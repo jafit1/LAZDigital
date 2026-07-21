@@ -956,7 +956,7 @@ function initBgFx(){
   for(var i=0;i<N;i++)pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.25*DPR,vy:(Math.random()-.5)*.25*DPR,r:(Math.random()*2+1)*DPR});
   window.addEventListener('mousemove',function(e){mouse.x=e.clientX*DPR;mouse.y=e.clientY*DPR;});
   window.addEventListener('mouseout',function(){mouse.x=-999;mouse.y=-999;});
-  function accent(){return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#C15F3C';}
+  function accent(){return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ea6a1e';}
   function loop(){
     ctx.clearRect(0,0,W,H);var col=accent();var link=120*DPR;
     for(var i=0;i<pts.length;i++){var p=pts[i];
@@ -1019,8 +1019,8 @@ function initBgFx(){
 /* ===== DASHBOARD v6 RENDER ===== */
 var WIDGETS={
   rekening:{t:'Tunai & Non Tunai',dot:'#0ea5e9'},
-  tren:{t:'Tren Arus Dana',dot:'#C15F3C'},
-  jenis:{t:'Jenis Dana Terhimpun',dot:'#D97757'},
+  tren:{t:'Tren Arus Dana',dot:'#ea6a1e'},
+  jenis:{t:'Jenis Dana Terhimpun',dot:'#f7931e'},
   pilar:{t:'Pilar Program',dot:'#10b981'},
   bank:{t:'Bank & Kas',dot:'#f43f5e'},
   ashnaf:{t:'Penyaluran Berdasarkan Ashnaf',dot:'#8b5cf6'},
@@ -1030,7 +1030,7 @@ var WIDGETS={
   rtasyaruf:{t:'Pentasyarufan Terbaru',dot:'#ec4899'}
 };
 function dashGreeting(){var h=new Date().getHours();return h<11?'Selamat pagi':h<15?'Selamat siang':h<19?'Selamat sore':'Selamat malam';}
-function avColor(s){var p=['#C15F3C','#D97757','#8b5cf6','#3b82f6','#10b981','#ec4899','#0ea5e9','#f59e0b'];var n=0;s=s||'?';for(var i=0;i<s.length;i++)n+=s.charCodeAt(i);return p[n%p.length];}
+function avColor(s){var p=['#ea6a1e','#f7931e','#8b5cf6','#3b82f6','#10b981','#ec4899','#0ea5e9','#f59e0b'];var n=0;s=s||'?';for(var i=0;i<s.length;i++)n+=s.charCodeAt(i);return p[n%p.length];}
 
 function kpiSpark(series,key){
   if(!series||!series.length)return '';
@@ -1040,7 +1040,7 @@ function kpiSpark(series,key){
   var pts=vals.map(function(v,i){var x=(i/(n-1||1))*W;var y=H-2-((v-min)/((max-min)||1))*(H-4);return x.toFixed(1)+','+y.toFixed(1);});
   var d='M'+pts.join(' L');
   var area=d+' L'+W+','+H+' L0,'+H+' Z';
-  var col=key==='himpun'?'#C15F3C':'#3b82f6';
+  var col=key==='himpun'?'#ea6a1e':'#3b82f6';
   var gid='sg_'+key+'_'+Math.random().toString(36).slice(2,7);
   return '<svg class="kpi-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+col+'" stop-opacity=".28"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs><path d="'+area+'" fill="url(#'+gid+')"/><path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 }
@@ -1064,14 +1064,14 @@ function areaChart(series){
   var grid='';for(var g=0;g<=3;g++){var gy=22+g*((H-44)/3);grid+='<line x1="'+pad+'" y1="'+gy+'" x2="'+(W-pad)+'" y2="'+gy+'" stroke="rgba(100,116,139,.13)" stroke-width="1"/>';}
   var labels=series.map(function(s,i){var x=pad+(i/(n-1||1))*(W-2*pad);return '<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" font-size="9" fill="#94a3b8" text-anchor="middle">'+(s.bulan||'').slice(2)+'</text>';}).join('');
   return '<div class="area-wrap"><svg class="area-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'+
-    '<defs><linearGradient id="ah" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C15F3C" stop-opacity=".26"/><stop offset="1" stop-color="#C15F3C" stop-opacity="0"/></linearGradient>'+
+    '<defs><linearGradient id="ah" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ea6a1e" stop-opacity=".26"/><stop offset="1" stop-color="#ea6a1e" stop-opacity="0"/></linearGradient>'+
     '<linearGradient id="at" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6" stop-opacity=".22"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>'+
     grid+
     '<path d="'+h.area+'" fill="url(#ah)"/><path d="'+t.area+'" fill="url(#at)"/>'+
     '<path d="'+t.line+'" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+
-    '<path d="'+h.line+'" fill="none" stroke="#C15F3C" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>'+
+    '<path d="'+h.line+'" fill="none" stroke="#ea6a1e" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>'+
     labels+'</svg></div>'+
-    '<div class="legend"><span><i style="background:#C15F3C"></i>Penghimpunan</span><span><i style="background:#3b82f6"></i>Pentasyarufan</span></div>';
+    '<div class="legend"><span><i style="background:#ea6a1e"></i>Penghimpunan</span><span><i style="background:#3b82f6"></i>Pentasyarufan</span></div>';
 }
 function barsWidget(obj){
   var k=Object.keys(obj||{});if(!k.length)return '<div class="muted" style="padding:18px 0;text-align:center">Belum ada data.</div>';
@@ -1575,48 +1575,39 @@ function renderDashboard(d){
   '</div>';
 
   var kpis='<div class="kpis">'+
-    kpiCard('himpun','Total Penghimpunan',rp(d.totalHimpun),'↑','linear-gradient(135deg,#C15F3C,#D97757)','up',trH+' transaksi',kpiSpark(d.series,'himpun'))+
+    kpiCard('himpun','Total Penghimpunan',rp(d.totalHimpun),'↑','linear-gradient(135deg,#ea6a1e,#f7931e)','up',trH+' transaksi',kpiSpark(d.series,'himpun'))+
     kpiCard('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),'↓','linear-gradient(135deg,#3b82f6,#60a5fa)','down',trT+' transaksi',kpiSpark(d.series,'tasyaruf'))+
     kpiCard('orang','Donatur / Mustahik',orangCardHtml,'♥','linear-gradient(135deg,#8b5cf6,#a78bfa)','flat','terdaftar','')+
     '</div>';
 
-  var hint=window.DASH_EDIT?'<div class="edit-hint">⚙️ <b>Mode Atur Layout aktif</b> — Seret kartu untuk memindahkan posisi. Atur <b>Lebar</b> (S/M/L/XL) dan <b>Tinggi</b> (Auto/S/M/L) menggunakan tombol kontrol di kanan atas kartu. Klik <b>Selesai</b> untuk menyimpan.</div>':'';
+  var hint=window.DASH_EDIT?'<div class="edit-hint">⚙️ <b>Mode Atur Layout aktif</b> — Seret header kartu untuk memindahkan. Tarik handle <b>↘</b> di kanan bawah untuk mengubah lebar dan tinggi secara bebas. Ukuran tersimpan otomatis. Klik <b>Selesai</b> jika sudah.</div>':'';
 
   var cells=lay.order.filter(function(id){return WIDGETS[id]&&(!lay.vis||lay.vis[id]!==false);}).map(function(id){
     var w=WIDGETS[id];
     var sz=(lay.size&&lay.size[id])||'md';
     var hz=(lay.height&&lay.height[id])||'auto';
     
-    var ctr='<div class="wc-ctrls">' +
-      '<div class="wc-ctrl-row">' +
-        '<span class="ctrl-lbl">Lebar</span>' +
-        '<button class="cbtn'+(sz==='sm'?' active':'')+'" title="Kecil (33%)" onclick="event.stopPropagation();dashSetSize(\''+id+'\',\'sm\')">S</button>'+
-        '<button class="cbtn'+(sz==='md'?' active':'')+'" title="Sedang (50%)" onclick="event.stopPropagation();dashSetSize(\''+id+'\',\'md\')">M</button>'+
-        '<button class="cbtn'+(sz==='lg'?' active':'')+'" title="Besar (66%)" onclick="event.stopPropagation();dashSetSize(\''+id+'\',\'lg\')">L</button>'+
-        '<button class="cbtn'+(sz==='full'?' active':'')+'" title="Penuh (100%)" onclick="event.stopPropagation();dashSetSize(\''+id+'\',\'full\')">XL</button>'+
-      '</div>' +
-      '<div class="wc-ctrl-row">' +
-        '<span class="ctrl-lbl">Tinggi</span>' +
-        '<button class="cbtn'+(hz==='auto'?' active':'')+'" title="Otomatis" onclick="event.stopPropagation();dashSetHeight(\''+id+'\',\'auto\')">Auto</button>'+
-        '<button class="cbtn'+(hz==='sm'?' active':'')+'" title="Pendek" onclick="event.stopPropagation();dashSetHeight(\''+id+'\',\'sm\')">S</button>'+
-        '<button class="cbtn'+(hz==='md'?' active':'')+'" title="Sedang" onclick="event.stopPropagation();dashSetHeight(\''+id+'\',\'md\')">M</button>'+
-        '<button class="cbtn'+(hz==='lg'?' active':'')+'" title="Tinggi" onclick="event.stopPropagation();dashSetHeight(\''+id+'\',\'lg\')">L</button>'+
-        '<button class="cbtn hide-btn" title="Sembunyikan" onclick="event.stopPropagation();dashHide(\''+id+'\')">✕</button>' +
-      '</div>' +
-    '</div>';
+    var ctr=window.DASH_EDIT?('<div class="wc-ctrls">' +
+      '<button class="cbtn hide-btn" title="Sembunyikan widget" onclick="event.stopPropagation();dashHide(\''+id+'\')">✕</button>' +
+    '</div>'):'';
+    var dim=(lay.dimensions&&lay.dimensions[id])||{};
+    var dimStyle='';
+    if(dim.width)dimStyle+='--widget-width:'+Math.round(dim.width)+'px;';
+    if(dim.height)dimStyle+='--widget-height:'+Math.round(dim.height)+'px;';
+    var resizeHandle=window.DASH_EDIT?'<span class="resize-handle" title="Tarik untuk mengubah ukuran">↘</span>':'';
     
     var dragHandle = window.DASH_EDIT ? '<span class="drag-handle" title="Tarik untuk memindahkan">⋮⋮</span>' : '';
     
-    return '<div class="wc" data-size="'+sz+'" data-height="'+hz+'" data-id="'+id+'" draggable="'+(window.DASH_EDIT?'true':'false')+'">'+
+    return '<div class="wc" data-size="'+sz+'" data-height="'+hz+'" data-id="'+id+'" style="'+dimStyle+'" draggable="'+(window.DASH_EDIT?'true':'false')+'">'+
       '<div class="wc-h"><div class="wc-t">'+dragHandle+'<span class="dot" style="background:'+w.dot+'"></span>'+w.t+'</div>'+ctr+'</div>'+
-      '<div class="wc-b">'+widgetBody(id,d)+'</div></div>';
+      '<div class="wc-b">'+widgetBody(id,d)+'</div>'+resizeHandle+'</div>';
   }).join('');
 
   var hidden=lay.order.filter(function(id){return WIDGETS[id]&&lay.vis&&lay.vis[id]===false;});
   var hiddenBar=(window.DASH_EDIT&&hidden.length)?'<div class="edit-hint" style="background:rgba(100,116,139,.08);border-color:rgba(100,116,139,.2);color:var(--ink2)">Tersembunyi: '+hidden.map(function(id){return '<button class="cbtn" style="width:auto;padding:0 8px;margin:0 3px" onclick="dashShow(\''+id+'\')">+ '+WIDGETS[id].t+'</button>';}).join('')+'</div>':'';
 
   el('content').innerHTML='<div class="dash-wrap view-anim'+(window.DASH_EDIT?' dash-edit':'')+'">'+hero+kpis+hint+hiddenBar+'<div class="dgrid" id="dgrid">'+cells+'</div></div>';
-  if(window.DASH_EDIT)wireDashDrag();
+  if(window.DASH_EDIT){wireDashDrag();wireDashResize();}
 }
 
 /* ===== flexible layout ===== */
@@ -1625,7 +1616,8 @@ function getDashLayout(){
     order:['rekening','jenis','pilar','bank','ashnaf','program','fundraising','rhimpun','rtasyaruf','tren'],
     vis:{},
     size:{rekening:'full',tren:'full',jenis:'md',pilar:'md',bank:'md',ashnaf:'md',program:'md',fundraising:'md',rhimpun:'md',rtasyaruf:'md'},
-    height:{rekening:'auto',tren:'auto',jenis:'auto',pilar:'auto',bank:'auto',ashnaf:'auto',program:'auto',fundraising:'auto',rhimpun:'auto',rtasyaruf:'auto'}
+    height:{rekening:'auto',tren:'auto',jenis:'auto',pilar:'auto',bank:'auto',ashnaf:'auto',program:'auto',fundraising:'auto',rhimpun:'auto',rtasyaruf:'auto'},
+    dimensions:{}
   };
   try{
     var raw=localStorage.getItem('laz_dashlayout')||(typeof SETTINGS!=='undefined'&&SETTINGS.dashLayout)||'';
@@ -1650,6 +1642,7 @@ function getDashLayout(){
         // Populate missing properties
         s.size = s.size || {};
         s.height = s.height || {};
+        s.dimensions = s.dimensions || {};
         s.vis = s.vis || {};
         
         def.order.forEach(function(k) {
@@ -1706,6 +1699,49 @@ function wireDashDrag(){
       var r=c.getBoundingClientRect();
       var after=(e.clientY-r.top)/(r.height)>.5;
       grid.insertBefore(dragEl,after?c.nextSibling:c);
+    });
+  });
+}
+
+
+/* Resize widget bebas (native Pointer Events, tanpa ketergantungan CDN). */
+function wireDashResize(){
+  var grid=el('dgrid');if(!grid)return;
+  grid.querySelectorAll('.wc').forEach(function(card){
+    var handle=card.querySelector('.resize-handle');if(!handle)return;
+    handle.addEventListener('pointerdown',function(e){
+      e.preventDefault();e.stopPropagation();
+      var startX=e.clientX,startY=e.clientY;
+      var rect=card.getBoundingClientRect();
+      var gridRect=grid.getBoundingClientRect();
+      var startW=rect.width,startH=rect.height;
+      var minW=Math.min(280,gridRect.width),minH=180;
+      var maxW=gridRect.width;
+      card.setAttribute('draggable','false');
+      card.classList.add('resizing');
+      handle.setPointerCapture(e.pointerId);
+      function move(ev){
+        var w=Math.max(minW,Math.min(maxW,startW+(ev.clientX-startX)));
+        var h=Math.max(minH,startH+(ev.clientY-startY));
+        card.style.setProperty('--widget-width',Math.round(w)+'px');
+        card.style.setProperty('--widget-height',Math.round(h)+'px');
+      }
+      function done(ev){
+        handle.removeEventListener('pointermove',move);
+        handle.removeEventListener('pointerup',done);
+        handle.removeEventListener('pointercancel',done);
+        card.classList.remove('resizing');
+        card.setAttribute('draggable','true');
+        var lay=getDashLayout();lay.dimensions=lay.dimensions||{};
+        lay.dimensions[card.getAttribute('data-id')]={
+          width:Math.round(card.getBoundingClientRect().width),
+          height:Math.round(card.getBoundingClientRect().height)
+        };
+        saveDashLayout(lay);
+      }
+      handle.addEventListener('pointermove',move);
+      handle.addEventListener('pointerup',done);
+      handle.addEventListener('pointercancel',done);
     });
   });
 }

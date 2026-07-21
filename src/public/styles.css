@@ -1,5 +1,5 @@
 /* ===== LAZ DIGITAL v3 — Tema Lazsimu (Clean White + Orange, Dark Mode) ===== */
-@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 :root{
   --accent:#ea6a1e; --accent2:#f7931e; --accent-d:#c9551a;
@@ -1143,96 +1143,6 @@ html[data-theme="dark"] .custom-dropdown-menu .item.active {
 }
 
 /* ============================================================
-   TEMA FLAT + "CLAUDE ORANGE" (terracotta kalem) v1
-   - Gaya flat design (warna solid, bayangan tipis, sudut membulat)
-   - Ciri khas oranye Lazismu dipertahankan namun lebih kalem
-     (terracotta hangat seperti Claude) + netral krem hangat.
-   - Ditaruh di akhir file agar meng-override variabel sebelumnya.
-   ============================================================ */
-
-:root{
-  --accent:#C15F3C; --accent2:#D97757; --accent-d:#A34A2C;
-  --accent-soft:#F5EAE3; --accent-soft2:#EAD6C8;
-  --bg:#F4F0E8; --surface:#FFFFFF; --surface2:#F1ECE3; --surface3:#FAF6F0;
-  --text:#2A2723; --text2:#57514A; --muted:#8B8378; --border:#E6DFD4; --border2:#F0EAE0;
-  --green:#6E9B84; --red:#C46B5B; --amber:#C79A57; --blue:#6E8BB0; --purple:#9585AE;
-  --green-bg:#E8EFEA; --red-bg:#F5E6E2; --amber-bg:#F5ECDC; --blue-bg:#E9EEF4; --purple-bg:#ECE8F1;
-  --shadow:0 1px 2px rgba(60,45,30,.05);
-  --shadow-lg:0 8px 24px -12px rgba(60,45,30,.14);
-  --radius:14px; --radius-sm:10px;
-  --sans:'Lato','Inter',system-ui,sans-serif;
-  --glass:#FFFFFF; --glass-bd:#E6DFD4; --ink:#2A2723; --ink2:#8B8378;
-  --ag-cream:#F4F0E8; --ag-cream2:#EFE9DF;
-}
-html[data-theme="dark"]{
-  --accent:#D0714E; --accent2:#E08A66; --accent-d:#B65C3C;
-  --accent-soft:#3A2A20; --accent-soft2:#4A3628;
-  --bg:#262320; --surface:#302C28; --surface2:#3A352F; --surface3:#221F1C;
-  --text:#EEE8DF; --text2:#C6BDB1; --muted:#948B7E; --border:#413A32; --border2:#332D27;
-  --green:#7FA894; --red:#D07E6E; --amber:#D3A867; --blue:#7F98BC; --purple:#A395B4;
-  --green-bg:#1E2C25; --red-bg:#2E1E1B; --amber-bg:#2C2417; --blue-bg:#1B2431; --purple-bg:#241E2E;
-  --shadow:0 1px 2px rgba(0,0,0,.25);
-  --shadow-lg:0 10px 24px -12px rgba(0,0,0,.5);
-  --glass:#302C28; --glass-bd:#413A32; --ink:#EEE8DF; --ink2:#948B7E;
-}
-
-/* --- Latar flat & bersih: matikan dekorasi ramai --- */
-body{ background:var(--bg) !important; background-image:none !important; background-attachment:initial !important; }
-html[data-theme="dark"] body{ background:var(--bg) !important; background-image:none !important; }
-#bgfx, .ag-grid, .bg-blob{ display:none !important; }
-
-/* --- Flat: gradien tombol/aksen jadi warna solid, bayangan tipis --- */
-.btn-primary{ background:var(--accent) !important; border:1px solid var(--accent) !important; color:#fff; box-shadow:none !important; }
-.btn-primary:hover{ background:var(--accent-d) !important; filter:none !important; box-shadow:none !important; }
-.btn-danger{ background:var(--red) !important; border:1px solid var(--red) !important; box-shadow:none !important; }
-.btn-danger:hover{ background:var(--red) !important; filter:brightness(.95); box-shadow:none !important; }
-.login-logo{ background:var(--accent) !important; box-shadow:none !important; }
-.brand .logo{ background:var(--accent) !important; }
-.avatar{ background:var(--accent) !important; }
-.stat::before{ background:var(--accent) !important; }
-.gradient-text{ background:linear-gradient(92deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-
-/* --- Kartu flat: hilangkan glass/blur, pakai permukaan solid --- */
-.kpi, .wc{ background:var(--surface) !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; border:1px solid var(--border) !important; box-shadow:var(--shadow) !important; }
-.card, .stat, .table-wrap{ box-shadow:var(--shadow); }
-.kpi:hover, .wc:hover{ box-shadow:var(--shadow-lg) !important; transform:none !important; }
-
-/* --- Aksen warna berputar pada kartu statistik (echo template flat) --- */
-.stats .stat:nth-child(4n+1)::before{ background:var(--accent) !important; }
-.stats .stat:nth-child(4n+2)::before{ background:var(--green) !important; }
-.stats .stat:nth-child(4n+3)::before{ background:var(--amber) !important; }
-.stats .stat:nth-child(4n+4)::before{ background:var(--blue) !important; }
-
-/* --- Hero dashboard: terracotta kalem, tanpa bayangan berat --- */
-.dash-hero{ background:linear-gradient(135deg,var(--accent),var(--accent-d)) !important; box-shadow:none !important; }
-
-/* ============================================================
-   SIDEBAR GELAP (mengikuti contoh desain / flat dashboard)
-   Berlaku untuk sidebar vertikal (desktop) & top navbar (mobile).
-   ============================================================ */
-.topnav{ background:#2B2825 !important; border-right-color:#3A3630 !important; border-bottom-color:#3A3630 !important; box-shadow:none !important; }
-.tn-brand{ color:#F5F1EA; }
-.tn-brand .logo{ background:var(--accent) !important; color:#fff; }
-.btn-toggle{ color:#E7E1D8 !important; }
-.btn-toggle:hover{ background:rgba(255,255,255,.08) !important; }
-.tn-item{ color:#C9C1B6 !important; }
-.tn-item .ic{ opacity:.92; }
-.tn-item:hover{ background:rgba(255,255,255,.08) !important; color:#FFFFFF !important; }
-.tn-item.active{ background:var(--accent) !important; color:#fff !important; box-shadow:none !important; }
-.tn-right{ border-top-color:rgba(255,255,255,.12) !important; }
-.user-chip{ border-color:rgba(255,255,255,.14) !important; }
-.user-chip:hover{ background:rgba(255,255,255,.06) !important; border-color:var(--accent) !important; }
-.uc-name{ color:#F5F1EA !important; }
-.uc-role{ color:#B7AFA4 !important; }
-.tn-icon{ background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.14) !important; color:#E7E1D8 !important; }
-.tn-icon:hover{ border-color:var(--accent) !important; color:var(--accent2) !important; }
-.tn-nav::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.15); }
-
-/* Hero dashboard: kalemkan gradien & hilangkan glow oranye lama */
-.dh{ box-shadow:none !important; }
-.dh-bg{ background:linear-gradient(120deg,var(--accent),var(--accent-d)) !important; }
-
-/* ============================================================
    RESPONSIVE LAYOUT (mobile-first) - desktop, laptop, tablet, HP.
    Tanpa horizontal scroll; lebar fleksibel (width:100%, max-width,
    flexbox, grid). Breakpoint: Mobile <768, Tablet 768-1023, Desktop >=1024.
@@ -1311,3 +1221,55 @@ img, video { max-width: 100%; height: auto; }
   .app { flex-direction: row !important; }
   .main { max-width: 100%; }
 }
+
+/* ============================================================
+   PERBAIKAN NAVIGASI & RESIZE WIDGET BEBAS
+   ============================================================ */
+/* Desktop: sidebar selalu mengikuti viewport saat halaman di-scroll. */
+@media (min-width:1024px){
+  .topnav{
+    position:fixed !important;
+    top:0;left:0;bottom:0;
+    height:100dvh !important;
+    overflow:hidden;
+  }
+  .app .main{margin-left:240px !important;width:calc(100% - 240px);}
+  .app.collapsed .main{margin-left:78px !important;width:calc(100% - 78px);}
+  .tn-nav{min-height:0;overflow-y:auto !important;overscroll-behavior:contain;}
+}
+
+/* Dashboard memakai flex-wrap agar lebar widget bisa ditarik bebas. */
+.dgrid{display:flex !important;flex-wrap:wrap;align-items:flex-start;gap:16px;}
+.dgrid .wc{
+  position:relative;
+  grid-column:auto !important;
+  flex:0 0 min(var(--widget-width,calc(50% - 8px)),100%);
+  width:min(var(--widget-width,calc(50% - 8px)),100%);
+  height:var(--widget-height,auto) !important;
+  min-width:min(280px,100%);
+  max-width:100%;
+  transition:box-shadow .15s,border-color .15s !important;
+}
+.dash-edit .wc{cursor:default;}
+.dash-edit .wc-h{cursor:grab;}
+.dash-edit .wc.resizing{user-select:none;cursor:nwse-resize;outline-color:var(--accent);}
+.wc-ctrls{display:none;flex-direction:row;align-items:center;}
+.dash-edit .wc-ctrls{display:flex;}
+.resize-handle{
+  display:none;position:absolute;right:3px;bottom:2px;
+  width:24px;height:24px;align-items:center;justify-content:center;
+  color:var(--accent);font-size:16px;font-weight:800;line-height:1;
+  cursor:nwse-resize;touch-action:none;user-select:none;z-index:5;
+  border-radius:6px;
+}
+.dash-edit .resize-handle{display:flex;}
+.resize-handle:hover{background:var(--accent-soft);}
+
+/* Tablet/HP: widget selalu penuh, resize desktop dinonaktifkan. */
+@media (max-width:1023px){
+  .topnav{position:sticky !important;height:auto !important;overflow:visible;}
+  .app .main,.app.collapsed .main{margin-left:0 !important;width:100% !important;}
+  .dgrid .wc{flex-basis:100% !important;width:100% !important;height:auto !important;}
+  .resize-handle{display:none !important;}
+}
+
