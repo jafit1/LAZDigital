@@ -721,7 +721,6 @@ function _getJurnalData(year, month) {
     
     var ket=(ketPrefix+' '+donorLabel(r)).trim();
     if (r.keterangan) ket = r.keterangan;
-    if (r.fundraising) ket += ' (' + r.fundraising + ')';
     
     var tgl=Utilities.formatDate(new Date(r.tanggal),TZ,'dd/MM/yyyy'); var amt=Number(r.jumlah)||0; var ref=r.noKwitansi||'-';
     secMap[secKey]=secMap[secKey]||{title:secKey,lines:[],subtotal:0};
@@ -760,7 +759,6 @@ function _getJurnalData(year, month) {
     }
     
     var ket = r.keterangan || (r.program + ' ' + r.namaPenerima);
-    if (r.fundraising) ket += ' (' + r.fundraising + ')';
     
     var tgl=Utilities.formatDate(new Date(r.tanggal),TZ,'dd/MM/yyyy'); var amt=Number(r.jumlah)||0; var ref='-';
     secMap[secKey]=secMap[secKey]||{title:secKey,lines:[],subtotal:0};
