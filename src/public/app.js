@@ -3323,19 +3323,36 @@ function onDonaturKategoriChange() {
   
   if (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)') {
     var tipe = kat === 'Kantor Layanan (KLL)' ? 'KLL' : 'ULL';
-    var list = (CACHE.layanan || []).filter(function(l) { return l.tipe === tipe; });
+    
+    var layData = CACHE.layanan || [];
+    if (!layData || layData.length === 0) {
+      gas('apiListLayanan')(TOKEN).then(function(data) {
+        CACHE.layanan = data || [];
+        onDonaturKategoriChange();
+      }).catch(handleErr);
+      return;
+    }
+    
+    var list = layData.filter(function(l) {
+      var tVal = String(l.tipe || l.Tipe || '').trim().toUpperCase();
+      return tVal === tipe.toUpperCase();
+    });
     
     var html = '<label class="kll-ull-option-label" style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;padding:6px 8px;border-radius:4px;transition:background 0.2s;font-weight:600;border-bottom:1px solid var(--border2);margin-bottom:4px">' +
       '  <input type="checkbox" id="kll_ull_select_all" style="width:14px;height:14px;margin:0;padding:0;cursor:pointer;flex-shrink:0" checked onchange="toggleKllUllSelectAll()"> Semua' +
       '</label>';
     
-    html += list.map(function(l) {
-      return '<label class="kll-ull-option-label" style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;padding:6px 8px;border-radius:4px;transition:background 0.2s">' +
-        '  <input type="checkbox" class="kll-ull-chk" value="' + esc(l.nama) + '" checked style="width:14px;height:14px;margin:0;padding:0;cursor:pointer;flex-shrink:0" onchange="onKllUllCheckboxChange()"> ' + esc(l.nama) +
-        '</label>';
-    }).join('');
+    if (list.length === 0) {
+      html += '<span style="font-size:12px;color:var(--muted);padding:8px;display:block">Belum ada data ' + tipe + '</span>';
+    } else {
+      html += list.map(function(l) {
+        return '<label class="kll-ull-option-label" style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;padding:6px 8px;border-radius:4px;transition:background 0.2s">' +
+          '  <input type="checkbox" class="kll-ull-chk" value="' + esc(l.nama) + '" checked style="width:14px;height:14px;margin:0;padding:0;cursor:pointer;flex-shrink:0" onchange="onKllUllCheckboxChange()"> ' + esc(l.nama) +
+          '</label>';
+      }).join('');
+    }
     
-    optionsList.innerHTML = html || '<span style="font-size:12px;color:var(--muted)">Belum ada data ' + tipe + '</span>';
+    optionsList.innerHTML = html;
     container.style.display = 'block';
     updateKllUllButtonText();
   } else {
@@ -3350,7 +3367,7 @@ function onKllUllCheckboxChange() {
   var checkedChks = document.querySelectorAll('.kll-ull-chk:checked');
   var allChk = el('kll_ull_select_all');
   if (allChk) {
-    allChk.checked = chks.length === checkedChks.length;
+    allChk.checked = (chks.length > 0 && chks.length === checkedChks.length);
   }
   updateKllUllButtonText();
   filterDonaturTable();
@@ -3370,7 +3387,9 @@ function toggleKllUllSelectAll() {
 function updateKllUllButtonText() {
   var chks = document.querySelectorAll('.kll-ull-chk:checked');
   var total = document.querySelectorAll('.kll-ull-chk').length;
-  var btnSpan = el('kll_ull_multi_btn').querySelector('span');
+  var btnSpan = el('kll_ull_multi_btn') ? el('kll_ull_multi_btn').querySelector('span') : null;
+  if (!btnSpan) return;
+  
   if (total === 0) {
     btnSpan.textContent = 'Tidak Ada Layanan';
   } else if (chks.length === 0) {
@@ -3386,7 +3405,7 @@ function onKllUllSearchInput() {
   var q = el('kll_ull_search').value.toLowerCase();
   var labels = document.querySelectorAll('.kll-ull-option-label');
   labels.forEach(function(lbl) {
-    if (lbl.getAttribute('id') === 'kll_ull_select_all' || lbl.querySelector('#kll_ull_select_all')) return;
+    if (lbl.querySelector('#kll_ull_select_all')) return;
     var txt = lbl.textContent.toLowerCase();
     lbl.style.display = txt.indexOf(q) >= 0 ? 'flex' : 'none';
   });
@@ -3409,11 +3428,12 @@ function toggleKllUllDropdown(e) {
 }
 
 function filterDonaturTable() {
-  var q = el('donatur_search').value.toLowerCase();
-  var kat = el('donatur_filter_kategori').value;
+  var q = el('donatur_search') ? el('donatur_search').value.toLowerCase() : '';
+  var kat = el('donatur_filter_kategori') ? el('donatur_filter_kategori').value : '';
   var rows = document.querySelectorAll('.donatur-row');
   
   var checkedLayanan = [];
+  var totalLayanan = document.querySelectorAll('.kll-ull-chk').length;
   if (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)') {
     var chks = document.querySelectorAll('.kll-ull-chk:checked');
     chks.forEach(function(c) {
@@ -3421,6 +3441,8 @@ function filterDonaturTable() {
     });
   }
   
+  var allSelected = (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)') && totalLayanan > 0 && (checkedLayanan.length === totalLayanan);
+
   rows.forEach(function(row) {
     var nameCell = row.querySelector('.donatur-name-cell');
     var donorNameLower = nameCell ? nameCell.textContent.toLowerCase() : '';
@@ -3431,18 +3453,20 @@ function filterDonaturTable() {
     var matchKat = !kat || rowKat === kat;
     
     if (matchSearch && matchKat && (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)')) {
-      var matchLayanan = false;
-      for (var j = 0; j < checkedLayanan.length; j++) {
-        var layName = checkedLayanan[j];
-        var cleanLay = layName.replace(/^(kll|ull)\s+/g, '').trim();
-        if (donorNameLower.indexOf(cleanLay) >= 0 || cleanLay.indexOf(donorNameLower) >= 0) {
-          matchLayanan = true;
-          break;
+      if (!allSelected) {
+        var matchLayanan = false;
+        for (var j = 0; j < checkedLayanan.length; j++) {
+          var layName = checkedLayanan[j];
+          var cleanLay = layName.replace(/^(kll|ull)\s+/g, '').trim();
+          if (donorNameLower.indexOf(cleanLay) >= 0 || cleanLay.indexOf(donorNameLower) >= 0) {
+            matchLayanan = true;
+            break;
+          }
         }
-      }
-      if (!matchLayanan) {
-        row.style.display = 'none';
-        return;
+        if (!matchLayanan) {
+          row.style.display = 'none';
+          return;
+        }
       }
     }
     
