@@ -3264,9 +3264,9 @@ function renderDonatur(rows) {
     '        <span>Pilih Layanan (Semua)</span>' +
     '        <span style="font-size:10px">▼</span>' +
     '      </button>' +
-    '      <div id="kll_ull_popover" class="hidden" style="position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-lg);padding:10px;z-index:1000;margin-top:4px;box-sizing:border-box;max-height:220px;display:flex;flex-direction:column">' +
+    '      <div id="kll_ull_popover" class="hidden" style="position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.18);padding:10px;z-index:10000;margin-top:4px;box-sizing:border-box;min-width:240px">' +
     '        <input type="text" id="kll_ull_search" placeholder="Cari..." oninput="onKllUllSearchInput()" style="padding:6px 10px;font-size:12.5px;width:100%;box-sizing:border-box;margin-bottom:8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text)">' +
-    '        <div id="kll_ull_options_list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px"></div>' +
+    '        <div id="kll_ull_options_list" style="max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>' +
     '      </div>' +
     '    </div>' +
     '  </div>';
@@ -3508,6 +3508,26 @@ function saveImportedDonaturText() {
   });
 }
 
+function cleanDonaturNameJS(name) {
+  if (!name) return '';
+  var s = String(name).trim();
+  s = s.replace(/^nn\s*[-.]*\s*/i, '').trim();
+  var prefixes = [
+    /^(infak umum|infak terikat|zakat profesi|zakat fitrah|zakat mal|penerimaan zakat|penerimaan infak|penerimaan|setor tunai|mutasi)\s*[-.:]*\s*/i
+  ];
+  var changed = true;
+  while (changed) {
+    changed = false;
+    for (var i = 0; i < prefixes.length; i++) {
+      if (prefixes[i].test(s)) {
+        s = s.replace(prefixes[i], '').trim();
+        changed = true;
+      }
+    }
+  }
+  return s;
+}
+
 function openDonaturDetail(namaEncoded) {
   var nama = decodeURIComponent(namaEncoded);
   var donatur = window.LIST_DONATUR.find(function(d) { return d.nama === nama; });
@@ -3518,7 +3538,14 @@ function openDonaturDetail(namaEncoded) {
   toast('Memuat riwayat donasi...');
   pPromise.then(function(list) {
     CACHE.penghimpunan = list;
-    var txs = list.filter(function(tx) { return String(tx.namaDonatur || '').trim().toLowerCase() === nama.toLowerCase(); });
+    var cleanTarget = cleanDonaturNameJS(nama).toLowerCase();
+    var txs = list.filter(function(tx) {
+      var rawName = String(tx.namaDonatur || '').trim().toLowerCase();
+      var cName = cleanDonaturNameJS(tx.namaDonatur).toLowerCase();
+      if (rawName === nama.toLowerCase() || cName === cleanTarget) return true;
+      if (cleanTarget && cName && (cName.indexOf(cleanTarget) >= 0 || cleanTarget.indexOf(cName) >= 0)) return true;
+      return false;
+    });
     
     var profileHtml = '<div style="margin-bottom:16px;background:var(--surface2);padding:12px;border-radius:8px;border:1px solid var(--border)">' +
       '  <p style="margin: 4px 0"><strong>Nama:</strong> ' + esc(donatur.nama) + '</p>' +
