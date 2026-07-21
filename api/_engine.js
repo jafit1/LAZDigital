@@ -3,6 +3,7 @@ const crypto = require('crypto');
 let DB = { sheets:{}, props:{} };
 const ID_M=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const ID_MS=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+const TZ = 'Asia/Jakarta';
 function _p2(n){return ('0'+n).slice(-2);}
 function _formatDate(date,tz,fmt){
   const t=new Date(date.getTime()+7*3600*1000);

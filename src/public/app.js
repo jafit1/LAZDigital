@@ -3244,10 +3244,8 @@ function renderDonatur(rows) {
     '  <button class="btn btn-primary" onclick="openImportDonaturModal()">📥 Impor Donatur (Teks)</button>' +
     '</div>';
 
-  h += '<button class="btn btn-ghost" id="btnToggleToolbar" onclick="toggleDonaturToolbar(event)" style="margin-bottom:12px;font-size:12.5px;padding:6px 12px">🔍 Filter & Pencarian</button>';
-
   h += '<div class="table-wrap">' +
-    '  <div class="toolbar hidden" id="donaturToolbar" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">' +
+    '  <div class="toolbar" id="donaturToolbar" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">' +
     '    <div class="field" style="margin:0;flex:2;min-width:200px"><label style="font-size:11px;font-weight:600;margin-bottom:4px;display:block">Nama / Telepon</label><input type="text" id="donatur_search" placeholder="Cari..." oninput="filterDonaturTable()" style="padding:8px 12px;font-size:13px;width:100%;box-sizing:border-box"></div>' +
     '    <div class="field" style="margin:0;flex:1;min-width:150px">' +
     '      <label style="font-size:11px;font-weight:600;margin-bottom:4px;display:block">Kategori Donatur</label>' +
@@ -3327,9 +3325,13 @@ function onDonaturKategoriChange() {
     var tipe = kat === 'Kantor Layanan (KLL)' ? 'KLL' : 'ULL';
     var list = (CACHE.layanan || []).filter(function(l) { return l.tipe === tipe; });
     
-    var html = list.map(function(l) {
-      return '<label class="kll-ull-option-label" style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;padding:4px 6px;border-radius:4px;transition:background 0.2s">' +
-        '  <input type="checkbox" class="kll-ull-chk" value="' + esc(l.nama) + '" checked onchange="onKllUllCheckboxChange()"> ' + esc(l.nama) +
+    var html = '<label class="kll-ull-option-label" style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;padding:6px 8px;border-radius:4px;transition:background 0.2s;font-weight:600;border-bottom:1px solid var(--border2);margin-bottom:4px">' +
+      '  <input type="checkbox" id="kll_ull_select_all" style="width:14px;height:14px;margin:0;padding:0;cursor:pointer;flex-shrink:0" checked onchange="toggleKllUllSelectAll()"> Semua' +
+      '</label>';
+    
+    html += list.map(function(l) {
+      return '<label class="kll-ull-option-label" style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;padding:6px 8px;border-radius:4px;transition:background 0.2s">' +
+        '  <input type="checkbox" class="kll-ull-chk" value="' + esc(l.nama) + '" checked style="width:14px;height:14px;margin:0;padding:0;cursor:pointer;flex-shrink:0" onchange="onKllUllCheckboxChange()"> ' + esc(l.nama) +
         '</label>';
     }).join('');
     
@@ -3344,6 +3346,23 @@ function onDonaturKategoriChange() {
 }
 
 function onKllUllCheckboxChange() {
+  var chks = document.querySelectorAll('.kll-ull-chk');
+  var checkedChks = document.querySelectorAll('.kll-ull-chk:checked');
+  var allChk = el('kll_ull_select_all');
+  if (allChk) {
+    allChk.checked = chks.length === checkedChks.length;
+  }
+  updateKllUllButtonText();
+  filterDonaturTable();
+}
+
+function toggleKllUllSelectAll() {
+  var allChk = el('kll_ull_select_all');
+  var state = allChk ? allChk.checked : false;
+  var chks = document.querySelectorAll('.kll-ull-chk');
+  chks.forEach(function(c) {
+    c.checked = state;
+  });
   updateKllUllButtonText();
   filterDonaturTable();
 }
@@ -3367,6 +3386,7 @@ function onKllUllSearchInput() {
   var q = el('kll_ull_search').value.toLowerCase();
   var labels = document.querySelectorAll('.kll-ull-option-label');
   labels.forEach(function(lbl) {
+    if (lbl.getAttribute('id') === 'kll_ull_select_all' || lbl.querySelector('#kll_ull_select_all')) return;
     var txt = lbl.textContent.toLowerCase();
     lbl.style.display = txt.indexOf(q) >= 0 ? 'flex' : 'none';
   });
@@ -3523,34 +3543,12 @@ function openDonaturDetail(namaEncoded) {
   }).catch(handleErr);
 }
 
-function toggleDonaturToolbar(e) {
-  if (e) e.stopPropagation();
-  var tb = el('donaturToolbar');
-  var btn = el('btnToggleToolbar');
-  var kllContainer = el('kll_ull_filter_container');
-  if (tb.classList.contains('hidden')) {
-    tb.classList.remove('hidden');
-    btn.innerHTML = '❌ Tutup Filter';
-    var kat = el('donatur_filter_kategori').value;
-    if ((kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)') && kllContainer) {
-      kllContainer.style.display = 'block';
-    }
-  } else {
-    tb.classList.add('hidden');
-    btn.innerHTML = '🔍 Filter & Pencarian';
-    if (kllContainer) kllContainer.style.display = 'none';
-  }
-}
-
 document.addEventListener('click', function(e) {
-  var tb = el('donaturToolbar');
-  var btn = el('btnToggleToolbar');
-  var kllContainer = el('kll_ull_filter_container');
-  if (tb && !tb.classList.contains('hidden') && btn) {
-    if (!tb.contains(e.target) && !btn.contains(e.target) && (!kllContainer || !kllContainer.contains(e.target))) {
-      tb.classList.add('hidden');
-      btn.innerHTML = '🔍 Filter & Pencarian';
-      if (kllContainer) kllContainer.style.display = 'none';
+  var container = el('kll_ull_dropdown_container');
+  var pop = el('kll_ull_popover');
+  if (container && pop && !pop.classList.contains('hidden')) {
+    if (!container.contains(e.target)) {
+      pop.classList.add('hidden');
     }
   }
 });
