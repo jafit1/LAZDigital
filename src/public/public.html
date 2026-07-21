@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laporan Transparansi Dana</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;850&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    :root {
+      --primary: #ea6a1e;
+      --accent: #f7931e;
+      --green: #10b981;
+      --red: #ef4444;
+      --glass: rgba(255, 255, 255, 0.72);
+      --glass-bd: rgba(226, 232, 240, 0.8);
+      --text: #0f172a;
+      --text2: #475569;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --border2: #f1f5f9;
+      --font: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    }
+    html[data-theme="dark"], @media (prefers-color-scheme: dark) {
+      :root {
+        --glass: rgba(15, 23, 42, 0.65);
+        --glass-bd: rgba(51, 65, 85, 0.45);
+        --text: #f8fafc;
+        --text2: #94a3b8;
+        --surface: #1e293b;
+        --border: #334155;
+        --border2: #0f172a;
+      }
+    }
+    
+    body {
+      font-family: var(--font);
+      color: var(--text);
+      background: radial-gradient(1100px 620px at 8% -12%, rgba(234,106,30,.06), transparent 58%),
+                  radial-gradient(1000px 680px at 108% 4%, rgba(139,92,246,.05), transparent 55%),
+                  linear-gradient(180deg,#faf9f5,#f4f2ec);
+      background-attachment: fixed;
+      line-height: 1.5;
+      padding: 20px 16px;
+      margin: 0;
+    }
+    
+    .pub-container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    /* Header card */
+    .pub-header {
+      background: linear-gradient(120deg,rgba(234,106,30,.96),rgba(247,147,30,.94));
+      color: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px -15px rgba(234,106,30,.4);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .pub-header::after {
+      content: ""; position: absolute; right: -50px; top: -50px; width: 220px; height: 220px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.22), transparent 70%);
+      pointer-events: none;
+    }
+    .pub-logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .pub-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      backdrop-filter: blur(4px);
+    }
+    .pub-title-main {
+      font-size: 20px;
+      font-weight: 850;
+      margin: 0;
+      letter-spacing: -0.5px;
+    }
+    .pub-subtitle {
+      font-size: 12.5px;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+    .pub-date-badge {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      padding: 5px 12px;
+      border-radius: 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      backdrop-filter: blur(4px);
+    }
+    
+    /* KPI grid */
+    .pub-kpis {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.2fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    @media(max-width: 768px) {
+      .pub-kpis { grid-template-columns: 1fr; }
+    }
+    .pub-kpi {
+      background: var(--glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-bd);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.015);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .pub-kpi-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .pub-kpi-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      color: #fff;
+    }
+    .pub-kpi-label {
+      font-size: 12px;
+      color: var(--text2);
+      font-weight: 600;
+    }
+    .pub-kpi-value {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+    
+    /* Split layout */
+    .pub-split {
+      display: flex; gap: 12px; align-items: center; margin: 4px 0 2px;
+    }
+    .pub-split-col { flex: 1; }
+    .pub-split-divider { width: 1px; background: rgba(100,116,139,0.18); align-self: stretch; }
+    .pub-split-sub { font-size: 9px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+    .pub-split-num { font-size: 16px; font-weight: 800; color: var(--text); }
+    .pub-split-unit { font-size: 10.5px; color: var(--text2); font-weight: normal; }
+    
+    /* Layout grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media(max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+    
+    .pub-card {
+      background: var(--glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-bd);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.015);
+    }
+    .pub-card-title {
+      font-size: 14px;
+      font-weight: 750;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+    }
+    .pub-card-title .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    
+    /* Progress Bars */
+    .pub-bar-row {
+      margin-bottom: 12px;
+    }
+    .pub-bar-info {
+      display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; font-weight: 500;
+    }
+    .pub-bar-name { color: var(--text); font-weight: 600; }
+    .pub-bar-num { color: var(--text2); font-weight: 700; }
+    .pub-bar-track {
+      height: 8px; background: var(--border2); border-radius: 4px; overflow: hidden;
+    }
+    .pub-bar-fill {
+      height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--primary), var(--accent)); transition: width 0.5s;
+    }
+    
+    /* Recipient and Cash Widgets */
+    .pub-item-row {
+      display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--border2); margin-bottom: 8px;
+    }
+    .pub-item-name { font-weight: 600; font-size: 13px; color: var(--text); }
+    .pub-item-val { font-weight: 750; font-size: 13.5px; }
+    
+    /* Trend charts */
+    .pub-chart-container {
+      position: relative;
+      width: 100%;
+      height: 220px;
+      margin-top: 10px;
+    }
+    .pub-chart-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    
+    .pub-footer {
+      text-align: center; font-size: 12px; color: var(--text2); margin-top: 40px; padding-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+  <div id="boot">
+    <div class="boxes">
+      <div class="box">
+        <div></div><div></div><div></div><div></div>
+      </div>
+      <div class="box">
+        <div></div><div></div><div></div><div></div>
+      </div>
+      <div class="box">
+        <div></div><div></div><div></div><div></div>
+      </div>
+      <div class="box">
+        <div></div><div></div><div></div><div></div>
+      </div>
+    </div>
+  </div>
+  <div id="root" class="pub-container hidden"></div>
+  <div id="errBox" class="hidden"></div>
+
+  <script>
+    var TOKEN=new URLSearchParams(location.search).get('token')||'';
+    function rp(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID');}
+    function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+    function fdate(d){try{return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});}catch(e){return d;}}
+    
+    window.addEventListener('load',function(){
+      fetch('/api/rpc',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({fn:'apiPublicDashboard',args:[TOKEN]})
+      }).then(function(r){
+        return r.json();
+      }).then(function(j){
+        if(j.__error){
+          showErr(j.__error);
+        } else {
+          render(j.result);
+        }
+      }).catch(showErr);
+    });
+
+    function showErr(e){
+      document.getElementById('boot').classList.add('hidden');
+      var b=document.getElementById('errBox');
+      b.style.cssText='max-width:520px;margin:80px auto;text-align:center;padding:40px;border-radius:24px;border:1px solid var(--border);background:var(--surface)';
+      b.innerHTML='<div style="font-size:48px;margin-bottom:16px">🔒</div><h2 style="margin-bottom:8px;font-weight:800">Dashboard Tidak Tersedia</h2><p class="muted" style="color:var(--text2)">'+esc((e&&e.message)||'Link tidak valid atau dinonaktifkan oleh administrator.')+'</p>';
+    }
+
+    function isTunaiAccount(r) {
+      var name = String(r.nama || r.namaBank || '').toLowerCase();
+      var grp = String(r.bankGroup || '').toLowerCase();
+      return name.indexOf('kas') >= 0 || name.indexOf('tunai') >= 0 || name.indexOf('cash') >= 0 ||
+             grp.indexOf('kas') >= 0 || grp.indexOf('tunai') >= 0 || grp.indexOf('cash') >= 0;
+    }
+
+    function renderTNCards(byRekening) {
+      var tunai = { name: 'Tunai', penerimaan: 0, pentasyarufan: 0, accounts: [] };
+      var nonTunai = { name: 'Non Tunai', penerimaan: 0, pentasyarufan: 0, accounts: [] };
+      
+      Object.keys(byRekening || {}).forEach(function(k) {
+        var r = byRekening[k];
+        if (isTunaiAccount(r)) {
+          tunai.penerimaan += (r.penerimaan || 0);
+          tunai.pentasyarufan += (r.pentasyarufan || 0);
+          tunai.accounts.push(r);
+        } else {
+          nonTunai.penerimaan += (r.penerimaan || 0);
+          nonTunai.pentasyarufan += (r.pentasyarufan || 0);
+          nonTunai.accounts.push(r);
+        }
+      });
+
+      var renderBlock = function(g, idSuffix) {
+        var colorH = 'var(--green)';
+        var colorS = 'var(--red)';
+        var badgeId = 'tn_detail_' + idSuffix;
+        
+        var subHtml = '<div id="' + badgeId + '" style="display:none;background:var(--surface);border-radius:10px;padding:12px;margin-top:12px;flex-direction:column;gap:10px;border:1px solid var(--border)">';
+        if (!g.accounts.length) {
+          subHtml += '<div class="muted" style="font-size:12px;text-align:center;padding:8px 0">Tidak ada rekening aktif.</div>';
+        } else {
+          g.accounts.forEach(function(acc) {
+            subHtml += '<div style="border-bottom:1px solid var(--border2);padding-bottom:10px;margin-bottom:2px;last-child:margin-bottom:0;last-child:border-bottom:0;last-child:padding-bottom:0">' +
+              '<div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:6px">' + esc(acc.nama) + '</div>' +
+              '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);line-height:1.4">' +
+                '<span>Penerimaan: <span style="color:' + colorH + ';font-weight:600">' + rp(acc.penerimaan) + '</span></span>' +
+                '<span>Penyaluran: <span style="color:' + colorS + ';font-weight:600">' + rp(acc.pentasyarufan) + '</span></span>' +
+              '</div>' +
+              '</div>';
+          });
+        }
+        subHtml += '</div>';
+        
+        return '<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--border2);margin-bottom:12px;transition:all 0.2s" class="wc-row-clickable">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBankDetail(\'' + badgeId + '\')">' +
+            '<div>' +
+              '<div style="font-weight:750;font-size:15px;color:var(--text);margin-bottom:4px">' + esc(g.name) + ' <span style="font-size:11px;color:var(--text2);font-weight:normal">▼</span></div>' +
+              '<div style="font-size:12px;color:var(--text2)">' + g.accounts.length + ' rekening/kas</div>' +
+            '</div>' +
+            '<div style="text-align:right;white-space:nowrap;flex:0 0 auto;line-height:1.4">' +
+              '<div style="font-size:12px;color:var(--text2);margin-bottom:3px">Penerimaan: <span style="font-weight:700;color:' + colorH + '">' + rp(g.penerimaan) + '</span></div>' +
+              '<div style="font-size:12px;color:var(--text2)">Penyaluran: <span style="font-weight:700;color:' + colorS + '">' + rp(g.pentasyarufan) + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          subHtml +
+          '</div>';
+      };
+      
+      return renderBlock(tunai, 'tunai') + renderBlock(nonTunai, 'nontunai');
+    }
+
+    function toggleBankDetail(id) {
+      var elDetail = document.getElementById(id);
+      if (elDetail) {
+        elDetail.style.display = elDetail.style.display === 'none' ? 'flex' : 'none';
+      }
+    }
+
+    function renderLayanan(d) {
+      var dataObj = d.byLayananHimpun || {};
+      var keys = Object.keys(dataObj);
+      if (!keys.length) return '<div class="muted" style="padding:18px 0;text-align:center">Belum ada data Kantor Layanan.</div>';
+      
+      keys.sort(function(a, b) { return dataObj[b] - dataObj[a]; });
+      
+      var html = '<div style="display:flex;flex-direction:column;gap:8px">';
+      keys.forEach(function(x) {
+        var val = dataObj[x] || 0;
+        if (val === 0) return;
+        
+        html += '<div class="pub-item-row">' +
+          '<div style="font-weight:600;font-size:13.5px;color:var(--text)">' + esc(x) + '</div>' +
+          '<div class="pub-item-val" style="color:var(--green)">' + rp(val) + '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    function renderProgressBars(obj, colorHex) {
+      var keys = Object.keys(obj || {});
+      if (!keys.length) return '<div class="muted" style="padding:18px 0;text-align:center">Belum ada data.</div>';
+      
+      keys.sort(function(a,b){ return obj[b] - obj[a]; });
+      var max = Math.max.apply(null, keys.map(function(x){ return obj[x]; })) || 1;
+      
+      return keys.slice(0, 8).map(function(x) {
+        var pct = (obj[x] / max * 100).toFixed(1);
+        var fillStyle = colorHex ? 'background:' + colorHex : '';
+        return '<div class="pub-bar-row">' +
+          '<div class="pub-bar-info">' +
+            '<span class="pub-bar-name">' + esc(x) + '</span>' +
+            '<span class="pub-bar-num">' + rp(obj[x]) + '</span>' +
+          '</div>' +
+          '<div class="pub-bar-track">' +
+            '<div class="pub-bar-fill" style="width:' + pct + '%;' + fillStyle + '"></div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function renderAreaChart(series) {
+      if (!series || !series.length) return '<div class="muted" style="padding:30px 0;text-align:center">Belum ada data grafik.</div>';
+      
+      var W = 720, H = 200, pad = 8, n = series.length;
+      var all = series.reduce(function(a, s) { return Math.max(a, s.himpun, s.tasyaruf); }, 0) || 1;
+      
+      function path(key) {
+        var pts = series.map(function(s, i) {
+          var x = pad + (i / (n - 1 || 1)) * (W - 2 * pad);
+          var y = H - 22 - ((s[key] || 0) / all) * (H - 40);
+          return [x, y];
+        });
+        
+        var d = 'M' + pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' L');
+        var area = d + ' L' + pts[pts.length - 1][0].toFixed(1) + ',' + (H - 20) + ' L' + pts[0][0].toFixed(1) + ',' + (H - 20) + ' Z';
+        var col = key === 'himpun' ? '#ea6a1e' : '#3b82f6';
+        var gid = 'sg_' + key + '_' + Math.random().toString(36).slice(2, 7);
+        
+        return '<defs>' +
+          '<linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="' + col + '" stop-opacity="0.25"/>' +
+            '<stop offset="1" stop-color="' + col + '" stop-opacity="0"/>' +
+          '</linearGradient>' +
+        '</defs>' +
+        '<path d="' + area + '" fill="url(#' + gid + ')" />' +
+        '<path d="' + d + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />';
+      }
+      
+      var labels = series.map(function(s, i) {
+        var x = pad + (i / (n - 1 || 1)) * (W - 2 * pad);
+        return '<text x="' + x.toFixed(1) + '" y="' + (H - 4) + '" font-size="9" fill="#94a3b8" text-anchor="middle" font-family="var(--font)">' + (s.bulan || '').slice(2) + '</text>';
+      }).join('');
+      
+      return '<div class="pub-chart-container">' +
+        '<svg class="pub-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+          path('himpun') +
+          path('tasyaruf') +
+          labels +
+        '</svg>' +
+        '</div>';
+    }
+
+    function render(d) {
+      document.getElementById('boot').classList.add('hidden');
+      var r = document.getElementById('root');
+      r.classList.remove('hidden');
+      
+      var s = d.settings || {};
+      
+      // 1. Header Area
+      var headerHtml = '<div class="pub-header">' +
+        '<div class="pub-logo-area">' +
+          '<div class="pub-logo">' + esc((s.singkatan || 'LZ').slice(0,2)) + '</div>' +
+          '<div>' +
+            '<h1 class="pub-title-main">' + esc(s.namaLembaga || 'LAZ Digital') + '</h1>' +
+            '<div class="pub-subtitle">Laporan Transparansi Dana Keuangan Publik</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="pub-date-badge">Diperbarui: ' + fdate(new Date()) + '</div>' +
+        '</div>';
+      
+      // 2. KPIs Area
+      var orangCard = '<div class="pub-kpi">' +
+        '<div class="pub-kpi-top">' +
+          '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)">♥</div>' +
+          '<div class="pub-kpi-label">Donatur / Mustahik</div>' +
+        '</div>' +
+        '<div class="pub-split">' +
+          '<div class="pub-split-col">' +
+            '<div class="pub-split-sub">Donatur</div>' +
+            '<div class="pub-split-num">' + (d.jumlahDonatur || 0) + ' <span class="pub-split-unit">jiwa</span></div>' +
+          '</div>' +
+          '<div class="pub-split-divider"></div>' +
+          '<div class="pub-split-col">' +
+            '<div class="pub-split-sub">Mustahik</div>' +
+            '<div class="pub-split-num">' + (d.jumlahMustahik || 0) + ' <span class="pub-split-unit">jiwa</span></div>' +
+          '</div>' +
+        '</div>' +
+        '</div>';
+
+      var kpisHtml = '<div class="pub-kpis">' +
+        '<div class="pub-kpi">' +
+          '<div class="pub-kpi-top">' +
+            '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#ea6a1e,#f7931e)">↑</div>' +
+            '<div class="pub-kpi-label">Total Penghimpunan</div>' +
+          '</div>' +
+          '<div class="pub-kpi-value" style="color:var(--primary)">' + rp(d.totalHimpun) + '</div>' +
+          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">▲ ' + (d.transaksiHimpun || 0) + ' transaksi</div>' +
+        '</div>' +
+        '<div class="pub-kpi">' +
+          '<div class="pub-kpi-top">' +
+            '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa)">↓</div>' +
+            '<div class="pub-kpi-label">Total Pentasyarufan</div>' +
+          '</div>' +
+          '<div class="pub-kpi-value" style="color:#3b82f6">' + rp(d.totalTasyaruf) + '</div>' +
+          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">▼ ' + (d.transaksiTasyaruf || 0) + ' transaksi</div>' +
+        '</div>' +
+        orangCard +
+        '</div>';
+        
+      // 3. Tunai & Non Tunai Widget
+      var tnHtml = '<div class="pub-card">' +
+        '<div class="pub-card-title"><span class="dot" style="background:#0ea5e9"></span>Tunai & Non Tunai</div>' +
+        renderTNCards(d.byRekening) +
+        '</div>';
+        
+      // 4. Kantor Layanan & ULL
+      var layananHtml = '<div class="pub-card">' +
+        '<div class="pub-card-title"><span class="dot" style="background:#3b82f6"></span>Penghimpunan Kantor Layanan & ULL</div>' +
+        renderLayanan(d) +
+        '</div>';
+        
+      // 5. Grid of Progress Charts (Jenis Dana & Ashnaf)
+      var chartsHtml = '<div class="grid-2">' +
+        '<div class="pub-card">' +
+          '<div class="pub-card-title"><span class="dot" style="background:#f7931e"></span>Penghimpunan per Jenis Dana</div>' +
+          renderProgressBars(d.byJenis) +
+        '</div>' +
+        '<div class="pub-card">' +
+          '<div class="pub-card-title"><span class="dot" style="background:#8b5cf6"></span>Pentasyarufan per Ashnaf</div>' +
+          renderProgressBars(d.byAshnaf, 'linear-gradient(90deg, #8b5cf6, #a78bfa)') +
+        '</div>' +
+        '</div>';
+        
+      // 6. Program Breakdown
+      var programHtml = '<div class="pub-card">' +
+        '<div class="pub-card-title"><span class="dot" style="background:#ec4899"></span>Penyaluran per Program/Kegiatan</div>' +
+        renderProgressBars(d.byProgram, 'linear-gradient(90deg, #ec4899, #f472b6)') +
+        '</div>';
+        
+      // 7. Tren Chart at the very bottom
+      var trendHtml = '<div class="pub-card">' +
+        '<div class="pub-card-title"><span class="dot" style="background:#ea6a1e"></span>Tren Arus Dana 12 Bulan Terakhir</div>' +
+        renderAreaChart(d.series) +
+        '<div style="display:flex;gap:18px;margin-top:14px;font-size:12px;font-weight:600">' +
+          '<span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ea6a1e"></span> Penghimpunan</span>' +
+          '<span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#3b82f6"></span> Pentasyarufan</span>' +
+        '</div>' +
+        '</div>';
+        
+      // Assemble everything
+      var footerHtml = '<div class="pub-footer">Powered by <b>LAZ Digital</b> • Transparansi Keuangan Terpercaya & Akuntabel</div>';
+      
+      r.innerHTML = headerHtml + kpisHtml + tnHtml + layananHtml + chartsHtml + programHtml + trendHtml + footerHtml;
+    }
+  </script>
+</body>
+</html>

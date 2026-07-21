@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f77f00">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+  <canvas id="bgfx" aria-hidden="true"></canvas>
+  <div class="ag-grid"></div>
+  <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('laz_theme')||'light');</script>
+
+  <!-- ============ LOADING ============ -->
+  <div id="boot">
+    <div class="loadingspinner">
+      <div id="square1"></div>
+      <div id="square2"></div>
+      <div id="square3"></div>
+      <div id="square4"></div>
+      <div id="square5"></div>
+    </div>
+  </div>
+
+  <!-- ============ LOGIN ============ -->
+  <div id="loginView" class="login-wrap hidden">
+    <div class="login-card">
+      <div class="login-logo">LZ</div>
+      <h1>LAZ <span class="gradient-text">Digital</span></h1>
+      <div class="sub">Sistem Pencatatan Lembaga Amil Zakat</div>
+      <form id="loginForm" onsubmit="return doLogin(event)">
+        <div class="field">
+          <label>Username</label>
+          <input id="lUser" autocomplete="username" placeholder="superadmin" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="lPass" type="password" autocomplete="current-password" placeholder="••••••••" required>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin:2px 0 16px;cursor:pointer;color:var(--muted)"><input type="checkbox" id="lRemember" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer"> Ingat saya di perangkat ini</label>
+        <button class="btn btn-primary btn-block" id="loginBtn" type="submit">Masuk</button>
+      </form>
+      <div id="loginErr" class="muted" style="color:var(--red);font-size:13px;margin-top:12px;text-align:center"></div>
+      <div class="divider"></div>
+      <div class="muted" style="font-size:12px;text-align:center">Default: superadmin / admin123</div>
+    </div>
+  </div>
+
+  <!-- ============ APP ============ -->
+  <div id="appView" class="app hidden">
+    <header class="topnav" id="topnav">
+      <div class="tn-brand" id="brandBox"><span class="logo">LZ</span><button class="btn-toggle" onclick="toggleSidebar()" title="Sembunyikan/Tampilkan Menu">☰</button></div>
+      <nav class="tn-nav" id="nav"></nav>
+      <div class="tn-right">
+        <div class="user-chip" onclick="openProfile()" title="Pengaturan User">
+          <div class="avatar" id="uAvatar">A</div>
+          <div class="uc-meta">
+            <div id="uName" class="uc-name"></div>
+            <div id="uRole" class="muted uc-role"></div>
+          </div>
+        </div>
+        <button class="tn-icon" onclick="doLogout()" title="Keluar">⏻</button>
+      </div>
+    </header>
+    <main class="main"><div id="content"></div></main>
+  </div>
+
+  <!-- ============ MODAL ROOT ============ -->
+  <div class="modal-bg" id="modalBg">
+    <div class="modal" id="modalCard">
+      <div class="modal-head"><h3 id="modalTitle"></h3><button class="close-x" onclick="closeModal()">&times;</button></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+.vercel/
+.env*
+*.log
+scratch/
+.tempmediaStorage/
+src/_*
+download.js
