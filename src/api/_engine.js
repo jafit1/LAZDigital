@@ -2635,6 +2635,22 @@ function detectKategoriDonatur(nama, tipeDonatur, layananId, layList) {
   return 'Perorangan';
 }
 
+function resolveLayananNamaForDonatur(nama, layananId, layList) {
+  layList = layList || [];
+  if (layananId) {
+    for (var i = 0; i < layList.length; i++) {
+      if (String(layList[i].id) === String(layananId)) return layList[i].nama;
+    }
+  }
+  var nl = String(nama || '').toLowerCase();
+  for (var j = 0; j < layList.length; j++) {
+    var ln = String(layList[j].nama || '').trim().toLowerCase();
+    if (!ln || ln.length < 4) continue;
+    if (nl.indexOf(ln) >= 0) return layList[j].nama;
+  }
+  return '';
+}
+
 function apiListDonatur(t) {
   _requirePerm(t, 'penghimpunan', 'view');
   var himp = readAll(SHEETS.PENGHIMPUNAN) || [];
@@ -2657,8 +2673,11 @@ function apiListDonatur(t) {
       totalDonasi: 0,
       jumlahTransaksi: 0,
       terakhir: '',
-      isImported: true
+      isImported: true,
+      _layananSet: {}
     };
+    var _regLay = resolveLayananNamaForDonatur(cleaned, row.layananId || '', layList);
+    if (_regLay) donaturMap[key]._layananSet[_regLay.toLowerCase()] = true;
   });
 
   himp.forEach(function(tx) {
@@ -2678,11 +2697,15 @@ function apiListDonatur(t) {
         totalDonasi: 0,
         jumlahTransaksi: 0,
         terakhir: '',
-        isImported: false
+        isImported: false,
+        _layananSet: {}
       };
     }
 
     var obj = donaturMap[key];
+    if (!obj._layananSet) obj._layananSet = {};
+    var _txLay = resolveLayananNamaForDonatur(cleaned, tx.layananId || '', layList);
+    if (_txLay) obj._layananSet[_txLay.toLowerCase()] = true;
     if (obj.kategori === 'Perorangan' && detected !== 'Perorangan') obj.kategori = detected;
     obj.totalDonasi += Number(tx.jumlah) || 0;
     obj.jumlahTransaksi++;
@@ -2694,7 +2717,12 @@ function apiListDonatur(t) {
     if (!obj.email && tx.email) obj.email = tx.email;
   });
   
-  return Object.values(donaturMap);
+  var _donaturArr = Object.values(donaturMap);
+  _donaturArr.forEach(function(o) {
+    o.layanan = Object.keys(o._layananSet || {});
+    delete o._layananSet;
+  });
+  return _donaturArr;
 }
 
 function apiImportDonaturText(t, text) {

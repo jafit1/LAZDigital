@@ -956,7 +956,7 @@ function initBgFx(){
   for(var i=0;i<N;i++)pts.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.25*DPR,vy:(Math.random()-.5)*.25*DPR,r:(Math.random()*2+1)*DPR});
   window.addEventListener('mousemove',function(e){mouse.x=e.clientX*DPR;mouse.y=e.clientY*DPR;});
   window.addEventListener('mouseout',function(){mouse.x=-999;mouse.y=-999;});
-  function accent(){return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#f77f00';}
+  function accent(){return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#C15F3C';}
   function loop(){
     ctx.clearRect(0,0,W,H);var col=accent();var link=120*DPR;
     for(var i=0;i<pts.length;i++){var p=pts[i];
@@ -1019,8 +1019,8 @@ function initBgFx(){
 /* ===== DASHBOARD v6 RENDER ===== */
 var WIDGETS={
   rekening:{t:'Tunai & Non Tunai',dot:'#0ea5e9'},
-  tren:{t:'Tren Arus Dana',dot:'#ea6a1e'},
-  jenis:{t:'Jenis Dana Terhimpun',dot:'#f7931e'},
+  tren:{t:'Tren Arus Dana',dot:'#C15F3C'},
+  jenis:{t:'Jenis Dana Terhimpun',dot:'#D97757'},
   pilar:{t:'Pilar Program',dot:'#10b981'},
   bank:{t:'Bank & Kas',dot:'#f43f5e'},
   ashnaf:{t:'Penyaluran Berdasarkan Ashnaf',dot:'#8b5cf6'},
@@ -1030,7 +1030,7 @@ var WIDGETS={
   rtasyaruf:{t:'Pentasyarufan Terbaru',dot:'#ec4899'}
 };
 function dashGreeting(){var h=new Date().getHours();return h<11?'Selamat pagi':h<15?'Selamat siang':h<19?'Selamat sore':'Selamat malam';}
-function avColor(s){var p=['#ea6a1e','#f7931e','#8b5cf6','#3b82f6','#10b981','#ec4899','#0ea5e9','#f59e0b'];var n=0;s=s||'?';for(var i=0;i<s.length;i++)n+=s.charCodeAt(i);return p[n%p.length];}
+function avColor(s){var p=['#C15F3C','#D97757','#8b5cf6','#3b82f6','#10b981','#ec4899','#0ea5e9','#f59e0b'];var n=0;s=s||'?';for(var i=0;i<s.length;i++)n+=s.charCodeAt(i);return p[n%p.length];}
 
 function kpiSpark(series,key){
   if(!series||!series.length)return '';
@@ -1040,7 +1040,7 @@ function kpiSpark(series,key){
   var pts=vals.map(function(v,i){var x=(i/(n-1||1))*W;var y=H-2-((v-min)/((max-min)||1))*(H-4);return x.toFixed(1)+','+y.toFixed(1);});
   var d='M'+pts.join(' L');
   var area=d+' L'+W+','+H+' L0,'+H+' Z';
-  var col=key==='himpun'?'#ea6a1e':'#3b82f6';
+  var col=key==='himpun'?'#C15F3C':'#3b82f6';
   var gid='sg_'+key+'_'+Math.random().toString(36).slice(2,7);
   return '<svg class="kpi-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+col+'" stop-opacity=".28"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs><path d="'+area+'" fill="url(#'+gid+')"/><path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 }
@@ -1064,14 +1064,14 @@ function areaChart(series){
   var grid='';for(var g=0;g<=3;g++){var gy=22+g*((H-44)/3);grid+='<line x1="'+pad+'" y1="'+gy+'" x2="'+(W-pad)+'" y2="'+gy+'" stroke="rgba(100,116,139,.13)" stroke-width="1"/>';}
   var labels=series.map(function(s,i){var x=pad+(i/(n-1||1))*(W-2*pad);return '<text x="'+x.toFixed(1)+'" y="'+(H-6)+'" font-size="9" fill="#94a3b8" text-anchor="middle">'+(s.bulan||'').slice(2)+'</text>';}).join('');
   return '<div class="area-wrap"><svg class="area-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'+
-    '<defs><linearGradient id="ah" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ea6a1e" stop-opacity=".26"/><stop offset="1" stop-color="#ea6a1e" stop-opacity="0"/></linearGradient>'+
+    '<defs><linearGradient id="ah" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C15F3C" stop-opacity=".26"/><stop offset="1" stop-color="#C15F3C" stop-opacity="0"/></linearGradient>'+
     '<linearGradient id="at" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6" stop-opacity=".22"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0"/></linearGradient></defs>'+
     grid+
     '<path d="'+h.area+'" fill="url(#ah)"/><path d="'+t.area+'" fill="url(#at)"/>'+
     '<path d="'+t.line+'" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+
-    '<path d="'+h.line+'" fill="none" stroke="#ea6a1e" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>'+
+    '<path d="'+h.line+'" fill="none" stroke="#C15F3C" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>'+
     labels+'</svg></div>'+
-    '<div class="legend"><span><i style="background:#ea6a1e"></i>Penghimpunan</span><span><i style="background:#3b82f6"></i>Pentasyarufan</span></div>';
+    '<div class="legend"><span><i style="background:#C15F3C"></i>Penghimpunan</span><span><i style="background:#3b82f6"></i>Pentasyarufan</span></div>';
 }
 function barsWidget(obj){
   var k=Object.keys(obj||{});if(!k.length)return '<div class="muted" style="padding:18px 0;text-align:center">Belum ada data.</div>';
@@ -1575,7 +1575,7 @@ function renderDashboard(d){
   '</div>';
 
   var kpis='<div class="kpis">'+
-    kpiCard('himpun','Total Penghimpunan',rp(d.totalHimpun),'↑','linear-gradient(135deg,#ea6a1e,#f7931e)','up',trH+' transaksi',kpiSpark(d.series,'himpun'))+
+    kpiCard('himpun','Total Penghimpunan',rp(d.totalHimpun),'↑','linear-gradient(135deg,#C15F3C,#D97757)','up',trH+' transaksi',kpiSpark(d.series,'himpun'))+
     kpiCard('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),'↓','linear-gradient(135deg,#3b82f6,#60a5fa)','down',trT+' transaksi',kpiSpark(d.series,'tasyaruf'))+
     kpiCard('orang','Donatur / Mustahik',orangCardHtml,'♥','linear-gradient(135deg,#8b5cf6,#a78bfa)','flat','terdaftar','')+
     '</div>';
@@ -3292,7 +3292,7 @@ function renderDonatur(rows) {
   } else {
     rows.sort(function(a, b) { return b.totalDonasi - a.totalDonasi; });
     rows.forEach(function(r) {
-      h += '<tr class="donatur-row" data-kategori="' + esc(r.kategori) + '">' +
+      h += '<tr class="donatur-row" data-kategori="' + esc(r.kategori) + '" data-layanan="' + esc((r.layanan || []).join('|').toLowerCase()) + '">' +
         '  <td style="font-weight:600" class="donatur-name-cell">' + esc(r.nama) + '</td>' +
         '  <td><span class="badge">' + esc(r.kategori) + '</span></td>' +
         '  <td>' + esc(r.telepon || '-') + '</td>' +
@@ -3325,7 +3325,8 @@ function onDonaturKategoriChange() {
     var tipe = kat === 'Kantor Layanan (KLL)' ? 'KLL' : 'ULL';
     
     var layData = CACHE.layanan || [];
-    if (!layData || layData.length === 0) {
+    if ((!layData || layData.length === 0) && !window.__layananFetched) {
+      window.__layananFetched = true;
       gas('apiListLayanan')(TOKEN).then(function(data) {
         CACHE.layanan = data || [];
         onDonaturKategoriChange();
@@ -3415,8 +3416,10 @@ function toggleKllUllDropdown(e) {
   if (e) e.stopPropagation();
   var pop = el('kll_ull_popover');
   if (pop) {
+    var willOpen = pop.classList.contains('hidden');
+    document.querySelectorAll('.select-enhanced-popover:not(.hidden), .datepicker-enhanced-popover:not(.hidden)').forEach(function(p) { p.classList.add('hidden'); });
     pop.classList.toggle('hidden');
-    if (!pop.classList.contains('hidden')) {
+    if (willOpen) {
       var searchInput = el('kll_ull_search');
       if (searchInput) {
         searchInput.value = '';
@@ -3453,12 +3456,14 @@ function filterDonaturTable() {
     var matchKat = !kat || rowKat === kat;
     
     if (matchSearch && matchKat && (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)')) {
-      if (!allSelected) {
+      // Batasi berdasarkan Kantor/Unit Layanan hanya jika master layanan tersedia
+      // DAN pengguna memilih sebagian layanan (bukan semua, bukan kosong).
+      // Cocokkan dengan asosiasi layanan asli donatur (data-layanan), bukan nama donatur.
+      if (totalLayanan > 0 && !allSelected && checkedLayanan.length > 0) {
+        var rowLayanan = (row.getAttribute('data-layanan') || '').split('|').filter(Boolean);
         var matchLayanan = false;
         for (var j = 0; j < checkedLayanan.length; j++) {
-          var layName = checkedLayanan[j];
-          var cleanLay = layName.replace(/^(kll|ull)\s+/g, '').trim();
-          if (donorNameLower.indexOf(cleanLay) >= 0 || cleanLay.indexOf(donorNameLower) >= 0) {
+          if (rowLayanan.indexOf(checkedLayanan[j]) >= 0) {
             matchLayanan = true;
             break;
           }

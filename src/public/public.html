@@ -8,8 +8,8 @@
   <link rel="stylesheet" href="/styles.css">
   <style>
     :root {
-      --primary: #ea6a1e;
-      --accent: #f7931e;
+      --primary: #C15F3C;
+      --accent: #D97757;
       --green: #10b981;
       --red: #ef4444;
       --glass: rgba(255, 255, 255, 0.72);
@@ -424,7 +424,7 @@
         
         var d = 'M' + pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' L');
         var area = d + ' L' + pts[pts.length - 1][0].toFixed(1) + ',' + (H - 20) + ' L' + pts[0][0].toFixed(1) + ',' + (H - 20) + ' Z';
-        var col = key === 'himpun' ? '#ea6a1e' : '#3b82f6';
+        var col = key === 'himpun' ? '#C15F3C' : '#3b82f6';
         var gid = 'sg_' + key + '_' + Math.random().toString(36).slice(2, 7);
         
         return '<defs>' +
@@ -492,7 +492,7 @@
       var kpisHtml = '<div class="pub-kpis">' +
         '<div class="pub-kpi">' +
           '<div class="pub-kpi-top">' +
-            '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#ea6a1e,#f7931e)">↑</div>' +
+            '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#C15F3C,#D97757)">↑</div>' +
             '<div class="pub-kpi-label">Total Penghimpunan</div>' +
           '</div>' +
           '<div class="pub-kpi-value" style="color:var(--primary)">' + rp(d.totalHimpun) + '</div>' +
@@ -524,7 +524,7 @@
       // 5. Grid of Progress Charts (Jenis Dana & Ashnaf)
       var chartsHtml = '<div class="grid-2">' +
         '<div class="pub-card">' +
-          '<div class="pub-card-title"><span class="dot" style="background:#f7931e"></span>Penghimpunan per Jenis Dana</div>' +
+          '<div class="pub-card-title"><span class="dot" style="background:#D97757"></span>Penghimpunan per Jenis Dana</div>' +
           renderProgressBars(d.byJenis) +
         '</div>' +
         '<div class="pub-card">' +
@@ -541,10 +541,10 @@
         
       // 7. Tren Chart at the very bottom
       var trendHtml = '<div class="pub-card">' +
-        '<div class="pub-card-title"><span class="dot" style="background:#ea6a1e"></span>Tren Arus Dana 12 Bulan Terakhir</div>' +
+        '<div class="pub-card-title"><span class="dot" style="background:#C15F3C"></span>Tren Arus Dana 12 Bulan Terakhir</div>' +
         renderAreaChart(d.series) +
         '<div style="display:flex;gap:18px;margin-top:14px;font-size:12px;font-weight:600">' +
-          '<span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ea6a1e"></span> Penghimpunan</span>' +
+          '<span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#C15F3C"></span> Penghimpunan</span>' +
           '<span style="display:flex;align-items:center;gap:6px"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#3b82f6"></span> Pentasyarufan</span>' +
         '</div>' +
         '</div>';
