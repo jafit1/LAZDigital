@@ -1429,24 +1429,17 @@ function onDashFilterChange(month, pekan, hari) {
 
 function handleMonthClick(mVal) {
   event.stopPropagation();
-  if (mVal === 'Semua') {
-    onDashFilterChange('Semua', 'Semua', 'Semua');
-    return;
-  }
-  window.DASH_TEMP_MONTH = mVal;
-  window.DASH_DROPDOWN_STEP = 'pekan';
-  renderMonthDropdownContent();
+  onDashFilterChange(mVal, 'Semua', 'Semua');
 }
 
 function handlePekanClick(pVal) {
   event.stopPropagation();
-  onDashFilterChange(window.DASH_TEMP_MONTH, pVal, 'Semua');
+  var mVal = (window.DASH && window.DASH.selectedMonth) || 'Semua';
+  onDashFilterChange(mVal, pVal, 'Semua');
 }
 
 function handleDropdownBack() {
   event.stopPropagation();
-  window.DASH_DROPDOWN_STEP = 'month';
-  renderMonthDropdownContent();
 }
 
 function renderMonthDropdownContent() {
@@ -1457,44 +1450,50 @@ function renderMonthDropdownContent() {
   var checkIcon = '<svg height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);margin-right:8px;fill:currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
   var h = '<div class="dropdown-section">';
   
-  if (window.DASH_DROPDOWN_STEP === 'month') {
-    h += '<div class="dropdown-header">Pilih Bulan</div>';
-    var isSelAll = d.selectedMonth === 'Semua';
-    h += '<div class="dropdown-item" onclick="handleMonthClick(\'Semua\')">' +
-      '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelAll ? checkIcon : '') + '</span>' +
-      '<span>Semua Waktu</span>' +
-    '</div>';
-    
-    if (d.availableMonths && d.availableMonths.length) {
-      d.availableMonths.forEach(function(m) {
-        var isSel = d.selectedMonth === m;
-        h += '<div class="dropdown-item" onclick="handleMonthClick(\'' + esc(m) + '\')">' +
-          '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSel ? checkIcon : '') + '</span>' +
-          '<span>' + esc(formatMonthYear(m)) + '</span>' +
-        '</div>';
-      });
-    }
-  } else {
-    h += '<div class="dropdown-header" style="display:flex;align-items:center;justify-content:space-between">' +
-      '<span>Pilih Pekan</span>' +
-      '<button class="btn btn-ghost btn-sm" onclick="handleDropdownBack()" style="font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer">← Kembali</button>' +
-    '</div>';
-    
-    var isSelSemua = d.selectedPekan === 'Semua';
-    h += '<div class="dropdown-item" onclick="handlePekanClick(\'Semua\')">' +
-      '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelSemua ? checkIcon : '') + '</span>' +
-      '<span>Semua (Satu Bulan)</span>' +
-    '</div>';
-    
-    for (var w = 1; w <= 5; w++) {
-      var wStr = String(w);
-      var isSel = d.selectedPekan === wStr;
-      var desc = w === 1 ? ' (1-7)' : w === 2 ? ' (8-14)' : w === 3 ? ' (15-21)' : w === 4 ? ' (22-28)' : ' (29-31)';
-      h += '<div class="dropdown-item" onclick="handlePekanClick(\'' + wStr + '\')">' +
+  h += '<div class="dropdown-header">Pilih Bulan</div>';
+  var isSelAll = d.selectedMonth === 'Semua';
+  h += '<div class="dropdown-item" onclick="handleMonthClick(\'Semua\')">' +
+    '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelAll ? checkIcon : '') + '</span>' +
+    '<span>Semua Waktu</span>' +
+  '</div>';
+  
+  if (d.availableMonths && d.availableMonths.length) {
+    d.availableMonths.forEach(function(m) {
+      var isSel = d.selectedMonth === m;
+      h += '<div class="dropdown-item" onclick="handleMonthClick(\'' + esc(m) + '\')">' +
         '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSel ? checkIcon : '') + '</span>' +
-        '<span>Pekan ' + wStr + desc + '</span>' +
+        '<span>' + esc(formatMonthYear(m)) + '</span>' +
       '</div>';
-    }
+    });
+  }
+  
+  h += '</div>';
+  pop.innerHTML = h;
+}
+
+function renderPekanDropdownContent() {
+  var pop = el('dashPekan_popover');
+  if (!pop || !CACHE.dash) return;
+  
+  var d = CACHE.dash;
+  var checkIcon = '<svg height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);margin-right:8px;fill:currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
+  var h = '<div class="dropdown-section">';
+  
+  h += '<div class="dropdown-header">Pilih Pekan</div>';
+  var isSelSemua = d.selectedPekan === 'Semua' || !d.selectedPekan;
+  h += '<div class="dropdown-item" onclick="handlePekanClick(\'Semua\')">' +
+    '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelSemua ? checkIcon : '') + '</span>' +
+    '<span>Semua Pekan</span>' +
+  '</div>';
+  
+  for (var w = 1; w <= 5; w++) {
+    var wStr = String(w);
+    var isSel = d.selectedPekan === wStr;
+    var desc = w === 1 ? ' (1-7)' : w === 2 ? ' (8-14)' : w === 3 ? ' (15-21)' : w === 4 ? ' (22-28)' : ' (29-31)';
+    h += '<div class="dropdown-item" onclick="handlePekanClick(\'' + wStr + '\')">' +
+      '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSel ? checkIcon : '') + '</span>' +
+      '<span>Pekan ' + wStr + desc + '</span>' +
+    '</div>';
   }
   
   h += '</div>';
@@ -1512,8 +1511,9 @@ function toggleCustomDropdown(popId) {
     if (wasHidden) {
       pop.classList.remove('hidden');
       if (popId === 'dashMonth_popover') {
-        window.DASH_DROPDOWN_STEP = 'month';
         renderMonthDropdownContent();
+      } else if (popId === 'dashPekan_popover') {
+        renderPekanDropdownContent();
       }
     }
   }
@@ -1549,20 +1549,28 @@ function renderDashboard(d){
   var selectedVal = d.selectedMonth || 'Semua';
   var selectedOpt = dropdownOptions.find(function(o) { return o.value === selectedVal; }) || dropdownOptions[0];
   
-  var triggerLabel = selectedOpt.label;
-  if (selectedVal !== 'Semua' && d.selectedPekan !== 'Semua') {
-    triggerLabel = formatMonthYear(selectedVal) + ' - Pekan ' + d.selectedPekan;
-  }
-  
   var monthDropdown = '<div class="custom-dropdown">' +
     '<button id="dashMonth_trigger" class="btn-dropdown" onclick="toggleCustomDropdown(\'dashMonth_popover\')">' +
-      '<span>' + esc(triggerLabel) + '</span>' +
+      '<span>' + esc(selectedOpt.label) + '</span>' +
       '<svg height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg" style="fill:currentColor"><path d="M4.5 6l3.5 3.5L11.5 6H4.5z"/></svg>' +
     '</button>' +
     '<div id="dashMonth_popover" class="dropdown-popover hidden"></div>' +
   '</div>';
 
   var checkIcon = '<svg height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);margin-right:8px;fill:currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
+
+  var pekanDropdown = '';
+  if (selectedVal !== 'Semua') {
+    var selPekan = d.selectedPekan || 'Semua';
+    var pekanLabel = selPekan === 'Semua' ? 'Semua Pekan' : 'Pekan ' + selPekan;
+    pekanDropdown = '<div class="custom-dropdown" style="margin-left:4px">' +
+      '<button id="dashPekan_trigger" class="btn-dropdown" onclick="toggleCustomDropdown(\'dashPekan_popover\')">' +
+        '<span>' + esc(pekanLabel) + '</span>' +
+        '<svg height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg" style="fill:currentColor"><path d="M4.5 6l3.5 3.5L11.5 6H4.5z"/></svg>' +
+      '</button>' +
+      '<div id="dashPekan_popover" class="dropdown-popover hidden"></div>' +
+    '</div>';
+  }
 
   var dayDropdown = '';
   if (selectedVal !== 'Semua' && d.selectedPekan !== 'Semua') {
@@ -1613,7 +1621,7 @@ function renderDashboard(d){
         '<div class="dh-sub">'+today+' • Ringkasan dana lembaga Anda</div></div>'+
         '<div class="dh-acts">' +
           '<div class="dh-act-row">' + pubBtn + '<button class="dh-btn '+edClass+'" id="dashEditBtn" onclick="toggleDashEdit()">⚙ '+(window.DASH_EDIT?'Selesai':'Atur Layout')+'</button></div>' +
-          '<div class="dh-act-row">' + monthDropdown + dayDropdown + '</div>' +
+          '<div class="dh-act-row">' + monthDropdown + pekanDropdown + dayDropdown + '</div>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -1621,15 +1629,15 @@ function renderDashboard(d){
 
   var trH=d.transaksiHimpun||0,trT=d.transaksiTasyaruf||0;
   
-  var orangCardHtml = '<div style="display:flex;gap:12px;margin:4px 0 2px;font-family:var(--head);letter-spacing:0">' +
+  var orangCardHtml = '<div style="display:flex;gap:8px;margin:4px 0 2px;font-family:var(--head);letter-spacing:0">' +
     '<div style="flex:1">' +
-      '<div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Donatur</div>' +
-      '<div style="font-size:18px;font-weight:750;color:var(--text)">' + (d.jumlahDonatur||0) + ' <span style="font-size:11px;color:var(--text2);font-weight:normal">jiwa</span></div>' +
+      '<div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Donatur</div>' +
+      '<div style="font-size:16px;font-weight:750;color:var(--text);white-space:nowrap">' + (d.jumlahDonatur||0) + ' <span style="font-size:10.5px;color:var(--text2);font-weight:normal">jiwa</span></div>' +
     '</div>' +
-    '<div style="width:1px;background:rgba(100,116,139,0.18);align-self:stretch"></div>' +
+    '<div style="width:1px;background:rgba(100,116,139,0.15);align-self:stretch"></div>' +
     '<div style="flex:1">' +
-      '<div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Mustahik</div>' +
-      '<div style="font-size:18px;font-weight:750;color:var(--text)">' + (d.jumlahMustahik||0) + ' <span style="font-size:11px;color:var(--text2);font-weight:normal">jiwa</span></div>' +
+      '<div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Mustahik</div>' +
+      '<div style="font-size:16px;font-weight:750;color:var(--text);white-space:nowrap">' + (d.jumlahMustahik||0) + ' <span style="font-size:10.5px;color:var(--text2);font-weight:normal">jiwa</span></div>' +
     '</div>' +
   '</div>';
 
