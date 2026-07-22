@@ -652,39 +652,98 @@ function setLapTab(t){LAP_TAB=t;renderLaporanShell();}
 function renderJurnalForm(){
   var now=new Date();var yopt='';for(var y=now.getFullYear()+1;y>=now.getFullYear()-3;y--)yopt+='<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>';
   var mopt='';for(var m=1;m<=12;m++)mopt+='<option value="'+m+'" '+((m-1)===now.getMonth()?'selected':'')+'>'+BULAN[m]+'</option>';
-  var h='<div class="card" style="max-width:560px"><h3 style="margin-bottom:6px">Generate Jurnal Penerimaan</h3><p class="muted" style="font-size:13px;margin-bottom:18px">Pilih bulan & tahun, lalu buka spreadsheet atau unduh jurnal dalam format Excel (.xlsx) sesuai standar akuntansi.</p><div class="row"><div class="field"><label>Bulan</label><select id="j_bulan">'+mopt+'</select></div><div class="field"><label>Tahun</label><select id="j_tahun">'+yopt+'</select></div></div><div style="display:flex;gap:12px;margin-top:20px"><button class="btn btn-ghost" style="flex:1;border:1px solid var(--border)" onclick="openMonthlySpreadsheet()">🟢 Spreadsheet</button><button class="btn btn-primary" style="flex:1" onclick="loadJurnal()">⬇ Unduh</button></div></div><div id="jurnalPreview" style="margin-top:20px"></div>';
+  var h='<div class="card" style="max-width:560px"><h3 style="margin-bottom:6px">Generate Jurnal Penerimaan</h3><p class="muted" style="font-size:13px;margin-bottom:18px">Pilih bulan & tahun, lalu lihat laporan detail atau unduh jurnal dalam format Excel (.xlsx) sesuai standar akuntansi.</p><div class="row"><div class="field"><label>Bulan</label><select id="j_bulan">'+mopt+'</select></div><div class="field"><label>Tahun</label><select id="j_tahun">'+yopt+'</select></div></div><div style="display:flex;gap:12px;margin-top:20px"><button class="btn btn-ghost" style="flex:1;border:1px solid var(--border)" onclick="loadJurnal()">👁 Lihat Laporan</button><button class="btn btn-primary" style="flex:1" onclick="loadJurnalAndDownload()">⬇ Unduh Excel</button></div></div><div id="jurnalPreview" style="margin-top:20px"></div>';
   el('lapBody').innerHTML=h;
 }
-function openMonthlySpreadsheet(){
+
+function loadJurnal(){
   var m=el('j_bulan').value,y=el('j_tahun').value;
-  toast('Membuka Spreadsheet...');
-  gas('apiGetMonthlySpreadsheet')(TOKEN,y,m).then(function(res){
-    if(res && res.data){
-      // Direct download via temporary link
-      var a = document.createElement('a');
-      a.href = res.data;
-      a.download = 'Jurnal Penerimaan ' + res.month + '.xlsx';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      toast('Spreadsheet ' + res.month + ' diunduh');
-    } else {
-      toast('Belum ada transaksi pada periode ini',true);
-    }
+  el('jurnalPreview').innerHTML=BOXES_SPINNER;
+  gas('apiJurnalData')(TOKEN,y,m).then(function(d){
+    CACHE.jurnal=d;
+    renderJurnalPreview(d);
   }).catch(handleErr);
 }
-function loadJurnal(){var m=el('j_bulan').value,y=el('j_tahun').value;el('jurnalPreview').innerHTML=BOXES_SPINNER;
-  gas('apiJurnalData')(TOKEN,y,m).then(function(d){CACHE.jurnal=d;renderJurnalPreview(d);if(d.count>0)exportJurnalXlsx(d);else toast('Tidak ada transaksi pada periode ini',true);}).catch(handleErr);}
+
+function loadJurnalAndDownload(){
+  var m=el('j_bulan').value,y=el('j_tahun').value;
+  el('jurnalPreview').innerHTML=BOXES_SPINNER;
+  gas('apiJurnalData')(TOKEN,y,m).then(function(d){
+    CACHE.jurnal=d;
+    renderJurnalPreview(d);
+    if(d.count>0) exportJurnalXlsx(d);
+    else toast('Tidak ada transaksi pada periode ini',true);
+  }).catch(handleErr);
+}
+
 function renderJurnalPreview(d){
   if(!d.count){el('jurnalPreview').innerHTML='<div class="card empty"><div class="big">🧾</div>Tidak ada penerimaan pada '+esc(d.periode)+'.</div>';return;}
-  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">⬇ Unduh .xlsx</button></div>';
+  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" style="border:1px solid var(--border)" onclick="copyAllJurnal()">📋 Salin Semua</button><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">⬇ Unduh .xlsx</button></div></div>';
   h+='<div style="overflow:auto"><table><thead><tr><th>Tanggal</th><th>Akun</th><th>Debit</th><th>Kredit</th><th>Keterangan</th></tr></thead><tbody>';
-  d.sections.forEach(function(sec){h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</td></tr>';
-    sec.lines.forEach(function(l){h+='<tr><td>'+esc(l.tanggal)+'</td><td>'+esc(l.akun)+'</td><td>'+(l.debit!==''?rp(l.debit):'')+'</td><td>'+(l.kredit!==''?rp(l.kredit):'')+'</td><td class="muted">'+esc(l.ket)+'</td></tr>';});
-    h+='<tr><td></td><td style="font-weight:600">Subtotal</td><td colspan="2" style="font-weight:700;color:var(--green)">'+rp(sec.subtotal)+'</td><td></td></tr>';});
+  d.sections.forEach(function(sec, idx){
+    h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">📋 Salin Kategori</button></div></td></tr>';
+    sec.lines.forEach(function(l){
+      h+='<tr><td>'+esc(l.tanggal)+'</td><td>'+esc(l.akun)+'</td><td>'+(l.debit!==''?rp(l.debit):'')+'</td><td>'+(l.kredit!==''?rp(l.kredit):'')+'</td><td class="muted">'+esc(l.ket)+'</td></tr>';
+    });
+    h+='<tr><td></td><td style="font-weight:600">Subtotal</td><td colspan="2" style="font-weight:700;color:var(--green)">'+rp(sec.subtotal)+'</td><td></td></tr>';
+  });
   h+='<tr><td></td><td style="font-weight:700;font-family:var(--font)">TOTAL PENERIMAAN</td><td colspan="2" style="font-weight:700;color:var(--primary);font-size:15px">'+rp(d.grandTotal)+'</td><td></td></tr>';
-  h+='</tbody></table></div></div>';el('jurnalPreview').innerHTML=h;
+  h+='</tbody></table></div></div>';
+  el('jurnalPreview').innerHTML=h;
+}
+
+function copySectionJurnal(idx) {
+  if (!CACHE.jurnal || !CACHE.jurnal.sections || !CACHE.jurnal.sections[idx]) return;
+  var sec = CACHE.jurnal.sections[idx];
+  
+  var lines = [];
+  lines.push('Tanggal\tAkun\tDebit\tKredit\tKeterangan');
+  
+  sec.lines.forEach(function(l) {
+    var row = [
+      l.tanggal || '',
+      l.akun || '',
+      l.debit !== '' ? l.debit : '',
+      l.kredit !== '' ? l.kredit : '',
+      l.ket || ''
+    ];
+    lines.push(row.join('\t'));
+  });
+  
+  var text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(function() {
+    toast('Kategori "' + sec.title + '" berhasil disalin ke clipboard');
+  }).catch(function(err) {
+    toast('Gagal menyalin data', true);
+  });
+}
+
+function copyAllJurnal() {
+  if (!CACHE.jurnal || !CACHE.jurnal.sections) return;
+  
+  var lines = [];
+  lines.push('Kategori\tTanggal\tAkun\tDebit\tKredit\tKeterangan');
+  
+  CACHE.jurnal.sections.forEach(function(sec) {
+    sec.lines.forEach(function(l) {
+      var row = [
+        sec.title || '',
+        l.tanggal || '',
+        l.akun || '',
+        l.debit !== '' ? l.debit : '',
+        l.kredit !== '' ? l.kredit : '',
+        l.ket || ''
+      ];
+      lines.push(row.join('\t'));
+    });
+  });
+  
+  var text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(function() {
+    toast('Seluruh jurnal berhasil disalin ke clipboard');
+  }).catch(function(err) {
+    toast('Gagal menyalin data', true);
+  });
 }
 function exportJurnalXlsx(d){
   var wb = XLSX.utils.book_new();
