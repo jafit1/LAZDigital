@@ -1343,8 +1343,8 @@ function mapImportedRow(row, type) {
           pilar = 'Qurban';
           program = 'Qurban';
         } else if (suffixLower.indexOf('filantropis') >= 0) {
-          pilar = 'Pendidikan/Filanatropis';
-          program = 'Pendidikan/Filanatropis';
+          pilar = 'Pendidikan';
+          program = 'Pendidikan';
         } else {
           pilar = 'Sosial Dakwah';
           program = 'Sosial Dakwah';
