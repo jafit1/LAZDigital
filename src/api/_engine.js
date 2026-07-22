@@ -701,7 +701,7 @@ function _getJurnalData(year, month) {
     else if(jl.indexOf('infak')>=0||jl.indexOf('infaq')>=0||jl.indexOf('sedekah')>=0){
       debitBase='Infak';
       var terikat = sl.indexOf('terikat')>=0 || (!!r.pilar && sl.indexOf('umum')<0);
-      if(terikat){ var kat=catTerikat(r); groupLabel='INFAK TERIKAT'; creditAcc='Penerimaan Infak Terikat - '+kat; ketPrefix='Infak Terikat '+kat; }
+      if(terikat){ var kat=catTerikat(r); groupLabel='INFAK TERIKAT'; creditAcc='Penerimaan Infak Terikat - '+kat; ketPrefix='Infak Terikat'; }
       else { groupLabel='INFAK UMUM'; creditAcc='Penerimaan Infak Umum'; ketPrefix='Infak Umum'; }
     } else { groupLabel=(r.jenisDana||'LAINNYA').toUpperCase(); debitBase=r.jenisDana||'Lainnya'; creditAcc='Penerimaan '+(r.jenisDana||'Lainnya'); ketPrefix=r.jenisDana||'Lainnya'; }
     
