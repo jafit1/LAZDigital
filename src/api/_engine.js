@@ -715,7 +715,7 @@ function _getJurnalData(year, month) {
     }
     
     var debitAcc = getCleanBankName(r, via);
-    if (!debitAcc) {
+    if (!debitAcc || debitAcc === 'Kas') {
       debitAcc = (via==='BANK'?'Bank ':'Kas ')+debitBase;
     }
     
@@ -754,7 +754,7 @@ function _getJurnalData(year, month) {
     
     var debitAcc = r.program || 'Penyaluran';
     var creditAcc = getCleanBankName(r, via);
-    if (!creditAcc) {
+    if (!creditAcc || creditAcc === 'Kas') {
       creditAcc = (via==='BANK'?'Bank ':'Kas ')+(r.sumberDana || 'Infak');
     }
     
