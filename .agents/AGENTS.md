@@ -58,3 +58,22 @@ Always use semantic HSL CSS custom properties to manage colors, making light and
 ## 🛡️ Focus and Accessibility rings
 - Never hide focus rings entirely. Use a clean `:focus-visible` ring style using `--ring` and focus offset:
   `outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));`
+
+## 📊 Flexible Dashboard Layout & KPI Card Rules
+
+To prevent dynamic data updates from breaking the dashboard layout, always follow these rules:
+
+1. **Stable Widget Dimensions**:
+   - Never let list-based or table-based widgets (like "Recent Transactions" or "Branch Offices") grow infinitely in height.
+   - Always wrap lists and tables inside a container with a fixed `max-height` (e.g., `240px` to `280px`) and `overflow-y: auto`.
+   - This ensures that when records are added or deleted, the overall card dimensions remain stable, and only the scrollable contents inside change.
+
+2. **Symmetrical Grid Alignment**:
+   - Arrange dashboard cards into structured horizontal rows or equal-height grids using CSS Flexbox or CSS Grid.
+   - For rows, use `align-items: stretch` to ensure that all cards in the same row share the exact same height, preventing awkward vertical gaps.
+   - Use explicit fractional widths (e.g., `flex: 1.5` for a primary card, `flex: 1` for a secondary card) to control sizing rather than letting content define width.
+
+3. **Premium KPI Stats Cards**:
+   - Visual Hierarchy: Place key stats (like Total Income/Expenditure) in a dedicated grid at the top. Use large bold values (e.g., `font-size: 26px`, `font-weight: 700`, `letter-spacing: -0.02em`).
+   - Soft Backdrops & Shadows: Use custom backgrounds (`var(--surface2)`) with a very soft colored drop shadow corresponding to the metric (e.g., subtle green shadow for income, subtle red shadow for expense, subtle blue/purple for metadata).
+   - Styled Trend Badges: Use pills with soft background colors and corresponding text colors (e.g., `background: rgba(16,185,129,0.12); color: #10b981` instead of plain raw text) for transaction count indicators.

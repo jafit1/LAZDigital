@@ -559,10 +559,10 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     selectedMonth: filterMonth || 'Semua',
     recentHimpun: H.sort(function(a, b) {
       return new Date(b.dibuat) - new Date(a.dibuat);
-    }).slice(0, 5),
+    }).slice(0, 15),
     recentTasyaruf: T.sort(function(a, b) {
       return new Date(b.dibuat) - new Date(a.dibuat);
-    }).slice(0, 5),
+    }).slice(0, 15),
     detailHarian: (function() {
       if (!filterPrefix) return null;
       var detail = {};

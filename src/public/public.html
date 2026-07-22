@@ -114,8 +114,8 @@
     .pub-kpis {
       display: grid;
       grid-template-columns: 1fr 1fr 1.2fr;
-      gap: 14px;
-      margin-bottom: 20px;
+      gap: 18px;
+      margin-bottom: 24px;
     }
     @media(max-width: 768px) {
       .pub-kpis { grid-template-columns: 1fr; }
@@ -125,37 +125,43 @@
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--glass-bd);
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.015);
+      border-radius: 16px;
+      padding: 18px 20px;
+      box-shadow: 0 8px 30px -10px rgba(16,24,40,.08);
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      transition: all .3s cubic-bezier(.25,.8,.25,1);
+    }
+    .pub-kpi:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px -15px rgba(16,24,40,.16);
+      border-color: var(--accent);
     }
     .pub-kpi-top {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
+      gap: 10px;
+      margin-bottom: 12px;
     }
     .pub-kpi-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
       display: grid;
       place-items: center;
-      font-size: 14px;
+      font-size: 15px;
       color: #fff;
     }
     .pub-kpi-label {
-      font-size: 12px;
+      font-size: 12.5px;
       color: var(--text2);
       font-weight: 600;
     }
     .pub-kpi-value {
-      font-size: 21px;
+      font-size: 25px;
       font-weight: 800;
-      letter-spacing: -0.5px;
+      letter-spacing: -0.6px;
       color: var(--text);
     }
     

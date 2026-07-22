@@ -1106,7 +1106,7 @@ function kpiSpark(series,key){
 function kpiCard(key,label,val,ic,bg,trend,trv,spark){
   var tc=trend==='up'?'kpi-up':trend==='down'?'kpi-down':'kpi-flat';
   var ta=trend==='up'?'▲':trend==='down'?'▼':'●';
-  return '<div class="kpi" onclick="openDashDetail(\''+key+'\')">'+
+  return '<div class="kpi kpi-'+key+'" onclick="openDashDetail(\''+key+'\')">'+
     '<div class="kpi-top"><div class="kpi-ic" style="background:'+bg+'">'+ic+'</div><div class="kpi-lb">'+label+'</div></div>'+
     '<div class="kpi-val">'+val+'</div>'+
     '<div class="kpi-meta"><span class="kpi-tr '+tc+'">'+ta+' '+trv+'</span>'+(spark||'')+'</div></div>';
