@@ -179,7 +179,7 @@ function apiGetPermissionMeta(t){ authUser(t); return {modules:MODULES,actions:A
 
 /* ===== PENGHIMPUNAN ===== */
 function generateNoKwitansi(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var n=0; readAll(SHEETS.PENGHIMPUNAN).forEach(function(r){if(String(r.noKwitansi).indexOf('KW/'+ym)===0)n++;}); return 'KW/'+ym+'/'+('0000'+(n+1)).slice(-4); }
-function apiListPenghimpunan(t){ _requirePerm(t,'penghimpunan','view'); return readAll(SHEETS.PENGHIMPUNAN).sort(function(a,b){return new Date(b.dibuat)-new Date(a.dibuat);}); }
+function apiListPenghimpunan(t){ _requirePerm(t,'penghimpunan','view'); return readAll(SHEETS.PENGHIMPUNAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
 async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.id?'edit':'create');
   d.fundraising = cleanFundraisingName(d.fundraising);
   var oldMonth = '';
@@ -206,7 +206,7 @@ function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view'); return {da
 
 /* ===== PENTASYARUFAN ===== */
 function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var n=0; readAll(SHEETS.PENTASYARUFAN).forEach(function(r){if(String(r.noBukti).indexOf('BPT/'+ym)===0)n++;}); return 'BPT/'+ym+'/'+('0000'+(n+1)).slice(-4); }
-function apiListPentasyarufan(t){ _requirePerm(t,'pentasyarufan','view'); return readAll(SHEETS.PENTASYARUFAN).sort(function(a,b){return new Date(b.dibuat)-new Date(a.dibuat);}); }
+function apiListPentasyarufan(t){ _requirePerm(t,'pentasyarufan','view'); return readAll(SHEETS.PENTASYARUFAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
 async function apiSavePentasyarufan(t,d){ var u=_requirePerm(t,'pentasyarufan',d.id?'edit':'create');
   d.fundraising = cleanFundraisingName(d.fundraising);
   var oldMonth = '';
@@ -557,11 +557,15 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     series: series,
     availableMonths: availableMonths,
     selectedMonth: filterMonth || 'Semua',
-    recentHimpun: H.sort(function(a, b) {
-      return new Date(b.dibuat) - new Date(a.dibuat);
+    recentHimpun: H.slice().sort(function(a, b) {
+      var tA = String(a.tanggal || ''), tB = String(b.tanggal || '');
+      if (tA !== tB) return tB.localeCompare(tA);
+      return new Date(b.dibuat || 0) - new Date(a.dibuat || 0);
     }).slice(0, 15),
-    recentTasyaruf: T.sort(function(a, b) {
-      return new Date(b.dibuat) - new Date(a.dibuat);
+    recentTasyaruf: T.slice().sort(function(a, b) {
+      var tA = String(a.tanggal || ''), tB = String(b.tanggal || '');
+      if (tA !== tB) return tB.localeCompare(tA);
+      return new Date(b.dibuat || 0) - new Date(a.dibuat || 0);
     }).slice(0, 15),
     detailHarian: (function() {
       if (!filterPrefix) return null;
