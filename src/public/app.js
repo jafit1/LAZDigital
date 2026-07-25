@@ -2389,10 +2389,28 @@ function enhanceSelects(containerId) {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
       var isHidden = popover.classList.contains('hidden');
-      document.querySelectorAll('.select-enhanced-popover').forEach(function(p) {
-        p.classList.add('hidden');
+      document.querySelectorAll('.select-enhanced-popover, .datepicker-enhanced-popover').forEach(function(p) {
+        if (p !== popover) p.classList.add('hidden');
       });
       if (isHidden) {
+        var rect = btn.getBoundingClientRect();
+        var spaceBelow = window.innerHeight - rect.bottom;
+        var spaceAbove = rect.top;
+        
+        if (spaceBelow < 240 && spaceAbove > spaceBelow) {
+          popover.style.top = 'auto';
+          popover.style.bottom = '100%';
+          popover.style.marginTop = '0';
+          popover.style.marginBottom = '6px';
+          popover.style.transformOrigin = 'bottom left';
+        } else {
+          popover.style.top = '100%';
+          popover.style.bottom = 'auto';
+          popover.style.marginTop = '6px';
+          popover.style.marginBottom = '0';
+          popover.style.transformOrigin = 'top left';
+        }
+
         popover.classList.remove('hidden');
         if (searchInput) {
           setTimeout(function() {
@@ -2402,6 +2420,8 @@ function enhanceSelects(containerId) {
             searchInput.focus();
           }, 50);
         }
+      } else {
+        popover.classList.add('hidden');
       }
     });
   });
@@ -3518,9 +3538,29 @@ function onKllUllSearchInput() {
 function toggleKllUllDropdown(e) {
   if (e) e.stopPropagation();
   var pop = el('kll_ull_popover');
+  var btn = el('kll_ull_dropdown_btn');
   if (pop) {
     var willOpen = pop.classList.contains('hidden');
     document.querySelectorAll('.select-enhanced-popover:not(.hidden), .datepicker-enhanced-popover:not(.hidden)').forEach(function(p) { p.classList.add('hidden'); });
+    
+    if (willOpen && btn) {
+      var rect = btn.getBoundingClientRect();
+      var spaceBelow = window.innerHeight - rect.bottom;
+      var spaceAbove = rect.top;
+      
+      if (spaceBelow < 240 && spaceAbove > spaceBelow) {
+        pop.style.top = 'auto';
+        pop.style.bottom = '100%';
+        pop.style.marginTop = '0';
+        pop.style.marginBottom = '6px';
+      } else {
+        pop.style.top = '100%';
+        pop.style.bottom = 'auto';
+        pop.style.marginTop = '6px';
+        pop.style.marginBottom = '0';
+      }
+    }
+    
     pop.classList.toggle('hidden');
     if (willOpen) {
       var searchInput = el('kll_ull_search');

@@ -1276,3 +1276,28 @@ img, video { max-width: 100%; height: auto; }
   .resize-handle{display:none !important;}
 }
 
+/* ===== DROPDOWN POPOVER FLEXIBILITY & CLIPPING FIX ===== */
+.toolbar, .dash-filters, .filter-box, .filter-row, .card-header, .custom-dropdown, .field, .opt-row, .table-controls, .card {
+  overflow: visible !important;
+}
+
+.table-wrap {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+.dropdown-popover, .select-enhanced-popover, .custom-dropdown-menu, .datepicker-enhanced-popover {
+  z-index: 99999 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22) !important;
+  max-height: 260px !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dropdown-section {
+  max-height: 240px !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+
