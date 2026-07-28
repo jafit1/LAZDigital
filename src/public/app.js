@@ -1691,46 +1691,32 @@ function playAsymmetricalAnimation() {
   
   var largeEls = grid.querySelectorAll('.wc[data-asym="large"], .asym-large');
   var medEls = grid.querySelectorAll('.wc[data-asym="med"], .asym-med');
-  var smEls = grid.querySelectorAll('.wc[data-asym="sm"], .asym-sm');
   
   largeEls.forEach(function(el) {
     el.style.transition = 'none';
     el.style.opacity = '0';
-    el.style.transform = 'scaleX(0.92) translateY(8px)';
+    el.style.transform = 'translateY(10px)';
   });
   medEls.forEach(function(el) {
     el.style.transition = 'none';
     el.style.opacity = '0';
-    el.style.transform = 'translateY(12px)';
-  });
-  smEls.forEach(function(el) {
-    el.style.transition = 'none';
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(16px)';
+    el.style.transform = 'translateY(14px)';
   });
   
   requestAnimationFrame(function() {
     largeEls.forEach(function(el) {
-      el.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
+      el.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
       el.style.opacity = '1';
-      el.style.transform = 'scaleX(1) translateY(0)';
+      el.style.transform = 'translateY(0)';
     });
     
     setTimeout(function() {
       medEls.forEach(function(el) {
-        el.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
+        el.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
         el.style.opacity = '1';
         el.style.transform = 'translateY(0)';
       });
-    }, 120);
-    
-    smEls.forEach(function(el, i) {
-      setTimeout(function() {
-        el.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease';
-        el.style.opacity = '1';
-        el.style.transform = 'translateY(0)';
-      }, 240 + i * 70);
-    });
+    }, 100);
   });
 }
 
