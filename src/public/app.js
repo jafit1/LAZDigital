@@ -1654,6 +1654,13 @@ function renderDashboard(d){
     var sz=(lay.size&&lay.size[id])||'md';
     var hz=(lay.height&&lay.height[id])||'auto';
     
+    var asymWeight = 'med';
+    if (id === 'tren' || id === 'rekening' || id === 'pilar' || id === 'program' || id === 'fundraising') {
+      asymWeight = 'large';
+    } else if (id === 'rhimpun' || id === 'rtasyaruf' || id === 'jenis' || id === 'ashnaf' || id === 'bank') {
+      asymWeight = 'med';
+    }
+
     var ctr=window.DASH_EDIT?('<div class="wc-ctrls">' +
       '<button class="cbtn hide-btn" title="Sembunyikan widget" onclick="event.stopPropagation();dashHide(\''+id+'\')">✕</button>' +
     '</div>'):'';
@@ -1665,7 +1672,7 @@ function renderDashboard(d){
     
     var dragHandle = window.DASH_EDIT ? '<span class="drag-handle" title="Tarik untuk memindahkan">⋮⋮</span>' : '';
     
-    return '<div class="wc" data-size="'+sz+'" data-height="'+hz+'" data-id="'+id+'" style="'+dimStyle+'" draggable="'+(window.DASH_EDIT?'true':'false')+'">'+
+    return '<div class="wc" data-asym="'+asymWeight+'" data-size="'+sz+'" data-height="'+hz+'" data-id="'+id+'" style="'+dimStyle+'" draggable="'+(window.DASH_EDIT?'true':'false')+'">'+
       '<div class="wc-h"><div class="wc-t">'+dragHandle+'<span class="dot" style="background:'+w.dot+'"></span>'+w.t+'</div>'+ctr+'</div>'+
       '<div class="wc-b">'+widgetBody(id,d)+'</div>'+resizeHandle+'</div>';
   }).join('');
@@ -1675,6 +1682,56 @@ function renderDashboard(d){
 
   el('content').innerHTML='<div class="dash-wrap view-anim'+(window.DASH_EDIT?' dash-edit':'')+'">'+hero+kpis+hint+hiddenBar+'<div class="dgrid" id="dgrid">'+cells+'</div></div>';
   if(window.DASH_EDIT){wireDashDrag();wireDashResize();}
+  else { playAsymmetricalAnimation(); }
+}
+
+function playAsymmetricalAnimation() {
+  var grid = el('dgrid');
+  if (!grid) return;
+  
+  var largeEls = grid.querySelectorAll('.wc[data-asym="large"], .asym-large');
+  var medEls = grid.querySelectorAll('.wc[data-asym="med"], .asym-med');
+  var smEls = grid.querySelectorAll('.wc[data-asym="sm"], .asym-sm');
+  
+  largeEls.forEach(function(el) {
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = 'scaleX(0.92) translateY(8px)';
+  });
+  medEls.forEach(function(el) {
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(12px)';
+  });
+  smEls.forEach(function(el) {
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(16px)';
+  });
+  
+  requestAnimationFrame(function() {
+    largeEls.forEach(function(el) {
+      el.style.transition = 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
+      el.style.opacity = '1';
+      el.style.transform = 'scaleX(1) translateY(0)';
+    });
+    
+    setTimeout(function() {
+      medEls.forEach(function(el) {
+        el.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      });
+    }, 120);
+    
+    smEls.forEach(function(el, i) {
+      setTimeout(function() {
+        el.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease';
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      }, 240 + i * 70);
+    });
+  });
 }
 
 /* ===== flexible layout ===== */
