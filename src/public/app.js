@@ -184,7 +184,7 @@ function saveProfile(){
   gas('apiUpdateMyProfile')(TOKEN,d).then(function(){ME.nama=nama;if(PROF_FOTO)SETTINGS['uf_'+ME.id]=PROF_FOTO;PROF_FOTO=null;closeModal();startApp();toast('Profil tersimpan');}).catch(handleErr);
 }
 function resizeImg(file,max,cb,fmt){var r=new FileReader();r.onload=function(ev){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>h){if(w>max){h=h*max/w;w=max;}}else{if(h>max){w=w*max/h;h=max;}}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.85));};img.src=ev.target.result;};r.readAsDataURL(file);}
-function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings}[view]||viewDashboard)();}
+function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings}[view]||viewDashboard)();}
 
 /* ============ MODAL ============ */
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
@@ -784,11 +784,17 @@ function lapSortedKeys(g){
   return Object.keys(g).sort(function(a,b){ return g[b].total - g[a].total; });
 }
 
-function setLapSel(name){ LAP_SEL = (LAP_SEL === name) ? null : name; LAP_Q=''; renderLaporanShell(); }
+/* Cukup gambar ulang daftarnya — halaman, header, dan tab tidak perlu ikut. */
+function lapRefreshList(){
+  var host = el('lapList');
+  if (!host) { renderLaporanShell(); return; }
+  host.innerHTML = lapLayananList(window.__lapAll || []);
+}
+function setLapSel(name){ LAP_SEL = (LAP_SEL === name) ? null : name; LAP_Q=''; lapRefreshList(); }
 function setLapSort(key){
   if (LAP_SORT.key === key) LAP_SORT.dir = -LAP_SORT.dir;
   else LAP_SORT = { key: key, dir: (key === 'jumlah' || key === 'tanggal') ? -1 : 1 };
-  renderLaporanShell();
+  lapRefreshList();
 }
 function setLapQ(v){ LAP_Q = v || ''; var t = el('lapDetailTable'); if (t) t.outerHTML = lapDetailTable(window.__lapRows || [], window.__lapMode || 'himpun'); }
 
@@ -925,7 +931,9 @@ function renderLapRekap(mode){
     var rows = res[0] || [];
     CACHE.layanan = res[1] || [];
     if (mode === 'himpun') CACHE.himpun = rows; else CACHE.tasyaruf = rows;
-    host.innerHTML = lapSummary(rows, mode) + lapLayananList(rows);
+    window.__lapAll = rows;                       // dipakai render parsial
+    host.innerHTML = lapSummary(rows, mode)
+      + '<div id="lapList" class="swap-in">' + lapLayananList(rows) + '</div>';
   }).catch(handleErr);
 }
 
@@ -934,7 +942,7 @@ function renderLaporanShell(){
             ['jurnal','Jurnal Penerimaan'],['broadcast','Broadcast WhatsApp']];
   var h='<div class="page-head"><div><h2>Laporan</h2><div class="desc">Rekap per kantor layanan, jurnal, dan broadcast</div></div></div>';
   h+='<div class="lap-tabs">'+tabs.map(function(t){
-    return '<button class="lap-tab'+(LAP_TAB===t[0]?' on':'')+'" onclick="setLapTab(\''+t[0]+'\')">'+t[1]+'</button>';
+    return '<button class="lap-tab'+(LAP_TAB===t[0]?' on':'')+'" data-tab="'+t[0]+'" onclick="setLapTab(\''+t[0]+'\')">'+t[1]+'</button>';
   }).join('')+'</div>';
   h+='<div id="lapBody"></div>';
   el('content').innerHTML=h;
@@ -943,7 +951,17 @@ function renderLaporanShell(){
   else if(LAP_TAB==='jurnal')renderJurnalForm();
   else renderBroadcastForm();
 }
-function setLapTab(t){LAP_TAB=t;renderLaporanShell();}
+function setLapTab(t){
+  LAP_TAB=t;
+  var tabs=document.querySelectorAll('.lap-tabs .lap-tab');
+  if(!tabs.length){renderLaporanShell();return;}
+  tabs.forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-tab')===t); });
+  var body=el('lapBody'); if(body){ body.classList.remove('swap-in'); void body.offsetWidth; body.classList.add('swap-in'); }
+  if(t==='himpun')renderLapRekap('himpun');
+  else if(t==='salur')renderLapRekap('salur');
+  else if(t==='jurnal')renderJurnalForm();
+  else renderBroadcastForm();
+}
 /* Panel seragam untuk tab Jurnal & Broadcast, mengikuti gaya kartu Laporan. */
 function lapPanel(title,desc,inner,actions){
   return '<div class="lap-panel">'
@@ -1228,10 +1246,17 @@ function viewSettings(){gas('apiGetSettings')(TOKEN).then(function(s){SETTINGS=s
 var SET_TAB='lembaga';
 function renderSettings(s){
   var h='<div class="page-head"><div><h2>Pengaturan</h2><div class="desc">Identitas lembaga, rekening, unit layanan & tampilan</div></div></div>';
-  h+='<div class="lap-tabs">'+['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'].map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
+  h+='<div class="lap-tabs">'+['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'].map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" data-tab="'+p[0]+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
   el('content').innerHTML=h;renderSetTab(s);
 }
-function setTab(t){SET_TAB=t;renderSettings(SETTINGS);}
+function setTab(t){
+  SET_TAB=t;
+  var tabs=document.querySelectorAll('.lap-tabs .lap-tab');
+  if(!tabs.length){renderSettings(SETTINGS);return;}
+  tabs.forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-tab')===t); });
+  var body=el('setBody'); if(body){ body.classList.remove('swap-in'); void body.offsetWidth; body.classList.add('swap-in'); }
+  renderSetTab(SETTINGS);
+}
 function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
@@ -1472,10 +1497,16 @@ function uiAlert(msg,title){ return confirmDialog({title:title||'Berhasil',messa
   function init(){
     var c=document.getElementById('content');
     if(!c){ if(++tries>60) return; setTimeout(init,200); return; }
+    /* Animasi masuk hanya untuk PERPINDAHAN MENU. Sebelumnya observer ini
+       menyalakan animasi setiap kali isi #content berubah — termasuk saat
+       membuka dropdown, mengurutkan tabel, atau berpindah tab — sehingga
+       seluruh layar berkedip seolah halaman dimuat ulang. */
     var obs=new MutationObserver(function(){
-      if(window.DASH_EDIT) return;           // jangan animasi saat menata layout
+      if(window.DASH_EDIT) return;
+      if(!window.__viewAnim) return;         // bukan perpindahan menu -> diam saja
+      window.__viewAnim = false;
       c.classList.remove('view-leaving','view-anim','view-enter');
-      void c.offsetWidth;                    // paksa reflow agar animasi diputar ulang
+      void c.offsetWidth;
       c.classList.add('view-anim');
     });
     obs.observe(c,{childList:true});
@@ -1807,7 +1838,11 @@ function layananWidget(d) {
 
 function setDashLayananMode(mode) {
   window.DASH_LAYANAN_MODE = mode;
-  renderDashboard(window.DASH);
+  /* Ganti isi widget itu saja — merender ulang seluruh dashboard demi satu
+     toggle membuat semua kartu berkedip. */
+  var host = document.querySelector('.wc[data-id="program"] .wc-b');
+  if (host) { host.innerHTML = layananWidget(window.DASH || {}); host.classList.remove('swap-in'); void host.offsetWidth; host.classList.add('swap-in'); }
+  else renderDashboard(window.DASH);
 }
 
 /* Aturan penentuan KLL/ULL — HARUS sama persis dengan resolveLayananName()
