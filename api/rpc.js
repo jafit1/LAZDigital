@@ -87,8 +87,14 @@ module.exports = async (req, res) => {
     if(typeof body === 'string') body = JSON.parse(body || '{}');
     body = body || {};
     const fn   = body.fn,  args = body.args || [];
+    /* Alamat IP dan peramban ikut dicatat di log aktivitas. */
+    const fwd  = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const ctx  = {
+      ip: fwd || (req.socket && req.socket.remoteAddress) || '',
+      ua: String(req.headers['user-agent'] || '').slice(0, 160)
+    };
     const db   = await loadDB();
-    const out  = await engine.runRPC(db, fn, args);
+    const out  = await engine.runRPC(db, fn, args, ctx);
     await saveDB(out.db);
     res.status(200).json({ result: out.result });
   }catch(err){

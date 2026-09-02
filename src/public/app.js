@@ -64,7 +64,8 @@ var NAV_ICONS={
   laporan: navIcon('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 12.5h5"/><path d="M9.5 16.5h5"/>'),
   users: navIcon('<circle cx="9.5" cy="8" r="3.2"/><path d="M3.5 19.5a6 6 0 0 1 12 0"/><path d="M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18 14.4a6 6 0 0 1 3 5.1"/>'),
   settings: navIcon('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3.4a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 1-1.5V3.4a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"/>'),
-  panel: navIcon('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/>')
+  panel: navIcon('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/>'),
+  log: navIcon('<path d="M12 8v4l2.5 2.5"/><circle cx="12" cy="12" r="8.5"/>')
 };
 var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
@@ -73,7 +74,8 @@ var MENU=[
   {id:'donatur',label:'Donatur',ic:NAV_ICONS.donatur,mod:'penghimpunan'},
   {id:'laporan',label:'Laporan',ic:NAV_ICONS.laporan,mod:'laporan'},
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
-  {id:'settings',label:'Pengaturan',ic:NAV_ICONS.settings,mod:'settings'}
+  {id:'settings',label:'Pengaturan',ic:NAV_ICONS.settings,mod:'settings'},
+  {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
 function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }
 
@@ -184,7 +186,7 @@ function saveProfile(){
   gas('apiUpdateMyProfile')(TOKEN,d).then(function(){ME.nama=nama;if(PROF_FOTO)SETTINGS['uf_'+ME.id]=PROF_FOTO;PROF_FOTO=null;closeModal();startApp();toast('Profil tersimpan');}).catch(handleErr);
 }
 function resizeImg(file,max,cb,fmt){var r=new FileReader();r.onload=function(ev){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>h){if(w>max){h=h*max/w;w=max;}}else{if(h>max){w=w*max/h;h=max;}}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.85));};img.src=ev.target.result;};r.readAsDataURL(file);}
-function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings}[view]||viewDashboard)();}
+function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,log:viewLog}[view]||viewDashboard)();}
 
 /* ============ MODAL ============ */
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
@@ -1347,7 +1349,9 @@ function viewSettings(){gas('apiGetSettings')(TOKEN).then(function(s){SETTINGS=s
 var SET_TAB='lembaga';
 function renderSettings(s){
   var h='<div class="page-head"><div><h2>Pengaturan</h2><div class="desc">Identitas lembaga, rekening, unit layanan & tampilan</div></div></div>';
-  h+='<div class="lap-tabs">'+['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'].map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" data-tab="'+p[0]+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
+  var tabSet=['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'];
+  if(canDo('settings','edit')) tabSet.push('perawatan|Perawatan Data');
+  h+='<div class="lap-tabs">'+tabSet.map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" data-tab="'+p[0]+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
   el('content').innerHTML=h;renderSetTab(s);
 }
 function setTab(t){
@@ -1361,6 +1365,7 @@ function setTab(t){
 function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
+  else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();}
   else {
     window.REK_HOST='';window.LAY_HOST='';
     host.innerHTML=(SET_TAB==='tampilan')?tampilanHTML(s):lembagaHTML(s);
@@ -2112,20 +2117,31 @@ function getLayananNameForTx(r, layList, layMap){
   //     Itu artinya tingkat daerah — bukan KLL bernama "Bantul".
   if (/lazismu daerah|daerah bantul|penghimpunan daerah/.test(blob)) return LAYANAN_DAERAH;
 
-  // 3. Nama atau kode layanan disebut utuh di salah satu teks.
-  var best = null;
-  layList.forEach(function(l){
-    var ln = _layNorm(l && l.nama);
-    var kd = _layNorm(l && l.kode);
-    if (kd && kd.length >= 3 && _layWord(blob, kd)) { if (!best) best = l; return; }
-    if (!ln || ln.length < 4) return;
-    if (_layWord(blob, ln)) {
-      if (!best || ln.length > _layNorm(best.nama).length) best = l;
+  /* 3. Tipe donatur yang dipilih sendiri oleh petugas juga penanda tegas. */
+  var td = _layNorm(r.tipeDonatur);
+  if (td.indexOf('kantor layanan') >= 0 || td.indexOf('unit layanan') >= 0 || td === 'kll' || td === 'ull') {
+    var tipeT = (td.indexOf('unit layanan') >= 0 || td === 'ull') ? 'ULL' : 'KLL';
+    var namaT = String(r.namaDonatur || r.namaPenerima || '').trim();
+    if (namaT) {
+      var polos = namaT.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '');
+      var cT = _layNorm(polos);
+      var hitT = null;
+      layList.forEach(function(l){
+        var ln = _layNorm(l && l.nama), kd = _layNorm(l && l.kode);
+        if (kd && kd.length >= 2 && cT === kd) { if (!hitT) hitT = l; return; }
+        if (!ln || ln.length < 3) return;
+        if (cT === ln || _layWord(cT, ln)) {
+          if (!hitT || ln.length > _layNorm(hitT.nama).length) hitT = l;
+        }
+      });
+      if (hitT) return _lbl(hitT);
+      return tipeT + ' ' + polos;
     }
-  });
-  if (best) return _lbl(best);
+  }
 
-  // 4. Tidak ada penanda apa pun -> penghimpunan tingkat daerah.
+  /* 4. Tidak ada penanda KLL/ULL -> penghimpunan tingkat daerah.
+        Nama layanan yang kebetulan muncul di dalam nama donatur TIDAK
+        dihitung: "SMP N 2 Srandakan" adalah donatur tingkat daerah. */
   return LAYANAN_DAERAH;
 }
 
@@ -5076,3 +5092,239 @@ document.addEventListener('click', function(e) {
     }
   }
 });
+
+/* ================================================================
+   LOG AKTIVITAS
+   Menjawab dua pertanyaan: siapa yang membuka apa, dan siapa yang
+   menambah / mengubah / menghapus data — beserta kolom mana yang
+   berubah dari nilai apa ke nilai apa.
+   ================================================================ */
+var LOG_FILTER = { cari:'', username:'', jenis:'', dari:'', sampai:'', batas:200 };
+
+var LOG_AKSI_META = {
+  login:            ['Masuk',              'green'],
+  logout:           ['Keluar',             'grey'],
+  login_gagal:      ['Gagal masuk',        'red'],
+  create:           ['Tambah',             'green'],
+  edit:             ['Ubah',               'amber'],
+  delete:           ['Hapus',              'red'],
+  import:           ['Impor',              'blue'],
+  buka:             ['Buka halaman',       'grey'],
+  perbaikan_data_lama: ['Perbaikan data',  'amber'],
+  hapus_log:        ['Bersihkan log',      'red']
+};
+
+function logLabel(aksi){
+  aksi = String(aksi || '');
+  if (LOG_AKSI_META[aksi]) return LOG_AKSI_META[aksi];
+  var kepala = aksi.split('_')[0];
+  var meta = LOG_AKSI_META[kepala];
+  var ekor = aksi.slice(kepala.length + 1).replace(/_/g, ' ');
+  if (meta) return [meta[0] + (ekor ? ' ' + ekor : ''), meta[1]];
+  return [aksi.replace(/_/g, ' '), 'grey'];
+}
+
+function viewLog(){
+  var el0 = el('log_cari');
+  if (el0) {
+    LOG_FILTER.cari = el0.value;
+    LOG_FILTER.username = (el('log_user')||{}).value || '';
+    LOG_FILTER.jenis = (el('log_jenis')||{}).value || '';
+    LOG_FILTER.dari = (el('log_dari')||{}).value || '';
+    LOG_FILTER.sampai = (el('log_sampai')||{}).value || '';
+  }
+  gas('apiListAudit')(TOKEN, LOG_FILTER).then(renderLog).catch(handleErr);
+}
+
+function logRefresh(){
+  var host = el('logBody');
+  if (!host) { viewLog(); return; }
+  LOG_FILTER.cari = (el('log_cari')||{}).value || '';
+  LOG_FILTER.username = (el('log_user')||{}).value || '';
+  LOG_FILTER.jenis = (el('log_jenis')||{}).value || '';
+  LOG_FILTER.dari = (el('log_dari')||{}).value || '';
+  LOG_FILTER.sampai = (el('log_sampai')||{}).value || '';
+  host.classList.add('lap-memuat');
+  gas('apiListAudit')(TOKEN, LOG_FILTER).then(function(d){
+    host.classList.remove('lap-memuat');
+    host.innerHTML = logTabel(d);
+  }).catch(function(e){ host.classList.remove('lap-memuat'); handleErr(e); });
+}
+
+function logReset(){
+  LOG_FILTER = { cari:'', username:'', jenis:'', dari:'', sampai:'', batas:200 };
+  viewLog();
+}
+
+function renderLog(d){
+  var opsiUser = '<option value="">Semua pengguna</option>' + (d.users||[]).map(function(u){
+    return '<option value="'+esc(u)+'"'+(LOG_FILTER.username===u?' selected':'')+'>'+esc(u)+'</option>';
+  }).join('');
+  var opsiJenis = [['','Semua aktivitas'],['akses','Akses & sesi'],['ubah','Perubahan data']].map(function(o){
+    return '<option value="'+o[0]+'"'+(LOG_FILTER.jenis===o[0]?' selected':'')+'>'+o[1]+'</option>';
+  }).join('');
+
+  var h = '<div class="page-head"><div><h2>Log Aktivitas</h2>'
+    + '<div class="desc">Siapa masuk, siapa membuka halaman apa, dan siapa yang menambah, mengubah, atau menghapus data</div></div>'
+    + (canDo('log','delete') ? '<button class="btn btn-ghost" onclick="logBersihkan()">Bersihkan log</button>' : '')
+    + '</div>';
+
+  h += '<div class="lap-filter">'
+    + '<div class="lap-filter-f grow"><label>Cari</label><input id="log_cari" value="'+esc(LOG_FILTER.cari)+'" placeholder="nama, aksi, nomor bukti, IP…" oninput="logKetik()"></div>'
+    + '<div class="lap-filter-f"><label>Pengguna</label><select id="log_user" onchange="logRefresh()">'+opsiUser+'</select></div>'
+    + '<div class="lap-filter-f"><label>Jenis</label><select id="log_jenis" onchange="logRefresh()">'+opsiJenis+'</select></div>'
+    + '<div class="lap-filter-f"><label>Dari tanggal</label><input type="date" id="log_dari" value="'+esc(LOG_FILTER.dari)+'" onchange="logRefresh()"></div>'
+    + '<div class="lap-filter-f"><label>Sampai tanggal</label><input type="date" id="log_sampai" value="'+esc(LOG_FILTER.sampai)+'" onchange="logRefresh()"></div>'
+    + '<button class="btn btn-ghost lap-filter-reset" onclick="logReset()">Reset</button>'
+    + '</div>';
+
+  h += '<div id="logBody">' + logTabel(d) + '</div>';
+  el('content').innerHTML = h;
+}
+
+var _logKetikTimer = null;
+function logKetik(){
+  clearTimeout(_logKetikTimer);
+  _logKetikTimer = setTimeout(logRefresh, 280);
+}
+
+function logTabel(d){
+  var rows = d.rows || [];
+  var h = '<div class="log-info">Menampilkan <b>'+rows.length+'</b> dari <b>'+d.total+'</b> catatan yang cocok'
+    + ' &middot; tersimpan '+d.tersimpan+' catatan (batas '+d.batasSimpan+', yang terlama otomatis dibuang)</div>';
+
+  h += '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
+    + '<th>Waktu</th><th>Pengguna</th><th>Aktivitas</th><th>Rincian</th><th>Asal</th>'
+    + '</tr></thead><tbody>';
+
+  if (!rows.length) {
+    h += '<tr><td colspan="5"><div class="empty"><div class="big">🗒️</div>Tidak ada catatan yang cocok dengan filter ini.</div></td></tr>';
+  } else {
+    rows.forEach(function(r){
+      var m = logLabel(r.aksi);
+      var waktu = '-';
+      try {
+        var t = new Date(r.waktu);
+        waktu = t.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})
+              + ' <span class="muted">' + t.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) + '</span>';
+      } catch(e) {}
+      var rincian = '';
+      if (r.detail)  rincian += '<div class="log-detail">'+esc(r.detail)+'</div>';
+      if (r.ringkas) rincian += '<div class="log-ringkas">'+esc(r.ringkas)+'</div>';
+      if (!rincian)  rincian = '<span class="muted">—</span>';
+      h += '<tr>'
+        + '<td class="log-waktu">'+waktu+'</td>'
+        + '<td><b>'+esc(r.username||'-')+'</b></td>'
+        + '<td><span class="badge '+m[1]+'">'+esc(m[0])+'</span></td>'
+        + '<td>'+rincian+'</td>'
+        + '<td class="log-asal"><div>'+esc(r.ip||'-')+'</div>'
+          + (r.ua ? '<div class="muted" title="'+esc(r.ua)+'">'+esc(ringkasPeramban(r.ua))+'</div>' : '')
+        + '</td>'
+        + '</tr>';
+    });
+  }
+  h += '</tbody></table></div></div>';
+  return h;
+}
+
+/* "Mozilla/5.0 (Windows NT 10.0…) Chrome/140" -> "Chrome di Windows" */
+function ringkasPeramban(ua){
+  var s = String(ua||'');
+  var mesin = /Windows/i.test(s) ? 'Windows'
+            : /Android/i.test(s) ? 'Android'
+            : /iPhone|iPad|iOS/i.test(s) ? 'iOS'
+            : /Mac OS X|Macintosh/i.test(s) ? 'Mac'
+            : /Linux/i.test(s) ? 'Linux' : '';
+  var app = /Edg\//i.test(s) ? 'Edge'
+          : /OPR\/|Opera/i.test(s) ? 'Opera'
+          : /Chrome\//i.test(s) ? 'Chrome'
+          : /Firefox\//i.test(s) ? 'Firefox'
+          : /Safari\//i.test(s) ? 'Safari' : 'Peramban';
+  return app + (mesin ? ' di ' + mesin : '');
+}
+
+function logBersihkan(){
+  if (!confirm('Hapus seluruh catatan log aktivitas? Tindakan ini tidak bisa dibatalkan.')) return;
+  gas('apiHapusAudit')(TOKEN).then(function(r){
+    toast(r.dihapus + ' catatan dihapus');
+    viewLog();
+  }).catch(handleErr);
+}
+
+/* ================================================================
+   PERAWATAN DATA — perbaikan sekali jalan
+   ================================================================ */
+function perawatanHTML(){
+  return '<div class="card set-panel">'
+    + '<h3>Perbaikan Data Lama</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Aturan rekap dan pilar sudah diperbaiki, tetapi baris yang sudah terlanjur tersimpan masih membawa nilai lama. '
+    + 'Alat ini menyisirnya tanpa perlu impor ulang. Dua hal yang disentuh:<br>'
+    + '<b>1.</b> Pilar yang jelas keliru — mis. <i>Donasi NTT</i> yang masuk Sosial Dakwah, seharusnya Kemanusiaan. '
+    + 'Peruntukan yang tidak dikenali dibiarkan apa adanya supaya pilar dari jurnal tidak ikut tertimpa.<br>'
+    + '<b>2.</b> Tautan KLL/ULL yang tidak berdasar — mis. donatur <i>SMP N 2 Srandakan</i> yang tertaut ke KLL Srandakan '
+    + 'padahal keterangannya tidak menyebut KLL sama sekali.<br>'
+    + 'Nominal, tanggal, dan nama donatur tidak pernah diubah.'
+    + '</p>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary" onclick="perbaikanPeriksa()">Periksa dulu</button>'
+    + '<button class="btn btn-ghost hidden" id="btnTerapkanPerbaikan" onclick="perbaikanTerapkan()">Terapkan perbaikan</button>'
+    + '</div>'
+    + '<div id="perbaikanHasil" style="margin-top:16px"></div>'
+    + '</div>';
+}
+
+function perbaikanPeriksa(){
+  var host = el('perbaikanHasil');
+  host.innerHTML = BOXES_SPINNER;
+  el('btnTerapkanPerbaikan').classList.add('hidden');
+  gas('apiPerbaikiDataLama')(TOKEN, false).then(function(d){
+    host.innerHTML = perbaikanHTML(d);
+    if (d.totalBerubah > 0) el('btnTerapkanPerbaikan').classList.remove('hidden');
+  }).catch(function(e){ host.innerHTML=''; handleErr(e); });
+}
+
+function perbaikanTerapkan(){
+  if (!confirm('Terapkan perbaikan pada data yang tampil di pratinjau?')) return;
+  var host = el('perbaikanHasil');
+  host.innerHTML = BOXES_SPINNER;
+  gas('apiPerbaikiDataLama')(TOKEN, true).then(function(d){
+    el('btnTerapkanPerbaikan').classList.add('hidden');
+    host.innerHTML = '<div class="imp-note">Selesai. <b>'+d.totalBerubah+'</b> baris disesuaikan dari '+d.totalDiperiksa+' baris yang diperiksa. '
+      + 'Perubahan ini tercatat di Log Aktivitas.</div>' + perbaikanHTML(d);
+    toast(d.totalBerubah + ' baris diperbaiki');
+  }).catch(function(e){ host.innerHTML=''; handleErr(e); });
+}
+
+function perbaikanHTML(d){
+  if (!d.totalBerubah) {
+    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+      + 'Tidak ada yang perlu diperbaiki. '+d.totalDiperiksa+' baris sudah sesuai aturan.</div>';
+  }
+  var h = '<div class="imp-note">Ditemukan <b>'+d.totalBerubah+'</b> baris yang perlu disesuaikan dari '
+    + d.totalDiperiksa+' baris: <b>'+d.pilarUbahTotal+'</b> pilar dan <b>'+d.layananLepasTotal+'</b> tautan layanan.'
+    + (d.diterapkan ? '' : ' Belum ada yang disimpan — periksa dulu daftarnya di bawah.')
+    + '</div>';
+
+  function tabel(judul, rows, total, kolomDari){
+    if (!rows.length) return '';
+    var t = '<h4 style="margin:16px 0 8px;font-family:var(--head);font-size:13.5px">'+judul+' <span class="muted">('+total+')</span></h4>'
+      + '<div class="table-wrap"><div style="overflow:auto;max-height:320px"><table class="log-tabel"><thead><tr>'
+      + '<th>Tanggal</th><th>Donatur</th><th>'+kolomDari+'</th><th>Semula</th><th>Menjadi</th><th>Nominal</th>'
+      + '</tr></thead><tbody>';
+    rows.forEach(function(r){
+      t += '<tr><td>'+esc(r.tanggal||'-')+'</td><td>'+esc(r.donatur||'-')+'</td>'
+        + '<td class="muted">'+esc(r.program||'-')+'</td>'
+        + '<td><span class="badge red">'+esc(r.dari)+'</span></td>'
+        + '<td><span class="badge green">'+esc(r.jadi)+'</span></td>'
+        + '<td style="text-align:right;white-space:nowrap">'+rp(r.jumlah)+'</td></tr>';
+    });
+    t += '</tbody></table></div></div>';
+    if (total > rows.length) t += '<div class="muted" style="font-size:12px;margin-top:6px">…dan '+(total-rows.length)+' baris lain (semuanya tetap ikut diperbaiki).</div>';
+    return t;
+  }
+
+  h += tabel('Pilar yang dibetulkan', d.pilarUbah, d.pilarUbahTotal, 'Peruntukan');
+  h += tabel('Tautan layanan yang dilepas ke Penghimpunan Daerah', d.layananLepas, d.layananLepasTotal, 'Peruntukan');
+  return h;
+}

@@ -58,7 +58,7 @@ var SHEETS = {
   SETTINGS:'Settings', SESSIONS:'Sessions', LOG:'AuditLog',
   REKENING:'Rekening', LAYANAN:'Layanan', MUTASI:'Mutasi', DONATUR:'Donatur'
 };
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur'];
+var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log'];
 var ACTIONS = ['view','create','edit','delete'];
 
 var BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -93,7 +93,7 @@ function setup(){
   ensureSheet(ss,SHEETS.DONATUR,['id','nama','kategori','telepon','alamat','email','dibuat']);
   ensureSheet(ss,SHEETS.SETTINGS,['key','value']);
   ensureSheet(ss,SHEETS.SESSIONS,['token','userId','expired']);
-  ensureSheet(ss,SHEETS.LOG,['waktu','userId','username','aksi','detail']);
+  ensureSheet(ss,SHEETS.LOG,['waktu','userId','username','aksi','modul','entitasId','ringkas','detail','ip','ua']);
 
   var defaults={namaLembaga:'Lembaga Amil Zakat',singkatan:'LAZ',alamat:'Alamat lembaga Anda',telepon:'021-0000000',email:'info@laz.org',website:'www.laz.org',logoUrl:'',publicToken:'',publicEnabled:'false'};
   Object.keys(defaults).forEach(function(k){ if(getSetting(k)===null) setSetting(k,defaults[k]); });
@@ -177,7 +177,8 @@ function hashPassword(p,s){
   }
 }
 function login(u,p){ var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.length;i++){if(String(us[i].username).toLowerCase()===String(u).toLowerCase()){f=us[i];break;}}
-  if(!f) return {ok:false,msg:'Username tidak ditemukan'}; if(String(f.aktif)!=='true') return {ok:false,msg:'Akun dinonaktifkan'};
+  if(!f){ audit('', String(u||'').slice(0,40), 'login_gagal', 'username tidak ditemukan'); return {ok:false,msg:'Username tidak ditemukan'}; }
+  if(String(f.aktif)!=='true'){ audit(f.id,f.username,'login_gagal','akun dinonaktifkan'); return {ok:false,msg:'Akun dinonaktifkan'}; }
   var inputHash = hashPassword(p, f.salt);
   if (inputHash !== f.passwordHash) {
     var legacy = legacyHashPassword(p, f.salt);
@@ -185,11 +186,17 @@ function login(u,p){ var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.lengt
       // Auto upgrade hash to scrypt
       updateRowById(SHEETS.USERS, f.id, { passwordHash: inputHash });
     } else {
+      audit(f.id,f.username,'login_gagal','password salah');
       return {ok:false,msg:'Password salah'};
     }
   }
-  var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); audit(f.id,f.username,'login',''); return {ok:true,token:token,user:sanitizeUser(f)}; }
-function logout(t){ deleteRowBy(SHEETS.SESSIONS,'token',t); return {ok:true}; }
+  var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); audit(f.id,f.username,'login','',{modul:'sesi'}); return {ok:true,token:token,user:sanitizeUser(f)}; }
+function logout(t){
+  var u=null; try{ u=authUser(t); }catch(e){}
+  deleteRowBy(SHEETS.SESSIONS,'token',t);
+  if(u) audit(u.id,u.username,'logout','',{modul:'sesi'});
+  return {ok:true};
+}
 function deleteRowBy(name,col,val){ var sh=getSS().getSheetByName(name); var v=sh.getDataRange().getValues(); var c=v[0].indexOf(col); for(var i=v.length-1;i>=1;i--){if(String(v[i][c])===String(val))sh.deleteRow(i+1);} }
 function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.'); var ss=readAll(SHEETS.SESSIONS),s=null; for(var i=0;i<ss.length;i++)if(ss[i].token===t){s=ss[i];break;}
   if(!s) throw new Error('AUTH: sesi tidak valid, login ulang.'); if(new Date(s.expired)<new Date()){deleteRowBy(SHEETS.SESSIONS,'token',t);throw new Error('AUTH: sesi berakhir, login ulang.');}
@@ -197,7 +204,21 @@ function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.')
 function sanitizeUser(u){ return {id:u.id,username:u.username,nama:u.nama,role:u.role,permissions:typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{})}; }
 function can(u,m,a){ if(u.role==='superadmin')return true; var p=typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{}); return !!(p[m]&&p[m][a]); }
 function _requirePerm(t,m,a){ var u=authUser(t); if(!can(u,m,a)) throw new Error('IZIN: tidak punya akses '+a+' pada modul '+m+'.'); return u; }
-function audit(id,un,ak,d){ try{insertRow(SHEETS.LOG,{waktu:new Date().toISOString(),userId:id,username:un,aksi:ak,detail:d});}catch(e){} }
+/* Satu catatan aktivitas. `opt` boleh berisi {modul, entitasId, ringkas}.
+   IP dan peramban diambil dari konteks permintaan (diisi runRPC). */
+function audit(id,un,ak,d,opt){
+  opt = opt || {};
+  try{
+    insertRow(SHEETS.LOG,{
+      waktu:new Date().toISOString(),
+      userId:id||'', username:un||'', aksi:ak||'',
+      modul:opt.modul||'', entitasId:opt.entitasId||'',
+      ringkas:opt.ringkas||'', detail:(d==null?'':String(d)),
+      ip:(_LOG_CTX&&_LOG_CTX.ip)||'', ua:(_LOG_CTX&&_LOG_CTX.ua)||''
+    });
+    if (typeof _logPangkas === 'function') _logPangkas();
+  }catch(e){}
+}
 
 /* ===== SESI ===== */
 function apiMe(t){ return sanitizeUser(authUser(t)); }
@@ -216,8 +237,20 @@ async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.i
   }
   var newMonth = getMonthFromDate(d.tanggal);
   var res;
-  if(d.id){ updateRowById(SHEETS.PENGHIMPUNAN,d.id,d); audit(u.id,u.username,'edit_penghimpunan',d.id); res = findById(SHEETS.PENGHIMPUNAN,d.id); }
-  else { d.id=makeId(); d.noKwitansi=d.noKwitansi||generateNoKwitansi(); d.petugas=u.nama; d.dibuat=new Date().toISOString(); insertRow(SHEETS.PENGHIMPUNAN,d); audit(u.id,u.username,'create_penghimpunan',d.id); res = findById(SHEETS.PENGHIMPUNAN,d.id); }
+  if(d.id){
+    updateRowById(SHEETS.PENGHIMPUNAN,d.id,d);
+    audit(u.id,u.username,'edit_penghimpunan',d.noKwitansi||d.id,
+      {modul:'penghimpunan',entitasId:d.id,ringkas:ringkasPerubahan(oldRow,d)});
+    res = findById(SHEETS.PENGHIMPUNAN,d.id);
+  }
+  else {
+    d.id=makeId(); d.noKwitansi=d.noKwitansi||generateNoKwitansi(); d.petugas=u.nama; d.dibuat=new Date().toISOString();
+    insertRow(SHEETS.PENGHIMPUNAN,d);
+    audit(u.id,u.username,'create_penghimpunan',d.noKwitansi||d.id,
+      {modul:'penghimpunan',entitasId:d.id,
+       ringkas:(d.namaDonatur||'-')+' · '+(d.jenisDana||'')+' '+(d.subJenis||'')+' · Rp '+(Number(d.jumlah)||0).toLocaleString('id-ID')});
+    res = findById(SHEETS.PENGHIMPUNAN,d.id);
+  }
   if (newMonth) await syncMonthlySpreadsheet(newMonth);
   if (oldMonth && oldMonth !== newMonth) await syncMonthlySpreadsheet(oldMonth);
   return res;
@@ -225,7 +258,10 @@ async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.i
 async function apiDeletePenghimpunan(t,id){ var u=_requirePerm(t,'penghimpunan','delete');
   var oldRow = findById(SHEETS.PENGHIMPUNAN, id);
   var oldMonth = oldRow ? getMonthFromDate(oldRow.tanggal) : '';
-  deleteRowById(SHEETS.PENGHIMPUNAN,id); audit(u.id,u.username,'delete_penghimpunan',id);
+  deleteRowById(SHEETS.PENGHIMPUNAN,id);
+  audit(u.id,u.username,'delete_penghimpunan',(oldRow&&oldRow.noKwitansi)||id,
+    {modul:'penghimpunan',entitasId:id,
+     ringkas:oldRow?((oldRow.namaDonatur||'-')+' · '+(oldRow.tanggal||'')+' · Rp '+(Number(oldRow.jumlah)||0).toLocaleString('id-ID')):''});
   if (oldMonth) await syncMonthlySpreadsheet(oldMonth);
   return {ok:true};
 }
@@ -243,8 +279,20 @@ async function apiSavePentasyarufan(t,d){ var u=_requirePerm(t,'pentasyarufan',d
   }
   var newMonth = getMonthFromDate(d.tanggal);
   var res;
-  if(d.id){ updateRowById(SHEETS.PENTASYARUFAN,d.id,d); audit(u.id,u.username,'edit_pentasyarufan',d.id); res = findById(SHEETS.PENTASYARUFAN,d.id); }
-  else { d.id=makeId(); d.noBukti=d.noBukti||generateNoBukti(); d.petugas=u.nama; d.dibuat=new Date().toISOString(); insertRow(SHEETS.PENTASYARUFAN,d); audit(u.id,u.username,'create_pentasyarufan',d.id); res = findById(SHEETS.PENTASYARUFAN,d.id); }
+  if(d.id){
+    updateRowById(SHEETS.PENTASYARUFAN,d.id,d);
+    audit(u.id,u.username,'edit_pentasyarufan',d.noBukti||d.id,
+      {modul:'pentasyarufan',entitasId:d.id,ringkas:ringkasPerubahan(oldRow,d)});
+    res = findById(SHEETS.PENTASYARUFAN,d.id);
+  }
+  else {
+    d.id=makeId(); d.noBukti=d.noBukti||generateNoBukti(); d.petugas=u.nama; d.dibuat=new Date().toISOString();
+    insertRow(SHEETS.PENTASYARUFAN,d);
+    audit(u.id,u.username,'create_pentasyarufan',d.noBukti||d.id,
+      {modul:'pentasyarufan',entitasId:d.id,
+       ringkas:(d.namaPenerima||'-')+' · '+(d.program||'')+' · Rp '+(Number(d.jumlah)||0).toLocaleString('id-ID')});
+    res = findById(SHEETS.PENTASYARUFAN,d.id);
+  }
   if (newMonth) await syncMonthlySpreadsheet(newMonth);
   if (oldMonth && oldMonth !== newMonth) await syncMonthlySpreadsheet(oldMonth);
   return res;
@@ -252,7 +300,10 @@ async function apiSavePentasyarufan(t,d){ var u=_requirePerm(t,'pentasyarufan',d
 async function apiDeletePentasyarufan(t,id){ var u=_requirePerm(t,'pentasyarufan','delete');
   var oldRow = findById(SHEETS.PENTASYARUFAN, id);
   var oldMonth = oldRow ? getMonthFromDate(oldRow.tanggal) : '';
-  deleteRowById(SHEETS.PENTASYARUFAN,id); audit(u.id,u.username,'delete_pentasyarufan',id);
+  deleteRowById(SHEETS.PENTASYARUFAN,id);
+  audit(u.id,u.username,'delete_pentasyarufan',(oldRow&&oldRow.noBukti)||id,
+    {modul:'pentasyarufan',entitasId:id,
+     ringkas:oldRow?((oldRow.namaPenerima||'-')+' · '+(oldRow.tanggal||'')+' · Rp '+(Number(oldRow.jumlah)||0).toLocaleString('id-ID')):''});
   if (oldMonth) await syncMonthlySpreadsheet(oldMonth);
   return {ok:true};
 }
@@ -261,26 +312,36 @@ function apiGetBuktiPentasyarufan(t,id){ _requirePerm(t,'pentasyarufan','view');
 /* ===== REKENING ===== */
 function apiListRekening(t){ _requirePerm(t,'rekening','view'); return readAll(SHEETS.REKENING); }
 function apiListRekeningPublic(t){ authUser(t); return readAll(SHEETS.REKENING).filter(function(r){return String(r.aktif)!=='false';}); }
-function apiSaveRekening(t,d){ var u=_requirePerm(t,'rekening',d.id?'edit':'create');
-  if(d.id){ updateRowById(SHEETS.REKENING,d.id,d); } else { d.id=makeId(); d.dibuat=new Date().toISOString(); insertRow(SHEETS.REKENING,d); }
-  audit(u.id,u.username,'save_rekening',d.namaBank||''); return {ok:true}; }
-function apiDeleteRekening(t,id){ var u=_requirePerm(t,'rekening','delete'); deleteRowById(SHEETS.REKENING,id); audit(u.id,u.username,'delete_rekening',id); return {ok:true}; }
+function apiSaveRekening(t,d){ var baru=!d.id; var u=_requirePerm(t,'rekening',baru?'create':'edit');
+  var lama = baru ? null : findById(SHEETS.REKENING,d.id);
+  if(!baru){ updateRowById(SHEETS.REKENING,d.id,d); } else { d.id=makeId(); d.dibuat=new Date().toISOString(); insertRow(SHEETS.REKENING,d); }
+  audit(u.id,u.username,(baru?'create_rekening':'edit_rekening'),d.namaBank||'',
+    {modul:'rekening',entitasId:d.id||'',
+     ringkas: baru ? ((d.namaBank||'')+' '+(d.nomor||'')).trim() : ringkasPerubahan(lama,d)}); return {ok:true}; }
+function apiDeleteRekening(t,id){ var u=_requirePerm(t,'rekening','delete'); var rk=findById(SHEETS.REKENING,id); deleteRowById(SHEETS.REKENING,id);
+  audit(u.id,u.username,'delete_rekening',(rk&&rk.namaBank)||id,{modul:'rekening',entitasId:id,ringkas:rk?((rk.namaBank||'')+' '+(rk.nomor||'')):''}); return {ok:true}; }
 
 /* ===== LAYANAN (KLL/ULL) ===== */
 function apiListLayanan(t){ _requirePerm(t,'layanan','view'); return readAll(SHEETS.LAYANAN); }
 function apiListLayananPublic(t){ authUser(t); return readAll(SHEETS.LAYANAN).filter(function(r){return String(r.aktif)!=='false';}); }
-function apiSaveLayanan(t,d){ var u=_requirePerm(t,'layanan',d.id?'edit':'create');
-  if(d.id){ updateRowById(SHEETS.LAYANAN,d.id,d); } else { d.id=makeId(); d.dibuat=new Date().toISOString(); insertRow(SHEETS.LAYANAN,d); }
-  audit(u.id,u.username,'save_layanan',d.nama||''); return {ok:true}; }
-function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); deleteRowById(SHEETS.LAYANAN,id); audit(u.id,u.username,'delete_layanan',id); return {ok:true}; }
+function apiSaveLayanan(t,d){ var baru=!d.id||!findById(SHEETS.LAYANAN,d.id); var u=_requirePerm(t,'layanan',baru?'create':'edit');
+  var lama = baru ? null : findById(SHEETS.LAYANAN,d.id);
+  if(!baru){ updateRowById(SHEETS.LAYANAN,d.id,d); } else { d.id=d.id||makeId(); d.dibuat=d.dibuat||new Date().toISOString(); insertRow(SHEETS.LAYANAN,d); }
+  audit(u.id,u.username,(baru?'create_layanan':'edit_layanan'),d.nama||'',
+    {modul:'layanan',entitasId:d.id||'',
+     ringkas: baru ? ((d.tipe||'')+' '+(d.nama||'')+(d.kode?' ('+d.kode+')':'')).trim() : ringkasPerubahan(lama,d)}); return {ok:true}; }
+function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); var lm=findById(SHEETS.LAYANAN,id); deleteRowById(SHEETS.LAYANAN,id);
+  audit(u.id,u.username,'delete_layanan',(lm&&lm.nama)||id,{modul:'layanan',entitasId:id,ringkas:lm?_layLabel(lm):''}); return {ok:true}; }
 
 /* ===== USER MGMT ===== */
 function apiListUsers(t){ _requirePerm(t,'users','view'); return readAll(SHEETS.USERS).map(sanitizeUser); }
 function apiSaveUser(t,d){ var a=_requirePerm(t,'users',d.id?'edit':'create');
-  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.username)up.username=d.username; if(d.password){var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} updateRowById(SHEETS.USERS,d.id,up); audit(a.id,a.username,'edit_user',d.username||d.id); }
-  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password||'password123',s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString()}); audit(a.id,a.username,'create_user',d.username); }
+  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.username)up.username=d.username; if(d.password){var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up);
+    audit(a.id,a.username,'edit_user',d.username||d.id,{modul:'users',entitasId:d.id,
+      ringkas:ringkasPerubahan(lamaU,up)+(d.password?(ringkasPerubahan(lamaU,up)?' | ':'')+'password diganti':'')}); }
+  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password||'password123',s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
   return {ok:true}; }
-function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=findById(SHEETS.USERS,id); if(tg&&tg.role==='superadmin'){ var sup=readAll(SHEETS.USERS).filter(function(x){return x.role==='superadmin'&&String(x.aktif)==='true';}); if(sup.length<=1) throw new Error('Tidak bisa menghapus satu-satunya Superadmin.'); } deleteRowById(SHEETS.USERS,id); audit(a.id,a.username,'delete_user',id); return {ok:true}; }
+function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=findById(SHEETS.USERS,id); if(tg&&tg.role==='superadmin'){ var sup=readAll(SHEETS.USERS).filter(function(x){return x.role==='superadmin'&&String(x.aktif)==='true';}); if(sup.length<=1) throw new Error('Tidak bisa menghapus satu-satunya Superadmin.'); } deleteRowById(SHEETS.USERS,id); audit(a.id,a.username,'delete_user',(tg&&tg.username)||id,{modul:'users',entitasId:id,ringkas:tg?((tg.nama||'')+' · peran '+(tg.role||'')):''}); return {ok:true}; }
 function apiChangeMyPassword(t,o,n){ var u=authUser(t); if(hashPassword(o,u.salt)!==u.passwordHash) throw new Error('Password lama salah'); var s=makeId(); updateRowById(SHEETS.USERS,u.id,{salt:s,passwordHash:hashPassword(n,s)}); return {ok:true}; }
 
 function apiUpdateMyProfile(t,d){
@@ -295,7 +356,14 @@ function apiUpdateMyProfile(t,d){
 
 /* ===== SETTINGS ===== */
 function apiGetSettings(t){ _requirePerm(t,'settings','view'); return getAllSettings(); }
-function apiSaveSettings(t,d){ var u=_requirePerm(t,'settings','edit'); Object.keys(d).forEach(function(k){setSetting(k,d[k]);}); audit(u.id,u.username,'edit_settings',''); return getAllSettings(); }
+function apiSaveSettings(t,d){
+  var u=_requirePerm(t,'settings','edit');
+  var lama=getAllSettings();
+  Object.keys(d).forEach(function(k){setSetting(k,d[k]);});
+  audit(u.id,u.username,'edit_settings',Object.keys(d).join(', '),
+    {modul:'settings',ringkas:ringkasPerubahan(lama,d)});
+  return getAllSettings();
+}
 function apiGeneratePublicLink(t){ _requirePerm(t,'dashboard','view'); var x=Utilities.getUuid().replace(/-/g,''); setSetting('publicToken',x); setSetting('publicEnabled','true'); return {token:x,url:getWebAppUrl()+'?page=public&token='+x}; }
 function apiDisablePublicLink(t){ _requirePerm(t,'dashboard','view'); setSetting('publicEnabled','false'); return {ok:true}; }
 function apiGetPublicLinkInfo(t){ _requirePerm(t,'dashboard','view'); var x=getSetting('publicToken')||''; return {enabled:getSetting('publicEnabled')==='true',token:x,url:x?(getWebAppUrl()+'?page=public&token='+x):''}; }
@@ -386,6 +454,7 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
   }
 
   var tH = 0, tT = 0, byJenis = {}, byFundraising = {}, byAshnaf = {}, byBank = {}, byPilar = {};
+  var byProgramSalur = {};   /* penyaluran dikelompokkan per program/kegiatan */
   
   var layMap = {};
   var layList = [];
@@ -447,6 +516,8 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     var n = Number(r.jumlah) || 0;
     tT += n;
     byAshnaf[r.ashnaf || 'Lainnya'] = (byAshnaf[r.ashnaf || 'Lainnya'] || 0) + n;
+    var progT = String(r.program || '').trim() || 'Lainnya';
+    byProgramSalur[progT] = (byProgramSalur[progT] || 0) + n;
     
     // Grouping Fundraising untuk Pentasyarufan
     var frNameT = cleanFundraisingName(r.fundraising);
@@ -563,6 +634,7 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     byAshnaf: byAshnaf,
     byBank: byBank,
     byPilar: byPilar,
+    byProgram: byProgramSalur,
     byRekening: byRekening,
     series: series,
     availableMonths: availableMonths,
@@ -629,8 +701,26 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
 function mk(d){try{return Utilities.formatDate(new Date(d),TZ,'yyyy-MM');}catch(e){return 'NA';}}
 function uniq(rows,k){var s={};rows.forEach(function(r){if(r[k])s[String(r[k]).toLowerCase()]=1;});return Object.keys(s).length;}
 function apiDashboard(t, filterMonth, filterPekan, filterHari){ _requirePerm(t,'dashboard','view'); return buildDashboard(filterMonth, filterPekan, filterHari); }
-function apiPublicDashboard(t){ if(getSetting('publicEnabled')!=='true') throw new Error('Dashboard publik dinonaktifkan.'); if(t!==getSetting('publicToken')) throw new Error('Token tidak valid.');
-  var d=buildDashboard(); d.recentHimpun=d.recentHimpun.map(function(r){return {tanggal:r.tanggal,program:r.program,jenisDana:r.jenisDana,jumlah:r.jumlah};}); d.recentTasyaruf=d.recentTasyaruf.map(function(r){return {tanggal:r.tanggal,program:r.program,ashnaf:r.ashnaf,jumlah:r.jumlah};}); return d; }
+/* Halaman publik: hanya angka ringkasan, tanpa identitas siapa pun.
+   `bulan` boleh diisi 'YYYY-MM' untuk melihat satu periode, atau kosong
+   / 'Semua' untuk akumulasi sejak awal pencatatan. */
+function apiPublicDashboard(t, bulan){
+  if(getSetting('publicEnabled')!=='true') throw new Error('Dashboard publik dinonaktifkan.');
+  if(t!==getSetting('publicToken')) throw new Error('Token tidak valid.');
+  var pilih = (bulan && /^\d{4}-\d{2}$/.test(String(bulan))) ? String(bulan) : 'Semua';
+  var d = buildDashboard(pilih);
+  d.recentHimpun = (d.recentHimpun||[]).map(function(r){return {tanggal:r.tanggal,program:r.program,jenisDana:r.jenisDana,jumlah:r.jumlah};});
+  d.recentTasyaruf = (d.recentTasyaruf||[]).map(function(r){return {tanggal:r.tanggal,program:r.program,ashnaf:r.ashnaf,jumlah:r.jumlah};});
+  /* Pengaturan disaring: token publik dan data internal lain tidak ikut terkirim
+     ke peramban pengunjung. */
+  var s = d.settings || {};
+  d.settings = {
+    namaLembaga: s.namaLembaga||'', singkatan: s.singkatan||'', alamat: s.alamat||'',
+    telepon: s.telepon||'', email: s.email||'', website: s.website||'', logoData: s.logoData||s.logoUrl||''
+  };
+  d.periodeDipilih = pilih;
+  return d;
+}
 
 /* ===== REKAP KLL / ULL =====
    Satu sumber kebenaran untuk menentukan sebuah transaksi milik Kantor Layanan
@@ -733,20 +823,34 @@ function resolveLayananName(r, layList, layMap){
   //     Itu artinya tingkat daerah — bukan KLL bernama "Bantul".
   if (/lazismu daerah|daerah bantul|penghimpunan daerah/.test(blob)) return LAYANAN_DAERAH;
 
-  // 3. Nama atau kode layanan disebut utuh di salah satu teks.
-  var best = null;
-  layList.forEach(function(l){
-    var ln = _norm(l && l.nama);
-    var kd = _norm(l && l.kode);
-    if (kd && kd.length >= 3 && _containsWord(blob, kd)) { if (!best) best = l; return; }
-    if (!ln || ln.length < 4) return;
-    if (_containsWord(blob, ln)) {
-      if (!best || ln.length > _norm(best.nama).length) best = l;
+  /* 3. Tipe donatur yang dipilih sendiri oleh petugas juga penanda tegas.
+        Namanya boleh ditulis tanpa awalan, mis. tipe "Kantor Layanan (KLL)"
+        dengan nama "Srandakan". */
+  var td = _norm(r.tipeDonatur);
+  if (td.indexOf('kantor layanan') >= 0 || td.indexOf('unit layanan') >= 0 || td === 'kll' || td === 'ull') {
+    var tipeT = (td.indexOf('unit layanan') >= 0 || td === 'ull') ? 'ULL' : 'KLL';
+    var namaT = String(r.namaDonatur || r.namaPenerima || '').trim();
+    if (namaT) {
+      var cT = _norm(namaT.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, ''));
+      var hitT = null;
+      layList.forEach(function(l){
+        var ln = _norm(l && l.nama), kd = _norm(l && l.kode);
+        if (kd && kd.length >= 2 && cT === kd) { if (!hitT) hitT = l; return; }
+        if (!ln || ln.length < 3) return;
+        if (cT === ln || _containsWord(cT, ln)) {
+          if (!hitT || ln.length > _norm(hitT.nama).length) hitT = l;
+        }
+      });
+      if (hitT) return _layLabel(hitT);
+      return tipeT + ' ' + namaT.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '');
     }
-  });
-  if (best) return _layLabel(best);
+  }
 
-  // 4. Tidak ada penanda apa pun -> penghimpunan tingkat daerah.
+  /* 4. Tidak ada penanda KLL/ULL -> penghimpunan tingkat daerah.
+        Nama layanan yang kebetulan muncul di dalam nama donatur TIDAK
+        dihitung: "SMP N 2 Srandakan" adalah donatur tingkat daerah,
+        bukan KLL Srandakan; "Jamaah Masjid At Tauhid - Kekeringan Dlingo"
+        juga daerah, bukan KLL Dlingo. */
   return LAYANAN_DAERAH;
 }
 
@@ -1636,61 +1740,44 @@ function getSectionHeader(r) {
   return null;
 }
 
+/* Layanan hanya diambil bila teksnya memang menulis KLL / ULL.
+   Versi lama mencocokkan nama layanan di mana pun ia muncul, sehingga
+   donatur "SMP N 2 Srandakan" ikut terekap ke KLL Srandakan. */
 function extractLayananFromText(text, listLayanan) {
   if (!text) return null;
-  var s = String(text).toLowerCase();
-  
-  for (var i = 0; i < listLayanan.length; i++) {
-    var l = listLayanan[i];
-    var nameLower = String(l.nama || '').toLowerCase();
-    var cleanText = s.replace(/[^a-z0-9]/g, '');
-    var cleanLName = nameLower.replace(/kll|ull|kl|lazismu/g, '').replace(/[^a-z0-9]/g, '');
-    
-    if (cleanLName && cleanText.indexOf(cleanLName) >= 0) {
-      return l;
+  var pre = _layFromPrefix(String(text));
+  if (!pre) return null;
+  var cand = _norm(pre.nama);
+  var hit = null;
+  (listLayanan || []).forEach(function(l){
+    var ln = _norm(l && l.nama), kd = _norm(l && l.kode);
+    if (kd && kd.length >= 2 && (cand === kd || _containsWord(cand, kd))) { if (!hit) hit = l; return; }
+    if (!ln || ln.length < 3) return;
+    if (_containsWord(cand, ln) || cand.indexOf(ln) === 0 || ln.indexOf(cand) === 0) {
+      if (!hit || ln.length > _norm(hit.nama).length) hit = l;
     }
-  }
-  
-  var m = s.match(/(kll|ull)\s+([a-z0-9\s]+)/i);
-  if (m) {
-    var name = m[2].trim();
-    var cleanName = name.replace(/[^a-z0-9]/g, '');
-    for (var i = 0; i < listLayanan.length; i++) {
-      var l = listLayanan[i];
-      var cleanLName = String(l.nama || '').toLowerCase().replace(/kll|ull|kl|lazismu/g, '').replace(/[^a-z0-9]/g, '');
-      if (cleanLName && cleanName.indexOf(cleanLName) >= 0) {
-        return l;
-      }
-    }
-  }
-  return null;
+  });
+  return hit;
 }
 
+/* Deteksi pilar dari teks peruntukan. Aturannya disamakan dengan
+   pembacaan buku kas, dan pencocokannya memakai batas kata — versi lama
+   memakai potongan huruf ("sd", "tk", "sma") sehingga nama donatur
+   seperti "SMP N 2 Srandakan" ikut terbaca sebagai pilar Pendidikan. */
 function detectPilarFromText(text) {
   if (!text) return '';
-  var s = String(text).toLowerCase();
-  
-  if (s.indexOf('ambulan') >= 0 || s.indexOf('sehat') >= 0 || s.indexOf('obat') >= 0 || s.indexOf('sakit') >= 0 || s.indexOf('klinik') >= 0 || s.indexOf('donor darah') >= 0) {
-    return 'Kesehatan';
-  }
-  if (s.indexOf('sekolah') >= 0 || s.indexOf('beasiswa') >= 0 || s.indexOf('ppdb') >= 0 || s.indexOf('gtt') >= 0 || s.indexOf('ptt') >= 0 || s.indexOf('pesantren') >= 0 || s.indexOf('pondok') >= 0 || s.indexOf('asy syifa') >= 0 || s.indexOf('sdua') >= 0 || s.indexOf('sd') >= 0 || s.indexOf('smp') >= 0 || s.indexOf('sma') >= 0 || s.indexOf('smk') >= 0 || s.indexOf('tk') >= 0 || s.indexOf('aba') >= 0 || s.indexOf('guru') >= 0 || s.indexOf('uad') >= 0 || s.indexOf('kuliah') >= 0) {
-    return 'Pendidikan';
-  }
-  if (s.indexOf('bencana') >= 0 || s.indexOf('kebakaran') >= 0 || s.indexOf('kemanusiaan') >= 0 || s.indexOf('palestina') >= 0 || s.indexOf('gempa') >= 0 || s.indexOf('sumatera') >= 0) {
-    return 'Kemanusiaan';
-  }
-  if (s.indexOf('qurban') >= 0 || s.indexOf('kurban') >= 0 || s.indexOf('dam hadyu') >= 0 || s.indexOf('jagalmu') >= 0) {
-    return 'Qurban';
-  }
-  if (s.indexOf('umkm') >= 0 || s.indexOf('usaha') >= 0 || s.indexOf('modal') >= 0 || s.indexOf('ekonomi') >= 0) {
-    return 'Ekonomi';
-  }
-  if (s.indexOf('lingkungan') >= 0 || s.indexOf('sampah') >= 0) {
-    return 'Lingkungan';
-  }
-  if (s.indexOf('keagamaan') >= 0 || s.indexOf('muadzin') >= 0) {
-    return 'Keagamaan';
-  }
+  var s = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  function ada(re){ return re.test(s); }
+
+  if (ada(/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara timur\b/)) return 'Kemanusiaan';
+  if (ada(/\bkekeringan\b|\bdropping air\b/)) return 'Sosial Dakwah';
+  if (ada(/\bkesehatan\b|\bambulan\w*\b|\bklinik\b|\bberobat\b|\bdonor darah\b|\bsakit\b|\bobat\b/)) return 'Kesehatan';
+  if (ada(/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bppdb\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bguru\b|\bgtt\b|\bptt\b|\bsdua\b|\bsd\b|\bsmp\b|\bsma\b|\bsmk\b|\btk\b|\baba\b|\buad\b|\bkuliah\b/)) return 'Pendidikan';
+  if (ada(/\bkemanusiaan\b|\bbencana\b|\bgempa\b|\bbanjir\b|\bkebakaran\b|\blongsor\b|\btsunami\b|\berupsi\b|\bpengungsi\b|\bsumatera\b/)) return 'Kemanusiaan';
+  if (ada(/\bqurban\b|\bkurban\b|\bdam hadyu\b|\bjagalmu\b/)) return 'Qurban';
+  if (ada(/\bumkm\b|\busaha\b|\bmodal\b|\bekonomi\b/)) return 'Ekonomi';
+  if (ada(/\blingkungan\b|\bsampah\b/)) return 'Lingkungan';
+  if (ada(/\bkeagamaan\b|\bmuadzin\b/)) return 'Keagamaan';
   return 'Sosial Dakwah';
 }
 
@@ -2551,10 +2638,21 @@ function bkKlasifikasi(kategori, namaLengkap){
 
   if (!k || /infak umum|infaq umum|umum|saldo/.test(k)) { out.subJenis='Infak Umum'; out.pilar=''; return out; }
 
+  /* Aturan yang ditegaskan pengguna, diuji lebih dulu supaya tidak
+     tertimpa aturan umum di bawahnya:
+       - donasi Palestina dan NTT  -> Kemanusiaan
+       - kekeringan                -> Sosial Dakwah                       */
+  if (/palestin|gaza|\bntt\b|nusa tenggara timur/.test(k)) {
+    out.subJenis='Infak Terikat'; out.pilar='Kemanusiaan'; return out;
+  }
+  if (/kekeringan|dropping air/.test(k)) {
+    out.subJenis='Infak Terikat'; out.pilar='Sosial Dakwah'; return out;
+  }
+
   var peta = [
-    [/kesehatan|sehat|ambulan|klinik|berobat/, 'Kesehatan'],
+    [/kesehatan|sehat|ambulan|klinik|berobat|donor darah/, 'Kesehatan'],
     [/pendidikan|sekolah|beasiswa|pondok|pesantren|sdua|madrasah|guru|santri/, 'Pendidikan'],
-    [/kemanusiaan|bencana|palestin|gempa|banjir|kebakaran/, 'Kemanusiaan'],
+    [/kemanusiaan|bencana|palestin|gempa|banjir|kebakaran|longsor|tsunami|erupsi|pengungsi/, 'Kemanusiaan'],
     [/dam\b|kulit|kambing/, 'DAM'],
     [/filantropis/, 'Pendidikan/Filanatropis'],
     [/dakwah|sosial|masjid|musholla|mushola|pembangunan|takmir|yatim|dhuafa|lansia/, 'Sosial Dakwah']
@@ -3344,6 +3442,239 @@ function hashPassword(p,salt){
     return crypto.createHash('sha256').update(String(salt)+'::'+String(p)).digest('hex');
   }
 }
+/* ================================================================
+   PERBAIKAN DATA LAMA (sekali jalan)
+   ----------------------------------------------------------------
+   Aturan rekap dan pilar sudah diperbaiki, tetapi kolom `pilar` dan
+   `layananId` tersimpan di basis data, jadi baris yang terlanjur masuk
+   masih membawa nilai lama. Fungsi ini menyisirnya tanpa impor ulang.
+
+   Dua hal yang disentuh, dan hanya kalau memang jelas keliru:
+     1. pilar  — hanya diganti bila teks peruntukannya cocok TEGAS dengan
+                 satu kata kunci (mis. "Donasi NTT" -> Kemanusiaan).
+                 Peruntukan yang tidak dikenali dibiarkan apa adanya,
+                 supaya pilar dari jurnal (yang diambil dari akun kredit,
+                 mis. "SOS" -> Pendidikan) tidak ikut tertimpa.
+     2. layananId — dilepas bila tidak ada penanda KLL/ULL sama sekali
+                 dan tipe donaturnya juga bukan Kantor/Unit Layanan.
+   Selalu bisa dijalankan dalam mode periksa dulu (tanpa menyimpan).
+   ================================================================ */
+
+/* Sama seperti detectPilarFromText, tetapi mengembalikan '' bila tidak ada
+   kata kunci yang benar-benar cocok — bukan menebak 'Sosial Dakwah'. */
+function detectPilarTegas(text){
+  if (!text) return '';
+  var s = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  var peta = [
+    [/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara timur\b/, 'Kemanusiaan'],
+    [/\bkekeringan\b|\bdropping air\b/, 'Sosial Dakwah'],
+    [/\bkesehatan\b|\bambulan\w*\b|\bklinik\b|\bberobat\b|\bdonor darah\b/, 'Kesehatan'],
+    [/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bsdua\b/, 'Pendidikan'],
+    [/\bkemanusiaan\b|\bbencana\b|\bgempa\b|\bbanjir\b|\bkebakaran\b|\blongsor\b|\btsunami\b|\berupsi\b|\bpengungsi\b/, 'Kemanusiaan'],
+    [/\bqurban\b|\bkurban\b/, 'Qurban'],
+    [/\bumkm\b|\bmodal usaha\b|\bekonomi\b/, 'Ekonomi'],
+    [/\blingkungan\b|\bsampah\b/, 'Lingkungan']
+  ];
+  for (var i = 0; i < peta.length; i++) if (peta[i][0].test(s)) return peta[i][1];
+  return '';
+}
+
+function _pdAdaPenandaLayanan(r){
+  var teks = [r.namaDonatur, r.namaPenerima, r.program, r.keterangan]
+    .map(function(x){ return String(x == null ? '' : x); }).join(' | ');
+  if (_layFromPrefix(teks)) return true;
+  var td = _norm(r.tipeDonatur);
+  return td.indexOf('kantor layanan') >= 0 || td.indexOf('unit layanan') >= 0 || td === 'kll' || td === 'ull';
+}
+
+function apiPerbaikiDataLama(t, terapkan){
+  var u = _requirePerm(t, 'settings', 'edit');
+  var rows = readAll(SHEETS.PENGHIMPUNAN) || [];
+  var layMap = {}; (readAll(SHEETS.LAYANAN) || []).forEach(function(l){ if (l && l.id) layMap[l.id] = l; });
+
+  var pilarUbah = [], layananLepas = [];
+
+  rows.forEach(function(r){
+    var perubahan = {};
+
+    // 1. pilar
+    if (String(r.subJenis || '').toLowerCase().indexOf('terikat') >= 0) {
+      var dasar = String(r.program || '').trim() || String(r.keterangan || '').trim();
+      var baru = detectPilarTegas(dasar);
+      if (baru && baru !== String(r.pilar || '').trim()) {
+        perubahan.pilar = baru;
+        pilarUbah.push({
+          id: r.id, tanggal: r.tanggal, donatur: r.namaDonatur,
+          program: r.program || '', dari: r.pilar || '(kosong)', jadi: baru,
+          jumlah: Number(r.jumlah) || 0
+        });
+      }
+    }
+
+    // 2. layananId yang tidak punya dasar
+    if (r.layananId && !_pdAdaPenandaLayanan(r)) {
+      perubahan.layananId = '';
+      layananLepas.push({
+        id: r.id, tanggal: r.tanggal, donatur: r.namaDonatur,
+        dari: layMap[r.layananId] ? _layLabel(layMap[r.layananId]) : r.layananId,
+        jadi: LAYANAN_DAERAH, jumlah: Number(r.jumlah) || 0
+      });
+    }
+
+    if (terapkan && Object.keys(perubahan).length) updateRowById(SHEETS.PENGHIMPUNAN, r.id, perubahan);
+  });
+
+  var total = pilarUbah.length + layananLepas.length;
+  if (terapkan && total) {
+    audit(u.id, u.username, 'perbaikan_data_lama', total + ' baris disesuaikan', {
+      modul: 'settings',
+      ringkas: pilarUbah.length + ' pilar dibetulkan, ' + layananLepas.length + ' tautan layanan dilepas'
+    });
+  }
+
+  return {
+    diterapkan: !!terapkan,
+    totalDiperiksa: rows.length,
+    totalBerubah: total,
+    pilarUbah: pilarUbah.slice(0, 300),
+    pilarUbahTotal: pilarUbah.length,
+    layananLepas: layananLepas.slice(0, 300),
+    layananLepasTotal: layananLepas.length
+  };
+}
+
+/* ================================================================
+   LOG AKTIVITAS
+   ----------------------------------------------------------------
+   Mencatat siapa masuk, siapa membuka apa, dan siapa yang menambah,
+   mengubah, atau menghapus data — lengkap dengan ringkasan kolom mana
+   yang berubah. Basis datanya satu kunci Redis yang ditulis utuh tiap
+   permintaan, jadi jumlah barisnya dibatasi agar tidak membengkak.
+   ================================================================ */
+var LOG_MAKS_BAWAAN = 1500;
+var _LOG_CTX = { ip: '', ua: '' };
+
+function auditKonteks(ctx){ _LOG_CTX = { ip: (ctx && ctx.ip) || '', ua: (ctx && ctx.ua) || '' }; }
+
+function _logMaks(){
+  var n = parseInt(getSetting('logMaks') || '', 10);
+  return (isFinite(n) && n >= 200 && n <= 20000) ? n : LOG_MAKS_BAWAAN;
+}
+
+/* Buang catatan terlama bila sudah melewati batas. */
+function _logPangkas(){
+  try{
+    var sh = getSS().getSheetByName(SHEETS.LOG);
+    if (!sh) return;
+    var batas = _logMaks();
+    var jml = sh.getLastRow() - 1;
+    if (jml <= batas + 100) return;
+    var buang = jml - batas;
+    for (var i = 0; i < buang; i++) sh.deleteRow(2);   // baris 1 = header
+  }catch(e){}
+}
+
+/* Ringkas perubahan antar dua baris: kolom mana yang berubah, dari apa ke apa. */
+function ringkasPerubahan(lama, baru){
+  if (!lama) return '';
+  var lewati = { id:1, dibuat:1, petugas:1, passwordHash:1, salt:1 };
+  var out = [];
+  Object.keys(baru || {}).forEach(function(k){
+    if (lewati[k]) return;
+    var a = String(lama[k] == null ? '' : lama[k]).trim();
+    var b = String(baru[k] == null ? '' : baru[k]).trim();
+    if (a === b || (!a && !b)) return;
+    var pot = function(x){ return x.length > 60 ? x.slice(0, 57) + '…' : (x || '(kosong)'); };
+    out.push(k + ': ' + pot(a) + ' → ' + pot(b));
+  });
+  return out.join(' | ').slice(0, 700);
+}
+
+/* Modul yang dianggap "membuka halaman". Dicatat paling sering sekali
+   tiap beberapa menit per pengguna supaya log tidak dibanjiri. */
+var _LOG_AKSES = {
+  apiDashboard:'dashboard', apiListPenghimpunan:'penghimpunan', apiListPentasyarufan:'pentasyarufan',
+  apiListDonatur:'donatur', apiJurnalData:'laporan', apiBroadcastReport:'laporan',
+  apiListUsers:'users', apiListRekening:'rekening', apiListLayanan:'layanan',
+  apiGetSettings:'settings', apiListMutasi:'mutasi', apiListAudit:'log',
+  apiGetRAPBData:'laporan', apiGetDonaturAnalytics:'donatur'
+};
+var _LOG_AKSES_JEDA = 5 * 60 * 1000;
+
+function _catatAkses(fn, token){
+  var modul = _LOG_AKSES[fn];
+  if (!modul || !token) return;
+  var u = null;
+  try { u = authUser(token); } catch(e) { return; }
+  try{
+    var props = (DB && DB.props) || {};
+    var peta = {};
+    try { peta = JSON.parse(props._aksesTerakhir || '{}') || {}; } catch(e) { peta = {}; }
+    var kunci = u.id + '|' + modul;
+    var kini = Date.now();
+    if (peta[kunci] && (kini - peta[kunci]) < _LOG_AKSES_JEDA) return;
+    peta[kunci] = kini;
+    /* jaga peta tetap kecil */
+    var kunciSemua = Object.keys(peta);
+    if (kunciSemua.length > 400) {
+      kunciSemua.sort(function(a,b){ return peta[a] - peta[b]; });
+      kunciSemua.slice(0, kunciSemua.length - 300).forEach(function(k){ delete peta[k]; });
+    }
+    props._aksesTerakhir = JSON.stringify(peta);
+    if (DB) DB.props = props;
+    audit(u.id, u.username, 'buka_' + modul, '', { modul: modul });
+  }catch(e){}
+}
+
+function apiListAudit(t, opsi){
+  _requirePerm(t, 'log', 'view');
+  opsi = opsi || {};
+  var rows = (readAll(SHEETS.LOG) || []).slice();
+  rows.reverse();   // terbaru dulu
+
+  var q = String(opsi.cari || '').toLowerCase().trim();
+  var user = String(opsi.username || '').trim();
+  var jenis = String(opsi.jenis || '').trim();   // 'akses' | 'ubah' | ''
+  var dari = String(opsi.dari || '').trim();
+  var sampai = String(opsi.sampai || '').trim();
+
+  var hasil = rows.filter(function(r){
+    var aksi = String(r.aksi || '');
+    if (user && String(r.username || '') !== user) return false;
+    if (jenis === 'akses' && aksi.indexOf('buka_') !== 0 && aksi !== 'login' && aksi !== 'logout' && aksi !== 'login_gagal') return false;
+    if (jenis === 'ubah' && !/^(create|edit|delete|import|save|perbaikan)/.test(aksi)) return false;
+    var tgl = String(r.waktu || '').slice(0, 10);
+    if (dari && tgl < dari) return false;
+    if (sampai && tgl > sampai) return false;
+    if (q) {
+      var blob = [r.username, r.aksi, r.modul, r.entitasId, r.ringkas, r.detail, r.ip].join(' ').toLowerCase();
+      if (blob.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+
+  var batas = Math.min(Math.max(parseInt(opsi.batas, 10) || 200, 20), 1000);
+  var daftarUser = {};
+  rows.forEach(function(r){ if (r.username) daftarUser[r.username] = true; });
+
+  return {
+    total: hasil.length,
+    tersimpan: rows.length,
+    batasSimpan: _logMaks(),
+    users: Object.keys(daftarUser).sort(),
+    rows: hasil.slice(0, batas)
+  };
+}
+
+function apiHapusAudit(t){
+  var u = _requirePerm(t, 'log', 'delete');
+  var sh = getSS().getSheetByName(SHEETS.LOG);
+  var jml = sh ? Math.max(sh.getLastRow() - 1, 0) : 0;
+  if (sh) { for (var i = 0; i < jml; i++) sh.deleteRow(2); }
+  audit(u.id, u.username, 'hapus_log', jml + ' catatan dihapus', { modul: 'log' });
+  return { ok: true, dihapus: jml };
+}
+
 var REGISTRY={};
 REGISTRY['apiListMutasi']=apiListMutasi;
 REGISTRY['apiSaveMutasiRows']=apiSaveMutasiRows;
@@ -3361,6 +3692,16 @@ REGISTRY['apiGetPublicLinkInfo']=apiGetPublicLinkInfo;
 REGISTRY['apiGeneratePublicLink']=apiGeneratePublicLink;
 REGISTRY['apiDisablePublicLink']=apiDisablePublicLink;
 /* ===== API PUBLIC KWITANSI VERIFICATION ===== */
+/* Samarkan nama donatur pada hasil verifikasi publik.
+   Nomor kwitansi berurutan dan halaman ini terbuka untuk siapa saja, jadi nama
+   utuh akan mudah dipanen. Pemegang kwitansi tetap bisa mengenali namanya. */
+function _samarkanNama(nama){
+  return String(nama||'').split(/\s+/).filter(Boolean).map(function(k,i){
+    if (i === 0 || k.length <= 2) return k;
+    return k.charAt(0) + '•'.repeat(Math.max(k.length - 1, 1));
+  }).join(' ') || '-';
+}
+
 function apiVerifyKwitansi(noKwitansi){
   if(!noKwitansi) return { valid:false, msg:'Nomor kwitansi tidak boleh kosong' };
   var rows = readAll(SHEETS.PENGHIMPUNAN);
@@ -3379,11 +3720,10 @@ function apiVerifyKwitansi(noKwitansi){
       jenisDana: found.jenisDana,
       subJenis: found.subJenis,
       pilar: found.pilar,
-      namaDonatur: found.namaDonatur,
+      namaDonatur: _samarkanNama(found.namaDonatur),
       jumlah: found.jumlah,
       metode: found.metode,
-      statusBayar: found.statusBayar || 'Lunas',
-      fundraising: found.fundraising || '-'
+      statusBayar: found.statusBayar || 'Lunas'
     },
     lembaga: settings.namaLembaga || 'Lazismu Bantul'
   };
@@ -3530,13 +3870,20 @@ REGISTRY['apiGetPermissionMeta']=apiGetPermissionMeta;
 REGISTRY['apiPublicDashboard']=apiPublicDashboard;
 REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
+REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
+REGISTRY['apiListAudit']=apiListAudit;
+REGISTRY['apiHapusAudit']=apiHapusAudit;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
-async function runRPC(db, fn, args){
+async function runRPC(db, fn, args, ctx){
   DB = db || {sheets:{},props:{}};
   if(!DB.sheets) DB.sheets={}; if(!DB.props) DB.props={};
+  auditKonteks(ctx);
   setup(); // Always run setup to keep table schemas and defaults up to date
   if(!REGISTRY[fn]) throw new Error('Fungsi tidak dikenal: '+fn);
   var result = await REGISTRY[fn].apply(null, args||[]);
+  /* Catat "siapa membuka apa" setelah fungsinya berhasil, supaya panggilan
+     yang gagal izin tidak ikut tercatat sebagai kunjungan. */
+  try{ _catatAkses(fn, (args && args[0]) || ''); }catch(e){}
   return { result: result, db: DB };
 }
 module.exports = { runRPC };
