@@ -136,7 +136,7 @@ function startApp(){
   if(foto){av.style.backgroundImage='url('+foto+')';av.textContent='';}else{av.style.backgroundImage='';av.textContent=(ME.nama||'?').charAt(0).toUpperCase();}
   function buildNav(){
     var nav=el('nav');nav.innerHTML='';
-    MENU.forEach(function(m){if(m.mod&&!canDo(m.mod,'view'))return;var d=document.createElement('button');d.className='tn-item';d.id='nav_'+m.id;d.title=m.label;d.setAttribute('aria-label',m.label);d.innerHTML='<span class="ic">'+m.ic+'</span><span class="tn-tip">'+m.label+'</span>';d.onclick=function(){expandSidebar();go(m.id);};nav.appendChild(d);});
+    MENU.forEach(function(m){if(m.mod&&!canDo(m.mod,'view'))return;var d=document.createElement('button');d.className='tn-item';d.id='nav_'+m.id;d.title=m.label;d.setAttribute('aria-label',m.label);d.innerHTML='<span class="ic">'+m.ic+'</span><span class="tn-tip">'+m.label+'</span>';d.onclick=function(){go(m.id);};nav.appendChild(d);});   // klik menu = langsung buka halamannya, sidebar tidak ikut melebar
     var first=MENU.find(function(m){return !m.mod||canDo(m.mod,'view');});
     go(first?first.id:'dashboard');
   }
@@ -754,15 +754,21 @@ function delLay(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)re
 var LAP_TAB='himpun';   // tab pertama = rekap penghimpunan per layanan
 function viewLaporan(){renderLaporanShell();}
 /* ============================================================
-   LAPORAN — REKAP PER KANTOR LAYANAN (v8)
-   Tab "Penghimpunan" & "Pentasyarufan": ringkasan per KLL/ULL,
-   klik satu layanan untuk melihat rincian pilar/ashnaf, dan
-   khusus Penghimpunan Daerah ditampilkan seluruh transaksinya
-   dengan tabel yang bisa diurutkan.
+   LAPORAN — REKAP PER KANTOR LAYANAN (v9)
+   Filter bulan + pencarian layanan. Tiap layanan dibuka jadi
+   rincian per pilar/ashnaf, dan tiap pilar bisa dibuka lagi
+   menjadi daftar transaksi dengan filter fundraising.
    ============================================================ */
-var LAP_SEL = null;                       // layanan yang sedang dibuka
+var LAP_SEL = null;                        // layanan yang terbuka
+var LAP_PILAR = null;                      // pilar yang terbuka di dalamnya
 var LAP_SORT = { key: 'tanggal', dir: -1 };
-var LAP_Q = '';
+var LAP_Q = '';                            // cari transaksi
+var LAP_QLAY = '';                         // cari nama KLL/ULL
+var LAP_MONTH = 'all';                     // 'all' atau 'YYYY-MM'
+var LAP_FR = 'all';                        // filter fundraising di detail pilar
+
+function lapDec(v){ try { return decodeURIComponent(v); } catch(e) { return v; } }
+function lapEnc(v){ return encodeURIComponent(String(v == null ? '' : v)); }
 
 function lapPilarOf(r){
   if (r.pilar && String(r.pilar).trim()) return String(r.pilar).trim();
@@ -770,6 +776,10 @@ function lapPilarOf(r){
   if (sub) return sub;
   return String(r.jenisDana || 'Lainnya').trim();
 }
+function lapKeyOf(r){
+  return (window.__lapMode === 'salur') ? (r.ashnaf || 'Lainnya') : lapPilarOf(r);
+}
+function lapMonthKey(r){ return String(r.tanggal || '').slice(0, 7); }
 function lapGroup(rows, keyFn){
   var g = {};
   rows.forEach(function(r){
@@ -780,110 +790,170 @@ function lapGroup(rows, keyFn){
   });
   return g;
 }
-function lapSortedKeys(g){
-  return Object.keys(g).sort(function(a,b){ return g[b].total - g[a].total; });
+function lapSortedKeys(g){ return Object.keys(g).sort(function(a,b){ return g[b].total - g[a].total; }); }
+function lapSum(rows){ return rows.reduce(function(a,r){ return a + (Number(r.jumlah)||0); }, 0); }
+
+/* ---- data terfilter bulan ---- */
+function lapRows(){
+  var all = window.__lapAll || [];
+  if (LAP_MONTH === 'all') return all;
+  return all.filter(function(r){ return lapMonthKey(r) === LAP_MONTH; });
 }
 
-/* Cukup gambar ulang daftarnya — halaman, header, dan tab tidak perlu ikut. */
-function lapRefreshList(){
-  var host = el('lapList');
-  if (!host) { renderLaporanShell(); return; }
-  host.innerHTML = lapLayananList(window.__lapAll || []);
-}
-function setLapSel(name){ LAP_SEL = (LAP_SEL === name) ? null : name; LAP_Q=''; lapRefreshList(); }
-function setLapSort(key){
-  if (LAP_SORT.key === key) LAP_SORT.dir = -LAP_SORT.dir;
-  else LAP_SORT = { key: key, dir: (key === 'jumlah' || key === 'tanggal') ? -1 : 1 };
-  lapRefreshList();
-}
-function setLapQ(v){ LAP_Q = v || ''; var t = el('lapDetailTable'); if (t) t.outerHTML = lapDetailTable(window.__lapRows || [], window.__lapMode || 'himpun'); }
-
-/* ---- ringkasan atas: total, KLL/ULL, daerah ---- */
-function lapSummary(rows, mode){
-  var sumLay = 0, sumDae = 0, nLay = {};
-  rows.forEach(function(r){
-    var k = getLayananNameForTx(r);
-    var v = Number(r.jumlah) || 0;
-    if (k === LAYANAN_DAERAH) sumDae += v;
-    else { sumLay += v; nLay[k] = 1; }
+/* ---- kendali: filter bulan + cari layanan ---- */
+function lapFilterBar(){
+  var all = window.__lapAll || [];
+  var months = {};
+  all.forEach(function(r){ var m = lapMonthKey(r); if (m) months[m] = (months[m]||0) + 1; });
+  var keys = Object.keys(months).sort().reverse();
+  var opt = '<option value="all"' + (LAP_MONTH==='all'?' selected':'') + '>Semua Bulan</option>';
+  keys.forEach(function(m){
+    var p = m.split('-');
+    var label = (BULAN[Number(p[1])] || p[1]) + ' ' + p[0];
+    opt += '<option value="' + m + '"' + (LAP_MONTH===m?' selected':'') + '>' + label + '</option>';
   });
-  var total = sumLay + sumDae;
-  var pct = total ? Math.round(sumLay / total * 100) : 0;
+  return '<div class="lap-filter">'
+    + '<div class="lap-filter-f"><label>Periode</label>'
+    + '<select onchange="setLapMonth(this.value)">' + opt + '</select></div>'
+    + '<div class="lap-filter-f grow"><label>Cari Kantor Layanan</label>'
+    + '<input placeholder="Ketik nama KLL / ULL..." value="' + esc(LAP_QLAY) + '" oninput="setLapQLay(this.value)"></div>'
+    + (LAP_MONTH!=='all'||LAP_QLAY ? '<button class="btn btn-sm lap-filter-reset" onclick="lapResetFilter()">Reset</button>' : '')
+    + '</div>';
+}
+function setLapMonth(v){ LAP_MONTH = v; LAP_SEL = null; LAP_PILAR = null; lapRefreshAll(); }
+function setLapQLay(v){ LAP_QLAY = v || ''; lapRefreshList(); }
+function lapResetFilter(){ LAP_MONTH='all'; LAP_QLAY=''; LAP_SEL=null; LAP_PILAR=null; renderLapRekap(window.__lapMode||'himpun'); }
+
+/* ---- ringkasan ---- */
+function lapSummary(rows, mode){
+  var sLay = 0, sDae = 0, nLay = {};
+  rows.forEach(function(r){
+    var k = getLayananNameForTx(r), v = Number(r.jumlah) || 0;
+    if (k === LAYANAN_DAERAH) sDae += v; else { sLay += v; nLay[k] = 1; }
+  });
+  var total = sLay + sDae;
+  var pct = total ? Math.round(sLay / total * 100) : 0;
   return '<div class="lap-sum">'
     + '<div class="lap-sum-card big"><div class="lap-sum-lbl">Total ' + (mode==='himpun'?'Penghimpunan':'Pentasyarufan') + '</div>'
     + '<div class="lap-sum-val">' + rp(total) + '</div>'
     + '<div class="lap-sum-sub">' + rows.length + ' transaksi</div></div>'
     + '<div class="lap-sum-card"><div class="lap-sum-lbl">Lewat KLL / ULL</div>'
-    + '<div class="lap-sum-val">' + rp(sumLay) + '</div>'
+    + '<div class="lap-sum-val">' + rp(sLay) + '</div>'
     + '<div class="lap-sum-sub">' + pct + '% &middot; ' + Object.keys(nLay).length + ' layanan</div></div>'
     + '<div class="lap-sum-card"><div class="lap-sum-lbl">Penghimpunan Daerah</div>'
-    + '<div class="lap-sum-val">' + rp(sumDae) + '</div>'
+    + '<div class="lap-sum-val">' + rp(sDae) + '</div>'
     + '<div class="lap-sum-sub">' + (100 - pct) + '% dari total</div></div>'
     + '</div>';
 }
 
-/* ---- daftar layanan (klik untuk membuka rincian) ---- */
+/* ---- daftar layanan ---- */
 function lapLayananList(rows){
   var g = lapGroup(rows, function(r){ return getLayananNameForTx(r); });
   var keys = lapSortedKeys(g);
-  var max = keys.length ? g[keys[0]].total : 0;
+  var q = LAP_QLAY.toLowerCase().trim();
+  if (q) {
+    /* Cocokkan juga KODE layanan — petugas terbiasa mengetik "SDUA",
+       sementara yang tampil sudah jadi nama resminya. */
+    var master = CACHE.layanan || [];
+    keys = keys.filter(function(k){
+      if (k.toLowerCase().indexOf(q) >= 0) return true;
+      var l = null;
+      for (var i = 0; i < master.length; i++) {
+        var lbl = (master[i].tipe ? master[i].tipe + ' ' : '') + master[i].nama;
+        if (lbl === k) { l = master[i]; break; }
+      }
+      return !!(l && String(l.kode || '').toLowerCase().indexOf(q) >= 0);
+    });
+  }
+  if (!keys.length) return '<div class="lap-empty">Tidak ada layanan yang cocok.</div>';
+  var max = g[keys[0]] ? g[keys[0]].total : 0;
   var h = '<div class="lap-list">';
   keys.forEach(function(k){
-    var it = g[k];
-    var isDae = (k === LAYANAN_DAERAH);
-    var open = (LAP_SEL === k);
+    var it = g[k], isDae = (k === LAYANAN_DAERAH), open = (LAP_SEL === k);
     var w = max ? Math.round(it.total / max * 100) : 0;
-    h += '<button class="lap-row' + (open ? ' open' : '') + (isDae ? ' daerah' : '') + '" onclick="setLapSel(\'' + esc(k).replace(/'/g,"\\'") + '\')">'
+    h += '<button class="lap-row' + (open?' open':'') + (isDae?' daerah':'') + '" onclick="setLapSel(\'' + lapEnc(k) + '\')">'
       + '<span class="lap-row-bar" style="width:' + w + '%"></span>'
-      + '<span class="lap-row-name">' + esc(k) + (isDae ? '<em>tanpa penanda KLL/ULL</em>' : '<em>' + it.n + ' transaksi</em>') + '</span>'
+      + '<span class="lap-row-name">' + esc(k) + '<em>' + it.n + ' transaksi</em></span>'
       + '<span class="lap-row-val">' + rp(it.total) + '</span>'
-      + '<span class="lap-row-caret">' + (open ? '&#9662;' : '&#9656;') + '</span>'
-      + '</button>';
+      + '<span class="lap-row-caret">' + (open?'&#9662;':'&#9656;') + '</span></button>';
     if (open) h += '<div class="lap-detail">' + lapDetail(rows, k) + '</div>';
   });
-  h += '</div>';
-  return h;
+  return h + '</div>';
 }
 
-/* ---- isi rincian satu layanan ---- */
+/* ---- rincian pilar / ashnaf sebuah layanan ---- */
 function lapDetail(rows, name){
   var mode = window.__lapMode || 'himpun';
   var sub = rows.filter(function(r){ return getLayananNameForTx(r) === name; });
-  var total = sub.reduce(function(a,r){ return a + (Number(r.jumlah)||0); }, 0);
-
-  // Daerah: seluruh transaksi, bisa diurutkan
-  if (name === LAYANAN_DAERAH) {
-    window.__lapRows = sub;
-    return '<div class="lap-detail-head"><div><b>' + sub.length + ' transaksi</b> &middot; ' + rp(total) + '</div>'
-      + '<input class="lap-search" placeholder="Cari nama, program, fundraising..." value="' + esc(LAP_Q) + '" oninput="setLapQ(this.value)"></div>'
-      + lapDetailTable(sub, mode);
-  }
-
-  // Layanan: rincian per pilar (penghimpunan) atau ashnaf (pentasyarufan)
-  var keyFn = (mode === 'himpun') ? lapPilarOf : function(r){ return r.ashnaf || 'Lainnya'; };
-  var g = lapGroup(sub, keyFn);
+  var total = lapSum(sub);
+  var g = lapGroup(sub, lapKeyOf);
   var keys = lapSortedKeys(g);
-  var h = '<div class="lap-detail-head"><div><b>' + (mode==='himpun'?'Rincian per pilar':'Rincian per ashnaf') + '</b></div>'
+
+  var h = '<div class="lap-detail-head">'
+    + '<div><b>' + (mode==='himpun'?'Rincian per pilar':'Rincian per ashnaf') + '</b>'
+    + ' <span class="muted">&middot; ' + sub.length + ' transaksi</span></div>'
     + '<div class="lap-detail-total">' + rp(total) + '</div></div>'
-    + '<table class="lap-table"><thead><tr><th>' + (mode==='himpun'?'Pilar / Jenis':'Ashnaf') + '</th><th class="num">Transaksi</th><th class="num">Jumlah</th><th class="num">Porsi</th></tr></thead><tbody>';
+    + '<table class="lap-table"><thead><tr>'
+    + '<th>' + (mode==='himpun'?'Pilar / Jenis':'Ashnaf') + '</th>'
+    + '<th class="num">Transaksi</th><th class="num">Jumlah</th><th class="num">Porsi</th><th></th>'
+    + '</tr></thead><tbody>';
   keys.forEach(function(k){
     var pct = total ? Math.round(g[k].total / total * 100) : 0;
-    h += '<tr><td>' + esc(k) + '</td><td class="num">' + g[k].n + '</td>'
+    var open = (LAP_PILAR === k);
+    h += '<tr class="' + (open?'on':'') + '"><td>' + esc(k) + '</td>'
+      + '<td class="num">' + g[k].n + '</td>'
       + '<td class="num strong">' + rp(g[k].total) + '</td>'
-      + '<td class="num"><span class="lap-pct"><i style="width:' + pct + '%"></i></span>' + pct + '%</td></tr>';
+      + '<td class="num"><span class="lap-pct"><i style="width:' + pct + '%"></i></span>' + pct + '%</td>'
+      + '<td class="num"><button class="lap-mini" onclick="setLapPilar(\'' + lapEnc(k) + '\')">'
+      + (open ? 'Tutup' : 'Detail') + '</button></td></tr>';
+    if (open) {
+      h += '<tr class="lap-sub-row"><td colspan="5">'
+        + lapPilarPanel(sub.filter(function(r){ return lapKeyOf(r) === k; }), k, mode)
+        + '</td></tr>';
+    }
   });
-  h += '</tbody><tfoot><tr><td>Total</td><td class="num">' + sub.length + '</td><td class="num strong">' + rp(total) + '</td><td class="num">100%</td></tr></tfoot></table>';
+  h += '</tbody><tfoot><tr><td>Total</td><td class="num">' + sub.length + '</td>'
+    + '<td class="num strong">' + rp(total) + '</td><td class="num">100%</td><td></td></tr></tfoot></table>';
   return h;
 }
 
-/* ---- tabel transaksi (khusus Daerah) ---- */
-function lapDetailTable(rows, mode){
-  var q = LAP_Q.toLowerCase();
-  var list = rows.filter(function(r){
-    if (!q) return true;
-    return [r.namaDonatur, r.namaPenerima, r.program, r.fundraising, r.jenisDana, r.subJenis, r.ashnaf, r.metode]
-      .join(' ').toLowerCase().indexOf(q) >= 0;
+/* ---- isi satu pilar: filter fundraising + daftar transaksi ---- */
+function lapPilarPanel(rows, pilar, mode){
+  var frs = {};
+  rows.forEach(function(r){ frs[cleanFR(r.fundraising)] = 1; });
+  var frKeys = Object.keys(frs).sort();
+  var opt = '<option value="all"' + (LAP_FR==='all'?' selected':'') + '>Semua Fundraising</option>';
+  frKeys.forEach(function(f){ opt += '<option value="' + esc(f) + '"' + (LAP_FR===f?' selected':'') + '>' + esc(f) + '</option>'; });
+
+  var list = rows.filter(function(r){ return LAP_FR === 'all' || cleanFR(r.fundraising) === LAP_FR; });
+  var q = LAP_Q.toLowerCase().trim();
+  if (q) list = list.filter(function(r){
+    return [r.namaDonatur, r.namaPenerima, r.program, r.fundraising, r.metode].join(' ').toLowerCase().indexOf(q) >= 0;
   });
+  var tot = lapSum(list);
+
+  var head = '<div class="lap-pilar-head">'
+    + '<div class="lap-pilar-t">' + esc(pilar) + '</div>'
+    + '<div class="lap-pilar-ctl">'
+    + '<select onchange="setLapFR(this.value)">' + opt + '</select>'
+    + '<input placeholder="Cari nama / program..." value="' + esc(LAP_Q) + '" oninput="setLapQ(this.value)">'
+    + '</div>'
+    + '<div class="lap-pilar-tot"><span>Total tampil</span><b>' + rp(tot) + '</b>'
+    + '<em>' + list.length + ' transaksi</em></div>'
+    + '</div>';
+  return head + lapDetailTable(list, mode);
+}
+function setLapPilar(enc){
+  var k = lapDec(enc);
+  LAP_PILAR = (LAP_PILAR === k) ? null : k;
+  LAP_FR = 'all'; LAP_Q = '';
+  lapRefreshList();
+}
+function setLapFR(v){ LAP_FR = v; lapRefreshList(); }
+function setLapQ(v){ LAP_Q = v || ''; lapRefreshList(); }
+
+/* ---- tabel transaksi ---- */
+function lapDetailTable(list, mode){
   var k = LAP_SORT.key, dir = LAP_SORT.dir;
   list = list.slice().sort(function(a,b){
     var va, vb;
@@ -894,29 +964,53 @@ function lapDetailTable(rows, mode){
   });
   function th(key, label, cls){
     var on = (LAP_SORT.key === key);
-    return '<th class="' + (cls||'') + ' sortable' + (on ? ' on' : '') + '" onclick="setLapSort(\'' + key + '\')">'
-      + label + '<span class="lap-arw">' + (on ? (LAP_SORT.dir > 0 ? '&#9650;' : '&#9660;') : '') + '</span></th>';
+    return '<th class="' + (cls||'') + ' sortable' + (on?' on':'') + '" onclick="setLapSort(\'' + key + '\')">'
+      + label + '<span class="lap-arw">' + (on ? (LAP_SORT.dir>0?'&#9650;':'&#9660;') : '') + '</span></th>';
   }
   var cols = (mode === 'himpun')
-    ? [th('tanggal','Tanggal'), th('namaDonatur','Donatur'), th('jenisDana','Jenis'), th('program','Program'),
+    ? [th('tanggal','Tanggal'), th('namaDonatur','Donatur'), th('program','Program'),
        th('fundraising','Fundraising'), th('metode','Metode'), th('jumlah','Jumlah','num')]
-    : [th('tanggal','Tanggal'), th('namaPenerima','Penerima'), th('ashnaf','Ashnaf'), th('program','Program'),
+    : [th('tanggal','Tanggal'), th('namaPenerima','Penerima'), th('program','Program'),
        th('fundraising','Fundraising'), th('metode','Metode'), th('jumlah','Jumlah','num')];
-
-  var tot = list.reduce(function(a,r){ return a + (Number(r.jumlah)||0); }, 0);
-  var h = '<div class="lap-table-wrap" id="lapDetailTable"><table class="lap-table"><thead><tr>' + cols.join('') + '</tr></thead><tbody>';
-  if (!list.length) h += '<tr><td colspan="7" style="text-align:center;padding:22px" class="muted">Tidak ada transaksi cocok.</td></tr>';
+  var tot = lapSum(list);
+  var h = '<div class="lap-table-wrap"><table class="lap-table sub"><thead><tr>' + cols.join('') + '</tr></thead><tbody>';
+  if (!list.length) h += '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">Tidak ada transaksi cocok.</td></tr>';
   list.forEach(function(r){
     h += '<tr><td>' + fdate(r.tanggal) + '</td>'
       + '<td><b>' + esc((mode==='himpun' ? r.namaDonatur : r.namaPenerima) || '-') + '</b></td>'
-      + '<td>' + esc((mode==='himpun' ? lapPilarOf(r) : (r.ashnaf||'-'))) + '</td>'
       + '<td>' + esc(r.program || '-') + '</td>'
       + '<td>' + esc(cleanFR(r.fundraising)) + '</td>'
       + '<td>' + esc(r.metode || '-') + '</td>'
       + '<td class="num strong">' + rp(r.jumlah) + '</td></tr>';
   });
-  h += '</tbody><tfoot><tr><td colspan="6">Total ' + list.length + ' transaksi</td><td class="num strong">' + rp(tot) + '</td></tr></tfoot></table></div>';
+  h += '</tbody><tfoot><tr><td colspan="5">Total ' + list.length + ' transaksi</td>'
+    + '<td class="num strong">' + rp(tot) + '</td></tr></tfoot></table></div>';
   return h;
+}
+
+/* ---- render parsial ---- */
+function lapRefreshList(){
+  var host = el('lapList');
+  if (!host) { renderLaporanShell(); return; }
+  host.innerHTML = lapLayananList(lapRows());
+}
+function lapRefreshAll(){
+  var s = el('lapSum'), l = el('lapList');
+  if (!s || !l) { renderLaporanShell(); return; }
+  var rows = lapRows();
+  s.innerHTML = lapSummary(rows, window.__lapMode || 'himpun');
+  l.innerHTML = lapLayananList(rows);
+}
+function setLapSel(enc){
+  var name = lapDec(enc);
+  LAP_SEL = (LAP_SEL === name) ? null : name;
+  LAP_PILAR = null; LAP_FR = 'all'; LAP_Q = '';
+  lapRefreshList();
+}
+function setLapSort(key){
+  if (LAP_SORT.key === key) LAP_SORT.dir = -LAP_SORT.dir;
+  else LAP_SORT = { key: key, dir: (key==='jumlah'||key==='tanggal') ? -1 : 1 };
+  lapRefreshList();
 }
 
 /* ---- pemuat tab ---- */
@@ -924,15 +1018,17 @@ function renderLapRekap(mode){
   window.__lapMode = mode;
   var host = el('lapBody');
   if (!host) return;
-  host.innerHTML = '<div class="empty muted" style="padding:28px">Memuat data…</div>';
+  host.innerHTML = '<div class="lap-empty">Memuat data…</div>';
   var api = (mode === 'himpun') ? 'apiListPenghimpunan' : 'apiListPentasyarufan';
   var need = CACHE.layanan ? Promise.resolve(CACHE.layanan) : gas('apiListLayanan')(TOKEN);
   Promise.all([gas(api)(TOKEN), need]).then(function(res){
-    var rows = res[0] || [];
+    var all = res[0] || [];
     CACHE.layanan = res[1] || [];
-    if (mode === 'himpun') CACHE.himpun = rows; else CACHE.tasyaruf = rows;
-    window.__lapAll = rows;                       // dipakai render parsial
-    host.innerHTML = lapSummary(rows, mode)
+    if (mode === 'himpun') CACHE.himpun = all; else CACHE.tasyaruf = all;
+    window.__lapAll = all;
+    var rows = lapRows();
+    host.innerHTML = '<div id="lapSum">' + lapSummary(rows, mode) + '</div>'
+      + lapFilterBar()
       + '<div id="lapList" class="swap-in">' + lapLayananList(rows) + '</div>';
   }).catch(handleErr);
 }
@@ -1260,7 +1356,11 @@ function setTab(t){
 function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
-  else {window.REK_HOST='';window.LAY_HOST='';host.innerHTML=(SET_TAB==='tampilan')?tampilanHTML(s):lembagaHTML(s);}
+  else {
+    window.REK_HOST='';window.LAY_HOST='';
+    host.innerHTML=(SET_TAB==='tampilan')?tampilanHTML(s):lembagaHTML(s);
+    if(SET_TAB!=='tampilan' && typeof salamPreview==='function') salamPreview();
+  }
 }
 function lembagaHTML(s){
   var logo = s.logoData || '';
@@ -1280,11 +1380,55 @@ function lembagaHTML(s){
     + fld(4,'Website','<input id="s_website" value="' + esc(s.website||'') + '">')
     + '</div>';
 
+  var salam = '<div class="fgrid">'
+    + fld(6,'Judul Sambutan','<input id="s_salamJudul" value="' + esc(s.salamJudul || SALAM_DEFAULT) + '" oninput="salamPreview()">')
+    + fld(6,'Baris Kedua','<input id="s_salamSub" value="' + esc(s.salamSub || SALAM_SUB_DEFAULT) + '" oninput="salamPreview()">')
+    + '<div class="fld" data-col="12"><label>Pratinjau</label>'
+    + '<div class="salam-prev"><div class="salam-prev-t" id="salamPrevT"></div>'
+    + '<div class="salam-prev-s" id="salamPrevS"></div></div></div>'
+    + '<div class="fld" data-col="12"><div class="salam-tags">'
+    + ['{waktu}','{nama}','{namaLengkap}','{lembaga}','{tanggal}'].map(function(t){
+        return '<button type="button" class="salam-tag" onclick="salamInsert(\'' + t + '\')">' + t + '</button>';
+      }).join('')
+    + '<span class="salam-hint">Klik untuk menyisipkan ke Judul Sambutan</span></div></div>'
+    + '</div>';
+
   return '<div class="set-grid">'
     + '<div class="set-side">' + setPanel('Logo Lembaga','Tampil di sidebar, kwitansi, dan dokumen cetak', logoBox) + '</div>'
-    + '<div class="set-wide">' + setPanel('Identitas','Dipakai pada kop kwitansi dan bukti penyaluran', ident,
-        canDo('settings','edit') ? '<button class="btn btn-primary" onclick="saveSettings()">Simpan Identitas</button>' : '')
+    + '<div class="set-wide">'
+      + setPanel('Identitas','Dipakai pada kop kwitansi dan bukti penyaluran', ident,
+          canDo('settings','edit') ? '<button class="btn btn-primary" onclick="saveSettings()">Simpan Identitas</button>' : '')
+      + setPanel('Kalimat Sambutan','Tampil di bagian atas dashboard', salam,
+          canDo('settings','edit') ? '<button class="btn btn-ghost" onclick="salamReset()">Kembalikan Bawaan</button>'
+            + '<button class="btn btn-primary" onclick="saveSalam()">Simpan Sambutan</button>' : '')
     + '</div></div>';
+}
+
+function salamPreview(){
+  var t = el('s_salamJudul'), u = el('s_salamSub');
+  var pt = el('salamPrevT'), ps = el('salamPrevS');
+  if (pt && t) pt.textContent = salamRender(t.value);
+  if (ps && u) ps.textContent = salamRender(u.value);
+}
+function salamInsert(tag){
+  var t = el('s_salamJudul'); if (!t) return;
+  var a = t.selectionStart, b = t.selectionEnd;
+  t.value = t.value.slice(0, a) + tag + t.value.slice(b);
+  t.focus(); t.setSelectionRange(a + tag.length, a + tag.length);
+  salamPreview();
+}
+function salamReset(){
+  var t = el('s_salamJudul'), u = el('s_salamSub');
+  if (t) t.value = SALAM_DEFAULT;
+  if (u) u.value = SALAM_SUB_DEFAULT;
+  salamPreview();
+}
+function saveSalam(){
+  var d = { salamJudul: el('s_salamJudul') ? el('s_salamJudul').value : SALAM_DEFAULT,
+            salamSub:   el('s_salamSub')   ? el('s_salamSub').value   : SALAM_SUB_DEFAULT };
+  gas('apiSaveSettings')(TOKEN, d).then(function(res){
+    SETTINGS = res; toast('Kalimat sambutan tersimpan');
+  }).catch(handleErr);
 }
 
 /* panel pengaturan — bentuknya sama dengan panel di halaman Laporan */
@@ -1337,7 +1481,7 @@ function setTheme(t){applyTheme(t);applyBranding();if(canDo('settings','edit'))g
 function onLogoUpload(e){var f=e.target.files[0];if(!f)return;resizeImg(f,240,function(data){gas('apiSaveSettings')(TOKEN,{logoData:data}).then(function(s){SETTINGS=s;applyBranding();renderSetTab(s);toast('Logo tersimpan');}).catch(handleErr);});}
 function removeLogo(){gas('apiSaveSettings')(TOKEN,{logoData:''}).then(function(s){SETTINGS=s;applyBranding();renderSetTab(s);toast('Logo dihapus');}).catch(handleErr);}
 function saveDashLayout(){var def=getDashLayout();var vis={};document.querySelectorAll('[data-w]').forEach(function(c){vis[c.getAttribute('data-w')]=c.checked;});var obj={order:def.order,vis:vis};localStorage.setItem('laz_dashlayout',JSON.stringify(obj));if(canDo('settings','edit'))gas('apiSaveSettings')(TOKEN,{dashLayout:JSON.stringify(obj)}).then(function(s){SETTINGS=s;}).catch(function(){});toast('Layout disimpan');}
-function saveSettings(){var d={};['namaLembaga','singkatan','alamat','telepon','email','website'].forEach(function(k){var e=el('s_'+k);if(e)d[k]=e.value;});gas('apiSaveSettings')(TOKEN,d).then(function(s){SETTINGS=s;applyBranding();toast('Pengaturan disimpan');}).catch(handleErr);}
+function saveSettings(){var d={};['namaLembaga','singkatan','alamat','telepon','email','website','salamJudul','salamSub'].forEach(function(k){var e=el('s_'+k);if(e)d[k]=e.value;});gas('apiSaveSettings')(TOKEN,d).then(function(s){SETTINGS=s;applyBranding();toast('Pengaturan disimpan');}).catch(handleErr);}
 
 /* ============ SHARED ============ */
 /* ============ HELPER FORM v8 (seksi, grid, input nominal) ============ */
@@ -1599,6 +1743,34 @@ var WIDGETS={
   rapb:{t:'Target & Realisasi RAPB 2026',dot:'#ea6a1e'}
 };
 function dashGreeting(){var h=new Date().getHours();return h<11?'Selamat pagi':h<15?'Selamat siang':h<19?'Selamat sore':'Selamat malam';}
+
+/* ===== KALIMAT SAMBUTAN DASHBOARD (bisa diatur di Pengaturan) =====
+   Placeholder yang dikenali:
+     {waktu}    -> Selamat pagi / siang / sore / malam
+     {nama}     -> nama depan pengguna yang login
+     {namaLengkap}
+     {lembaga}  -> nama lembaga
+     {tanggal}  -> tanggal hari ini */
+var SALAM_DEFAULT = '{waktu}, {nama}';
+var SALAM_SUB_DEFAULT = '{tanggal} • Ringkasan amanah ZISWAF lembaga';
+
+function salamRender(tpl, opt){
+  opt = opt || {};
+  var nmFull = opt.nama || (ME && ME.nama) || '';
+  var nm = String(nmFull).split(' ')[0] || '';
+  var lembaga = opt.lembaga || (SETTINGS && SETTINGS.namaLembaga) || '';
+  var tgl = opt.tanggal || fdate(new Date());
+  return String(tpl == null ? '' : tpl)
+    .replace(/\{waktu\}/gi, dashGreeting())
+    .replace(/\{namaLengkap\}/gi, nmFull)
+    .replace(/\{nama\}/gi, nm)
+    .replace(/\{lembaga\}/gi, lembaga)
+    .replace(/\{tanggal\}/gi, tgl);
+}
+function salamText(){ return salamRender((SETTINGS && SETTINGS.salamJudul) || SALAM_DEFAULT); }
+function salamSub(tglStr){
+  return salamRender((SETTINGS && SETTINGS.salamSub) || SALAM_SUB_DEFAULT, { tanggal: tglStr });
+}
 function avColor(s){var p=['#ea6a1e','#f7931e','#8b5cf6','#3b82f6','#10b981','#ec4899','#0ea5e9','#f59e0b'];var n=0;s=s||'?';for(var i=0;i<s.length;i++)n+=s.charCodeAt(i);return p[n%p.length];}
 
 function kpiSpark(series,key){
@@ -2325,8 +2497,8 @@ function renderDashboard(d){
   var hero='<div class="dh">' +
     '<div class="dh-content">' +
       '<div class="dh-row">' +
-        '<div class="dh-greeting"><div class="dh-hi">'+dashGreeting()+', '+esc(nm.split(' ')[0])+'</div>'+
-        '<div class="dh-sub">'+today+' • Ringkasan amanah ZISWAF lembaga</div></div>'+
+        '<div class="dh-greeting"><div class="dh-hi">'+esc(salamRender((SETTINGS&&SETTINGS.salamJudul)||SALAM_DEFAULT,{nama:nm}))+'</div>'+
+        '<div class="dh-sub">'+esc(salamSub(today))+'</div></div>'+
         '<div class="dh-acts">' +
           '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + pubBtn + editBtn + '</div>' +
           '<div class="dh-act-row">' + monthDropdown + pekanDropdown + dayDropdown + '</div>' +
