@@ -2400,3 +2400,268 @@ html[data-theme="dark"] .lay-sum-item.alt{background:rgba(255,255,255,.04)}
 .lay-sum-val{font-family:var(--head);font-size:16px;font-weight:800;color:var(--text);margin-top:3px;letter-spacing:-.02em}
 .lay-sum-sub{font-size:10.5px;color:var(--muted);margin-top:1px}
 @media(max-width:520px){.lay-summary{grid-template-columns:1fr}}
+
+/* ---------- 21. NOMINAL & KETERANGAN ---------- */
+/* Prefix "Rp" dulu terlalu dekat dengan awal teks, sehingga kursor ketik
+   menimpa hurufnya ("Rp" terbaca "Bp"). Sekarang diberi ruang cukup. */
+.money-cur{
+  left:12px;font-size:14px;font-weight:800;
+  color:var(--accent-d);letter-spacing:-.01em;
+}
+.money-input{
+  padding-left:46px !important;
+  padding-right:34px !important;
+}
+.money-input::placeholder{color:rgba(150,141,135,.55)}
+
+/* Kotak nominal menempati dua baris grid; keterangan mengisi ruang kosong
+   di kanannya, sejajar di bawah Metode–Fundraising. */
+@media (min-width:901px){
+  .money-fld{grid-row:span 2}
+  .fld-note{grid-column:5 / -1 !important}
+  .fld-note textarea{min-height:74px;height:100%}
+}
+
+/* ---------- 22. PERBAIKAN SPESIFISITAS INPUT NOMINAL ----------
+   `.fld input` (satu class + satu elemen) spesifisitasnya lebih tinggi dari
+   `.money-input` (satu class), jadi padding & ukuran font ringkasnya ikut
+   menimpa input nominal walau ditulis belakangan — itu sebabnya "Rp" masih
+   tertimpa angka. Dua class di bawah ini menang telak. */
+.fld .money-input,
+.money-box .money-input{
+  font-family:var(--head) !important;
+  font-size:18px !important;
+  font-weight:800 !important;
+  letter-spacing:-.01em !important;
+  height:40px !important;
+  padding:6px 34px 6px 46px !important;
+  border-radius:10px !important;
+  background:var(--surface) !important;
+}
+.money-box .money-cur{
+  left:13px;
+  font-size:13.5px;
+  font-weight:800;
+  color:var(--accent-d);
+  opacity:.9;
+}
+
+/* ================================================================
+   23. WIDGET SEBARAN DANA (dashboard) — angka & proporsi saja
+   ================================================================ */
+.lay-toggle{display:flex;gap:4px;background:rgba(255,255,255,.55);border:1px solid var(--glass-bd);
+  border-radius:999px;padding:4px;margin-bottom:14px}
+html[data-theme="dark"] .lay-toggle{background:rgba(255,255,255,.04)}
+.lay-tg{flex:1;border:none;background:transparent;border-radius:999px;padding:7px 0;cursor:pointer;
+  font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text2);
+  transition:background .16s,color .16s}
+.lay-tg.on{background:var(--grad-accent);color:#fff;box-shadow:0 8px 18px -12px rgba(var(--accent-rgb),.9)}
+.lay-total{text-align:center;margin-bottom:12px}
+.lay-total-lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.lay-total-val{font-family:var(--head);font-size:26px;font-weight:800;letter-spacing:-.025em;color:var(--text);line-height:1.2}
+.lay-split-bar{display:flex;height:9px;border-radius:99px;overflow:hidden;background:var(--surface2);margin-bottom:11px}
+.lay-bar-a{background:var(--grad-accent)}
+.lay-bar-b{background:rgba(150,141,135,.32)}
+.lay-split-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lay-box{border-radius:13px;padding:10px 12px;border:1px solid var(--border)}
+.lay-box.a{background:var(--accent-soft);border-color:var(--accent-soft2)}
+.lay-box.b{background:rgba(255,255,255,.5)}
+html[data-theme="dark"] .lay-box.b{background:rgba(255,255,255,.04)}
+.lay-box-lbl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text2)}
+.lay-box-val{font-family:var(--head);font-size:16px;font-weight:800;color:var(--text);margin-top:2px;letter-spacing:-.02em}
+.lay-box-sub{font-size:10.5px;color:var(--muted);margin-top:1px}
+.lay-more{margin-top:12px;width:100%;border:1px dashed var(--border);background:transparent;
+  border-radius:11px;padding:8px;cursor:pointer;font-family:var(--sans);font-size:12px;
+  font-weight:600;color:var(--accent-d);transition:background .16s,border-color .16s}
+.lay-more:hover{background:var(--accent-soft);border-color:var(--accent-soft2)}
+
+/* ================================================================
+   24. HALAMAN LAPORAN — REKAP PER LAYANAN
+   ================================================================ */
+.lap-tabs{display:flex;gap:4px;flex-wrap:wrap;background:rgba(255,255,255,.55);
+  border:1px solid var(--glass-bd);border-radius:999px;padding:4px;margin-bottom:18px;width:fit-content;max-width:100%}
+html[data-theme="dark"] .lap-tabs{background:rgba(255,255,255,.04)}
+.lap-tab{border:none;background:transparent;border-radius:999px;padding:8px 16px;cursor:pointer;
+  font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap;
+  transition:background .16s,color .16s}
+.lap-tab:hover{color:var(--text)}
+.lap-tab.on{background:var(--grad-accent);color:#fff;box-shadow:0 8px 18px -12px rgba(var(--accent-rgb),.9)}
+
+.lap-sum{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px;margin-bottom:18px}
+.lap-sum-card{background:var(--glass-card);border:1px solid var(--glass-bd);border-radius:16px;
+  padding:14px 16px;box-shadow:var(--shadow)}
+.lap-sum-card.big{background:var(--grad-accent);border-color:transparent;
+  box-shadow:0 16px 32px -20px rgba(var(--accent-rgb),.95)}
+.lap-sum-card.big .lap-sum-lbl{color:rgba(255,255,255,.85)}
+.lap-sum-card.big .lap-sum-val{color:#fff}
+.lap-sum-card.big .lap-sum-sub{color:rgba(255,255,255,.78)}
+.lap-sum-lbl{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text2)}
+.lap-sum-val{font-family:var(--head);font-size:21px;font-weight:800;letter-spacing:-.025em;color:var(--text);margin-top:3px}
+.lap-sum-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+@media(max-width:900px){.lap-sum{grid-template-columns:1fr}}
+
+.lap-list{display:flex;flex-direction:column;gap:8px}
+.lap-row{position:relative;display:flex;align-items:center;gap:12px;width:100%;
+  background:var(--glass-card);border:1px solid var(--glass-bd);border-radius:14px;
+  padding:13px 16px;cursor:pointer;text-align:left;overflow:hidden;
+  font-family:var(--sans);box-shadow:var(--shadow);
+  transition:border-color .16s,box-shadow .16s}
+.lap-row:hover{border-color:var(--accent-soft2);box-shadow:var(--shadow-lg)}
+.lap-row.open{border-color:var(--accent);border-bottom-left-radius:0;border-bottom-right-radius:0}
+.lap-row-bar{position:absolute;left:0;top:0;bottom:0;background:rgba(var(--accent-rgb),.09);z-index:0}
+.lap-row.daerah .lap-row-bar{background:rgba(150,141,135,.13)}
+.lap-row-name{position:relative;z-index:1;flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--text)}
+.lap-row-name em{display:block;font-style:normal;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}
+.lap-row-val{position:relative;z-index:1;font-family:var(--head);font-size:15px;font-weight:800;
+  color:var(--green);white-space:nowrap}
+.lap-row-caret{position:relative;z-index:1;color:var(--muted);font-size:11px}
+
+.lap-detail{background:var(--surface);border:1px solid var(--accent);border-top:none;
+  border-radius:0 0 14px 14px;padding:14px 16px 16px;margin-top:-8px}
+html[data-theme="dark"] .lap-detail{background:var(--surface2)}
+.lap-detail-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;margin-bottom:10px;font-size:12.5px;color:var(--text2)}
+.lap-detail-total{font-family:var(--head);font-size:15px;font-weight:800;color:var(--text)}
+.lap-search{max-width:280px;flex:1;min-width:180px}
+
+.lap-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.lap-table th{text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted);font-weight:700;border-bottom:1px solid var(--border);white-space:nowrap}
+.lap-table td{padding:8px 10px;border-bottom:1px solid var(--border2);vertical-align:middle}
+.lap-table tbody tr:hover{background:rgba(var(--accent-rgb),.045)}
+.lap-table .num{text-align:right;white-space:nowrap}
+.lap-table .strong{font-weight:700;color:var(--green)}
+.lap-table tfoot td{border-top:1px solid var(--border);border-bottom:none;font-weight:700;
+  color:var(--text);padding-top:10px}
+.lap-table th.sortable{cursor:pointer;user-select:none;transition:color .15s}
+.lap-table th.sortable:hover{color:var(--accent-d)}
+.lap-table th.sortable.on{color:var(--accent-d)}
+.lap-arw{margin-left:4px;font-size:9px}
+.lap-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.lap-pct{display:inline-block;width:52px;height:6px;border-radius:99px;background:var(--surface2);
+  margin-right:7px;vertical-align:middle;overflow:hidden}
+.lap-pct i{display:block;height:100%;border-radius:99px;background:var(--grad-accent)}
+@media(max-width:700px){
+  .lap-table{min-width:640px}
+  .lap-row-val{font-size:13.5px}
+}
+
+/* ---------- 25. PANEL JURNAL & BROADCAST ---------- */
+.lap-panel{
+  background:var(--glass-card);border:1px solid var(--glass-bd);border-radius:18px;
+  box-shadow:var(--shadow);overflow:hidden;max-width:820px;
+}
+.lap-panel-h{padding:15px 20px 13px;border-bottom:1px solid var(--border2)}
+.lap-panel-t{font-family:var(--head);font-size:15px;font-weight:700;color:var(--text)}
+.lap-panel-d{font-size:12.5px;color:var(--muted);margin-top:3px;max-width:62ch;line-height:1.45}
+.lap-panel-b{padding:14px 20px 4px}
+.lap-panel-a{
+  display:flex;justify-content:flex-end;gap:10px;
+  padding:12px 20px;border-top:1px solid var(--border2);
+  background:linear-gradient(180deg,rgba(255,255,255,.4),rgba(255,255,255,.85));
+}
+html[data-theme="dark"] .lap-panel-a{background:linear-gradient(180deg,rgba(29,24,23,.4),rgba(29,24,23,.9))}
+.lap-panel-a .btn{padding:9px 18px}
+.lap-result{margin-top:18px}
+/* Hasil jurnal & broadcast ikut gaya kartu yang sama */
+.lap-result .card,.lap-result .table-wrap{border-radius:16px}
+.lap-result table{font-size:12.5px}
+@media(max-width:900px){
+  .lap-panel{max-width:100%}
+  .lap-panel-h,.lap-panel-a{padding-left:16px;padding-right:16px}
+  .lap-panel-b{padding-left:16px;padding-right:16px}
+}
+
+/* ================================================================
+   26. FORM DI DALAM MODAL (Edit / Catat)
+   Grid 12 kolom dirancang untuk lebar halaman penuh. Di modal 560px
+   kolom selebar 2/12 hanya ~90px — label terpotong dan isi field
+   tidak terbaca. Di sini modal dilebarkan dan kolom dipetakan ulang
+   jadi tiga field per baris.
+   ================================================================ */
+.modal.form-modal{max-width:920px !important}
+.modal.form-modal .modal-body{padding:14px 20px 18px}
+.modal.form-modal .fform{padding:0}
+.modal.form-modal .fsec{padding:9px 0}
+.modal.form-modal .fsec:first-child{padding-top:2px}
+
+/* tiga field per baris, seragam */
+.modal.form-modal .fgrid .fld[data-col="2"],
+.modal.form-modal .fgrid .fld[data-col="3"],
+.modal.form-modal .fgrid .fld[data-col="4"],
+.modal.form-modal .fgrid .fld[data-col="5"]{grid-column:span 4}
+.modal.form-modal .fgrid .fld[data-col="6"]{grid-column:span 8}
+.modal.form-modal .fgrid .fld[data-col="8"],
+.modal.form-modal .fgrid .fld[data-col="12"]{grid-column:span 12}
+.modal.form-modal .money-fld{grid-column:span 4 !important;grid-row:auto !important}
+.modal.form-modal .fld-note{grid-column:span 8 !important}
+.modal.form-modal .fld-note textarea{min-height:96px}
+
+/* label tidak boleh terpotong di ruang sempit */
+.modal.form-modal .fld > label{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.modal.form-modal .fld select,
+.modal.form-modal .fld input,
+.modal.form-modal .fld .btn-dropdown{min-width:0;width:100%}
+
+@media (max-width:1000px){
+  .modal.form-modal{max-width:calc(100% - 24px) !important}
+  .modal.form-modal .fgrid .fld[data-col]{grid-column:span 6}
+  .modal.form-modal .money-fld{grid-column:span 6 !important}
+  .modal.form-modal .fld-note{grid-column:span 6 !important}
+}
+@media (max-width:620px){
+  .modal.form-modal .fgrid .fld[data-col],
+  .modal.form-modal .money-fld,
+  .modal.form-modal .fld-note{grid-column:span 12 !important}
+}
+
+/* ================================================================
+   27. HALAMAN PENGATURAN — memakai lebar halaman
+   Sebelumnya semua kartu dikunci 680–760px dan bertumpuk ke bawah,
+   menyisakan setengah layar kosong di monitor lebar.
+   ================================================================ */
+/* Kolom TIDAK boleh memakai nama kelas "main" — itu sudah dipakai area konten
+   aplikasi (.main punya padding 20px 24px), sehingga kolom kanan ikut terdorong
+   turun 20px dan kedua panel tidak sejajar. */
+.set-grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;align-items:start}
+.set-side,.set-wide{display:flex;flex-direction:column;gap:16px;min-width:0}
+.set-panel{max-width:none}
+.set-logo-ph{font-size:12.5px;color:var(--muted);padding:22px 0}
+.set-panel .upload-box{margin:0}
+
+.set-theme{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.set-theme-opt{
+  display:flex;flex-direction:column;gap:4px;text-align:left;cursor:pointer;
+  border:1.5px solid var(--border);background:var(--surface);border-radius:14px;
+  padding:11px 12px 12px;font-family:var(--sans);
+  transition:border-color .16s,background .16s,box-shadow .16s;
+}
+.set-theme-opt:hover{border-color:var(--accent-soft2)}
+.set-theme-opt.on{border-color:var(--accent);background:var(--accent-soft);
+  box-shadow:0 10px 22px -16px rgba(var(--accent-rgb),.9)}
+.set-theme-prev{display:block;height:38px;border-radius:9px;margin-bottom:5px;border:1px solid var(--border)}
+.set-theme-prev.light{background:linear-gradient(135deg,#fdfbfa,#f3eeeb)}
+.set-theme-prev.dark{background:linear-gradient(135deg,#241f1e,#141010)}
+.set-theme-t{font-size:13px;font-weight:700;color:var(--text)}
+.set-theme-d{font-size:11px;color:var(--muted);line-height:1.35}
+
+.set-switch-list{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
+.set-switch{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 12px;border-radius:11px;cursor:pointer;
+  border:1px solid transparent;transition:background .15s,border-color .15s;
+}
+.set-switch:hover{background:var(--accent-soft);border-color:var(--accent-soft2)}
+.set-switch-t{font-size:13px;font-weight:600;color:var(--text)}
+.set-switch .switch{flex-shrink:0}
+
+/* tabel rekening & KLL/ULL ikut lebar penuh di dalam tab pengaturan */
+#setRekBody .page-head,#setLayBody .page-head{margin-bottom:12px}
+#setRekBody .page-head h1,#setLayBody .page-head h1{font-size:18px}
+
+@media (max-width:1100px){
+  .set-grid{grid-template-columns:1fr}
+  .set-switch-list{grid-template-columns:1fr}
+}

@@ -188,7 +188,10 @@ function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAl
 
 /* ============ MODAL ============ */
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
-function closeModal(){el('modalBg').classList.remove('show');}
+function closeModal(){
+  el('modalBg').classList.remove('show');
+  var mc=el('modalCard'); if(mc) mc.classList.remove('form-modal');
+}
 el('modalBg').addEventListener('click',function(e){if(e.target===el('modalBg'))closeModal();});
 
 /* ============ DASHBOARD ============ */
@@ -458,15 +461,16 @@ function formHimpun(id,host){
     + fld(2,'Status',selOpt('f_statusBayar',['Lunas','Pending'],r.statusBayar||'Lunas'))
     + fld(4,'Fundraising <b class="req">*</b>',selOpt('f_fundraising',FUNDRAISING_OPTIONS,r.fundraising||'',''))
     + '<div class="fld" id="rekWrap" data-col="4" style="display:none"><label>Rekening Tujuan</label><span id="rekSel"></span></div>'
+    + fld(8,'Keterangan','<textarea id="f_keterangan" rows="2" placeholder="Catatan tambahan...">'+esc(r.keterangan||'')+'</textarea>',{cls:'fld-note'})
   );
 
-  var sec4 = fsec(4,'Catatan','Opsional',
-    fld(12,'Keterangan','<textarea id="f_keterangan" rows="2" placeholder="Catatan tambahan...">'+esc(r.keterangan||'')+'</textarea>')
-  );
+  var b='<div class="fform">'+sec1+sec2+sec3+'</div>';
 
-  var b='<div class="fform">'+sec1+sec2+sec3+sec4+'</div>';
-
-  if(host){el(host).innerHTML=b;}else{openModal(id?'Edit Penghimpunan':'Catat Penghimpunan',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveHimpun(\''+(id||'')+'\')">Simpan</button>');}
+  if(host){el(host).innerHTML=b;}
+  else{
+    openModal(id?'Edit Penghimpunan':'Catat Penghimpunan',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveHimpun(\''+(id||'')+'\')">Simpan</button>');
+    var mc=el('modalCard'); if(mc) mc.classList.add('form-modal');   // modal lebih lega untuk form 12 kolom
+  }
   
   var uniqueNames = [];
   (CACHE.himpun || []).forEach(function(x) {
@@ -676,15 +680,16 @@ function formTasyaruf(id,host){
     + fld(2,'Metode',selOpt('f_metode',METODE,r.metode))
     + fld(2,'Status',selOpt('f_statusSalur',['Tersalur','Pending'],r.statusSalur||'Tersalur'))
     + fld(4,'Fundraising <b class="req">*</b>',selOpt('f_fundraising',FUNDRAISING_OPTIONS,r.fundraising||'',''))
+    + fld(8,'Keterangan','<textarea id="f_keterangan" rows="2" placeholder="Catatan tambahan...">'+esc(r.keterangan||'')+'</textarea>',{cls:'fld-note'})
   );
 
-  var sec4 = fsec(4,'Catatan','Opsional',
-    fld(12,'Keterangan','<textarea id="f_keterangan" rows="2" placeholder="Catatan tambahan...">'+esc(r.keterangan||'')+'</textarea>')
-  );
+  var b='<div class="fform">'+sec1+sec2+sec3+'</div>';
 
-  var b='<div class="fform">'+sec1+sec2+sec3+sec4+'</div>';
-
-  if(host){el(host).innerHTML=b;}else{openModal(id?'Edit Pentasyarufan':'Catat Pentasyarufan',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveTasyaruf(\''+(id||'')+'\')">Simpan</button>');}
+  if(host){el(host).innerHTML=b;}
+  else{
+    openModal(id?'Edit Pentasyarufan':'Catat Pentasyarufan',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveTasyaruf(\''+(id||'')+'\')">Simpan</button>');
+    var mc2=el('modalCard'); if(mc2) mc2.classList.add('form-modal');
+  }
 
   var uniquePenerima = [];
   (CACHE.tasyaruf || []).forEach(function(x) {
@@ -746,22 +751,225 @@ function saveLay(id){var d={tipe:el('l_tipe').value,kode:el('l_kode').value,nama
 function delLay(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)return;gas('apiDeleteLayanan')(TOKEN,id).then(function(){toast('Terhapus');viewLayanan();}).catch(handleErr);});}
 
 /* ============ LAPORAN (Jurnal + Broadcast) ============ */
-var LAP_TAB='jurnal';
+var LAP_TAB='himpun';   // tab pertama = rekap penghimpunan per layanan
 function viewLaporan(){renderLaporanShell();}
+/* ============================================================
+   LAPORAN — REKAP PER KANTOR LAYANAN (v8)
+   Tab "Penghimpunan" & "Pentasyarufan": ringkasan per KLL/ULL,
+   klik satu layanan untuk melihat rincian pilar/ashnaf, dan
+   khusus Penghimpunan Daerah ditampilkan seluruh transaksinya
+   dengan tabel yang bisa diurutkan.
+   ============================================================ */
+var LAP_SEL = null;                       // layanan yang sedang dibuka
+var LAP_SORT = { key: 'tanggal', dir: -1 };
+var LAP_Q = '';
+
+function lapPilarOf(r){
+  if (r.pilar && String(r.pilar).trim()) return String(r.pilar).trim();
+  var sub = String(r.subJenis || '').trim();
+  if (sub) return sub;
+  return String(r.jenisDana || 'Lainnya').trim();
+}
+function lapGroup(rows, keyFn){
+  var g = {};
+  rows.forEach(function(r){
+    var k = keyFn(r) || 'Lainnya';
+    if (!g[k]) g[k] = { total: 0, n: 0 };
+    g[k].total += Number(r.jumlah) || 0;
+    g[k].n++;
+  });
+  return g;
+}
+function lapSortedKeys(g){
+  return Object.keys(g).sort(function(a,b){ return g[b].total - g[a].total; });
+}
+
+function setLapSel(name){ LAP_SEL = (LAP_SEL === name) ? null : name; LAP_Q=''; renderLaporanShell(); }
+function setLapSort(key){
+  if (LAP_SORT.key === key) LAP_SORT.dir = -LAP_SORT.dir;
+  else LAP_SORT = { key: key, dir: (key === 'jumlah' || key === 'tanggal') ? -1 : 1 };
+  renderLaporanShell();
+}
+function setLapQ(v){ LAP_Q = v || ''; var t = el('lapDetailTable'); if (t) t.outerHTML = lapDetailTable(window.__lapRows || [], window.__lapMode || 'himpun'); }
+
+/* ---- ringkasan atas: total, KLL/ULL, daerah ---- */
+function lapSummary(rows, mode){
+  var sumLay = 0, sumDae = 0, nLay = {};
+  rows.forEach(function(r){
+    var k = getLayananNameForTx(r);
+    var v = Number(r.jumlah) || 0;
+    if (k === LAYANAN_DAERAH) sumDae += v;
+    else { sumLay += v; nLay[k] = 1; }
+  });
+  var total = sumLay + sumDae;
+  var pct = total ? Math.round(sumLay / total * 100) : 0;
+  return '<div class="lap-sum">'
+    + '<div class="lap-sum-card big"><div class="lap-sum-lbl">Total ' + (mode==='himpun'?'Penghimpunan':'Pentasyarufan') + '</div>'
+    + '<div class="lap-sum-val">' + rp(total) + '</div>'
+    + '<div class="lap-sum-sub">' + rows.length + ' transaksi</div></div>'
+    + '<div class="lap-sum-card"><div class="lap-sum-lbl">Lewat KLL / ULL</div>'
+    + '<div class="lap-sum-val">' + rp(sumLay) + '</div>'
+    + '<div class="lap-sum-sub">' + pct + '% &middot; ' + Object.keys(nLay).length + ' layanan</div></div>'
+    + '<div class="lap-sum-card"><div class="lap-sum-lbl">Penghimpunan Daerah</div>'
+    + '<div class="lap-sum-val">' + rp(sumDae) + '</div>'
+    + '<div class="lap-sum-sub">' + (100 - pct) + '% dari total</div></div>'
+    + '</div>';
+}
+
+/* ---- daftar layanan (klik untuk membuka rincian) ---- */
+function lapLayananList(rows){
+  var g = lapGroup(rows, function(r){ return getLayananNameForTx(r); });
+  var keys = lapSortedKeys(g);
+  var max = keys.length ? g[keys[0]].total : 0;
+  var h = '<div class="lap-list">';
+  keys.forEach(function(k){
+    var it = g[k];
+    var isDae = (k === LAYANAN_DAERAH);
+    var open = (LAP_SEL === k);
+    var w = max ? Math.round(it.total / max * 100) : 0;
+    h += '<button class="lap-row' + (open ? ' open' : '') + (isDae ? ' daerah' : '') + '" onclick="setLapSel(\'' + esc(k).replace(/'/g,"\\'") + '\')">'
+      + '<span class="lap-row-bar" style="width:' + w + '%"></span>'
+      + '<span class="lap-row-name">' + esc(k) + (isDae ? '<em>tanpa penanda KLL/ULL</em>' : '<em>' + it.n + ' transaksi</em>') + '</span>'
+      + '<span class="lap-row-val">' + rp(it.total) + '</span>'
+      + '<span class="lap-row-caret">' + (open ? '&#9662;' : '&#9656;') + '</span>'
+      + '</button>';
+    if (open) h += '<div class="lap-detail">' + lapDetail(rows, k) + '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+/* ---- isi rincian satu layanan ---- */
+function lapDetail(rows, name){
+  var mode = window.__lapMode || 'himpun';
+  var sub = rows.filter(function(r){ return getLayananNameForTx(r) === name; });
+  var total = sub.reduce(function(a,r){ return a + (Number(r.jumlah)||0); }, 0);
+
+  // Daerah: seluruh transaksi, bisa diurutkan
+  if (name === LAYANAN_DAERAH) {
+    window.__lapRows = sub;
+    return '<div class="lap-detail-head"><div><b>' + sub.length + ' transaksi</b> &middot; ' + rp(total) + '</div>'
+      + '<input class="lap-search" placeholder="Cari nama, program, fundraising..." value="' + esc(LAP_Q) + '" oninput="setLapQ(this.value)"></div>'
+      + lapDetailTable(sub, mode);
+  }
+
+  // Layanan: rincian per pilar (penghimpunan) atau ashnaf (pentasyarufan)
+  var keyFn = (mode === 'himpun') ? lapPilarOf : function(r){ return r.ashnaf || 'Lainnya'; };
+  var g = lapGroup(sub, keyFn);
+  var keys = lapSortedKeys(g);
+  var h = '<div class="lap-detail-head"><div><b>' + (mode==='himpun'?'Rincian per pilar':'Rincian per ashnaf') + '</b></div>'
+    + '<div class="lap-detail-total">' + rp(total) + '</div></div>'
+    + '<table class="lap-table"><thead><tr><th>' + (mode==='himpun'?'Pilar / Jenis':'Ashnaf') + '</th><th class="num">Transaksi</th><th class="num">Jumlah</th><th class="num">Porsi</th></tr></thead><tbody>';
+  keys.forEach(function(k){
+    var pct = total ? Math.round(g[k].total / total * 100) : 0;
+    h += '<tr><td>' + esc(k) + '</td><td class="num">' + g[k].n + '</td>'
+      + '<td class="num strong">' + rp(g[k].total) + '</td>'
+      + '<td class="num"><span class="lap-pct"><i style="width:' + pct + '%"></i></span>' + pct + '%</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td>Total</td><td class="num">' + sub.length + '</td><td class="num strong">' + rp(total) + '</td><td class="num">100%</td></tr></tfoot></table>';
+  return h;
+}
+
+/* ---- tabel transaksi (khusus Daerah) ---- */
+function lapDetailTable(rows, mode){
+  var q = LAP_Q.toLowerCase();
+  var list = rows.filter(function(r){
+    if (!q) return true;
+    return [r.namaDonatur, r.namaPenerima, r.program, r.fundraising, r.jenisDana, r.subJenis, r.ashnaf, r.metode]
+      .join(' ').toLowerCase().indexOf(q) >= 0;
+  });
+  var k = LAP_SORT.key, dir = LAP_SORT.dir;
+  list = list.slice().sort(function(a,b){
+    var va, vb;
+    if (k === 'jumlah') { va = Number(a.jumlah)||0; vb = Number(b.jumlah)||0; }
+    else if (k === 'tanggal') { va = String(a.tanggal||''); vb = String(b.tanggal||''); }
+    else { va = String(a[k]||'').toLowerCase(); vb = String(b[k]||'').toLowerCase(); }
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+  function th(key, label, cls){
+    var on = (LAP_SORT.key === key);
+    return '<th class="' + (cls||'') + ' sortable' + (on ? ' on' : '') + '" onclick="setLapSort(\'' + key + '\')">'
+      + label + '<span class="lap-arw">' + (on ? (LAP_SORT.dir > 0 ? '&#9650;' : '&#9660;') : '') + '</span></th>';
+  }
+  var cols = (mode === 'himpun')
+    ? [th('tanggal','Tanggal'), th('namaDonatur','Donatur'), th('jenisDana','Jenis'), th('program','Program'),
+       th('fundraising','Fundraising'), th('metode','Metode'), th('jumlah','Jumlah','num')]
+    : [th('tanggal','Tanggal'), th('namaPenerima','Penerima'), th('ashnaf','Ashnaf'), th('program','Program'),
+       th('fundraising','Fundraising'), th('metode','Metode'), th('jumlah','Jumlah','num')];
+
+  var tot = list.reduce(function(a,r){ return a + (Number(r.jumlah)||0); }, 0);
+  var h = '<div class="lap-table-wrap" id="lapDetailTable"><table class="lap-table"><thead><tr>' + cols.join('') + '</tr></thead><tbody>';
+  if (!list.length) h += '<tr><td colspan="7" style="text-align:center;padding:22px" class="muted">Tidak ada transaksi cocok.</td></tr>';
+  list.forEach(function(r){
+    h += '<tr><td>' + fdate(r.tanggal) + '</td>'
+      + '<td><b>' + esc((mode==='himpun' ? r.namaDonatur : r.namaPenerima) || '-') + '</b></td>'
+      + '<td>' + esc((mode==='himpun' ? lapPilarOf(r) : (r.ashnaf||'-'))) + '</td>'
+      + '<td>' + esc(r.program || '-') + '</td>'
+      + '<td>' + esc(cleanFR(r.fundraising)) + '</td>'
+      + '<td>' + esc(r.metode || '-') + '</td>'
+      + '<td class="num strong">' + rp(r.jumlah) + '</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td colspan="6">Total ' + list.length + ' transaksi</td><td class="num strong">' + rp(tot) + '</td></tr></tfoot></table></div>';
+  return h;
+}
+
+/* ---- pemuat tab ---- */
+function renderLapRekap(mode){
+  window.__lapMode = mode;
+  var host = el('lapBody');
+  if (!host) return;
+  host.innerHTML = '<div class="empty muted" style="padding:28px">Memuat data…</div>';
+  var api = (mode === 'himpun') ? 'apiListPenghimpunan' : 'apiListPentasyarufan';
+  var need = CACHE.layanan ? Promise.resolve(CACHE.layanan) : gas('apiListLayanan')(TOKEN);
+  Promise.all([gas(api)(TOKEN), need]).then(function(res){
+    var rows = res[0] || [];
+    CACHE.layanan = res[1] || [];
+    if (mode === 'himpun') CACHE.himpun = rows; else CACHE.tasyaruf = rows;
+    host.innerHTML = lapSummary(rows, mode) + lapLayananList(rows);
+  }).catch(handleErr);
+}
+
 function renderLaporanShell(){
-  var now=new Date();
-  var h='<div class="page-head"><div><h1>Laporan</h1><div class="desc">Jurnal penerimaan & broadcast WhatsApp</div></div></div>';
-  h+='<div style="display:flex;gap:8px;margin-bottom:20px"><button class="btn '+(LAP_TAB==='jurnal'?'btn-primary':'btn-ghost')+'" onclick="setLapTab(\'jurnal\')">🧾 Jurnal Penerimaan</button><button class="btn '+(LAP_TAB==='broadcast'?'btn-primary':'btn-ghost')+'" onclick="setLapTab(\'broadcast\')">📢 Broadcast WhatsApp</button></div>';
+  var tabs=[['himpun','Detail Penghimpunan'],['salur','Detail Pentasyarufan'],
+            ['jurnal','Jurnal Penerimaan'],['broadcast','Broadcast WhatsApp']];
+  var h='<div class="page-head"><div><h2>Laporan</h2><div class="desc">Rekap per kantor layanan, jurnal, dan broadcast</div></div></div>';
+  h+='<div class="lap-tabs">'+tabs.map(function(t){
+    return '<button class="lap-tab'+(LAP_TAB===t[0]?' on':'')+'" onclick="setLapTab(\''+t[0]+'\')">'+t[1]+'</button>';
+  }).join('')+'</div>';
   h+='<div id="lapBody"></div>';
   el('content').innerHTML=h;
-  if(LAP_TAB==='jurnal')renderJurnalForm();else renderBroadcastForm();
+  if(LAP_TAB==='himpun')renderLapRekap('himpun');
+  else if(LAP_TAB==='salur')renderLapRekap('salur');
+  else if(LAP_TAB==='jurnal')renderJurnalForm();
+  else renderBroadcastForm();
 }
 function setLapTab(t){LAP_TAB=t;renderLaporanShell();}
+/* Panel seragam untuk tab Jurnal & Broadcast, mengikuti gaya kartu Laporan. */
+function lapPanel(title,desc,inner,actions){
+  return '<div class="lap-panel">'
+    + '<div class="lap-panel-h"><div class="lap-panel-hd">'
+    + '<div class="lap-panel-t">'+title+'</div>'
+    + (desc?'<div class="lap-panel-d">'+desc+'</div>':'')
+    + '</div></div>'
+    + '<div class="lap-panel-b">'+inner+'</div>'
+    + (actions?'<div class="lap-panel-a">'+actions+'</div>':'')
+    + '</div>';
+}
+
 function renderJurnalForm(){
-  var now=new Date();var yopt='';for(var y=now.getFullYear()+1;y>=now.getFullYear()-3;y--)yopt+='<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>';
+  var now=new Date();
+  var yopt='';for(var y=now.getFullYear()+1;y>=now.getFullYear()-3;y--)yopt+='<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>';
   var mopt='';for(var m=1;m<=12;m++)mopt+='<option value="'+m+'" '+((m-1)===now.getMonth()?'selected':'')+'>'+BULAN[m]+'</option>';
-  var h='<div class="card" style="max-width:560px"><h3 style="margin-bottom:6px">Generate Jurnal Penerimaan</h3><p class="muted" style="font-size:13px;margin-bottom:18px">Pilih bulan & tahun, lalu lihat laporan detail atau unduh jurnal dalam format Excel (.xlsx) sesuai standar akuntansi.</p><div class="row"><div class="field"><label>Bulan</label><select id="j_bulan">'+mopt+'</select></div><div class="field"><label>Tahun</label><select id="j_tahun">'+yopt+'</select></div></div><div style="display:flex;gap:12px;margin-top:20px"><button class="btn btn-ghost" style="flex:1;border:1px solid var(--border)" onclick="loadJurnal()">👁 Lihat Laporan</button><button class="btn btn-primary" style="flex:1" onclick="loadJurnalAndDownload()">⬇ Unduh Excel</button></div></div><div id="jurnalPreview" style="margin-top:20px"></div>';
-  el('lapBody').innerHTML=h;
+  var form='<div class="fgrid">'
+    + fld(3,'Bulan','<select id="j_bulan">'+mopt+'</select>')
+    + fld(3,'Tahun','<select id="j_tahun">'+yopt+'</select>')
+    + '</div>';
+  var acts='<button class="btn" onclick="loadJurnal()">Lihat Laporan</button>'
+    + '<button class="btn btn-primary" onclick="loadJurnalAndDownload()">Unduh Excel</button>';
+  el('lapBody').innerHTML = lapPanel('Jurnal Penerimaan',
+      'Pilih periode, lalu tampilkan rinciannya atau unduh sebagai Excel (.xlsx) sesuai format standar Pusat.',
+      form, acts)
+    + '<div id="jurnalPreview" class="lap-result"></div>';
 }
 
 function loadJurnal(){
@@ -924,9 +1132,16 @@ function exportJurnalXlsx(d){
   toast('File jurnal diunduh');
 }
 function renderBroadcastForm(){
-  var e=today();var s=new Date();s.setDate(s.getDate()-6);var sStr=s.toISOString().slice(0,10);
-  var h='<div class="card" style="max-width:560px"><h3 style="margin-bottom:6px">Generate Laporan Broadcast WhatsApp</h3><p class="muted" style="font-size:13px;margin-bottom:18px">Pilih rentang hari bebas. Sistem membuat deskripsi laporan siap kirim/broadcast ke donatur.</p><div class="row"><div class="field"><label>Dari Tanggal</label><input type="date" id="bc_start" value="'+sStr+'"></div><div class="field"><label>Sampai Tanggal</label><input type="date" id="bc_end" value="'+e+'"></div></div><button class="btn btn-primary" onclick="loadBroadcast()">Generate Laporan</button></div><div id="bcResult" style="margin-top:20px"></div>';
-  el('lapBody').innerHTML=h;
+  var e=today();var st=new Date();st.setDate(st.getDate()-6);var sStr=st.toISOString().slice(0,10);
+  var form='<div class="fgrid">'
+    + fld(3,'Dari Tanggal','<input type="date" id="bc_start" value="'+sStr+'">')
+    + fld(3,'Sampai Tanggal','<input type="date" id="bc_end" value="'+e+'">')
+    + '</div>';
+  var acts='<button class="btn btn-primary" onclick="loadBroadcast()">Buat Laporan</button>';
+  el('lapBody').innerHTML = lapPanel('Broadcast WhatsApp',
+      'Pilih rentang tanggal bebas. Sistem menyusun ringkasan siap kirim ke donatur.',
+      form, acts)
+    + '<div id="bcResult" class="lap-result"></div>';
 }
 function loadBroadcast(){var s=el('bc_start').value,e=el('bc_end').value;if(!s||!e){toast('Lengkapi rentang tanggal',true);return;}el('bcResult').innerHTML=BOXES_SPINNER;
   gas('apiBroadcastReport')(TOKEN,s,e).then(function(d){CACHE.bc=d;renderBroadcastResult(d);}).catch(handleErr);}
@@ -1013,7 +1228,7 @@ function viewSettings(){gas('apiGetSettings')(TOKEN).then(function(s){SETTINGS=s
 var SET_TAB='lembaga';
 function renderSettings(s){
   var h='<div class="page-head"><div><h2>Pengaturan</h2><div class="desc">Identitas lembaga, rekening, unit layanan & tampilan</div></div></div>';
-  h+='<div class="tabs">'+['lembaga|Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'].map(function(t){var p=t.split('|');return '<button class="tab'+(SET_TAB===p[0]?' active':'')+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
+  h+='<div class="lap-tabs">'+['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'].map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
   el('content').innerHTML=h;renderSetTab(s);
 }
 function setTab(t){SET_TAB=t;renderSettings(SETTINGS);}
@@ -1022,26 +1237,77 @@ function renderSetTab(s){var host=el('setBody');if(!host)return;
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
   else {window.REK_HOST='';window.LAY_HOST='';host.innerHTML=(SET_TAB==='tampilan')?tampilanHTML(s):lembagaHTML(s);}
 }
-function lembagaHTML(s){var logo=s.logoData||'';
-  return '<div class="card" style="max-width:760px"><h3>Logo & Identitas Lembaga</h3><div class="desc">Logo tampil penuh di sidebar & dokumen (tanpa teks)</div>'+
-   '<div class="upload-box" onclick="el(\'logoFile\').click()">'+(logo?'<img class="logo-preview" src="'+logo+'">':'<div style="font-size:32px;opacity:.4">🏛️</div>')+'<div class="muted" style="font-size:12.5px;margin-top:6px">Klik untuk upload logo (PNG/JPG)</div></div>'+
-   '<input type="file" id="logoFile" accept="image/*" style="display:none" onchange="onLogoUpload(event)">'+(logo?'<div style="text-align:center;margin-top:8px"><button class="btn btn-sm" onclick="removeLogo()">Hapus Logo</button></div>':'')+
-   '<div class="divider"></div>'+
-   '<div class="row"><div class="field" style="flex:1"><label>Nama Lembaga</label><input id="s_namaLembaga" value="'+esc(s.namaLembaga||'')+'"></div><div class="field" style="flex:1"><label>Singkatan</label><input id="s_singkatan" value="'+esc(s.singkatan||'')+'"></div></div>'+
-   '<div class="field"><label>Alamat</label><input id="s_alamat" value="'+esc(s.alamat||'')+'"></div>'+
-   '<div class="row-3"><div class="field"><label>Telepon</label><input id="s_telepon" value="'+esc(s.telepon||'')+'"></div><div class="field"><label>Email</label><input id="s_email" value="'+esc(s.email||'')+'"></div><div class="field"><label>Website</label><input id="s_website" value="'+esc(s.website||'')+'"></div></div>'+
-   (canDo('settings','edit')?'<button class="btn btn-primary" onclick="saveSettings()" style="margin-top:8px">💾 Simpan Identitas</button>':'')+'</div>';
+function lembagaHTML(s){
+  var logo = s.logoData || '';
+  var logoBox = '<div class="upload-box" onclick="el(\'logoFile\').click()">'
+    + (logo ? '<img class="logo-preview" src="' + logo + '">'
+            : '<div class="set-logo-ph">Belum ada logo</div>')
+    + '<div class="muted" style="font-size:12px;margin-top:8px">Klik untuk unggah (PNG / JPG)</div></div>'
+    + '<input type="file" id="logoFile" accept="image/*" style="display:none" onchange="onLogoUpload(event)">'
+    + (logo ? '<button class="btn btn-sm btn-ghost" style="width:100%;margin-top:10px" onclick="removeLogo()">Hapus Logo</button>' : '');
+
+  var ident = '<div class="fgrid">'
+    + fld(6,'Nama Lembaga','<input id="s_namaLembaga" value="' + esc(s.namaLembaga||'') + '">')
+    + fld(6,'Singkatan','<input id="s_singkatan" value="' + esc(s.singkatan||'') + '">')
+    + fld(12,'Alamat','<input id="s_alamat" value="' + esc(s.alamat||'') + '">')
+    + fld(4,'Telepon','<input id="s_telepon" value="' + esc(s.telepon||'') + '">')
+    + fld(4,'Email','<input id="s_email" value="' + esc(s.email||'') + '">')
+    + fld(4,'Website','<input id="s_website" value="' + esc(s.website||'') + '">')
+    + '</div>';
+
+  return '<div class="set-grid">'
+    + '<div class="set-side">' + setPanel('Logo Lembaga','Tampil di sidebar, kwitansi, dan dokumen cetak', logoBox) + '</div>'
+    + '<div class="set-wide">' + setPanel('Identitas','Dipakai pada kop kwitansi dan bukti penyaluran', ident,
+        canDo('settings','edit') ? '<button class="btn btn-primary" onclick="saveSettings()">Simpan Identitas</button>' : '')
+    + '</div></div>';
 }
-function tampilanHTML(s){var th=localStorage.getItem('laz_theme')||s.theme||'light';var lay=getDashLayout();
-  var labels={tren:'Tren 12 Bulan',jenis:'Per Jenis Dana',ashnaf:'Per Ashnaf',program:'Per Program',rhimpun:'Penghimpunan Terbaru',rtasyaruf:'Pentasyarufan Terbaru'};
-  var rows=lay.order.map(function(k){return '<div class="opt-row"><div><div class="ot">'+labels[k]+'</div></div><label class="switch"><input type="checkbox" data-w="'+k+'" '+(lay.vis[k]!==false?'checked':'')+' onchange="saveDashLayout()"><span class="slider"></span></label></div>';}).join('');
-  return '<div class="card" style="max-width:680px"><h3>Tema Tampilan</h3><div class="desc">Pilih tema terang atau gelap</div><div class="row" style="gap:12px">'+
-   '<div style="flex:1;border:2px solid '+(th==='light'?'var(--accent)':'var(--border)')+';background:'+(th==='light'?'var(--accent-soft)':'transparent')+';border-radius:12px;padding:16px;cursor:pointer" onclick="setTheme(\'light\')"><div class="ot">☀️ Terang</div><div class="od">Putih bersih, aksen oranye</div></div>'+
-   '<div style="flex:1;border:2px solid '+(th==='dark'?'var(--accent)':'var(--border)')+';background:'+(th==='dark'?'var(--accent-soft)':'transparent')+';border-radius:12px;padding:16px;cursor:pointer" onclick="setTheme(\'dark\')"><div class="ot">🌙 Gelap</div><div class="od">Nyaman di mata</div></div>'+
-   '</div></div>'+
-   '<div class="card" style="max-width:680px"><h3>Layout Dashboard</h3><div class="desc">Atur widget mana yang tampil</div>'+rows+'</div>'+
-   (canDo('dashboard','view')?'<div class="card" style="max-width:680px"><h3>Link Publik</h3><div class="desc">Bagikan dashboard tanpa login</div><button class="btn" onclick="openPublicLink()">🔗 Kelola Link Publik</button></div>':'');
+
+/* panel pengaturan — bentuknya sama dengan panel di halaman Laporan */
+function setPanel(title,desc,inner,actions){
+  return '<div class="lap-panel set-panel">'
+    + '<div class="lap-panel-h"><div class="lap-panel-t">'+title+'</div>'
+    + (desc?'<div class="lap-panel-d">'+desc+'</div>':'')+'</div>'
+    + '<div class="lap-panel-b">'+inner+'</div>'
+    + (actions?'<div class="lap-panel-a">'+actions+'</div>':'')
+    + '</div>';
 }
+
+function tampilanHTML(s){
+  var th = localStorage.getItem('laz_theme') || s.theme || 'light';
+  var lay = getDashLayout();
+
+  var themeBox = '<div class="set-theme">'
+    + '<button class="set-theme-opt' + (th==='light'?' on':'') + '" onclick="setTheme(\'light\')">'
+    + '<span class="set-theme-prev light"></span><span class="set-theme-t">Terang</span>'
+    + '<span class="set-theme-d">Latar terang, aksen coral</span></button>'
+    + '<button class="set-theme-opt' + (th==='dark'?' on':'') + '" onclick="setTheme(\'dark\')">'
+    + '<span class="set-theme-prev dark"></span><span class="set-theme-t">Gelap</span>'
+    + '<span class="set-theme-d">Nyaman untuk malam hari</span></button>'
+    + '</div>';
+
+  /* Label widget diambil dari daftar WIDGETS supaya tidak ada yang tampil
+     "undefined" ketika muncul widget yang belum terdaftar di peta lama. */
+  var rows = lay.order.map(function(k){
+    var w = (typeof WIDGETS !== 'undefined' && WIDGETS[k]) ? WIDGETS[k].t : k;
+    return '<label class="set-switch"><span class="set-switch-t">' + esc(w) + '</span>'
+      + '<span class="switch"><input type="checkbox" data-w="' + k + '" '
+      + (lay.vis[k] !== false ? 'checked' : '') + ' onchange="saveDashLayout()"><span class="slider"></span></span></label>';
+  }).join('');
+
+  var h = '<div class="set-grid">'
+    + '<div class="set-side">'
+      + setPanel('Tema Tampilan','Berlaku untuk perangkat ini saja', themeBox)
+      + (canDo('dashboard','view')
+          ? setPanel('Link Publik','Bagikan ringkasan tanpa perlu login',
+              '<button class="btn" style="width:100%" onclick="openPublicLink()">Kelola Link Publik</button>')
+          : '')
+    + '</div>'
+    + '<div class="set-wide">'
+      + setPanel('Widget Dashboard','Pilih kartu yang tampil di halaman dashboard','<div class="set-switch-list">' + rows + '</div>')
+    + '</div></div>';
+  return h;
+}
+
 function setTheme(t){applyTheme(t);applyBranding();if(canDo('settings','edit'))gas('apiSaveSettings')(TOKEN,{theme:t}).then(function(s){SETTINGS=s;}).catch(function(){});renderSetTab(SETTINGS);toast('Tema: '+(t==='dark'?'Gelap':'Terang'));}
 function onLogoUpload(e){var f=e.target.files[0];if(!f)return;resizeImg(f,240,function(data){gas('apiSaveSettings')(TOKEN,{logoData:data}).then(function(s){SETTINGS=s;applyBranding();renderSetTab(s);toast('Logo tersimpan');}).catch(handleErr);});}
 function removeLogo(){gas('apiSaveSettings')(TOKEN,{logoData:''}).then(function(s){SETTINGS=s;applyBranding();renderSetTab(s);toast('Logo dihapus');}).catch(handleErr);}
@@ -1065,9 +1331,12 @@ function fsec(no,title,desc,inner){
 /* Satu field. col = lebar dalam 12 kolom. */
 function fld(col,label,control,opt){
   opt = opt || {};
-  return '<div class="fld"'+(opt.id?' id="'+opt.id+'"':'')+' data-col="'+col+'"'
+  // satu atribut class saja — versi sebelumnya menulis class dua kali,
+  // dan browser memakai yang pertama sehingga opt.cls selalu terabaikan
+  return '<div class="fld'+(opt.cls?' '+opt.cls:'')+'"'
+    + (opt.id?' id="'+opt.id+'"':'')
+    + ' data-col="'+col+'"'
     + (opt.style?' style="'+opt.style+'"':'')
-    + (opt.cls?' class="fld '+opt.cls+'"':'')
     + '><label'+(opt.for?' for="'+opt.for+'"':'')+'>'+label+'</label>'+control+'</div>';
 }
 /* Input nominal: prefix Rp, pemisah ribuan otomatis, pintasan nominal, terbilang. */
@@ -1291,7 +1560,7 @@ var WIDGETS={
   pilar:{t:'Pilar Program',dot:'#10b981'},
   bank:{t:'Bank & Kas',dot:'#f43f5e'},
   ashnaf:{t:'Penyaluran Berdasarkan Ashnaf',dot:'#8b5cf6'},
-  program:{t:'Kantor Layanan & ULL',dot:'#3b82f6'},
+  program:{t:'Sebaran Dana',dot:'#3b82f6'},
   fundraising:{t:'Capaian Fundraising',dot:'#ec4899'},
   activity:{t:'Aktivitas Transaksi Terakhir',dot:'#059669'},
   rhimpun:{t:'Penghimpunan Terbaru',dot:'#10b981'},
@@ -1496,57 +1765,44 @@ function toggleBankDetail(id) {
 
 function layananWidget(d) {
   var mode = window.DASH_LAYANAN_MODE || 'himpun';
-  
-  var toggleHtml = '<div class="dash-toggle-group" style="display:flex;background:var(--border2);padding:4px;border-radius:10px;gap:4px;margin-bottom:16px;border:1px solid var(--border)">' +
-    '<button class="dash-toggle-btn ' + (mode === 'himpun' ? 'active' : '') + '" style="flex:1;background:' + (mode === 'himpun' ? 'var(--surface)' : 'transparent') + ';border:none;color:' + (mode === 'himpun' ? 'var(--text)' : 'var(--text2)') + ';font-size:12px;font-weight:600;padding:8px 0;border-radius:8px;cursor:pointer;transition:all 0.15s;box-shadow:' + (mode === 'himpun' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none') + '" onclick="setDashLayananMode(\'himpun\')">📥 Penerimaan</button>' +
-    '<button class="dash-toggle-btn ' + (mode === 'salur' ? 'active' : '') + '" style="flex:1;background:' + (mode === 'salur' ? 'var(--surface)' : 'transparent') + ';border:none;color:' + (mode === 'salur' ? 'var(--text)' : 'var(--text2)') + ';font-size:12px;font-weight:600;padding:8px 0;border-radius:8px;cursor:pointer;transition:all 0.15s;box-shadow:' + (mode === 'salur' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none') + '" onclick="setDashLayananMode(\'salur\')">📤 Pentasyarufan</button>' +
-    '</div>';
-    
+
+  var toggleHtml = '<div class="lay-toggle">'
+    + '<button class="lay-tg' + (mode === 'himpun' ? ' on' : '') + '" onclick="setDashLayananMode(\'himpun\')">Penerimaan</button>'
+    + '<button class="lay-tg' + (mode === 'salur' ? ' on' : '') + '" onclick="setDashLayananMode(\'salur\')">Pentasyarufan</button>'
+    + '</div>';
+
   var dataObj = (mode === 'himpun') ? d.byLayananHimpun : d.byLayananSalur;
   var keys = Object.keys(dataObj || {});
 
-  /* Ringkasan: berapa yang terekap atas nama KLL/ULL, berapa yang jatuh ke
-     penghimpunan tingkat daerah karena tidak ada penanda layanan. */
-  var sumLay = 0, sumDaerah = 0;
+  var sumLay = 0, sumDaerah = 0, nLay = 0;
   keys.forEach(function(k){
-    if (k === LAYANAN_DAERAH || k === 'Lazismu Daerah Bantul') sumDaerah += (dataObj[k]||0);
-    else sumLay += (dataObj[k]||0);
+    var v = dataObj[k] || 0;
+    if (k === LAYANAN_DAERAH || k === 'Lazismu Daerah Bantul') sumDaerah += v;
+    else { sumLay += v; if (v > 0) nLay++; }
   });
-  var totalAll = sumLay + sumDaerah;
-  var pctLay = totalAll ? Math.round(sumLay/totalAll*100) : 0;
-  var summaryHtml = '<div class="lay-summary">'
-    + '<div class="lay-sum-item"><div class="lay-sum-lbl">KLL / ULL</div>'
-    + '<div class="lay-sum-val">'+rp(sumLay)+'</div>'
-    + '<div class="lay-sum-sub">'+pctLay+'% dari total</div></div>'
-    + '<div class="lay-sum-item alt"><div class="lay-sum-lbl">Penghimpunan Daerah</div>'
-    + '<div class="lay-sum-val">'+rp(sumDaerah)+'</div>'
-    + '<div class="lay-sum-sub">'+(100-pctLay)+'% dari total</div></div>'
-    + '</div>';
-  toggleHtml += summaryHtml;
-  
-  if (!keys.length) {
-    return toggleHtml + '<div class="muted" style="padding:24px 0;text-align:center;font-size:13px">Belum ada data Kantor Layanan.</div>';
-  }
-  
-  keys.sort(function(a, b) {
-    return dataObj[b] - dataObj[a];
-  });
-  
-  var color = (mode === 'himpun' ? 'var(--green)' : 'var(--red)');
-  var html = toggleHtml + '<div style="display:flex;flex-direction:column;gap:8px">';
-  
-  keys.forEach(function(x) {
-    var val = dataObj[x] || 0;
-    if (val === 0) return;
-    
-    html += '<div class="wc-row-clickable" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:var(--border2);cursor:pointer;transition:all 0.2s;box-shadow:0 1px 2px rgba(0,0,0,0.02)" onclick="openLayananDetail(\'' + esc(x) + '\', \'' + mode + '\')">' +
-      '<div style="font-weight:600;font-size:13.5px;color:var(--text);flex:1;padding-right:12px;white-space:normal;line-height:1.4">' + esc(x) + ' <span style="font-size:10px;color:var(--text2);background:var(--border);padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500">🔍 Detail</span></div>' +
-      '<div style="font-weight:750;font-size:14.5px;color:' + color + ';white-space:nowrap;flex:0 0 auto;text-align:right;line-height:1.4">' + rp(val) + '</div>' +
-      '</div>';
-  });
-  
-  html += '</div>';
-  return html;
+  var total = sumLay + sumDaerah;
+  if (!total) return toggleHtml + '<div class="muted" style="padding:22px 0;text-align:center;font-size:13px">Belum ada data.</div>';
+
+  var pctLay = Math.round(sumLay / total * 100);
+  var pctDae = 100 - pctLay;
+
+  /* Fokus ke angka dan proporsinya. Rincian per layanan pindah ke
+     menu Laporan supaya widget ini tetap terbaca sekilas. */
+  return toggleHtml
+    + '<div class="lay-total"><div class="lay-total-lbl">Total ' + (mode === 'himpun' ? 'Penerimaan' : 'Pentasyarufan') + '</div>'
+    + '<div class="lay-total-val">' + rp(total) + '</div></div>'
+    + '<div class="lay-split">'
+    + '<div class="lay-split-bar"><span class="lay-bar-a" style="width:' + pctLay + '%"></span>'
+    + '<span class="lay-bar-b" style="width:' + pctDae + '%"></span></div>'
+    + '<div class="lay-split-grid">'
+    + '<div class="lay-box a"><div class="lay-box-lbl">KLL / ULL</div>'
+    + '<div class="lay-box-val">' + rp(sumLay) + '</div>'
+    + '<div class="lay-box-sub">' + pctLay + '% &middot; ' + nLay + ' layanan</div></div>'
+    + '<div class="lay-box b"><div class="lay-box-lbl">Daerah</div>'
+    + '<div class="lay-box-val">' + rp(sumDaerah) + '</div>'
+    + '<div class="lay-box-sub">' + pctDae + '% dari total</div></div>'
+    + '</div></div>'
+    + '<button class="lay-more" onclick="go(\'laporan\')">Lihat rincian per layanan &rarr;</button>';
 }
 
 function setDashLayananMode(mode) {
@@ -1569,39 +1825,95 @@ function _layWord(hay,needle){
   }
   return false;
 }
-function getLayananNameForTx(r) {
-  if(!r) return LAYANAN_DAERAH;
-  var list = CACHE.layanan || [];
-  var lbl = function(l){ return (l&&l.tipe?l.tipe+' ':'')+(l?l.nama:''); };
+function _lbl(l){ return (l&&l.tipe?l.tipe+' ':'')+(l?l.nama:''); }
+/* Kata yang jelas bukan bagian nama layanan — dipakai untuk memotong ekor
+   kalimat seperti "KLL Srandakan pekan 2" menjadi "Srandakan". */
+var _LAY_STOP = ['pekan','bulan','tanggal','tgl','infak','infaq','zakat','sedekah','shodaqoh',
+  'wakaf','kurban','qurban','fidyah','terikat','umum','setoran','setor','transfer','tunai',
+  'cash','qris','dari','an','a.n','atas','nama','via','bank','kas','donasi','sumbangan'];
 
-  for (var i=0;i<list.length;i++){ if(r.layananId && list[i].id===r.layananId) return lbl(list[i]); }
+/* Tangkap penanda "KLL <nama>" / "ULL <nama>" / "KL <nama>" dari teks asli
+   (bukan versi lowercase) supaya kapitalisasi nama tetap seperti yang diketik. */
+function _layFromPrefix(rawText){
+  var m = String(rawText || '').match(/\b(KLL|ULL|KL)\b[\s:.\-]*([^|\n]{2,60})/i);
+  if (!m) return null;
+  var tipe = m[1].toUpperCase();
+  if (tipe === 'KL') tipe = 'KLL';
+  var words = String(m[2]).replace(/[^A-Za-z0-9'’. ]/g, ' ').split(/\s+/).filter(function(w){ return w; });
+  var out = [];
+  for (var i = 0; i < words.length && out.length < 4; i++) {
+    var w = words[i];
+    if (_LAY_STOP.indexOf(w.toLowerCase()) >= 0) break;   // ekor kalimat, berhenti
+    if (/^\d+$/.test(w) && out.length) break;             // angka setelah nama = nominal/urutan
+    out.push(w);
+  }
+  if (!out.length) return null;
+  /* Samakan kapitalisasi supaya "kll sabrang" dan "KLL Sabrang" tidak menjadi
+     dua baris berbeda di rekap. Singkatan yang sudah kapital (SDUA, SD)
+     dibiarkan apa adanya. */
+  out = out.map(function(w){
+    return w === w.toLowerCase() ? (w.charAt(0).toUpperCase() + w.slice(1)) : w;
+  });
+  return { tipe: tipe, nama: out.join(' ') };
+}
 
-  var texts=[r.namaDonatur,r.namaPenerima,r.program,r.keterangan].map(_layNorm).filter(function(x){return x;});
-  if(!texts.length) return LAYANAN_DAERAH;
-  var blob=texts.join(' | ');
+function getLayananNameForTx(r, layList, layMap){
+  if (!r) return LAYANAN_DAERAH;
+  layList = layList || (CACHE.layanan || []);
+  if (!layMap) { layMap = {}; layList.forEach(function(l){ if(l&&l.id) layMap[l.id]=l; }); }
 
-  var m=blob.match(/\b(kll|ull|kl)\s*[:\-]?\s*([a-z0-9'. ]{3,40})/);
-  if(m){
-    var after=_layNorm(m[2]), hit=null;
-    list.forEach(function(l){
-      var ln=_layNorm(l.nama);
-      if(!ln||ln.length<3) return;
-      if(_layWord(after,ln)||after.indexOf(ln)===0){ if(!hit||ln.length>_layNorm(hit.nama).length) hit=l; }
+  // 1. Referensi eksplisit selalu menang — tidak perlu menebak dari teks.
+  if (r.layananId && layMap && layMap[r.layananId]) return _lbl(layMap[r.layananId]);
+
+  var raws = [r.namaDonatur, r.namaPenerima, r.program, r.keterangan]
+    .map(function(x){ return String(x == null ? '' : x).trim(); })
+    .filter(function(x){ return x.length > 0; });
+  if (!raws.length) return LAYANAN_DAERAH;
+  var rawBlob = raws.join(' | ');
+  var blob = _layNorm(rawBlob);
+
+  // 2. Penanda eksplisit KLL/ULL.
+  var pre = _layFromPrefix(rawBlob);
+  if (pre) {
+    var cand = _layNorm(pre.nama);
+    var hit = null;
+    layList.forEach(function(l){
+      var ln = _layNorm(l && l.nama);
+      var kd = _layNorm(l && l.kode);
+      // cocok lewat KODE (mis. "SDUA") atau lewat NAMA
+      if (kd && kd.length >= 2 && (cand === kd || _layWord(cand, kd))) {
+        if (!hit) hit = l;
+        return;
+      }
+      if (!ln || ln.length < 3) return;
+      if (_layWord(cand, ln) || cand.indexOf(ln) === 0 || ln.indexOf(cand) === 0) {
+        if (!hit || ln.length > _layNorm(hit.nama).length) hit = l;
+      }
     });
-    if(hit) return lbl(hit);
+    if (hit) return _lbl(hit);
+    /* Belum terdaftar di master Layanan pun tetap dihitung sebagai KLL/ULL —
+       kalau dipaksa masuk "Penghimpunan Daerah", rekapnya justru salah. */
+    return pre.tipe + ' ' + pre.nama;
   }
 
-  // "Lazismu Daerah Bantul" (nama donatur bawaan data lama) = tingkat daerah
-  if(/lazismu daerah|daerah bantul|penghimpunan daerah/.test(blob)) return LAYANAN_DAERAH;
+  // 2b. Data lama memakai "Lazismu Daerah Bantul" sebagai nama donatur bawaan.
+  //     Itu artinya tingkat daerah — bukan KLL bernama "Bantul".
+  if (/lazismu daerah|daerah bantul|penghimpunan daerah/.test(blob)) return LAYANAN_DAERAH;
 
-  var best=null;
-  list.forEach(function(l){
-    var ln=_layNorm(l.nama);
-    if(!ln||ln.length<4) return;
-    if(_layWord(blob,ln)){ if(!best||ln.length>_layNorm(best.nama).length) best=l; }
+  // 3. Nama atau kode layanan disebut utuh di salah satu teks.
+  var best = null;
+  layList.forEach(function(l){
+    var ln = _layNorm(l && l.nama);
+    var kd = _layNorm(l && l.kode);
+    if (kd && kd.length >= 3 && _layWord(blob, kd)) { if (!best) best = l; return; }
+    if (!ln || ln.length < 4) return;
+    if (_layWord(blob, ln)) {
+      if (!best || ln.length > _layNorm(best.nama).length) best = l;
+    }
   });
-  if(best) return lbl(best);
+  if (best) return _lbl(best);
 
+  // 4. Tidak ada penanda apa pun -> penghimpunan tingkat daerah.
   return LAYANAN_DAERAH;
 }
 

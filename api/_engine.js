@@ -660,6 +660,37 @@ function _containsWord(haystack, needle){
   return false;
 }
 
+/* Kata yang jelas bukan bagian nama layanan — dipakai untuk memotong ekor
+   kalimat seperti "KLL Srandakan pekan 2" menjadi "Srandakan". */
+var _LAY_STOP = ['pekan','bulan','tanggal','tgl','infak','infaq','zakat','sedekah','shodaqoh',
+  'wakaf','kurban','qurban','fidyah','terikat','umum','setoran','setor','transfer','tunai',
+  'cash','qris','dari','an','a.n','atas','nama','via','bank','kas','donasi','sumbangan'];
+
+/* Tangkap penanda "KLL <nama>" / "ULL <nama>" / "KL <nama>" dari teks asli
+   (bukan versi lowercase) supaya kapitalisasi nama tetap seperti yang diketik. */
+function _layFromPrefix(rawText){
+  var m = String(rawText || '').match(/\b(KLL|ULL|KL)\b[\s:.\-]*([^|\n]{2,60})/i);
+  if (!m) return null;
+  var tipe = m[1].toUpperCase();
+  if (tipe === 'KL') tipe = 'KLL';
+  var words = String(m[2]).replace(/[^A-Za-z0-9'’. ]/g, ' ').split(/\s+/).filter(function(w){ return w; });
+  var out = [];
+  for (var i = 0; i < words.length && out.length < 4; i++) {
+    var w = words[i];
+    if (_LAY_STOP.indexOf(w.toLowerCase()) >= 0) break;   // ekor kalimat, berhenti
+    if (/^\d+$/.test(w) && out.length) break;             // angka setelah nama = nominal/urutan
+    out.push(w);
+  }
+  if (!out.length) return null;
+  /* Samakan kapitalisasi supaya "kll sabrang" dan "KLL Sabrang" tidak menjadi
+     dua baris berbeda di rekap. Singkatan yang sudah kapital (SDUA, SD)
+     dibiarkan apa adanya. */
+  out = out.map(function(w){
+    return w === w.toLowerCase() ? (w.charAt(0).toUpperCase() + w.slice(1)) : w;
+  });
+  return { tipe: tipe, nama: out.join(' ') };
+}
+
 function resolveLayananName(r, layList, layMap){
   if (!r) return LAYANAN_DAERAH;
   layList = layList || [];
@@ -667,35 +698,47 @@ function resolveLayananName(r, layList, layMap){
   // 1. Referensi eksplisit selalu menang — tidak perlu menebak dari teks.
   if (r.layananId && layMap && layMap[r.layananId]) return _layLabel(layMap[r.layananId]);
 
-  var texts = [r.namaDonatur, r.namaPenerima, r.program, r.keterangan]
-    .map(_norm).filter(function(x){ return x.length > 0; });
-  if (!texts.length) return LAYANAN_DAERAH;
-  var blob = texts.join(' | ');
+  var raws = [r.namaDonatur, r.namaPenerima, r.program, r.keterangan]
+    .map(function(x){ return String(x == null ? '' : x).trim(); })
+    .filter(function(x){ return x.length > 0; });
+  if (!raws.length) return LAYANAN_DAERAH;
+  var rawBlob = raws.join(' | ');
+  var blob = _norm(rawBlob);
 
-  // 2. Penanda eksplisit "KLL <nama>" / "ULL <nama>" / "KL <nama>".
-  var m = blob.match(/\b(kll|ull|kl)\s*[:\-]?\s*([a-z0-9'. ]{3,40})/);
-  if (m) {
-    var after = _norm(m[2]);
+  // 2. Penanda eksplisit KLL/ULL.
+  var pre = _layFromPrefix(rawBlob);
+  if (pre) {
+    var cand = _norm(pre.nama);
     var hit = null;
     layList.forEach(function(l){
       var ln = _norm(l && l.nama);
+      var kd = _norm(l && l.kode);
+      // cocok lewat KODE (mis. "SDUA") atau lewat NAMA
+      if (kd && kd.length >= 2 && (cand === kd || _containsWord(cand, kd))) {
+        if (!hit) hit = l;
+        return;
+      }
       if (!ln || ln.length < 3) return;
-      if (_containsWord(after, ln) || after.indexOf(ln) === 0) {
-        if (!hit || ln.length > _norm(hit.nama).length) hit = l;   // cocokkan yang paling spesifik
+      if (_containsWord(cand, ln) || cand.indexOf(ln) === 0 || ln.indexOf(cand) === 0) {
+        if (!hit || ln.length > _norm(hit.nama).length) hit = l;
       }
     });
     if (hit) return _layLabel(hit);
+    /* Belum terdaftar di master Layanan pun tetap dihitung sebagai KLL/ULL —
+       kalau dipaksa masuk "Penghimpunan Daerah", rekapnya justru salah. */
+    return pre.tipe + ' ' + pre.nama;
   }
 
   // 2b. Data lama memakai "Lazismu Daerah Bantul" sebagai nama donatur bawaan.
   //     Itu artinya tingkat daerah — bukan KLL bernama "Bantul".
   if (/lazismu daerah|daerah bantul|penghimpunan daerah/.test(blob)) return LAYANAN_DAERAH;
 
-  // 3. Nama layanan disebut utuh di salah satu teks (minimal 4 huruf agar
-  //    kata umum yang pendek tidak salah tangkap).
+  // 3. Nama atau kode layanan disebut utuh di salah satu teks.
   var best = null;
   layList.forEach(function(l){
     var ln = _norm(l && l.nama);
+    var kd = _norm(l && l.kode);
+    if (kd && kd.length >= 3 && _containsWord(blob, kd)) { if (!best) best = l; return; }
     if (!ln || ln.length < 4) return;
     if (_containsWord(blob, ln)) {
       if (!best || ln.length > _norm(best.nama).length) best = l;
