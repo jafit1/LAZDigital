@@ -837,7 +837,7 @@ function _getJurnalData(year, month) {
       creditAcc='Penerimaan Zakat'+(cleanSub?(' '+cleanSub):'');
       ketPrefix=r.subJenis||'Zakat';
     }
-    else if(jl.indexOf('amil')>=0){ groupLabel='AMIL'; debitBase='Amil'; creditAcc='Penerimaan Amil'; ketPrefix='Amil'; }
+    else if(jl.indexOf('amil')>=0){ groupLabel='AMIL'; debitBase='Amil'; creditAcc='Penerimaan Amil'+(r.pilar?' '+r.pilar:''); ketPrefix='Amil'; }
     else if(jl.indexOf('wakaf')>=0){ groupLabel='WAKAF'; debitBase='Wakaf'; creditAcc='Penerimaan Wakaf'; ketPrefix='Wakaf'; }
     else if(jl.indexOf('infak')>=0||jl.indexOf('infaq')>=0||jl.indexOf('sedekah')>=0){
       debitBase='Infak';
@@ -860,13 +860,16 @@ function _getJurnalData(year, month) {
       debitAcc = (via==='BANK'?'Bank ':'Kas ')+debitBase;
     }
     
-    /* Format baku dipertahankan; catatan bebas hanya DITAMBAHKAN di belakang.
-       Sebelumnya `r.keterangan` menimpa seluruh keterangan, sehingga nama
-       donatur, jenis dana dan petugas fundraising hilang dari jurnal. */
-    var ket=(ketPrefix+' '+donorLabel(r)).trim();
-    var _fr = cleanFundraisingName ? cleanFundraisingName(r.fundraising) : (r.fundraising||'');
-    if (_fr) ket += ' | Fr: ' + _fr;
-    if (r.keterangan) ket += ' — ' + r.keterangan;
+    /* Keterangan jurnal mengikuti berkas acuan "Jurnal Bank":
+         {Nama Donatur / KLL / ULL} {Jenis Dana}[ {Peruntukan}]
+       Nama petugas fundraising sengaja TIDAK dicantumkan di jurnal.
+       Catatan bebas hanya ditambahkan bila memang membawa keterangan baru. */
+    var _peruntukan = String(r.program||'').trim();
+    if (/^(penerimaan|setor tunai)/i.test(_peruntukan)) _peruntukan = '';
+    if (_peruntukan && jpNorm(_peruntukan) === jpNorm(ketPrefix)) _peruntukan = '';
+    var ket = jpBersih(donorLabel(r) + ' ' + ketPrefix + (_peruntukan ? ' ' + _peruntukan : ''));
+    var _catatan = String(r.keterangan||'').trim();
+    if (_catatan && jpInti(ket).indexOf(jpInti(_catatan)) < 0) ket += ' — ' + _catatan;
     
     var tgl=Utilities.formatDate(new Date(r.tanggal),TZ,'dd/MM/yyyy'); var amt=Number(r.jumlah)||0; var ref=r.noKwitansi||'-';
     secMap[secKey]=secMap[secKey]||{title:secKey,lines:[],subtotal:0};
@@ -913,11 +916,13 @@ function _getJurnalData(year, month) {
     secMap[secKey].subtotal+=amt;
   });
   
+  /* Urutan kelompok mengikuti berkas jurnal acuan:
+     Zakat -> Infak Umum -> Infak Terikat -> Amil -> Wakaf. */
   var order=[
     'PENERIMAAN ZAKAT VIA KAS', 'PENERIMAAN ZAKAT VIA BANK',
-    'PENERIMAAN AMIL VIA KAS', 'PENERIMAAN AMIL VIA BANK',
-    'PENERIMAAN INFAK TERIKAT VIA KAS', 'PENERIMAAN INFAK TERIKAT VIA BANK',
     'PENERIMAAN INFAK UMUM VIA KAS', 'PENERIMAAN INFAK UMUM VIA BANK',
+    'PENERIMAAN INFAK TERIKAT VIA KAS', 'PENERIMAAN INFAK TERIKAT VIA BANK',
+    'PENERIMAAN AMIL VIA KAS', 'PENERIMAAN AMIL VIA BANK',
     'PENERIMAAN WAKAF VIA KAS', 'PENERIMAAN WAKAF VIA BANK',
     'BAGI HASIL BANK', 'PENGEMBALIAN UMP',
     'SETOR TUNAI',
@@ -1159,11 +1164,16 @@ function parseImportDate(val) {
     return date.toISOString().slice(0, 10);
   }
   var s = String(val).trim();
-  var m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  /* Urutan hari-bulan-tahun; tahun 2 digit dianggap 20xx.
+     Bila angka pertama > 12 sudah pasti hari, bila angka kedua > 12
+     berarti berkas memakai urutan bulan-hari (ekspor Excel gaya AS). */
+  var m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
   if (m) {
-    var day = parseInt(m[1], 10);
-    var month = parseInt(m[2], 10);
-    var year = parseInt(m[3], 10);
+    var a1 = parseInt(m[1], 10), a2 = parseInt(m[2], 10);
+    var year = parseInt(m[3], 10); if (year < 100) year += 2000;
+    var day = a1, month = a2;
+    if (a1 <= 12 && a2 > 12) { day = a2; month = a1; }
     return year + '-' + ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
   }
   try {
@@ -1578,7 +1588,10 @@ function isValidDateStringOrObject(val) {
   if (!val) return false;
   if (val instanceof Date) return true;
   var str = String(val).trim();
-  return /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str) || /^\d{4}-\d{2}-\d{2}/.test(str);
+  /* tahun 2 digit ikut diterima: berkas Excel kerap tampil "8/2/26" */
+  return /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2}(\d{2})?$/.test(str)
+      || /^\d{4}-\d{2}-\d{2}/.test(str)
+      || /^\d{1,2}[\/\- ][A-Za-z]{3,}[\/\- ]\d{2}(\d{2})?$/.test(str);
 }
 
 function checkIsJurnalPenerimaan(rawRows) {
@@ -1679,6 +1692,144 @@ function detectPilarFromText(text) {
     return 'Keagamaan';
   }
   return 'Sosial Dakwah';
+}
+
+/* ================================================================
+   JURNAL PENERIMAAN — pembacaan berbasis AKUN KREDIT
+   ----------------------------------------------------------------
+   Berkas jurnal ditulis berpasangan:
+     baris 1 (debet)  : tanggal | nama rekening bank | jumlah |        | uraian
+     baris 2 (kredit) : tanggal | Penerimaan ...     |        | jumlah | uraian
+   Baris kredit sudah menyebut jenis dananya secara tegas
+   ("Penerimaan Zakat Mal", "Penerimaan Infak Terikat - Kemanusiaan"),
+   jadi itulah yang dipakai — bukan menebak dari nomor rekening.
+   Cara lama menebak lewat potongan nomor ("9004", "880") membuat
+   rekening Infak Umum 1011959004 dan 0469988000 ikut terbaca Zakat.
+   ================================================================ */
+function jpBersih(x){ return String(x==null?'':x).replace(/\s+/g,' ').trim(); }
+function jpNorm(x){ return String(x==null?'':x).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
+/* Sisa kata setelah istilah jenis dana dibuang — dipakai untuk menguji apakah
+   catatan bebas benar-benar membawa keterangan baru atau hanya mengulang. */
+function jpInti(x){
+  return jpNorm(x).replace(/\b(zakat|infak|infaq|sedekah|wakaf|amil|dskl|terikat|umum|penerimaan|mal|fitrah|pertanian|profesi|penghasilan|perdagangan|simpanan|emas|perak|uang)\b/g,' ').replace(/\s+/g,' ').trim();
+}
+
+/* Cocokkan ekor akun zakat ke daftar sub jenis resmi. */
+function jpSubZakat(sisa){
+  var t = jpBersih(sisa);
+  if (!t) return 'Zakat Mal';
+  if (!/^zakat\b/i.test(t)) t = 'Zakat ' + t;
+  var opsi = (typeof SUBJENIS !== 'undefined' && SUBJENIS['Zakat']) ? SUBJENIS['Zakat'] : [];
+  var c = jpNorm(t).replace(/ /g,'');
+  for (var i=0;i<opsi.length;i++) if (jpNorm(opsi[i]).replace(/ /g,'') === c) return opsi[i];
+  for (var j=0;j<opsi.length;j++) if (c && jpNorm(opsi[j]).replace(/ /g,'').indexOf(c) === 0) return opsi[j];
+  return t;
+}
+
+/* Akun kredit -> jenis dana, sub jenis, dan pilar. */
+function jpDanaDariAkun(akunKredit){
+  var s = jpBersih(akunKredit).replace(/^penerimaan\s+/i,'');
+  var low = s.toLowerCase();
+  var out = { jenisDana:'', subJenis:'', pilar:'' };
+
+  var mT = s.match(/^(infa[kq]|sedekah)\s+terikat\s*(?:[-–—:]\s*)?(.*)$/i);
+  if (mT){
+    out.jenisDana = /sedekah/i.test(mT[1]) ? 'Sedekah' : 'Infak';
+    out.subJenis  = out.jenisDana + ' Terikat';
+    out.pilar     = jpBersih(mT[2]);
+    return out;
+  }
+  var mU = s.match(/^(infa[kq]|sedekah)\s+umum\b/i);
+  if (mU){
+    out.jenisDana = /sedekah/i.test(mU[1]) ? 'Sedekah' : 'Infak';
+    out.subJenis  = out.jenisDana + ' Umum';
+    return out;
+  }
+  if (/^zakat\b/i.test(s)){
+    out.jenisDana = 'Zakat';
+    out.subJenis  = jpSubZakat(s);
+    return out;
+  }
+  if (/^amil\b/i.test(s)){
+    out.jenisDana = 'Amil';
+    out.subJenis  = 'Amil';
+    out.pilar     = jpBersih(s.replace(/^amil\s*(?:[-–—:]\s*)?/i,''));
+    return out;
+  }
+  if (/^wakaf\b/i.test(s)){
+    out.jenisDana = 'Wakaf';
+    out.subJenis  = jpBersih(s) || 'Wakaf Uang';
+    return out;
+  }
+  if (low.indexOf('bagi hasil') >= 0){
+    out.jenisDana = 'DSKL'; out.subJenis = 'Bagi Hasil Bank';
+    return out;
+  }
+  if (/^(infa[kq]|sedekah)\b/i.test(s)){
+    out.jenisDana = /sedekah/i.test(s) ? 'Sedekah' : 'Infak';
+    out.subJenis  = out.jenisDana + ' Umum';
+    return out;
+  }
+  out.jenisDana = jpBersih(s.split(' ')[0]) || 'Infak';
+  out.subJenis  = jpBersih(s) || out.jenisDana;
+  return out;
+}
+
+/* Pisahkan uraian jadi nama donatur + peruntukan.
+   "KLL Imogiri Infak Terikat Ambulan" -> nama "KLL Imogiri", program "Ambulan"
+   "Ahmad Solikin Zakat Mal"           -> nama "Ahmad Solikin", program ""      */
+function jpPecahUraian(uraian, dana){
+  var t = jpBersih(uraian);
+  if (!t) return { nama:'', program:'' };
+  /* Frasa panjang diuji lebih dulu supaya "Infak Terikat Beasiswa Mentari"
+     tidak terpotong jadi peruntukan "Terikat Beasiswa Mentari". */
+  var kandidat = [];
+  if (dana && dana.subJenis) kandidat.push(dana.subJenis);
+  kandidat = kandidat.concat(['Infak Terikat','Infaq Terikat','Sedekah Terikat',
+    'Infak Umum','Infaq Umum','Sedekah Umum']);
+  if (dana && dana.jenisDana) kandidat.push(dana.jenisDana);
+  kandidat = kandidat.concat(['Zakat','Infak','Infaq','Sedekah',
+    'Wakaf','Amil','Kurban','Qurban','Fidyah']);
+  for (var i=0;i<kandidat.length;i++){
+    var kata = jpBersih(kandidat[i]);
+    if (!kata) continue;
+    var pola = kata.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');
+    var re, m;
+    try { re = new RegExp('\\b' + pola + '\\b','i'); } catch(e){ continue; }
+    m = t.match(re);
+    if (m && m.index > 0){
+      return { nama: jpBersih(t.slice(0, m.index)), program: jpBersih(t.slice(m.index + m[0].length)) };
+    }
+  }
+  return { nama:t, program:'' };
+}
+
+/* Metode pembayaran dari nama akun debet / uraian. */
+function jpMetode(akunDebet, uraian, seksi){
+  var a = String(akunDebet||'').toLowerCase(), u = String(uraian||'').toLowerCase();
+  if (/\bqris\b/.test(a) || /\bqris\b/.test(u)) return 'QRIS';
+  if (String(seksi||'').toUpperCase().indexOf('VIA KAS') >= 0) return 'Cash/Tunai';
+  if (/(^|[^a-z])kas([^a-z]|$)/.test(a) || a.indexOf('tunai') >= 0) return 'Cash/Tunai';
+  return 'Transfer Bank';
+}
+
+/* Cari rekening terdaftar: nomor dulu (paling pasti), baru nama bank. */
+function jpCariRekening(namaAkun, listRek){
+  var s = jpBersih(namaAkun);
+  if (!s || !listRek || !listRek.length) return null;
+  var digit = s.replace(/\D/g,'').replace(/^0+/,'');
+  if (digit.length >= 5){
+    for (var i=0;i<listRek.length;i++){
+      var no = String(listRek[i].nomor||'').replace(/\D/g,'').replace(/^0+/,'');
+      if (no && no === digit) return listRek[i];
+    }
+  }
+  var low = s.toLowerCase(), hit = null, panjang = 0;
+  for (var j=0;j<listRek.length;j++){
+    var nb = String(listRek[j].namaBank||'').toLowerCase().trim();
+    if (nb && nb.length >= 4 && low.indexOf(nb) >= 0 && nb.length > panjang){ hit = listRek[j]; panjang = nb.length; }
+  }
+  return hit;
 }
 
 function transformJurnalToImportData(rawRows, listRek, listLayanan) {
@@ -1794,32 +1945,67 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           var namaDonatur = uraian;
           var tipeDonatur = 'Perorangan';
           var layananId = '';
-          
-          if (matchedLay) {
-            layananId = matchedLay.id;
-            namaDonatur = (matchedLay.tipe === 'KLL' ? 'KLL ' : 'ULL ') + matchedLay.nama;
-            tipeDonatur = matchedLay.tipe === 'KLL' ? 'Kantor Layanan (KLL)' : 'Unit Layanan (ULL)';
-          } else if (uraian.toUpperCase().indexOf('KLL ') === 0) {
-            tipeDonatur = 'Kantor Layanan (KLL)';
-          } else if (uraian.toUpperCase().indexOf('ULL ') === 0) {
-            tipeDonatur = 'Unit Layanan (ULL)';
+
+          /* --- Jenis dana dibaca dari AKUN KREDIT (baris pasangannya) --- */
+          var _akunKredit = '';
+          var _nx = rawRows[i+1];
+          if (_nx && parseAmount(_nx[3]) > 0 && !parseAmount(_nx[2])) _akunKredit = String(_nx[1] || '').trim();
+          var _dana = _akunKredit ? jpDanaDariAkun(_akunKredit) : null;
+          var _pecah = jpPecahUraian(uraian, _dana);
+          var _namaBersih = _pecah.nama || uraian;
+
+          /* KLL / ULL memakai aturan pencocokan yang sama dengan rekap dashboard,
+             dijalankan atas nama yang SUDAH dibersihkan dari ekor jenis dana. */
+          var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(_namaBersih) : null;
+          var _layHit = matchedLay;
+          if (_pre && !_layHit) {
+            var _c = jpNorm(_pre.nama);
+            (listLayanan || []).forEach(function(l){
+              var ln = jpNorm(l.nama), kd = jpNorm(l.kode);
+              if (kd && kd.length >= 2 && _c === kd) { if (!_layHit) _layHit = l; return; }
+              if (ln && ln.length >= 3 && (_c === ln || _c.indexOf(ln) === 0 || ln.indexOf(_c) === 0)) {
+                if (!_layHit || ln.length > jpNorm(_layHit.nama).length) _layHit = l;
+              }
+            });
           }
-          
+          if (_layHit) {
+            layananId = _layHit.id;
+            namaDonatur = (String(_layHit.tipe).toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + _layHit.nama;
+            tipeDonatur = (String(_layHit.tipe).toUpperCase() === 'ULL') ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)';
+          } else if (_pre) {
+            namaDonatur = _pre.tipe + ' ' + _pre.nama;
+            tipeDonatur = (_pre.tipe === 'ULL') ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)';
+          } else {
+            namaDonatur = _namaBersih;
+          }
+
+          if (_dana && _dana.jenisDana) {
+            jDana   = _dana.jenisDana;
+            sJenis  = _dana.subJenis;
+            pilar   = _dana.pilar;
+            program = _pecah.program || '';
+            if (jDana === 'Infak' && sJenis === 'Infak Terikat' && !pilar) {
+              pilar = detectPilarFromText(program || uraian);
+            }
+          }
+
+          /* Tandai bila tulisan di uraian bertentangan dengan akun kredit,
+             misalnya uraian menulis "Infak Terikat" tetapi akun kreditnya
+             "Penerimaan Infak Umum". Akun kredit tetap yang dipakai; barisnya
+             hanya diberi tanda agar bisa diperiksa sebelum disimpan. */
+          var _bedaDana = false;
+          if (_dana && _dana.jenisDana) {
+            var _uN = ' ' + jpNorm(uraian) + ' ';
+            var _adaTerikat = _uN.indexOf(' terikat ') >= 0;
+            if (_adaTerikat !== /terikat/i.test(_dana.subJenis)) _bedaDana = true;
+            var _pokok = ['zakat','infak','infaq','sedekah','wakaf','amil'].filter(function(k){ return _uN.indexOf(' '+k+' ') >= 0; });
+            var _jd = _dana.jenisDana.toLowerCase();
+            if (_pokok.length && _jd !== 'dskl' && _pokok.indexOf(_jd) < 0 && !(_jd === 'infak' && _pokok.indexOf('infaq') >= 0)) _bedaDana = true;
+          }
+
           var uraianLower = uraian.toLowerCase();
           var isZakatAcc = false;
-          if (matchedRek) {
-            var fg = String(matchedRek.fundGroup || '').toLowerCase();
-            var rNo = String(matchedRek.nomor || '');
-            if (fg === 'zakat' || rNo.indexOf('9004') >= 0 || rNo.indexOf('880') >= 0) {
-              isZakatAcc = true;
-            }
-          } else {
-            var lookupLower = lookupName.toLowerCase();
-            if (lookupLower.indexOf('9004') >= 0 || lookupLower.indexOf('880') >= 0) {
-              isZakatAcc = true;
-            }
-          }
-          
+
           if (currentSection === 'SETOR TUNAI') {
             var cashAccName = '';
             var nextRow = rawRows[i+1];
@@ -1832,6 +2018,8 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             namaDonatur = 'Setor Tunai';
             tipeDonatur = 'Lembaga/Perusahaan';
             bankLabel = cashAccName;
+          } else if (_dana && _dana.jenisDana) {
+            /* sudah pasti dari akun kredit, tidak perlu menebak dari seksi */
           } else if (currentSection === 'PENERIMAAN ZAKAT VIA BANK' || currentSection === 'PENERIMAAN ZAKAT VIA KAS' || isZakatAcc) {
             jDana = 'Zakat';
             sJenis = 'Zakat Mal';
@@ -1868,13 +2056,8 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             tipeDonatur = matchedLay ? (matchedLay.tipe === 'KLL' ? 'Kantor Layanan (KLL)' : 'Unit Layanan (ULL)') : 'Perorangan';
           }
           
-          var metode = 'Transfer Bank';
-          if (currentSection.indexOf('KAS') >= 0 || accName.toLowerCase().indexOf('kas') >= 0) {
-            metode = 'Cash/Tunai';
-          } else if (accName.toUpperCase().indexOf('QRIS') >= 0) {
-            metode = 'QRIS';
-          }
-          
+          var metode = jpMetode(accName, uraian, currentSection);
+                    
           himpunRows.push({
             tanggal: dateStr,
             jenisDana: jDana,
@@ -1893,7 +2076,13 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             bank: bankLabel,
             statusBayar: 'Lunas',
             keterangan: uraian,
-            fundraising: cleanFundraisingName(extractFundraisingFromText(uraian))
+            /* Transaksi KLL/ULL dicatat atas nama layanannya; nama petugas
+               fundraising hanya untuk transaksi tingkat daerah. */
+            fundraising: layananId || _pre
+              ? namaDonatur
+              : cleanFundraisingName(extractFundraisingFromText(uraian)),
+            akunKredit: _akunKredit,
+            bedaDana: _bedaDana
           });
         }
         
@@ -2065,6 +2254,7 @@ async function apiParseImportUrl(t, url, type) {
         himpunInvalid: himpunInvalid,
         salurValid: salurValid,
         salurInvalid: salurInvalid,
+        bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
         totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length
       };
     } else {
@@ -2514,6 +2704,7 @@ async function apiParseImportText(t, text, type) {
         himpunInvalid: himpunInvalid,
         salurValid: salurValid,
         salurInvalid: salurInvalid,
+        bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
         totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length
       };
     }

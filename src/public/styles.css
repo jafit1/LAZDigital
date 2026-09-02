@@ -2907,3 +2907,17 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 @media(max-height:640px){
   .modal.import-modal .modal-body{height:62vh;min-height:62vh;max-height:62vh}
 }
+
+/* ================================================================
+   35. NOMINAL JURNAL
+   Angka jurnal ditulis polos (tanpa "Rp", tanpa titik ribuan) agar bisa
+   langsung disalin ke berkas jurnal. Supaya tetap enak dibaca, kolomnya
+   dirata-kanan dengan angka lebar seragam.
+   ================================================================ */
+.jnum{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1;
+  white-space:nowrap;
+  letter-spacing:.2px;
+}

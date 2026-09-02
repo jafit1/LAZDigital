@@ -1106,6 +1106,10 @@ function loadJurnalAndDownload(){
   }).catch(handleErr);
 }
 
+/* Nominal di jurnal ditulis polos: tanpa "Rp" dan tanpa titik pemisah ribuan,
+   supaya bisa langsung disalin ke berkas jurnal tanpa dirapikan lagi. */
+function jn(n){ var v = Number(n); return isFinite(v) ? String(Math.round(v)) : ''; }
+
 function renderJurnalPreview(d){
   if(!d.count){el('jurnalPreview').innerHTML='<div class="card empty"><div class="big">🧾</div>Tidak ada penerimaan pada '+esc(d.periode)+'.</div>';return;}
   var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" style="border:1px solid var(--border)" onclick="copyAllJurnal()">📋 Salin Semua</button><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">⬇ Unduh .xlsx</button></div></div>';
@@ -1113,11 +1117,11 @@ function renderJurnalPreview(d){
   d.sections.forEach(function(sec, idx){
     h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">📋 Salin Kategori</button></div></td></tr>';
     sec.lines.forEach(function(l){
-      h+='<tr><td>'+esc(l.tanggal)+'</td><td>'+esc(l.akun)+'</td><td>'+(l.debit!==''?rp(l.debit):'')+'</td><td>'+(l.kredit!==''?rp(l.kredit):'')+'</td><td class="muted">'+esc(l.ket)+'</td></tr>';
+      h+='<tr><td>'+esc(l.tanggal)+'</td><td>'+esc(l.akun)+'</td><td class="jnum">'+(l.debit!==''?jn(l.debit):'')+'</td><td class="jnum">'+(l.kredit!==''?jn(l.kredit):'')+'</td><td class="muted">'+esc(l.ket)+'</td></tr>';
     });
-    h+='<tr><td></td><td style="font-weight:600">Subtotal</td><td colspan="2" style="font-weight:700;color:var(--green)">'+rp(sec.subtotal)+'</td><td></td></tr>';
+    h+='<tr><td></td><td style="font-weight:600">Subtotal</td><td colspan="2" class="jnum" style="font-weight:700;color:var(--green)">'+jn(sec.subtotal)+'</td><td></td></tr>';
   });
-  h+='<tr><td></td><td style="font-weight:700;font-family:var(--font)">TOTAL PENERIMAAN</td><td colspan="2" style="font-weight:700;color:var(--primary);font-size:15px">'+rp(d.grandTotal)+'</td><td></td></tr>';
+  h+='<tr><td></td><td style="font-weight:700;font-family:var(--font)">TOTAL PENERIMAAN</td><td colspan="2" class="jnum" style="font-weight:700;color:var(--primary);font-size:15px">'+jn(d.grandTotal)+'</td><td></td></tr>';
   h+='</tbody></table></div></div>';
   el('jurnalPreview').innerHTML=h;
 }
@@ -1231,9 +1235,10 @@ function exportJurnalXlsx(d){
   
   function formatSheet(ws) {
     for (var key in ws) {
-      if (ws[key] && ws[key].t === 'd') {
-        ws[key].z = 'dd/mm/yyyy';
-      }
+      if (!ws[key]) continue;
+      if (ws[key].t === 'd') ws[key].z = 'dd/mm/yyyy';
+      /* angka ditulis polos: tanpa pemisah ribuan dan tanpa simbol mata uang */
+      else if (ws[key].t === 'n') ws[key].z = '0';
     }
   }
   formatSheet(wsTunai);
@@ -2893,7 +2898,7 @@ function openImportModal(type) {
     '<div id="group_import_file">' +
     '<div class="upload-box" onclick="el(\'import_file\').click()" id="importDrop">' +
     '<div class="imp-drop-t">Pilih file Excel atau CSV</div>' +
-    '<div class="imp-drop-d">Format buku kas: Tanggal &middot; Uraian &middot; Debet &middot; Kredit &middot; Fundraising</div>' +
+    '<div class="imp-drop-d">Buku kas (Tanggal &middot; Uraian &middot; Debet &middot; Kredit &middot; Fundraising) atau jurnal penerimaan berpasangan debet&ndash;kredit &mdash; keduanya dikenali otomatis</div>' +
     '</div>' +
     '<input type="file" id="import_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onImportFile(event)">' +
     '<div id="importFileInfo" class="imp-file-info"></div>' +
@@ -2964,11 +2969,23 @@ function onImportFile(e){
     try {
       var wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
       var ws = wb.Sheets[wb.SheetNames[0]];
-      var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', defval: '' });
-      var baris = aoa.filter(function(r){ return r.some(function(c){ return String(c).trim() !== ''; }); })
-                     .map(function(r){ return r.map(function(c){ return String(c == null ? '' : c).trim(); }).join('\t'); });
+      /* raw:true — tanggal tetap objek Date lalu kita tulis sendiri sebagai
+         yyyy-mm-dd. Sebelumnya raw:false menyerahkan format ke Excel dan
+         sering keluar "8/2/26"; tahun 2 digit membuat tanggal bisa tertukar
+         hari-bulan dan jurnal tidak dikenali sama sekali. */
+      var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      var p2 = function(n){ return ('0' + n).slice(-2); };
+      var sel = function(c){
+        if (c == null) return '';
+        if (c instanceof Date) return c.getFullYear() + '-' + p2(c.getMonth() + 1) + '-' + p2(c.getDate());
+        if (typeof c === 'number') return String(c);
+        return String(c).trim();
+      };
+      var baris = aoa.map(function(r){ return r.map(sel); })
+                     .filter(function(r){ return r.some(function(c){ return c !== ''; }); })
+                     .map(function(r){ return r.join('\t'); });
       IMPORT_FILE_TSV = baris.join('\n');
-      info.innerHTML = '<b>' + esc(f.name) + '</b> <span class="muted">&middot; ' + (baris.length - 1) + ' baris data'
+      info.innerHTML = '<b>' + esc(f.name) + '</b> <span class="muted">&middot; ' + baris.length + ' baris terbaca'
         + (wb.SheetNames.length > 1 ? ' &middot; sheet "' + esc(wb.SheetNames[0]) + '"' : '') + '</span>';
       toast('File terbaca, klik "Tarik & Analisis Data"');
     } catch (err) {
@@ -3029,7 +3046,14 @@ function tarikImportData() {
         var totalValid = res.himpunValid.length + res.salurValid.length;
         var totalInvalid = res.himpunInvalid.length + res.salurInvalid.length;
         
-        var h = '<div style="margin-bottom:12px;font-weight:600;font-size:13.5px">' +
+        var h = '<div class="imp-note">Terbaca sebagai <b>jurnal penerimaan</b>. '
+          + 'Jenis dana diambil dari <b>akun kredit</b> di baris pasangannya '
+          + '(mis. &ldquo;Penerimaan Infak Terikat - Kemanusiaan&rdquo;), '
+          + 'nama donatur diambil dari uraian setelah dibuang ekor jenis dananya. '
+          + 'Transaksi KLL/ULL tercatat atas nama layanannya.'
+          + ((res.bedaDana || 0) ? ' <b style="color:var(--red)">' + res.bedaDana + ' baris</b> menulis jenis dana berbeda dengan akun kreditnya — ditandai di bawah.' : '')
+          + '</div>';
+        h += '<div style="margin-bottom:12px;font-weight:600;font-size:13.5px">' +
           'Analisis Jurnal selesai: <span style="color:var(--green)">' + totalValid + ' Baris Valid</span> (Penghimpunan: ' + res.himpunValid.length + ', Pentasyarufan: ' + res.salurValid.length + '), ' +
           '<span style="color:var(--red)">' + totalInvalid + ' Baris Tidak Valid</span> (diabaikan)' +
           '</div>';
@@ -3039,18 +3063,19 @@ function tarikImportData() {
           h += '<div class="muted" style="padding:8px;font-size:12px">Tidak ada data penghimpunan.</div>';
         } else {
           h += '<table style="font-size:11.5px;width:100%;border-collapse:collapse;margin-bottom:14px" class="table-wrap"><thead><tr>' +
-            '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Jumlah</th><th>Metode</th><th>FR</th>' +
+            '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Akun Kredit</th><th>Jumlah</th><th>Metode</th>' +
             '</tr></thead><tbody>';
           res.himpunValid.forEach(function(r, idx) {
             var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="himpun" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> ⚠️ Transaksi Serupa Ada (Centang jika ingin tetap simpan)</label></div>' : '';
             var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
+            var bedaWarn = r.bedaDana ? '<div style="margin-top:3px;font-size:10.5px;color:var(--amber);font-weight:700">⚠️ Uraian menyebut jenis dana lain — mengikuti akun kredit</div>' : '';
             h += '<tr' + rowBg + '>' +
               '<td>' + esc(r.tanggal) + '</td>' +
-              '<td><b>' + esc(r.namaDonatur) + '</b>' + dupWarn + '</td>' +
-              '<td>' + esc(r.jenisDana + (r.pilar ? ' / ' + r.pilar : '')) + '</td>' +
-              '<td style="font-weight:600;color:' + (r.isDuplicate ? 'var(--red)' : 'var(--green)') + '">' + rp(r.jumlah) + '</td>' +
+              '<td><b>' + esc(r.namaDonatur) + '</b>' + dupWarn + bedaWarn + '</td>' +
+              '<td>' + esc(r.subJenis + (r.pilar ? ' / ' + r.pilar : '') + (r.program ? ' · ' + r.program : '')) + '</td>' +
+              '<td class="muted">' + esc(r.akunKredit || '-') + '</td>' +
+              '<td class="jnum" style="font-weight:600;color:' + (r.isDuplicate ? 'var(--red)' : 'var(--green)') + '">' + rp(r.jumlah) + '</td>' +
               '<td>' + esc(r.metode) + '</td>' +
-              '<td class="muted">' + esc(cleanFR(r.fundraising)) + '</td>' +
               '</tr>';
           });
           h += '</tbody></table>';
