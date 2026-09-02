@@ -1,20 +1,30 @@
-// LAZ Digital — RPC handler. Storage: Upstash Redis REST API + /tmp cache
 const engine = require('./_engine.js');
 const fs = require('fs');
+const path = require('path');
 
-const TMP   = '/tmp/laz-db-cache.json';
+const LOCAL_DB_DIR = path.join(process.cwd(), 'data');
+const LOCAL_DB_FILE = path.join(LOCAL_DB_DIR, 'laz-db-local.json');
+const TMP = '/tmp/laz-db-cache.json';
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const DB_KEY = 'laz:db';
 
 function ver(db){ return (db && db.props && Number(db.props._ver)) || 0; }
 
-/* ─── /tmp helpers ─── */
-function readTmp(){
-  try{ if(fs.existsSync(TMP)) return JSON.parse(fs.readFileSync(TMP,'utf8')); }catch(e){}
+/* ─── local / tmp file helpers ─── */
+function readLocalFile(){
+  try{
+    if(fs.existsSync(LOCAL_DB_FILE)) return JSON.parse(fs.readFileSync(LOCAL_DB_FILE, 'utf8'));
+    if(fs.existsSync(TMP)) return JSON.parse(fs.readFileSync(TMP, 'utf8'));
+  }catch(e){}
   return null;
 }
-function writeTmp(db){
+
+function writeLocalFile(db){
+  try{
+    if(!fs.existsSync(LOCAL_DB_DIR)) fs.mkdirSync(LOCAL_DB_DIR, { recursive: true });
+    fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(db, null, 2));
+  }catch(e){}
   try{ fs.writeFileSync(TMP, JSON.stringify(db)); }catch(e){}
 }
 
@@ -45,18 +55,27 @@ async function redisSet(db){
 
 /* ─── load / save ─── */
 async function loadDB(){
-  const tmp   = readTmp();
+  const file  = readLocalFile();
   const redis = await redisGet();
   let db;
-  if(tmp && redis)      db = ver(tmp) >= ver(redis) ? tmp : redis;
-  else                  db = tmp || redis || { sheets:{}, props:{} };
+  if(file && redis) db = ver(file) >= ver(redis) ? file : redis;
+  else              db = file || redis || { sheets:{}, props:{} };
+
+  // Auto setup if DB is fresh / uninitialized
+  if(!db.sheets || !db.sheets.Users || db.sheets.Users.length <= 1){
+    const setupRes = await engine.runRPC(db, 'setup', []);
+    db = setupRes.db;
+    writeLocalFile(db);
+    await redisSet(db);
+  }
+
   return db;
 }
 
 async function saveDB(db){
   if(!db.props) db.props = {};
   db.props._ver = ver(db) + 1;
-  writeTmp(db);
+  writeLocalFile(db);
   await redisSet(db);
 }
 

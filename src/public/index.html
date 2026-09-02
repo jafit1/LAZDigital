@@ -3,9 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f77f00">
+  <meta name="theme-color" content="#F2704F">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="/styles.css">
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+  <script src="/js/utils/qrcode.js" defer></script>
 </head>
 <body>
   <div class="bg-blob bg-blob-1"></div>
@@ -13,7 +18,14 @@
   <div class="bg-blob bg-blob-3"></div>
   <canvas id="bgfx" aria-hidden="true"></canvas>
   <div class="ag-grid"></div>
-  <script>document.documentElement.setAttribute('data-theme',localStorage.getItem('laz_theme')||'light');</script>
+  <script>
+    document.documentElement.setAttribute('data-theme',localStorage.getItem('laz_theme')||'light');
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js').catch(function(){});
+      });
+    }
+  </script>
 
   <!-- ============ LOADING ============ -->
   <div id="boot">
@@ -35,7 +47,7 @@
       <form id="loginForm" onsubmit="return doLogin(event)">
         <div class="field">
           <label>Username</label>
-          <input id="lUser" autocomplete="username" placeholder="superadmin" required>
+          <input id="lUser" autocomplete="username" placeholder="Masukkan username" required>
         </div>
         <div class="field">
           <label>Password</label>
@@ -45,15 +57,14 @@
         <button class="btn btn-primary btn-block" id="loginBtn" type="submit">Masuk</button>
       </form>
       <div id="loginErr" class="muted" style="color:var(--red);font-size:13px;margin-top:12px;text-align:center"></div>
-      <div class="divider"></div>
-      <div class="muted" style="font-size:12px;text-align:center">Default: superadmin / admin123</div>
+
     </div>
   </div>
 
   <!-- ============ APP ============ -->
   <div id="appView" class="app hidden">
     <header class="topnav" id="topnav">
-      <div class="tn-brand" id="brandBox"><span class="logo">LZ</span><button class="btn-toggle" onclick="toggleSidebar()" title="Sembunyikan/Tampilkan Menu">☰</button></div>
+      <div class="tn-brand" id="brandBox"><button class="tn-brand-id" type="button" onclick="toggleSidebar()" title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu"><span class="logo">LZ</span></button></div>
       <nav class="tn-nav" id="nav"></nav>
       <div class="tn-right">
         <div class="user-chip" onclick="openProfile()" title="Pengaturan User">
@@ -80,6 +91,8 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="/app.js"></script>
+  <!-- defer: dieksekusi berurutan (xlsx → qrcode → app) setelah HTML selesai diparse,
+       jadi parsing halaman tidak diblokir oleh library besar. -->
+  <script src="/app.js" defer></script>
 </body>
 </html>

@@ -464,22 +464,38 @@
       
       var s = d.settings || {};
       
-      // 1. Header Area
+      // 1. Header Area with Verification Search
       var headerHtml = '<div class="pub-header">' +
         '<div class="pub-logo-area">' +
           '<div class="pub-logo">' + esc((s.singkatan || 'LZ').slice(0,2)) + '</div>' +
           '<div>' +
             '<h1 class="pub-title-main">' + esc(s.namaLembaga || 'LAZ Digital') + '</h1>' +
-            '<div class="pub-subtitle">Laporan Transparansi Dana Keuangan Publik</div>' +
+            '<div class="pub-subtitle">Laporan Transparansi Keuangan &amp; Akuntabilitas Publik</div>' +
           '</div>' +
         '</div>' +
-        '<div class="pub-date-badge">Diperbarui: ' + fdate(new Date()) + '</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+          '<div class="pub-date-badge" style="background:rgba(255,255,255,0.25);color:#fff">✅ Terverifikasi &amp; Transparan</div>' +
+          '<div class="pub-date-badge">Diperbarui: ' + fdate(new Date()) + '</div>' +
+        '</div>' +
+        '</div>' +
+        '<div class="pub-card" style="margin-bottom:20px;background:var(--surface);border:1px solid var(--border)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">' +
+            '<div>' +
+              '<div style="font-weight:700;font-size:15px;color:var(--text)">🔍 Cek Keabsahan Kwitansi Digital</div>' +
+              '<div style="font-size:12px;color:var(--text2)">Masukkan nomor kwitansi untuk memverifikasi keaslian bukti pembayaran donasi Anda</div>' +
+            '</div>' +
+            '<form onsubmit="return checkPublicKwitansi(event)" style="display:flex;gap:8px;flex:1;max-width:400px;min-width:240px">' +
+              '<input id="searchKwInput" placeholder="Contoh: KW/202609/0001" style="flex:1;padding:9px 14px;border-radius:8px;border:1px solid var(--border);font-size:13px" required>' +
+              '<button type="submit" style="padding:9px 18px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px">Verifikasi</button>' +
+            '</form>' +
+          '</div>' +
+          '<div id="verifyResult" style="margin-top:12px"></div>' +
         '</div>';
       
-      // 2. KPIs Area
-      var orangCard = '<div class="pub-kpi">' +
+      // 2. KPIs Area (4 cards: Terhimpun, Tersalurkan, Saldo, Donatur/Mustahik)
+      var orangCard = '<div class="pub-kpi" style="border-left:4px solid #8b5cf6">' +
         '<div class="pub-kpi-top">' +
-          '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)">♥</div>' +
+          '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa)">👥</div>' +
           '<div class="pub-kpi-label">Donatur / Mustahik</div>' +
         '</div>' +
         '<div class="pub-split">' +
@@ -495,22 +511,30 @@
         '</div>' +
         '</div>';
 
-      var kpisHtml = '<div class="pub-kpis">' +
-        '<div class="pub-kpi">' +
+      var kpisHtml = '<div class="pub-kpis" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">' +
+        '<div class="pub-kpi" style="border-left:4px solid var(--primary)">' +
           '<div class="pub-kpi-top">' +
             '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#ea6a1e,#f7931e)">↑</div>' +
             '<div class="pub-kpi-label">Total Penghimpunan</div>' +
           '</div>' +
           '<div class="pub-kpi-value" style="color:var(--primary)">' + rp(d.totalHimpun) + '</div>' +
-          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">▲ ' + (d.transaksiHimpun || 0) + ' transaksi</div>' +
+          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">▲ ' + (d.transaksiHimpun || 0) + ' transaksi penerimaan</div>' +
         '</div>' +
-        '<div class="pub-kpi">' +
+        '<div class="pub-kpi" style="border-left:4px solid #3b82f6">' +
           '<div class="pub-kpi-top">' +
             '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#3b82f6,#60a5fa)">↓</div>' +
             '<div class="pub-kpi-label">Total Pentasyarufan</div>' +
           '</div>' +
           '<div class="pub-kpi-value" style="color:#3b82f6">' + rp(d.totalTasyaruf) + '</div>' +
-          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">▼ ' + (d.transaksiTasyaruf || 0) + ' transaksi</div>' +
+          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">▼ ' + (d.transaksiTasyaruf || 0) + ' transaksi penyaluran</div>' +
+        '</div>' +
+        '<div class="pub-kpi" style="border-left:4px solid #10b981">' +
+          '<div class="pub-kpi-top">' +
+            '<div class="pub-kpi-icon" style="background:linear-gradient(135deg,#10b981,#34d399)">⚖️</div>' +
+            '<div class="pub-kpi-label">Saldo Dana Amanah</div>' +
+          '</div>' +
+          '<div class="pub-kpi-value" style="color:#10b981">' + rp(d.saldo || 0) + '</div>' +
+          '<div style="font-size:11.5px;color:var(--text2);margin-top:6px">Dana siap disalurkan</div>' +
         '</div>' +
         orangCard +
         '</div>';
@@ -556,9 +580,70 @@
         '</div>';
         
       // Assemble everything
-      var footerHtml = '<div class="pub-footer">Powered by <b>LAZ Digital</b> • Transparansi Keuangan Terpercaya & Akuntabel</div>';
+      var footerHtml = '<div class="pub-footer">' +
+        '<div style="display:flex;justify-content:center;gap:20px;margin-bottom:12px;font-size:12px;color:var(--text2);flex-wrap:wrap">' +
+          '<span>🏛️ Terdaftar di Kemenag RI</span>' +
+          '<span>🔒 Transparansi Keuangan Realtime</span>' +
+          '<span>📋 Diaudit Syariah &amp; Publik</span>' +
+        '</div>' +
+        'Powered by <b>LAZ Digital</b> • Transparansi Keuangan Terpercaya &amp; Akuntabel' +
+      '</div>';
       
       r.innerHTML = headerHtml + kpisHtml + tnHtml + layananHtml + chartsHtml + programHtml + trendHtml + footerHtml;
+
+      // Auto check if URL has ?kwitansi=...
+      var params = new URLSearchParams(window.location.search);
+      var kwParam = params.get('kwitansi');
+      if (kwParam) {
+        var inp = document.getElementById('searchKwInput');
+        if (inp) inp.value = kwParam;
+        performVerifyKwitansi(kwParam);
+      }
+    }
+
+    function checkPublicKwitansi(ev) {
+      if (ev) ev.preventDefault();
+      var kw = document.getElementById('searchKwInput').value;
+      performVerifyKwitansi(kw);
+      return false;
+    }
+
+    function performVerifyKwitansi(kw) {
+      var target = document.getElementById('verifyResult');
+      if (!target) return;
+      target.innerHTML = '<div style="font-size:13px;color:var(--text2)">Memverifikasi data kwitansi...</div>';
+
+      fetch('/api/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fn: 'apiVerifyKwitansi', args: [kw] })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(json) {
+        var res = json && json.result;
+        if (!res || !res.valid) {
+          target.innerHTML = '<div style="padding:12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:13px;font-weight:600">❌ ' + esc(res ? res.msg : 'Kwitansi tidak ditemukan') + '</div>';
+          return;
+        }
+        var d = res.data;
+        target.innerHTML = '<div style="padding:16px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0;color:#166534">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
+            '<span style="font-weight:800;font-size:14px;color:#15803d;display:flex;align-items:center;gap:6px"><span style="font-size:16px">✓</span> KWITANSI SAH & TERVERIFIKASI</span>' +
+            '<span style="font-size:12px;font-weight:700;background:#dcfce7;padding:4px 10px;border-radius:20px;color:#166534">' + esc(res.lembaga) + '</span>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;font-size:13px;background:#ffffff;padding:12px;border-radius:8px;border:1px solid #dcfce7">' +
+            '<div><span style="color:#64748b;font-size:11.5px">Nomor Kwitansi</span><br><b>' + esc(d.noKwitansi) + '</b></div>' +
+            '<div><span style="color:#64748b;font-size:11.5px">Nama Donatur</span><br><b>' + esc(d.namaDonatur) + '</b></div>' +
+            '<div><span style="color:#64748b;font-size:11.5px">Tanggal Transaksi</span><br><b>' + fdate(d.tanggal) + '</b></div>' +
+            '<div><span style="color:#64748b;font-size:11.5px">Jenis & Pilar</span><br><b>' + esc(d.jenisDana) + ' (' + esc(d.pilar || d.subJenis || '-') + ')</b></div>' +
+            '<div><span style="color:#64748b;font-size:11.5px">Jumlah Nominal</span><br><b style="font-size:15px;color:var(--primary)">' + rp(d.jumlah) + '</b></div>' +
+            '<div><span style="color:#64748b;font-size:11.5px">Metode Pembayaran</span><br><b>' + esc(d.metode) + ' (' + esc(d.statusBayar) + ')</b></div>' +
+          '</div>' +
+        '</div>';
+      })
+      .catch(function(err) {
+        target.innerHTML = '<div style="color:red;font-size:13px">Gagal memverifikasi kwitansi.</div>';
+      });
     }
   </script>
 </body>

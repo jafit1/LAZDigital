@@ -1,8 +1,24 @@
+# Dependensi
 node_modules/
+
+# Vercel
 .vercel/
+
+# Rahasia — JANGAN pernah di-commit
 .env*
+!.env.example
+
+# ⚠️ DATABASE LOKAL — berisi data donatur, alamat, telepon, dan hash password.
+# Repo ini publik; file di bawah ini tidak boleh ikut ter-push.
+data/
+*.db.json
+laz-db-*.json
+
+# Log & sampah
 *.log
 scratch/
 .tempmediaStorage/
 src/_*
 download.js
+.DS_Store
+Thumbs.db

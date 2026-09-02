@@ -101,9 +101,19 @@ function setup(){
   if(readAll(SHEETS.USERS).length===0){
     var allPerm={}; MODULES.forEach(function(m){allPerm[m]={};ACTIONS.forEach(function(a){allPerm[m][a]=true;});});
     var salt=makeId();
-    insertRow(SHEETS.USERS,{id:makeId(),username:'superadmin',passwordHash:hashPassword('admin123',salt),salt:salt,nama:'Super Administrator',role:'superadmin',permissions:JSON.stringify(allPerm),aktif:'true',dibuat:new Date().toISOString()});
+    /* Password admin awal TIDAK ditulis di kode — repositori ini publik.
+       Diambil dari env SETUP_ADMIN_PASSWORD; kalau tidak diset, dibuatkan acak
+       dan ditampilkan sekali pada pesan hasil setup. */
+    var initPw = process.env.SETUP_ADMIN_PASSWORD;
+    if (!initPw) {
+      try { initPw = require('crypto').randomBytes(9).toString('base64').replace(/[^A-Za-z0-9]/g,'').slice(0,12); }
+      catch(e) { initPw = 'ubah-password-ini-' + Date.now(); }
+    }
+    _SETUP_INIT_PW = initPw;
+    insertRow(SHEETS.USERS,{id:makeId(),username:'superadmin',passwordHash:hashPassword(initPw,salt),salt:salt,nama:'Super Administrator',role:'superadmin',permissions:JSON.stringify(allPerm),aktif:'true',dibuat:new Date().toISOString()});
   }
-  return 'Setup selesai. Spreadsheet: '+ss.getUrl()+'\nLogin: superadmin / admin123';
+  return 'Setup selesai. Spreadsheet: '+ss.getUrl()
+    + (_SETUP_INIT_PW ? ('\nLogin: superadmin / '+_SETUP_INIT_PW+'\n(Segera ganti password ini setelah login pertama.)') : '');
 }
 
 function getSS(){ var id=PropertiesService.getScriptProperties().getProperty('SS_ID'); if(!id) throw new Error('Belum di-setup. Jalankan setup() dulu.'); return SpreadsheetApp.openById(id); }
@@ -157,10 +167,27 @@ function setSetting(k,val){ var sh=getSS().getSheetByName(SHEETS.SETTINGS); var 
 function getAllSettings(){ var o={}; readAll(SHEETS.SETTINGS).forEach(function(r){o[r.key]=r.value;}); return o; }
 
 /* ===== KEAMANAN ===== */
-function hashPassword(p,s){ var raw=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s+'::'+p,Utilities.Charset.UTF_8); return raw.map(function(b){return ('0'+(b&0xFF).toString(16)).slice(-2);}).join(''); }
+function legacyHashPassword(p,s){ var raw=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s+'::'+p,Utilities.Charset.UTF_8); return raw.map(function(b){return ('0'+(b&0xFF).toString(16)).slice(-2);}).join(''); }
+function hashPassword(p,s){
+  if (!p) return '';
+  try {
+    return crypto.scryptSync(String(p), String(s || 'salt'), 64).toString('hex');
+  } catch(e) {
+    return legacyHashPassword(p, s);
+  }
+}
 function login(u,p){ var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.length;i++){if(String(us[i].username).toLowerCase()===String(u).toLowerCase()){f=us[i];break;}}
   if(!f) return {ok:false,msg:'Username tidak ditemukan'}; if(String(f.aktif)!=='true') return {ok:false,msg:'Akun dinonaktifkan'};
-  if(hashPassword(p,f.salt)!==f.passwordHash) return {ok:false,msg:'Password salah'};
+  var inputHash = hashPassword(p, f.salt);
+  if (inputHash !== f.passwordHash) {
+    var legacy = legacyHashPassword(p, f.salt);
+    if (legacy === f.passwordHash) {
+      // Auto upgrade hash to scrypt
+      updateRowById(SHEETS.USERS, f.id, { passwordHash: inputHash });
+    } else {
+      return {ok:false,msg:'Password salah'};
+    }
+  }
   var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); audit(f.id,f.username,'login',''); return {ok:true,token:token,user:sanitizeUser(f)}; }
 function logout(t){ deleteRowBy(SHEETS.SESSIONS,'token',t); return {ok:true}; }
 function deleteRowBy(name,col,val){ var sh=getSS().getSheetByName(name); var v=sh.getDataRange().getValues(); var c=v[0].indexOf(col); for(var i=v.length-1;i>=1;i--){if(String(v[i][c])===String(val))sh.deleteRow(i+1);} }
@@ -365,12 +392,13 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
   try {
     layList = readAll(SHEETS.LAYANAN) || [];
     layList.forEach(function(l) {
-      if (l && l.id) layMap[l.id] = (l.tipe ? l.tipe + ' ' : '') + l.nama;
+      if (l && l.id) layMap[l.id] = l;
     });
   } catch (e) {}
 
   var byLayananHimpun = {};
   var byLayananSalur = {};
+  var laySum = { layanan: 0, daerah: 0, layananCount: 0, daerahCount: 0 };
   
   layList.forEach(function(l) {
     if (l && l.nama && String(l.aktif) !== 'false') {
@@ -379,31 +407,19 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
       byLayananSalur[name] = 0;
     }
   });
-  byLayananHimpun['Lazismu Daerah Bantul'] = 0;
-  byLayananSalur['Lazismu Daerah Bantul'] = 0;
+  byLayananHimpun[LAYANAN_DAERAH] = 0;
+  byLayananSalur[LAYANAN_DAERAH] = 0;
   
   H.forEach(function(r) {
     var n = Number(r.jumlah) || 0;
     tH += n;
     byJenis[r.jenisDana || 'Lainnya'] = (byJenis[r.jenisDana || 'Lainnya'] || 0) + n;
     
-    // Grouping KLL/ULL - Fallback to Lazismu Daerah Bantul
-    var layName = 'Lazismu Daerah Bantul';
-    if (r.layananId && layMap[r.layananId]) {
-      layName = layMap[r.layananId];
-    } else if (r.program && (String(r.program).indexOf('KLL ') === 0 || String(r.program).indexOf('KL ') === 0 || String(r.program).indexOf('ULL ') === 0)) {
-      layName = r.program;
-    } else if (r.namaDonatur && (String(r.namaDonatur).indexOf('KLL ') === 0 || String(r.namaDonatur).indexOf('KL ') === 0 || String(r.namaDonatur).indexOf('ULL ') === 0)) {
-      layName = r.namaDonatur;
-    }
-    
-    var matchedLay = layList.find(function(l) {
-      var ln = l.nama.toLowerCase();
-      var lnm = layName.toLowerCase();
-      return lnm.indexOf(ln) >= 0 || ln.indexOf(lnm) >= 0;
-    });
-    var finalKey = matchedLay ? ((matchedLay.tipe ? matchedLay.tipe + ' ' : '') + matchedLay.nama) : 'Lazismu Daerah Bantul';
+    // Rekap KLL/ULL — tunai maupun non tunai; tanpa penanda -> Penghimpunan Daerah
+    var finalKey = resolveLayananName(r, layList, layMap);
     byLayananHimpun[finalKey] = (byLayananHimpun[finalKey] || 0) + n;
+    if (finalKey === LAYANAN_DAERAH) { laySum.daerah += n; laySum.daerahCount++; }
+    else { laySum.layanan += n; laySum.layananCount++; }
     
     // Grouping Fundraising
     var frName = cleanFundraisingName(r.fundraising);
@@ -436,15 +452,8 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     var frNameT = cleanFundraisingName(r.fundraising);
     byFundraising[frNameT] = (byFundraising[frNameT] || 0) + n;
 
-    // Grouping KLL/ULL for Pentasyarufan
-    var nameP = String(r.namaPenerima || '').toLowerCase();
-    var progP = String(r.program || '').toLowerCase();
-    var ketP = String(r.keterangan || '').toLowerCase();
-    var matchedLay = layList.find(function(l) {
-      var ln = l.nama.toLowerCase();
-      return nameP.indexOf(ln) >= 0 || ln.indexOf(nameP) >= 0 || progP.indexOf(ln) >= 0 || ketP.indexOf(ln) >= 0;
-    });
-    var finalKey = matchedLay ? ((matchedLay.tipe ? matchedLay.tipe + ' ' : '') + matchedLay.nama) : 'Lazismu Daerah Bantul';
+    // Rekap KLL/ULL untuk pentasyarufan — aturan pencocokan sama persis
+    var finalKey = resolveLayananName(r, layList, layMap);
     byLayananSalur[finalKey] = (byLayananSalur[finalKey] || 0) + n;
   });
   
@@ -548,6 +557,7 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     byJenis: byJenis,
     byLayananHimpun: byLayananHimpun,
     byLayananSalur: byLayananSalur,
+    layananSummary: laySum,
     byLayanan: byLayananHimpun, // backward compatibility
     byFundraising: byFundraising,
     byAshnaf: byAshnaf,
@@ -622,6 +632,81 @@ function apiDashboard(t, filterMonth, filterPekan, filterHari){ _requirePerm(t,'
 function apiPublicDashboard(t){ if(getSetting('publicEnabled')!=='true') throw new Error('Dashboard publik dinonaktifkan.'); if(t!==getSetting('publicToken')) throw new Error('Token tidak valid.');
   var d=buildDashboard(); d.recentHimpun=d.recentHimpun.map(function(r){return {tanggal:r.tanggal,program:r.program,jenisDana:r.jenisDana,jumlah:r.jumlah};}); d.recentTasyaruf=d.recentTasyaruf.map(function(r){return {tanggal:r.tanggal,program:r.program,ashnaf:r.ashnaf,jumlah:r.jumlah};}); return d; }
 
+/* ===== REKAP KLL / ULL =====
+   Satu sumber kebenaran untuk menentukan sebuah transaksi milik Kantor Layanan
+   (KLL) / Unit Layanan (ULL) mana. Transaksi tanpa penanda apa pun masuk ke
+   penghimpunan tingkat daerah.
+
+   Versi lama mencocokkan dengan `a.indexOf(b)>=0 || b.indexOf(a)>=0` terhadap
+   string fallback 'Lazismu Daerah Bantul'. Akibatnya layanan bernama "Bantul"
+   selalu cocok dengan fallback itu, sehingga transaksi daerah tersedot ke KLL
+   tersebut. Di sisi pentasyarufan lebih parah: `ln.indexOf(nameP)` bernilai 0
+   ketika nama penerima kosong, jadi cocok ke layanan mana pun. */
+var LAYANAN_DAERAH = 'Penghimpunan Daerah';
+
+function _layLabel(l){ return (l && l.tipe ? l.tipe + ' ' : '') + (l ? l.nama : ''); }
+function _norm(x){ return String(x == null ? '' : x).toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+/* Nama layanan harus muncul sebagai kata utuh, bukan potongan kata. */
+function _containsWord(haystack, needle){
+  if (!haystack || !needle) return false;
+  var i = haystack.indexOf(needle);
+  while (i >= 0) {
+    var before = i === 0 ? ' ' : haystack.charAt(i - 1);
+    var after = (i + needle.length >= haystack.length) ? ' ' : haystack.charAt(i + needle.length);
+    if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return true;
+    i = haystack.indexOf(needle, i + 1);
+  }
+  return false;
+}
+
+function resolveLayananName(r, layList, layMap){
+  if (!r) return LAYANAN_DAERAH;
+  layList = layList || [];
+
+  // 1. Referensi eksplisit selalu menang — tidak perlu menebak dari teks.
+  if (r.layananId && layMap && layMap[r.layananId]) return _layLabel(layMap[r.layananId]);
+
+  var texts = [r.namaDonatur, r.namaPenerima, r.program, r.keterangan]
+    .map(_norm).filter(function(x){ return x.length > 0; });
+  if (!texts.length) return LAYANAN_DAERAH;
+  var blob = texts.join(' | ');
+
+  // 2. Penanda eksplisit "KLL <nama>" / "ULL <nama>" / "KL <nama>".
+  var m = blob.match(/\b(kll|ull|kl)\s*[:\-]?\s*([a-z0-9'. ]{3,40})/);
+  if (m) {
+    var after = _norm(m[2]);
+    var hit = null;
+    layList.forEach(function(l){
+      var ln = _norm(l && l.nama);
+      if (!ln || ln.length < 3) return;
+      if (_containsWord(after, ln) || after.indexOf(ln) === 0) {
+        if (!hit || ln.length > _norm(hit.nama).length) hit = l;   // cocokkan yang paling spesifik
+      }
+    });
+    if (hit) return _layLabel(hit);
+  }
+
+  // 2b. Data lama memakai "Lazismu Daerah Bantul" sebagai nama donatur bawaan.
+  //     Itu artinya tingkat daerah — bukan KLL bernama "Bantul".
+  if (/lazismu daerah|daerah bantul|penghimpunan daerah/.test(blob)) return LAYANAN_DAERAH;
+
+  // 3. Nama layanan disebut utuh di salah satu teks (minimal 4 huruf agar
+  //    kata umum yang pendek tidak salah tangkap).
+  var best = null;
+  layList.forEach(function(l){
+    var ln = _norm(l && l.nama);
+    if (!ln || ln.length < 4) return;
+    if (_containsWord(blob, ln)) {
+      if (!best || ln.length > _norm(best.nama).length) best = l;
+    }
+  });
+  if (best) return _layLabel(best);
+
+  // 4. Tidak ada penanda apa pun -> penghimpunan tingkat daerah.
+  return LAYANAN_DAERAH;
+}
+
 /* ===== JURNAL PENERIMAAN ===== */
 function fundGroupOf(jenis,sub){ var j=(jenis||'').toLowerCase(); if(j.indexOf('zakat')>=0)return 'ZAKAT'; if(j.indexOf('amil')>=0)return 'AMIL'; if(j.indexOf('wakaf')>=0)return 'WAKAF'; if(j.indexOf('infak')>=0||j.indexOf('infaq')>=0||j.indexOf('sedekah')>=0||j.indexOf('fidyah')>=0)return 'INFAK'; if(j.indexOf('kurban')>=0)return 'KURBAN'; return 'DSKL'; }
 function titleGroup(g){ var map={ZAKAT:'Zakat',INFAK:'Infak',AMIL:'Amil',WAKAF:'Wakaf',KURBAN:'Kurban',DSKL:'DSKL'}; return map[g]||g; }
@@ -653,7 +738,16 @@ function _getJurnalData(year, month) {
   });
   
   function catTerikat(r){ var s=(r.pilar||r.subJenis||'').replace(/infak/ig,'').replace(/terikat/ig,'').replace(/[-•]/g,' ').trim(); return s||'Umum'; }
-  function donorLabel(r){ if(r.layananId&&layMap[r.layananId]){var l=layMap[r.layananId];return (l.tipe==='ULL'?'ULL ':'KLL ')+l.nama;} return r.namaDonatur||r.namaLayanan||'-'; }
+  var _layList = readAll(SHEETS.LAYANAN) || [];
+  /* Aturan keterangan jurnal: "{jenisDana} {subJenis} {namaDonatur/KLL/ULL} | Fr: {fundraising}".
+     Label donatur memakai nama KLL/ULL bila transaksi memang milik salah satu
+     layanan — termasuk saat penandanya hanya tertulis di keterangan. */
+  function donorLabel(r){
+    if(r.layananId&&layMap[r.layananId]){var l=layMap[r.layananId];return (l.tipe==='ULL'?'ULL ':'KLL ')+l.nama;}
+    var resolved = resolveLayananName(r, _layList, layMap);
+    if (resolved !== LAYANAN_DAERAH) return resolved;
+    return r.namaDonatur||r.namaLayanan||'-';
+  }
   
   function getCleanBankName(r, via) {
     if (via === 'BANK') {
@@ -723,8 +817,13 @@ function _getJurnalData(year, month) {
       debitAcc = (via==='BANK'?'Bank ':'Kas ')+debitBase;
     }
     
+    /* Format baku dipertahankan; catatan bebas hanya DITAMBAHKAN di belakang.
+       Sebelumnya `r.keterangan` menimpa seluruh keterangan, sehingga nama
+       donatur, jenis dana dan petugas fundraising hilang dari jurnal. */
     var ket=(ketPrefix+' '+donorLabel(r)).trim();
-    if (r.keterangan) ket = r.keterangan;
+    var _fr = cleanFundraisingName ? cleanFundraisingName(r.fundraising) : (r.fundraising||'');
+    if (_fr) ket += ' | Fr: ' + _fr;
+    if (r.keterangan) ket += ' — ' + r.keterangan;
     
     var tgl=Utilities.formatDate(new Date(r.tanggal),TZ,'dd/MM/yyyy'); var amt=Number(r.jumlah)||0; var ref=r.noKwitansi||'-';
     secMap[secKey]=secMap[secKey]||{title:secKey,lines:[],subtotal:0};
@@ -2805,7 +2904,15 @@ function apiImportDonaturText(t, text) {
 }
 
 // ====== Node overrides ======
-function hashPassword(p,salt){ return crypto.createHash('sha256').update(String(salt)+'::'+String(p)).digest('hex'); }
+var _SETUP_INIT_PW = '';
+function hashPassword(p,salt){
+  if (!p) return '';
+  try {
+    return crypto.scryptSync(String(p), String(salt || 'salt'), 64).toString('hex');
+  } catch(e) {
+    return crypto.createHash('sha256').update(String(salt)+'::'+String(p)).digest('hex');
+  }
+}
 var REGISTRY={};
 REGISTRY['apiListMutasi']=apiListMutasi;
 REGISTRY['apiSaveMutasiRows']=apiSaveMutasiRows;
@@ -2822,6 +2929,147 @@ REGISTRY['apiDashboard']=apiDashboard;
 REGISTRY['apiGetPublicLinkInfo']=apiGetPublicLinkInfo;
 REGISTRY['apiGeneratePublicLink']=apiGeneratePublicLink;
 REGISTRY['apiDisablePublicLink']=apiDisablePublicLink;
+/* ===== API PUBLIC KWITANSI VERIFICATION ===== */
+function apiVerifyKwitansi(noKwitansi){
+  if(!noKwitansi) return { valid:false, msg:'Nomor kwitansi tidak boleh kosong' };
+  var rows = readAll(SHEETS.PENGHIMPUNAN);
+  var kw = String(noKwitansi).trim().toUpperCase();
+  var found = rows.find(function(r){
+    return String(r.noKwitansi || '').trim().toUpperCase() === kw || String(r.id || '').trim() === kw;
+  });
+  if(!found) return { valid:false, msg:'Nomor Kwitansi "' + noKwitansi + '" tidak ditemukan di database' };
+  
+  var settings = getAllSettings();
+  return {
+    valid: true,
+    data: {
+      noKwitansi: found.noKwitansi,
+      tanggal: found.tanggal,
+      jenisDana: found.jenisDana,
+      subJenis: found.subJenis,
+      pilar: found.pilar,
+      namaDonatur: found.namaDonatur,
+      jumlah: found.jumlah,
+      metode: found.metode,
+      statusBayar: found.statusBayar || 'Lunas',
+      fundraising: found.fundraising || '-'
+    },
+    lembaga: settings.namaLembaga || 'Lazismu Bantul'
+  };
+}
+
+/* ===== API RAPB TARGET & REALISASI ===== */
+function apiGetRAPBData(t, year){
+  if(t) _requirePerm(t, 'dashboard', 'view');
+  year = Number(year) || new Date().getFullYear();
+  
+  var allHimpun = readAll(SHEETS.PENGHIMPUNAN);
+  var allTasyaruf = readAll(SHEETS.PENTASYARUFAN);
+  
+  // Default RAPB targets per pilar if not set
+  var targetHimpun = { Zakat: 500000000, Infak: 350000000, Wakaf: 100000000, Kurban: 200000000, DSKL: 50000000 };
+  var targetPilar = { Pendidikan: 250000000, Kesehatan: 200000000, 'Ekonomi & Pemberdayaan': 150000000, 'Dakwah & Advokasi': 200000000, 'Sosial Kemanusiaan': 200000000 };
+  
+  try {
+    var customT = getSetting('rapb_target_' + year);
+    if(customT) {
+      var parsed = JSON.parse(customT);
+      if(parsed.himpun) targetHimpun = parsed.himpun;
+      if(parsed.pilar) targetPilar = parsed.pilar;
+    }
+  } catch(e){}
+
+  var realisasiHimpun = { Zakat:0, Infak:0, Wakaf:0, Kurban:0, DSKL:0 };
+  var realisasiPilar = { Pendidikan:0, Kesehatan:0, 'Ekonomi & Pemberdayaan':0, 'Dakwah & Advokasi':0, 'Sosial Kemanusiaan':0 };
+
+  allHimpun.forEach(function(r){
+    var d = new Date(r.tanggal || 0);
+    if(d.getFullYear() === year){
+      var j = r.jenisDana || 'Infak';
+      var n = Number(r.jumlah) || 0;
+      if(realisasiHimpun[j] !== undefined) realisasiHimpun[j] += n;
+      else realisasiHimpun.Infak += n;
+      
+      var p = r.pilar || 'Sosial Kemanusiaan';
+      if(realisasiPilar[p] !== undefined) realisasiPilar[p] += n;
+    }
+  });
+
+  return {
+    year: year,
+    targetHimpun: targetHimpun,
+    realisasiHimpun: realisasiHimpun,
+    targetPilar: targetPilar,
+    realisasiPilar: realisasiPilar
+  };
+}
+
+function apiSaveRAPBTarget(t, year, data){
+  _requirePerm(t, 'settings', 'edit');
+  year = Number(year) || new Date().getFullYear();
+  setSetting('rapb_target_' + year, JSON.stringify(data));
+  return { ok: true };
+}
+
+/* ===== API DONATUR CRM 360° ANALYTICS ===== */
+function apiGetDonaturAnalytics(t){
+  _requirePerm(t, 'penghimpunan', 'view');
+  var donaturs = readAll(SHEETS.DONATUR);
+  var himpuns = readAll(SHEETS.PENGHIMPUNAN);
+  
+  var statsMap = {};
+  himpuns.forEach(function(h){
+    var name = String(h.namaDonatur || '').trim();
+    if(!name || name.toLowerCase() === 'hamba allah') return;
+    if(!statsMap[name]){
+      statsMap[name] = { total: 0, count: 0, lastDate: '', phone: h.telepon || '', email: h.email || '' };
+    }
+    statsMap[name].total += Number(h.jumlah) || 0;
+    statsMap[name].count += 1;
+    var dStr = String(h.tanggal || '');
+    if(dStr > statsMap[name].lastDate) statsMap[name].lastDate = dStr;
+  });
+
+  var now = new Date();
+  var result = donaturs.map(function(d){
+    var name = String(d.nama || '').trim();
+    var st = statsMap[name] || { total: 0, count: 0, lastDate: d.dibuat || '', phone: d.telepon || '', email: d.email || '' };
+    
+    var lastD = st.lastDate ? new Date(st.lastDate) : new Date(0);
+    var diffDays = Math.floor((now - lastD) / (1000 * 3600 * 24));
+    
+    var status = 'Aktif';
+    if(st.count === 0) status = 'Baru';
+    else if(diffDays > 180) status = 'Dormant';
+    else if(diffDays > 90) status = 'Pasif';
+    
+    var isVip = st.total >= 5000000;
+    var isRutin = st.count >= 3;
+
+    return {
+      id: d.id,
+      nama: d.nama,
+      kategori: d.kategori || 'Perorangan',
+      telepon: d.telepon || st.phone,
+      email: d.email || st.email,
+      totalDonasi: st.total,
+      jumlahTransaksi: st.count,
+      terakhirDonasi: st.lastDate,
+      hariSebabDonasi: diffDays,
+      status: status,
+      isVip: isVip,
+      isRutin: isRutin
+    };
+  });
+
+  return result;
+}
+
+REGISTRY['setup']=setup;
+REGISTRY['apiVerifyKwitansi']=apiVerifyKwitansi;
+REGISTRY['apiGetRAPBData']=apiGetRAPBData;
+REGISTRY['apiSaveRAPBTarget']=apiSaveRAPBTarget;
+REGISTRY['apiGetDonaturAnalytics']=apiGetDonaturAnalytics;
 REGISTRY['apiListPenghimpunan']=apiListPenghimpunan;
 REGISTRY['apiListRekeningPublic']=apiListRekeningPublic;
 REGISTRY['apiListLayananPublic']=apiListLayananPublic;

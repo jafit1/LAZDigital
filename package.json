@@ -2,7 +2,12 @@
   "name": "laz-digital",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
   "dependencies": {
+    "express": "^4.19.2",
     "xlsx": "^0.18.5"
   }
 }
