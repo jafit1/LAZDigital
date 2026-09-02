@@ -3320,14 +3320,146 @@ function eksekusiHapusRentangTanggal(type) {
   });
 }
 
+/* ================================================================
+   DAFTAR PILIHAN (dropdown) — dipasang di <body>, bukan di dalam kartu
+   ----------------------------------------------------------------
+   Sebelumnya daftar pilihan diletakkan di dalam kartu induknya dengan
+   position:absolute. Kartu Laporan (.lap-panel) memakai overflow:hidden,
+   jadi daftarnya terpotong di tepi kartu — hanya satu dua pilihan yang
+   terlihat dan sulit dipilih. Sekarang daftarnya dipindah ke <body>
+   dengan position:fixed, diikatkan ke tombolnya lewat koordinat layar,
+   sehingga tidak ada pembungkus yang bisa memotongnya. Tingginya juga
+   menyesuaikan ruang yang benar-benar tersedia, dan membuka ke atas
+   bila ruang di bawah sempit.
+   ================================================================ */
+var _POP_DAFTAR = [];
+
+function popUkur(btn, pop){
+  var r = btn.getBoundingClientRect();
+  var vw = window.innerWidth, vh = window.innerHeight;
+  /* Kalender tidak boleh dipotong lalu digulir — bentuknya harus utuh,
+     jadi tingginya dibiarkan apa adanya dan letaknya yang digeser. */
+  var kaku = pop.classList.contains('datepicker-enhanced-popover');
+
+  var lebar = Math.min(Math.max(r.width, kaku ? 268 : 210), vw - 16);
+  var kiri  = Math.min(Math.max(8, r.left), Math.max(8, vw - lebar - 8));
+
+  pop.style.position = 'fixed';
+  pop.style.width = lebar + 'px';
+  pop.style.left = kiri + 'px';
+  pop.style.right = 'auto';
+  pop.style.margin = '0';
+
+  if (kaku){
+    pop.style.setProperty('max-height', 'none', 'important');
+    var perlu = Math.min(pop.offsetHeight || 340, vh - 16);
+    var atas = r.bottom + 6;
+    if (atas + perlu > vh - 8) atas = r.top - 6 - perlu;        // coba buka ke atas
+    if (atas < 8) atas = Math.max(8, vh - perlu - 8);           // masih mepet: rapatkan ke tepi layar
+    pop.style.bottom = 'auto';
+    pop.style.top = atas + 'px';
+    pop.style.transformOrigin = (atas < r.top ? 'bottom left' : 'top left');
+    return;
+  }
+
+  var ruangBawah = vh - r.bottom - 14;
+  var ruangAtas  = r.top - 14;
+  var keAtas = (ruangBawah < 240 && ruangAtas > ruangBawah);
+  var tinggi = Math.max(150, Math.min(420, keAtas ? ruangAtas : ruangBawah));
+
+  pop.style.setProperty('max-height', tinggi + 'px', 'important');
+  if (keAtas){
+    pop.style.top = 'auto';
+    pop.style.bottom = (vh - r.top + 6) + 'px';
+    pop.style.transformOrigin = 'bottom left';
+  } else {
+    pop.style.bottom = 'auto';
+    pop.style.top = (r.bottom + 6) + 'px';
+    pop.style.transformOrigin = 'top left';
+  }
+
+  var cari = pop.querySelector('.dropdown-search');
+  var sec  = pop.querySelector('.dropdown-section');
+  if (sec) sec.style.setProperty('max-height', Math.max(90, tinggi - (cari ? 52 : 10)) + 'px', 'important');
+}
+
+function popTutupSemua(kecuali){
+  document.querySelectorAll('.select-enhanced-popover, .datepicker-enhanced-popover').forEach(function(p){
+    if (p !== kecuali) p.classList.add('hidden');
+  });
+}
+
+function popDaftarkan(btn, pop){
+  var ada = false;
+  _POP_DAFTAR.forEach(function(x){ if (x.pop === pop) ada = true; });
+  if (!ada) _POP_DAFTAR.push({ btn: btn, pop: pop });
+}
+
+function popBuka(btn, pop){
+  if (pop.parentNode !== document.body) document.body.appendChild(pop);
+  popDaftarkan(btn, pop);
+  pop.classList.remove('hidden');
+  popUkur(btn, pop);
+}
+
+/* Buang daftar yatim: tombol pemiliknya sudah hilang dari halaman
+   (mis. panel di-render ulang) supaya tidak menumpuk di <body>. */
+function popBersihkan(){
+  for (var i = _POP_DAFTAR.length - 1; i >= 0; i--){
+    var x = _POP_DAFTAR[i];
+    if (!document.body.contains(x.btn)){
+      if (x.pop.parentNode) x.pop.parentNode.removeChild(x.pop);
+      _POP_DAFTAR.splice(i, 1);
+    }
+  }
+}
+
+(function(){
+  function ikuti(){
+    for (var i = _POP_DAFTAR.length - 1; i >= 0; i--){
+      var x = _POP_DAFTAR[i];
+      if (!document.body.contains(x.btn)) continue;
+      if (!x.pop.classList.contains('hidden')) popUkur(x.btn, x.pop);
+    }
+  }
+  window.addEventListener('scroll', ikuti, true);
+  window.addEventListener('resize', ikuti);
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') popTutupSemua(null);
+  });
+})();
+
+/* Sorot pilihan dengan panah atas/bawah lalu Enter. */
+function popSorot(pop, arah){
+  var items = [].slice.call(pop.querySelectorAll('.dropdown-item')).filter(function(it){ return it.style.display !== 'none'; });
+  if (!items.length) return;
+  var kini = -1;
+  items.forEach(function(it, i){ if (it.classList.contains('sorot')) kini = i; });
+  if (kini < 0) items.forEach(function(it, i){ if (it.classList.contains('active')) kini = i; });
+  var next = kini + arah;
+  if (next < 0) next = items.length - 1;
+  if (next >= items.length) next = 0;
+  items.forEach(function(it){ it.classList.remove('sorot'); });
+  items[next].classList.add('sorot');
+  items[next].scrollIntoView({ block: 'nearest' });
+}
+function popPilihSorotan(pop){
+  var it = pop.querySelector('.dropdown-item.sorot') ||
+           [].slice.call(pop.querySelectorAll('.dropdown-item')).filter(function(x){ return x.style.display !== 'none'; })[0];
+  if (it) it.click();
+}
+
 function enhanceSelects(containerId) {
   var parent = containerId ? (typeof containerId === 'string' ? el(containerId) : containerId) : document;
   if (!parent) return;
-  
+
+  popBersihkan();
+
   var wrappers = parent.querySelectorAll('.select-enhanced');
   wrappers.forEach(function(w) {
     var sel = w.nextSibling;
     if (!sel || sel.tagName !== 'SELECT') {
+      if (w.__pop && w.__pop.parentNode) w.__pop.parentNode.removeChild(w.__pop);
       w.remove();
     }
   });
@@ -3337,197 +3469,166 @@ function enhanceSelects(containerId) {
     if (sel.id === 'f_rekeningId' && sel.options.length <= 1 && sel.options[0] && sel.options[0].value === '') {
       return;
     }
-    
+
     var prev = sel.previousSibling;
     if (prev && prev.classList && prev.classList.contains('select-enhanced')) {
-      var popItems = prev.querySelectorAll('.dropdown-item');
-      if (popItems.length === sel.options.length) {
+      var popLama = prev.__pop;
+      var popItems = popLama ? popLama.querySelectorAll('.dropdown-item') : [];
+      if (popLama && popItems.length === sel.options.length) {
+        /* isi masih sama — cukup segarkan label & tanda pilihan */
         var btnText = prev.querySelector('.select-enhanced-btn span');
         if (btnText && sel.options[sel.selectedIndex]) {
           btnText.textContent = sel.options[sel.selectedIndex].textContent;
         }
         popItems.forEach(function(item, idx) {
-          if (sel.selectedIndex === idx) {
-            item.classList.add('active');
-            item.style.background = 'var(--accent-soft)';
-            item.style.color = 'var(--accent-d)';
-          } else {
-            item.classList.remove('active');
-            item.style.background = '';
-            item.style.color = '';
-          }
+          item.classList.toggle('active', sel.selectedIndex === idx);
+          item.classList.remove('sorot');
         });
         return;
-      } else {
-        prev.remove();
       }
+      if (popLama && popLama.parentNode) popLama.parentNode.removeChild(popLama);
+      prev.remove();
     }
-    
+
     sel.style.display = 'none';
-    
+
     var container = document.createElement('div');
     container.className = 'custom-dropdown select-enhanced';
-    container.style.width = '100%';
-    
+
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn-dropdown select-enhanced-btn';
-    btn.style.width = '100%';
-    btn.style.justifyContent = 'space-between';
-    
-    btn.style.background = 'var(--surface)';
-    btn.style.border = '1px solid var(--border)';
-    btn.style.color = 'var(--text)';
-    btn.style.padding = '10px 12px';
-    btn.style.borderRadius = '10px';
-    btn.style.fontSize = '14px';
-    btn.style.fontWeight = '500';
-    btn.style.minWidth = '0';
-    
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+
     var btnText = document.createElement('span');
+    btnText.className = 'sel-teks';
     btnText.textContent = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '- pilih -';
     btn.appendChild(btnText);
-    
+
     var chevron = document.createElement('span');
-    chevron.innerHTML = '▼';
-    chevron.style.fontSize = '8px';
-    chevron.style.opacity = '0.6';
+    chevron.className = 'sel-chev';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
     btn.appendChild(chevron);
-    
+
     var popover = document.createElement('div');
-    popover.className = 'dropdown-popover select-enhanced-popover hidden';
-    popover.style.width = '100%';
-    popover.style.left = '0';
-    popover.style.right = 'auto';
-    popover.style.boxSizing = 'border-box';
-    popover.style.maxHeight = '280px';
-    popover.style.overflowY = 'auto';
-    popover.style.display = 'flex';
-    popover.style.flexDirection = 'column';
-    
-    // Add Search Input if length > 5 or f_rekeningId
+    popover.className = 'dropdown-popover select-enhanced-popover sel-pop hidden';
+    popover.setAttribute('role', 'listbox');
+
     var searchInput = null;
-    if (sel.options.length > 5 || sel.id === 'f_rekeningId') {
+    if (sel.options.length > 6 || sel.id === 'f_rekeningId') {
       var searchDiv = document.createElement('div');
-      searchDiv.style.padding = '6px 8px';
-      searchDiv.style.borderBottom = '1px solid var(--border)';
-      searchDiv.style.position = 'sticky';
-      searchDiv.style.top = '0';
-      searchDiv.style.background = 'var(--surface)';
-      searchDiv.style.zIndex = '10';
-      
+      searchDiv.className = 'dropdown-search';
       searchInput = document.createElement('input');
       searchInput.type = 'text';
-      searchInput.placeholder = 'Cari...';
+      searchInput.placeholder = 'Cari…';
       searchInput.className = 'dropdown-search-input';
-      searchInput.style.fontSize = '12.5px';
-      searchInput.style.padding = '6px 10px';
-      searchInput.style.borderRadius = '6px';
-      searchInput.style.border = '1px solid var(--border)';
-      searchInput.style.width = '100%';
-      searchInput.style.boxSizing = 'border-box';
-      
-      searchInput.addEventListener('click', function(e) {
-        e.stopPropagation();
-      });
-      
+      searchInput.addEventListener('click', function(e) { e.stopPropagation(); });
       searchDiv.appendChild(searchInput);
       popover.appendChild(searchDiv);
     }
-    
+
     var section = document.createElement('div');
     section.className = 'dropdown-section';
-    section.style.overflowY = 'auto';
-    section.style.flex = '1';
-    
+
     for (var i = 0; i < sel.options.length; i++) {
       var opt = sel.options[i];
       var item = document.createElement('div');
-      item.className = 'dropdown-item';
+      item.className = 'dropdown-item' + (sel.selectedIndex === i ? ' active' : '');
+      item.setAttribute('role', 'option');
       item.textContent = opt.textContent;
       item.setAttribute('data-value', opt.value);
-      if (sel.selectedIndex === i) {
-        item.classList.add('active');
-        item.style.background = 'var(--accent-soft)';
-        item.style.color = 'var(--accent-d)';
-      }
-      
-      item.addEventListener('click', (function(oIdx, val, text) {
+
+      item.addEventListener('click', (function(oIdx, text) {
         return function(e) {
           e.stopPropagation();
           sel.selectedIndex = oIdx;
           btnText.textContent = text;
-          
           var evt = document.createEvent('HTMLEvents');
           evt.initEvent('change', true, true);
           sel.dispatchEvent(evt);
           if (sel.onchange) sel.onchange();
-          
           popover.classList.add('hidden');
-          enhanceSelects(containerId);
+          btn.setAttribute('aria-expanded', 'false');
+          section.querySelectorAll('.dropdown-item').forEach(function(x, k){
+            x.classList.toggle('active', k === oIdx);
+            x.classList.remove('sorot');
+          });
         };
-      })(i, opt.value, opt.textContent));
-      
+      })(i, opt.textContent));
+
       section.appendChild(item);
     }
-    
+
     if (searchInput) {
       searchInput.addEventListener('input', function(e) {
-        var query = e.target.value.toLowerCase();
-        var items = section.querySelectorAll('.dropdown-item');
-        items.forEach(function(item) {
-          var text = item.textContent.toLowerCase();
-          if (text.indexOf(query) >= 0) {
-            item.style.display = '';
-          } else {
-            item.style.display = 'none';
-          }
+        var q = e.target.value.toLowerCase().trim();
+        var terlihat = 0;
+        section.querySelectorAll('.dropdown-item').forEach(function(item) {
+          var cocok = item.textContent.toLowerCase().indexOf(q) >= 0;
+          item.style.display = cocok ? '' : 'none';
+          item.classList.remove('sorot');
+          if (cocok) terlihat++;
         });
+        var kosong = popover.querySelector('.dropdown-kosong');
+        if (!terlihat) {
+          if (!kosong) {
+            kosong = document.createElement('div');
+            kosong.className = 'dropdown-kosong';
+            kosong.textContent = 'Tidak ada yang cocok';
+            section.appendChild(kosong);
+          }
+          kosong.style.display = '';
+        } else if (kosong) { kosong.style.display = 'none'; }
+      });
+      searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); popSorot(popover, 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); popSorot(popover, -1); }
+        else if (e.key === 'Enter') { e.preventDefault(); popPilihSorotan(popover); }
       });
     }
-    
+
     popover.appendChild(section);
     container.appendChild(btn);
-    container.appendChild(popover);
-    
+    container.__pop = popover;
+
     sel.parentNode.insertBefore(container, sel);
-    
+
+    btn.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (popover.classList.contains('hidden')) btn.click();
+        else popSorot(popover, e.key === 'ArrowDown' ? 1 : -1);
+      } else if (e.key === 'Enter' && !popover.classList.contains('hidden')) {
+        e.preventDefault(); popPilihSorotan(popover);
+      }
+    });
+
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
-      var isHidden = popover.classList.contains('hidden');
-      document.querySelectorAll('.select-enhanced-popover, .datepicker-enhanced-popover').forEach(function(p) {
-        if (p !== popover) p.classList.add('hidden');
-      });
-      if (isHidden) {
-        var rect = btn.getBoundingClientRect();
-        var spaceBelow = window.innerHeight - rect.bottom;
-        var spaceAbove = rect.top;
-        
-        if (spaceBelow < 240 && spaceAbove > spaceBelow) {
-          popover.style.top = 'auto';
-          popover.style.bottom = '100%';
-          popover.style.marginTop = '0';
-          popover.style.marginBottom = '6px';
-          popover.style.transformOrigin = 'bottom left';
-        } else {
-          popover.style.top = '100%';
-          popover.style.bottom = 'auto';
-          popover.style.marginTop = '6px';
-          popover.style.marginBottom = '0';
-          popover.style.transformOrigin = 'top left';
-        }
-
-        popover.classList.remove('hidden');
-        if (searchInput) {
-          setTimeout(function() {
-            searchInput.value = '';
-            var items = section.querySelectorAll('.dropdown-item');
-            items.forEach(function(item) { item.style.display = ''; });
-            searchInput.focus();
-          }, 50);
-        }
-      } else {
+      var tertutup = popover.classList.contains('hidden');
+      popTutupSemua(popover);
+      if (!tertutup) {
         popover.classList.add('hidden');
+        btn.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      popBuka(btn, popover);
+      btn.setAttribute('aria-expanded', 'true');
+      section.querySelectorAll('.dropdown-item').forEach(function(x){
+        x.classList.remove('sorot');
+        x.style.display = '';
+      });
+      var kosong = popover.querySelector('.dropdown-kosong');
+      if (kosong) kosong.style.display = 'none';
+      /* pilihan yang sedang aktif ditaruh di tengah daftar supaya jelas
+         masih ada pilihan di atas maupun di bawahnya */
+      var aktif = section.querySelector('.dropdown-item.active');
+      if (aktif) aktif.scrollIntoView({ block: 'center' });
+      if (searchInput) {
+        searchInput.value = '';
+        setTimeout(function(){ searchInput.focus(); }, 30);
       }
     });
   });
@@ -3779,6 +3880,7 @@ function enhanceDatePickers(containerId) {
   wrappers.forEach(function(w) {
     var inp = w.nextSibling;
     if (!inp || inp.tagName !== 'INPUT' || inp.type !== 'date') {
+      if (w.__pop && w.__pop.parentNode) w.__pop.parentNode.removeChild(w.__pop);
       w.remove();
     }
   });
@@ -3798,6 +3900,7 @@ function enhanceDatePickers(containerId) {
     
     var container = document.createElement('div');
     container.className = 'custom-dropdown datepicker-enhanced';
+    container.__pop = null;
     container.style.width = '100%';
     
     var btn = document.createElement('button');
@@ -3836,10 +3939,10 @@ function enhanceDatePickers(containerId) {
     popover.style.border = '1px solid var(--border)';
     
     container.appendChild(btn);
-    container.appendChild(popover);
-    
+    container.__pop = popover;
+
     inp.parentNode.insertBefore(container, inp);
-    
+
     var currentViewDate = inp.value ? new Date(inp.value) : new Date();
     
     btn.addEventListener('click', function(e) {
@@ -3849,7 +3952,7 @@ function enhanceDatePickers(containerId) {
         p.classList.add('hidden');
       });
       if (isHidden) {
-        popover.classList.remove('hidden');
+        popBuka(btn, popover);   /* kalender ikut dipasang di <body> agar tidak terpotong kartu */
         renderCalendarGrid(popover, inp.value, currentViewDate, function(selectedDateStr) {
           inp.value = selectedDateStr;
           btnText.textContent = formatIndoDate(selectedDateStr);
@@ -3861,20 +3964,29 @@ function enhanceDatePickers(containerId) {
           
           popover.classList.add('hidden');
         });
+        /* Tinggi kalender baru diketahui setelah gridnya digambar, dan berubah
+           lagi saat ganti bulan (5 atau 6 baris), jadi letaknya dihitung ulang
+           supaya kotaknya selalu utuh di layar. */
+        popUkur(btn, popover);
+        if (!popover.__ukurTerpasang) {
+          popover.__ukurTerpasang = true;
+          popover.addEventListener('click', function(){
+            setTimeout(function(){
+              if (!popover.classList.contains('hidden')) popUkur(btn, popover);
+            }, 0);
+          });
+        }
       }
     });
   });
 }
 
-// Click outside to close custom dropdowns and datepickers
+/* Klik di luar menutup daftar. Daftar sekarang berada di <body>, jadi
+   pengecekan tidak bisa lagi lewat .closest('.custom-dropdown') dari
+   popovernya — yang diperiksa adalah letak klik itu sendiri. */
 document.addEventListener('click', function(e) {
-  var openPopovers = document.querySelectorAll('.select-enhanced-popover:not(.hidden), .datepicker-enhanced-popover:not(.hidden)');
-  openPopovers.forEach(function(pop) {
-    var dropdown = pop.closest('.custom-dropdown');
-    if (!dropdown || !dropdown.contains(e.target)) {
-      pop.classList.add('hidden');
-    }
-  });
+  if (e.target.closest && e.target.closest('.select-enhanced-popover, .datepicker-enhanced-popover, .custom-dropdown')) return;
+  popTutupSemua(null);
 });
 
 /* ============ MUTASI BANK ============ */

@@ -2921,3 +2921,119 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
   white-space:nowrap;
   letter-spacing:.2px;
 }
+
+/* ================================================================
+   36. DAFTAR PILIHAN (DROPDOWN) — DIPASANG DI <body>
+   Daftar pilihan tidak lagi berada di dalam kartu, sehingga tidak bisa
+   terpotong oleh .lap-panel / .card yang memakai overflow:hidden.
+   Blok ini menata tombol pemicunya, kotak daftarnya, kotak cari,
+   dan penanda baris terpilih.
+   ================================================================ */
+
+/* --- tombol pemicu --- */
+.custom-dropdown{position:relative;width:100%}
+.btn-dropdown.select-enhanced-btn,
+.btn-dropdown.datepicker-enhanced-btn{
+  width:100%;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:9px 12px;
+  border-radius:11px;
+  font-size:13.5px;font-weight:500;
+  text-align:left;
+  min-width:0;
+  box-shadow:0 1px 2px rgba(0,0,0,.02);
+}
+.btn-dropdown.select-enhanced-btn:hover,
+.btn-dropdown.datepicker-enhanced-btn:hover{border-color:rgba(var(--accent-rgb),.45)}
+.btn-dropdown.select-enhanced-btn[aria-expanded="true"]{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(var(--accent-rgb),.14);
+}
+.select-enhanced-btn .sel-teks{
+  flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.select-enhanced-btn .sel-chev{
+  flex:none;display:flex;align-items:center;opacity:.5;
+  transition:transform .18s ease,opacity .18s ease;
+}
+.select-enhanced-btn[aria-expanded="true"] .sel-chev{transform:rotate(180deg);opacity:.9}
+
+/* --- kotak daftar --- */
+.sel-pop,.datepicker-enhanced-popover{
+  position:fixed !important;
+  z-index:100000 !important;
+  padding:6px !important;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  animation:selPopMasuk .13s ease-out;
+}
+@keyframes selPopMasuk{from{opacity:0;transform:translateY(-4px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sel-pop,.datepicker-enhanced-popover{animation:none}}
+
+.sel-pop .dropdown-section{
+  display:flex;flex-direction:column;gap:1px;
+  overflow-y:auto;overscroll-behavior:contain;
+}
+
+/* --- baris pilihan --- */
+.sel-pop .dropdown-item{
+  position:relative;
+  padding:9px 12px 9px 30px;
+  font-size:13.5px;font-weight:500;
+  line-height:1.35;
+  border-radius:9px;
+  white-space:normal;
+  color:var(--text);
+}
+.sel-pop .dropdown-item:hover{background:var(--surface2);color:var(--text)}
+.sel-pop .dropdown-item.sorot{background:rgba(var(--accent-rgb),.10);color:var(--accent-d)}
+.sel-pop .dropdown-item.active{
+  background:rgba(var(--accent-rgb),.13);
+  color:var(--accent-d);
+  font-weight:650;
+}
+/* centang untuk yang sedang terpilih */
+.sel-pop .dropdown-item.active::before{
+  content:'';position:absolute;left:11px;top:50%;
+  width:5px;height:9px;margin-top:-6px;
+  border:solid currentColor;border-width:0 2px 2px 0;
+  transform:rotate(43deg);
+}
+
+/* --- kotak cari --- */
+.sel-pop .dropdown-search{
+  position:sticky;top:0;z-index:2;
+  padding:2px 2px 7px;margin-bottom:3px;
+  background:var(--glass-strong,var(--surface));
+  border-bottom:1px solid var(--border2);
+}
+.sel-pop .dropdown-search-input{
+  width:100%;box-sizing:border-box;
+  font-size:12.5px;padding:7px 11px;
+  border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);
+}
+.sel-pop .dropdown-kosong{
+  padding:14px 12px;text-align:center;
+  font-size:12.5px;color:var(--muted);
+}
+
+/* --- batang gulir ramping --- */
+.sel-pop,.sel-pop .dropdown-section{scrollbar-width:thin;scrollbar-color:rgba(var(--accent-rgb),.35) transparent}
+.sel-pop::-webkit-scrollbar,.sel-pop .dropdown-section::-webkit-scrollbar{width:8px}
+.sel-pop::-webkit-scrollbar-thumb,.sel-pop .dropdown-section::-webkit-scrollbar-thumb{
+  background:rgba(var(--accent-rgb),.32);border-radius:8px;border:2px solid transparent;background-clip:content-box;
+}
+.sel-pop::-webkit-scrollbar-thumb:hover,.sel-pop .dropdown-section::-webkit-scrollbar-thumb:hover{background:rgba(var(--accent-rgb),.55);background-clip:content-box}
+
+html[data-theme="dark"] .sel-pop .dropdown-item:hover{background:rgba(255,255,255,.06)}
+html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,#241f1e)}
+
+/* di layar sempit daftar boleh selebar layar dikurangi tepi */
+@media(max-width:520px){
+  .sel-pop .dropdown-item{padding-top:11px;padding-bottom:11px;font-size:14px}
+}
