@@ -2858,3 +2858,52 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 }
 .salam-tag:hover{background:var(--accent);border-color:transparent;color:#fff}
 .salam-hint{font-size:11px;color:var(--muted);margin-left:2px}
+
+/* ---------- 33. IMPOR: UNGGAH FILE & CATATAN BUKU KAS ---------- */
+.imp-drop-t{font-family:var(--head);font-size:14px;font-weight:700;color:var(--text)}
+.imp-drop-d{font-size:11.5px;color:var(--muted);margin-top:4px}
+.imp-file-info{font-size:12.5px;margin-top:10px;min-height:18px}
+.imp-note{
+  background:var(--accent-soft);border:1px solid var(--accent-soft2);
+  border-radius:12px;padding:10px 13px;font-size:12px;line-height:1.5;
+  color:var(--text2);margin-bottom:10px;
+}
+.imp-note b{color:var(--accent-d)}
+
+/* ================================================================
+   34. MODAL IMPOR — UKURAN TETAP
+   Sebelumnya tiap tab punya tinggi isi berbeda (unggah file pendek,
+   tempel teks tinggi, pratinjau lebih tinggi lagi), sehingga kotaknya
+   melompat-lompat tiap kali berpindah. Sekarang lebar dan tinggi area
+   isinya dikunci; yang bergulir cukup isinya saja.
+   ================================================================ */
+.modal.import-modal{max-width:860px !important;width:100%}
+.modal.import-modal .modal-body{
+  /* tinggi dipatok, bukan min/max — supaya benar-benar tidak bergeser
+     sedikit pun ketika isi tiap tab berbeda tingginya */
+  height:min(66vh,540px);
+  min-height:min(66vh,540px);
+  max-height:min(66vh,540px);
+  overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+/* tiap tab mendapat ruang minimum yang sama */
+.modal.import-modal #group_import_file,
+.modal.import-modal #group_import_text,
+.modal.import-modal #group_import_link{min-height:150px}
+.modal.import-modal #import_text{
+  width:100%;box-sizing:border-box;resize:vertical;min-height:120px;max-height:220px;
+}
+.modal.import-modal #importPreview{
+  flex:1;min-height:150px;margin-top:14px;
+  overflow-y:auto;
+}
+.modal.import-modal .upload-box{padding:26px 18px}
+.modal.import-modal .modal-foot{flex-wrap:wrap;gap:8px}
+@media(max-width:900px){
+  .modal.import-modal{max-width:calc(100% - 20px) !important}
+  .modal.import-modal .modal-body{height:70vh;min-height:70vh;max-height:70vh}
+}
+@media(max-height:640px){
+  .modal.import-modal .modal-body{height:62vh;min-height:62vh;max-height:62vh}
+}

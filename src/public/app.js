@@ -190,7 +190,7 @@ function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAl
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
 function closeModal(){
   el('modalBg').classList.remove('show');
-  var mc=el('modalCard'); if(mc) mc.classList.remove('form-modal');
+  var mc=el('modalCard'); if(mc) mc.classList.remove('form-modal','import-modal');
 }
 el('modalBg').addEventListener('click',function(e){if(e.target===el('modalBg'))closeModal();});
 
@@ -2885,11 +2885,20 @@ function openImportModal(type) {
     });
   }
   
-  var b = '<div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px">' +
-    '<button class="tab-btn active" id="tab_import_link" onclick="setImportTab(\'link\')">🔗 Link Spreadsheet / Excel</button>' +
-    '<button class="tab-btn" id="tab_import_text" onclick="setImportTab(\'text\')">📋 Copy-Paste Teks</button>' +
+  var b = '<div class="lap-tabs" style="margin-bottom:14px">' +
+    '<button class="lap-tab on" id="tab_import_file" onclick="setImportTab(\'file\')">Unggah File</button>' +
+    '<button class="lap-tab" id="tab_import_text" onclick="setImportTab(\'text\')">Tempel Teks</button>' +
+    '<button class="lap-tab" id="tab_import_link" onclick="setImportTab(\'link\')">Link Spreadsheet</button>' +
     '</div>' +
-    '<div id="group_import_link">' +
+    '<div id="group_import_file">' +
+    '<div class="upload-box" onclick="el(\'import_file\').click()" id="importDrop">' +
+    '<div class="imp-drop-t">Pilih file Excel atau CSV</div>' +
+    '<div class="imp-drop-d">Format buku kas: Tanggal &middot; Uraian &middot; Debet &middot; Kredit &middot; Fundraising</div>' +
+    '</div>' +
+    '<input type="file" id="import_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onImportFile(event)">' +
+    '<div id="importFileInfo" class="imp-file-info"></div>' +
+    '</div>' +
+    '<div id="group_import_link" class="hidden">' +
     '<p class="muted" style="margin-bottom:12px;font-size:12.5px">Tempelkan tautan (link) Google Sheets yang dibagikan secara publik (anyone with the link can view) atau URL langsung file Excel (.xlsx).</p>' +
     '<div class="field"><label>Link Spreadsheet / Excel *</label>' +
     '<input id="import_url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing"></div>' +
@@ -2919,45 +2928,75 @@ function openImportModal(type) {
     '<div class="field"><label>Default Nama Fundraising (Opsional)</label>' +
     '<input id="import_default_fundraising" placeholder="Masukkan nama fundraising jika tidak didefinisikan di kolom"></div>' +
     '</div>' +
-    '<div id="importPreview" style="margin-top:14px;max-height:300px;overflow-y:auto"></div>';
+    '<div id="importPreview"></div>';
   
   var f = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>' +
     '<button class="btn btn-ghost" id="importTarikBtn" onclick="tarikImportData()">Tarik & Analisis Data</button>' +
     '<button class="btn btn-primary hidden" id="importSimpanBtn" onclick="simpanImportData()">Simpan Data</button>';
-  
+
   openModal(title, b, f);
+  var mc = el('modalCard');
+  if (mc) mc.classList.add('import-modal');   // ukuran dikunci, tidak ikut berubah saat pindah tab
 }
 
 function setImportTab(tab) {
-  var linkTab = el('tab_import_link');
-  var textTab = el('tab_import_text');
-  var linkGroup = el('group_import_link');
-  var textGroup = el('group_import_text');
-  
-  if (tab === 'link') {
-    linkTab.classList.add('active');
-    textTab.classList.remove('active');
-    linkGroup.classList.remove('hidden');
-    textGroup.classList.add('hidden');
-  } else {
-    linkTab.classList.remove('active');
-    textTab.classList.add('active');
-    linkGroup.classList.add('hidden');
-    textGroup.classList.remove('hidden');
-  }
+  IMPORT_TAB = tab;
+  ['file','text','link'].forEach(function(t){
+    var btn = el('tab_import_' + t), grp = el('group_import_' + t);
+    if (btn) btn.classList.toggle('on', t === tab);
+    if (grp) grp.classList.toggle('hidden', t !== tab);
+  });
   el('importPreview').innerHTML = '';
   el('importSimpanBtn').classList.add('hidden');
 }
+var IMPORT_TAB = 'file';
+var IMPORT_FILE_TSV = '';
+
+/* Baca .xlsx / .xls / .csv di browser lalu ubah jadi TSV berheader,
+   supaya jalur unggah file dan tempel teks memakai parser yang sama. */
+function onImportFile(e){
+  var f = e.target.files && e.target.files[0];
+  if (!f) return;
+  var info = el('importFileInfo');
+  info.innerHTML = '<span class="muted">Membaca ' + esc(f.name) + '…</span>';
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try {
+      var wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', defval: '' });
+      var baris = aoa.filter(function(r){ return r.some(function(c){ return String(c).trim() !== ''; }); })
+                     .map(function(r){ return r.map(function(c){ return String(c == null ? '' : c).trim(); }).join('\t'); });
+      IMPORT_FILE_TSV = baris.join('\n');
+      info.innerHTML = '<b>' + esc(f.name) + '</b> <span class="muted">&middot; ' + (baris.length - 1) + ' baris data'
+        + (wb.SheetNames.length > 1 ? ' &middot; sheet "' + esc(wb.SheetNames[0]) + '"' : '') + '</span>';
+      toast('File terbaca, klik "Tarik & Analisis Data"');
+    } catch (err) {
+      IMPORT_FILE_TSV = '';
+      info.innerHTML = '<span style="color:var(--red)">Gagal membaca file: ' + esc(err.message || err) + '</span>';
+    }
+  };
+  reader.onerror = function(){ info.innerHTML = '<span style="color:var(--red)">Gagal membaca file.</span>'; };
+  reader.readAsArrayBuffer(f);
+}
 
 function tarikImportData() {
-  var isText = el('tab_import_text').classList.contains('active');
+  var isFile = (IMPORT_TAB === 'file');
+  var isText = (IMPORT_TAB === 'text');
   var btn = el('importTarikBtn');
   btn.disabled = true;
   btn.textContent = 'Memproses...';
   el('importPreview').innerHTML = '<div style="text-align:center;padding:20px 0">' + BOXES_SPINNER + '<div class="muted" style="margin-top:10px;font-size:12.5px">Menganalisis data...</div></div>';
   
   var promise;
-  if (isText) {
+  if (isFile) {
+    if (!IMPORT_FILE_TSV) {
+      btn.disabled = false; btn.textContent = 'Tarik & Analisis Data';
+      el('importPreview').innerHTML = '';
+      return toast('Pilih file terlebih dahulu', true);
+    }
+    promise = gas('apiParseImportText')(TOKEN, IMPORT_FILE_TSV, IMPORT_TEMP_TYPE);
+  } else if (isText) {
     var text = el('import_text').value.trim();
     if (!text) {
       btn.disabled = false;
@@ -3048,6 +3087,15 @@ function tarikImportData() {
           'Analisis selesai: <span style="color:var(--green)">' + res.valid.length + ' Baris Valid</span>, ' +
           '<span style="color:var(--red)">' + res.invalid.length + ' Baris Tidak Valid</span> (diabaikan)' +
           '</div>';
+        /* Format buku kas: jelaskan baris apa saja yang sengaja tidak diimpor. */
+        if (res.isBukuKas) {
+          h = '<div class="imp-note">Terbaca sebagai <b>buku kas</b>. '
+            + 'Nominal diambil dari kolom <b>Debet</b>; '
+            + '<b>' + (res.dilewatiSetor || 0) + '</b> baris setor tunai (nominal di kolom Kredit) dilewati'
+            + ((res.dilewatiKosong || 0) ? ', ' + res.dilewatiKosong + ' baris tanpa nominal diabaikan' : '')
+            + '. Fundraising hanya dipakai untuk transaksi tingkat daerah — transaksi KLL/ULL dicatat atas nama layanannya.'
+            + '</div>' + h;
+        }
         
         if (res.valid.length === 0) {
           h += '<div class="muted" style="text-align:center;padding:12px;border:1px dashed var(--border);border-radius:10px">Tidak ada baris valid yang ditemukan. Periksa apakah nama kolom sesuai (Tanggal, Nama, Jumlah, dll.).</div>';

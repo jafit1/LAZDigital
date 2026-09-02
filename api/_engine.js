@@ -2286,6 +2286,186 @@ function parseHeaderlessRows(rawRows, type, listLayanan) {
   return results;
 }
 
+/* ================================================================
+   FORMAT BUKU KAS  (Tanggal | Uraian | ... | Debet | Kredit | Saldo | Fundraising)
+   Aturan yang berlaku baik untuk unggah file maupun tempel teks:
+   - Baris yang nominalnya ada di kolom KREDIT adalah setor tunai ke bank
+     (pemindahan kas, bukan penerimaan baru) -> DILEWATI.
+   - Uraian berbentuk "<Nama atau KLL/ULL> - <Pilar>".
+   - Fundraising hanya berlaku untuk penghimpunan tingkat daerah; transaksi
+     milik KLL/ULL memakai nama layanannya sendiri.
+   ================================================================ */
+var BK_FR_ALIAS = { 'nur y':'Nur Yulianto', 'nury':'Nur Yulianto', 'yulianto':'Nur Yulianto' };
+
+function bkNorm(v){ return String(v == null ? '' : v).toLowerCase().replace(/\s+/g,' ').trim(); }
+function bkAngka(v){
+  if (v == null) return 0;
+  var s = String(v).replace(/[^\d,.-]/g,'').trim();
+  if (!s) return 0;
+  // 1.234.567,89  ->  1234567.89
+  if (s.indexOf(',') >= 0 && s.lastIndexOf(',') > s.lastIndexOf('.')) {
+    s = s.replace(/\./g,'').replace(',', '.');
+  } else {
+    s = s.replace(/,/g,'');
+    if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g,'');
+  }
+  var n = Number(s);
+  return isNaN(n) ? 0 : n;
+}
+function bkKapital(s){
+  return String(s||'').split(' ').map(function(w){
+    return w === w.toLowerCase() ? (w.charAt(0).toUpperCase() + w.slice(1)) : w;
+  }).join(' ').trim();
+}
+function bkFundraising(v){
+  var raw = bkNorm(v);
+  if (!raw) return '';
+  if (BK_FR_ALIAS[raw]) return BK_FR_ALIAS[raw];
+  var kanon = bkKapital(raw);
+  // samakan dengan daftar resmi bila ada yang cocok
+  var opsi = ['Sherli','Renata','Ariya','Nur Yulianto','Muzakki','Lazismu Daerah Bantul'];
+  for (var i = 0; i < opsi.length; i++) {
+    if (bkNorm(opsi[i]) === raw || bkNorm(opsi[i]).indexOf(raw) === 0) return opsi[i];
+  }
+  return kanon;
+}
+
+/* Apakah kumpulan header ini berformat buku kas? */
+function isBukuKasHeader(headers){
+  var h = (headers || []).map(bkNorm);
+  var ada = function(x){ return h.some(function(k){ return k.indexOf(x) >= 0; }); };
+  return ada('uraian') && (ada('debet') || ada('debit')) && ada('kredit');
+}
+
+/* Pilar & jenis dana dari teks kategori setelah tanda "-" */
+function bkKlasifikasi(kategori, namaLengkap){
+  var k = bkNorm(kategori);
+  var semua = bkNorm(namaLengkap + ' ' + kategori);
+  var out = { jenisDana:'Infak', subJenis:'Infak Umum', pilar:'', program: String(kategori||'').trim() };
+
+  if (/zakat/.test(semua)) {
+    out.jenisDana = 'Zakat';
+    if (/fitrah/.test(semua)) out.subJenis = 'Zakat Fitrah';
+    else if (/profesi|penghasilan/.test(semua)) out.subJenis = 'Zakat Profesi/Penghasilan';
+    else if (/perdagangan|dagang/.test(semua)) out.subJenis = 'Zakat Perdagangan';
+    else if (/pertanian/.test(semua)) out.subJenis = 'Zakat Pertanian';
+    else if (/emas|perak/.test(semua)) out.subJenis = 'Zakat Emas & Perak';
+    else out.subJenis = 'Zakat Mal';
+    out.pilar = '';
+    return out;
+  }
+  if (/wakaf/.test(semua)) { out.jenisDana='Wakaf'; out.subJenis='Wakaf'; return out; }
+  if (/fidyah|fidiah/.test(semua)) { out.jenisDana='Fidyah'; out.subJenis='Fidyah'; return out; }
+  if (/\bqurban\b|\bkurban\b/.test(semua)) { out.jenisDana='Kurban'; out.subJenis='Kurban'; return out; }
+  if (/\bamil\b/.test(semua)) { out.jenisDana='DSKL'; out.subJenis='Amil'; return out; }
+
+  if (!k || /infak umum|infaq umum|umum|saldo/.test(k)) { out.subJenis='Infak Umum'; out.pilar=''; return out; }
+
+  var peta = [
+    [/kesehatan|sehat|ambulan|klinik|berobat/, 'Kesehatan'],
+    [/pendidikan|sekolah|beasiswa|pondok|pesantren|sdua|madrasah|guru|santri/, 'Pendidikan'],
+    [/kemanusiaan|bencana|palestin|gempa|banjir|kebakaran/, 'Kemanusiaan'],
+    [/dam\b|kulit|kambing/, 'DAM'],
+    [/filantropis/, 'Pendidikan/Filanatropis'],
+    [/dakwah|sosial|masjid|musholla|mushola|pembangunan|takmir|yatim|dhuafa|lansia/, 'Sosial Dakwah']
+  ];
+  for (var i = 0; i < peta.length; i++) {
+    if (peta[i][0].test(k)) { out.subJenis='Infak Terikat'; out.pilar=peta[i][1]; return out; }
+  }
+  /* Kategori tak dikenal tetap dicatat sebagai terikat dengan pilar Sosial Dakwah
+     (aturan lama), teks aslinya disimpan di program agar tidak hilang. */
+  out.subJenis = 'Infak Terikat';
+  out.pilar = 'Sosial Dakwah';
+  return out;
+}
+
+/* Ubah satu baris buku kas menjadi baris penghimpunan. Mengembalikan null
+   untuk baris yang harus dilewati (setor tunai / tanpa nominal debet). */
+function bkBarisKeHimpun(row, listLayanan, layMap){
+  var n = {};
+  Object.keys(row).forEach(function(k){ n[bkNorm(k).replace(/[^a-z0-9]/g,'')] = row[k]; });
+  var ambil = function(keys){
+    for (var i=0;i<keys.length;i++) if (n[keys[i]] !== undefined && n[keys[i]] !== '') return n[keys[i]];
+    return '';
+  };
+
+  var kredit = bkAngka(ambil(['kredit','credit','keluar']));
+  var debet  = bkAngka(ambil(['debet','debit','masuk']));
+  var uraian = String(ambil(['uraian','keterangan','deskripsi','description']) || '').trim();
+
+  if (kredit > 0) return { skip: 'setor', uraian: uraian, jumlah: kredit };
+  if (!(debet > 0)) return { skip: 'kosong', uraian: uraian, jumlah: 0 };
+  if (!uraian) return { skip: 'kosong', uraian: '', jumlah: debet };
+
+  // pecah "Nama - Kategori" pada tanda hubung PERTAMA
+  var nama = uraian, kategori = '';
+  var m = uraian.match(/^(.*?)\s+-\s+(.*)$/);
+  if (m) { nama = m[1].trim(); kategori = m[2].trim(); }
+
+  // KLL / ULL memakai aturan pencocokan yang sama dengan rekap dashboard
+  var pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(nama) : null;
+  var layananId = '', tipeDonatur = 'Perorangan', namaDonatur = nama, adalahLayanan = false;
+  if (pre) {
+    adalahLayanan = true;
+    var hit = null, cand = bkNorm(pre.nama);
+    (listLayanan || []).forEach(function(l){
+      var ln = bkNorm(l.nama), kd = bkNorm(l.kode);
+      if (kd && kd.length >= 2 && cand === kd) { if (!hit) hit = l; return; }
+      if (ln && ln.length >= 3 && (cand === ln || cand.indexOf(ln) === 0 || ln.indexOf(cand) === 0)) {
+        if (!hit || ln.length > bkNorm(hit.nama).length) hit = l;
+      }
+    });
+    if (hit) {
+      layananId = hit.id;
+      namaDonatur = (hit.tipe ? hit.tipe + ' ' : '') + hit.nama;
+      tipeDonatur = (String(hit.tipe).toUpperCase() === 'ULL') ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)';
+    } else {
+      namaDonatur = pre.tipe + ' ' + pre.nama;
+      tipeDonatur = (pre.tipe === 'ULL') ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)';
+    }
+  }
+
+  var kls = bkKlasifikasi(kategori, nama);
+
+  /* Fundraising hanya untuk transaksi tingkat daerah. Transaksi KLL/ULL
+     dicatat atas nama layanannya, bukan petugas fundraising. */
+  var fr = adalahLayanan ? namaDonatur : bkFundraising(ambil(['fundraising','fr','petugas','amil']));
+
+  return {
+    tanggal: parseImportDate(ambil(['tanggal','tgl','date'])),
+    namaDonatur: namaDonatur,
+    tipeDonatur: tipeDonatur,
+    layananId: layananId,
+    jenisDana: kls.jenisDana,
+    subJenis: kls.subJenis,
+    pilar: kls.pilar,
+    program: kls.program,
+    jumlah: debet,
+    metode: 'Cash/Tunai',
+    statusBayar: 'Lunas',
+    alamat: String(ambil(['alamat']) || ''),
+    telepon: String(ambil(['nohp','hp','telepon','telp','wa']) || ''),
+    email: '',
+    keterangan: uraian,
+    fundraising: fr || 'Lazismu Daerah Bantul',
+    bank: 'Kas'
+  };
+}
+
+/* Proses seluruh tabel buku kas. */
+function parseBukuKas(json, listLayanan){
+  var layMap = {};
+  (listLayanan || []).forEach(function(l){ if (l && l.id) layMap[l.id] = l; });
+  var valid = [], dilewati = { setor: [], kosong: [] };
+  (json || []).forEach(function(row){
+    var r = bkBarisKeHimpun(row, listLayanan, layMap);
+    if (!r) return;
+    if (r.skip) { (dilewati[r.skip] || dilewati.kosong).push(r); return; }
+    valid.push(r);
+  });
+  return { valid: valid, dilewati: dilewati };
+}
+
 async function apiParseImportText(t, text, type) {
   authUser(t);
   if (!text) throw new Error('Teks tidak boleh kosong.');
@@ -2369,6 +2549,23 @@ async function apiParseImportText(t, text, type) {
       };
     }
     
+    // Format buku kas (Tanggal | Uraian | Debet | Kredit | ... | Fundraising)
+    var headersAwal = String(text).split(/\r?\n/)[0].split('\t').map(function(x){ return x.trim(); });
+    if (type === 'himpun' && isBukuKasHeader(headersAwal)) {
+      var bk = parseBukuKas(parseTSV(text), listLayanan);
+      markDuplicates(bk.valid, []);
+      return {
+        success: true,
+        isJurnal: false,
+        isBukuKas: true,
+        valid: bk.valid,
+        invalid: [],
+        dilewatiSetor: bk.dilewati.setor.length,
+        dilewatiKosong: bk.dilewati.kosong.length,
+        totalCount: bk.valid.length
+      };
+    }
+
     // Standard header-based TSV
     var json = parseTSV(text);
     var parsed2 = json.map(function(row) {
