@@ -2449,11 +2449,13 @@ function onDashFilterChange(month, pekan, hari) {
   window.DASH_SELECTED_MONTH = month;
   window.DASH_SELECTED_PEKAN = pekan;
   window.DASH_SELECTED_HARI = hari;
-  
+  /* Memilih bulan / pekan mengesampingkan rentang tanggal, dan sebaliknya. */
+  window.DASH_RENTANG = null;
+
   document.querySelectorAll('.dropdown-popover').forEach(function(p) {
     p.classList.add('hidden');
   });
-  
+
   gas('apiDashboard')(TOKEN, month, pekan, hari).then(function(d){
     CACHE.dash=d;
     renderDashboard(d);
@@ -2640,46 +2642,14 @@ function renderDashboard(d){
     '</div>';
   }
 
-  var dayDropdown = '';
-  if (selectedVal !== 'Semua' && d.selectedPekan !== 'Semua') {
-    var pNum = Number(d.selectedPekan);
-    var startDay = (pNum - 1) * 7 + 1;
-    var endDay = pNum === 5 ? 31 : pNum * 7;
-    
-    var parts = selectedVal.split('-');
-    var yr = Number(parts[0]), mo = Number(parts[1]);
-    var daysInMonth = new Date(yr, mo, 0).getDate();
-    if (endDay > daysInMonth) endDay = daysInMonth;
-    
-    var dayOptions = [{ value: 'Semua', label: 'Semua Hari' }];
-    for (var day = startDay; day <= endDay; day++) {
-      var dStr = ('0' + day).slice(-2);
-      var fullDateStr = selectedVal + '-' + dStr;
-      dayOptions.push({ value: fullDateStr, label: 'Tanggal ' + day });
-    }
-    
-    var selectedHariVal = d.selectedHari || 'Semua';
-    var selectedHariOpt = dayOptions.find(function(o) { return o.value === selectedHariVal; }) || dayOptions[0];
-    
-    dayDropdown = '<div class="custom-dropdown" style="margin-left:4px">' +
-      '<button id="dashHari_trigger" class="btn-dropdown" onclick="toggleCustomDropdown(\'dashHari_popover\')">' +
-        '<span>' + esc(selectedHariOpt.label) + '</span>' +
-        '<svg height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg" style="fill:currentColor"><path d="M4.5 6l3.5 3.5L11.5 6H4.5z"/></svg>' +
-      '</button>' +
-      '<div id="dashHari_popover" class="dropdown-popover hidden">' +
-        '<div class="dropdown-section">' +
-          '<div class="dropdown-header">Pilih Hari</div>';
-          
-    dayOptions.forEach(function(opt) {
-      var isSelected = opt.value === selectedHariVal;
-      dayDropdown += '<div class="dropdown-item" onclick="onDashFilterChange(\'' + esc(selectedVal) + '\',\'' + esc(d.selectedPekan) + '\',\'' + esc(opt.value) + '\')">' +
-        '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelected ? checkIcon : '') + '</span>' +
-        '<span>' + esc(opt.label) + '</span>' +
-      '</div>';
-    });
-    
-    dayDropdown += '</div></div></div>';
-  }
+  /* Pilih tanggal kini memakai kalender rentang: klik tanggal awal lalu akhir.
+     Berdiri sendiri — begitu rentang dipilih, saringan bulan & pekan
+     dikesampingkan (lihat dashSetRentang). Kosong = ikut bulan/pekan. */
+  var _dr = (d.selectedRentang && d.selectedRentang.dari && d.selectedRentang.sampai) ? d.selectedRentang : null;
+  var dayDropdown = '<div class="dash-rt" style="margin-left:4px;width:172px">'
+    + rentangHTML('dash_rt', _dr ? _dr.dari : '', _dr ? _dr.sampai : '',
+        { rapat:true, kosong:'Pilih Tanggal' })
+    + '</div>';
 
   // Clean minimal header replacing heavy orange hero
   var hero='<div class="dh">' +
@@ -2750,6 +2720,13 @@ function renderDashboard(d){
   var hiddenBar=(window.DASH_EDIT&&hidden.length)?'<div class="edit-hint" style="background:rgba(100,116,139,.08);border-color:rgba(100,116,139,.2);color:var(--ink2)">Tersembunyi: '+hidden.map(function(id){return '<button class="cbtn" style="width:auto;padding:0 8px;margin:0 3px" onclick="dashShow(\''+id+'\')">+ '+WIDGETS[id].t+'</button>';}).join('')+'</div>':'';
 
   el('content').innerHTML='<div class="dash-wrap view-anim'+(window.DASH_EDIT?' dash-edit':'')+'">'+hero+kpis+hint+hiddenBar+'<div class="dgrid" id="dgrid">'+cells+'</div></div>';
+  /* Kalender rekap dibangun ulang tiap render, jadi pemilih rentang dipasang lagi. */
+  if (el('dash_rt_btn')){
+    rentangPasang('dash_rt', {
+      dari: _dr ? _dr.dari : '', sampai: _dr ? _dr.sampai : '',
+      bolehKosong: true, kosong: 'Pilih Tanggal', onTerap: dashSetRentang
+    });
+  }
   if(window.DASH_EDIT){wireDashDrag();wireDashResize();}
   else { playAsymmetricalAnimation(); }
 }
