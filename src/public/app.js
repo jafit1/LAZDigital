@@ -5244,11 +5244,19 @@ function ringkasPeramban(ua){
 }
 
 function logBersihkan(){
-  if (!confirm('Hapus seluruh catatan log aktivitas? Tindakan ini tidak bisa dibatalkan.')) return;
-  gas('apiHapusAudit')(TOKEN).then(function(r){
-    toast(r.dihapus + ' catatan dihapus');
-    viewLog();
-  }).catch(handleErr);
+  /* Pakai dialog milik aplikasi, bukan confirm() bawaan peramban — yang
+     bawaan tampil dengan gaya sistem operasi dan menampilkan nama domain. */
+  confirmDialog({
+    title:'Bersihkan Log Aktivitas',
+    message:'Seluruh catatan aktivitas akan dihapus permanen dan tidak bisa dikembalikan.',
+    okText:'Ya, hapus semua', cancelText:'Batal', danger:true, icon:'🗑️'
+  }).then(function(setuju){
+    if (!setuju) return;
+    gas('apiHapusAudit')(TOKEN).then(function(r){
+      toast(r.dihapus + ' catatan dihapus');
+      viewLog();
+    }).catch(handleErr);
+  });
 }
 
 /* ================================================================
@@ -5279,13 +5287,26 @@ function perbaikanPeriksa(){
   host.innerHTML = BOXES_SPINNER;
   el('btnTerapkanPerbaikan').classList.add('hidden');
   gas('apiPerbaikiDataLama')(TOKEN, false).then(function(d){
+    window.__perbaikanPratinjau = d;
     host.innerHTML = perbaikanHTML(d);
     if (d.totalBerubah > 0) el('btnTerapkanPerbaikan').classList.remove('hidden');
   }).catch(function(e){ host.innerHTML=''; handleErr(e); });
 }
 
 function perbaikanTerapkan(){
-  if (!confirm('Terapkan perbaikan pada data yang tampil di pratinjau?')) return;
+  var jml = (window.__perbaikanPratinjau && window.__perbaikanPratinjau.totalBerubah) || 0;
+  confirmDialog({
+    title:'Terapkan Perbaikan?',
+    message: (jml ? '<b>'+jml+' baris</b> akan disesuaikan seperti pada pratinjau. ' : '')
+      + 'Nominal, tanggal, dan nama donatur tidak diubah.',
+    okText:'Terapkan sekarang', cancelText:'Batal', icon:'🛠️'
+  }).then(function(setuju){
+    if (!setuju) return;
+    perbaikanJalankan();
+  });
+}
+
+function perbaikanJalankan(){
   var host = el('perbaikanHasil');
   host.innerHTML = BOXES_SPINNER;
   gas('apiPerbaikiDataLama')(TOKEN, true).then(function(d){
