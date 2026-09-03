@@ -1037,6 +1037,7 @@ function renderLapRekap(mode){
 
 function renderLaporanShell(){
   var tabs=[['himpun','Detail Penghimpunan'],['salur','Detail Pentasyarufan'],
+            ['harian','Cetak Harian'],['a2','Formulir A2'],
             ['jurnal','Jurnal Penerimaan'],['broadcast','Broadcast WhatsApp']];
   var h='<div class="page-head"><div><h2>Laporan</h2><div class="desc">Rekap per kantor layanan, jurnal, dan broadcast</div></div></div>';
   h+='<div class="lap-tabs">'+tabs.map(function(t){
@@ -1046,6 +1047,8 @@ function renderLaporanShell(){
   el('content').innerHTML=h;
   if(LAP_TAB==='himpun')renderLapRekap('himpun');
   else if(LAP_TAB==='salur')renderLapRekap('salur');
+  else if(LAP_TAB==='harian')renderHarianForm();
+  else if(LAP_TAB==='a2')renderA2Form();
   else if(LAP_TAB==='jurnal')renderJurnalForm();
   else renderBroadcastForm();
 }
@@ -1057,6 +1060,8 @@ function setLapTab(t){
   var body=el('lapBody'); if(body){ body.classList.remove('swap-in'); void body.offsetWidth; body.classList.add('swap-in'); }
   if(t==='himpun')renderLapRekap('himpun');
   else if(t==='salur')renderLapRekap('salur');
+  else if(t==='harian')renderHarianForm();
+  else if(t==='a2')renderA2Form();
   else if(t==='jurnal')renderJurnalForm();
   else renderBroadcastForm();
 }
@@ -5348,4 +5353,723 @@ function perbaikanHTML(d){
   h += tabel('Pilar yang dibetulkan', d.pilarUbah, d.pilarUbahTotal, 'Peruntukan');
   h += tabel('Tautan layanan yang dilepas ke Penghimpunan Daerah', d.layananLepas, d.layananLepasTotal, 'Peruntukan');
   return h;
+}
+
+/* ================================================================
+   LAPORAN HARIAN — tampilan & cetak
+   Satu lembar pertanggungjawaban untuk satu tanggal: seluruh
+   penerimaan dan penyaluran hari itu, lengkap dengan rekapitulasi
+   dan kolom tanda tangan.
+   ================================================================ */
+var LH_DATA = null;
+
+function tglIndo(t){
+  try{
+    var d = new Date(String(t).slice(0,10) + 'T00:00:00');
+    return d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  }catch(e){ return t; }
+}
+function jamIndo(){
+  try{ return new Date().toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+
+function renderHarianForm(){
+  var hariIni = today();
+  var form = '<div class="fgrid">'
+    + fld(3,'Tanggal Laporan','<input type="date" id="lh_tanggal" value="'+esc(LH_DATA?LH_DATA.tanggal:hariIni)+'">')
+    + fld(9,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Lembar rekap lengkap ukuran A4: rincian tiap transaksi penerimaan <b>dan</b> penyaluran, rekapitulasi per jenis dana, metode, kantor layanan, ashnaf, dan program, serta kolom tanda tangan. Untuk lembar serah terima kasir yang ringkas, buka tab <b>Formulir A2</b>.</div>')
+    + '</div>';
+  var acts = '<button class="btn" onclick="lhGeser(-1)">&laquo; Hari sebelumnya</button>'
+    + '<button class="btn" onclick="lhGeser(1)">Hari berikutnya &raquo;</button>'
+    + '<button class="btn btn-primary" onclick="loadHarian()">Tampilkan</button>';
+  el('lapBody').innerHTML = lapPanel('Cetak Laporan Harian (Rekap Lengkap)',
+      'Pilih tanggal, lihat rinciannya, lalu cetak atau simpan sebagai PDF ukuran A4.',
+      form, acts)
+    + '<div id="lhPreview" class="lap-result"></div>';
+  if (LH_DATA) renderHarianPreview(LH_DATA);
+}
+
+function lhGeser(hari){
+  var inp = el('lh_tanggal'); if (!inp) return;
+  var d = new Date((inp.value || today()) + 'T00:00:00');
+  d.setDate(d.getDate() + hari);
+  var p2 = function(n){ return ('0'+n).slice(-2); };
+  inp.value = d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+  var btn = document.querySelector('.datepicker-enhanced-btn span');
+  if (btn && typeof formatIndoDate === 'function') btn.textContent = formatIndoDate(inp.value);
+  loadHarian();
+}
+
+function loadHarian(){
+  var tgl = el('lh_tanggal').value;
+  if (!tgl) { toast('Pilih tanggal dulu', true); return; }
+  el('lhPreview').innerHTML = BOXES_SPINNER;
+  gas('apiLaporanHarian')(TOKEN, tgl).then(function(d){
+    LH_DATA = d;
+    renderHarianPreview(d);
+  }).catch(function(e){ el('lhPreview').innerHTML=''; handleErr(e); });
+}
+
+function cetakHarian(){
+  if (!LH_DATA) { toast('Tampilkan datanya dulu', true); return; }
+  printDoc(buildHarianHTML(LH_DATA));
+}
+
+/* ---------------- pratinjau di layar ---------------- */
+
+function lhRekapMini(judul, obj, warna){
+  var keys = Object.keys(obj||{}).filter(function(k){ return (obj[k]||0) > 0; });
+  if (!keys.length) return '';
+  keys.sort(function(a,b){ return obj[b]-obj[a]; });
+  return '<div class="lh-rekap"><div class="lh-rekap-t">'+esc(judul)+'</div>'
+    + keys.map(function(k){
+        return '<div class="lh-rekap-r"><span>'+esc(k)+'</span><b style="color:'+(warna||'var(--text)')+'">'+rp(obj[k])+'</b></div>';
+      }).join('')
+    + '</div>';
+}
+
+function renderHarianPreview(d){
+  var r = d.ringkas;
+  var h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
+    + '<div><h3>Laporan Harian</h3><div class="muted" style="font-size:13px">'+esc(tglIndo(d.tanggal))+'</div></div>'
+    + '<button class="btn btn-primary btn-sm" onclick="cetakHarian()">🖨 Cetak / Simpan PDF</button>'
+    + '</div>';
+
+  h += '<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:16px">'
+    + '<div class="stat"><div class="lbl">Penghimpunan</div><div class="val" style="color:var(--green)">'+rp(r.himpunTotal)+'</div><div class="muted" style="font-size:12px;margin-top:4px">'+r.himpunCount+' transaksi</div></div>'
+    + '<div class="stat"><div class="lbl">Pentasyarufan</div><div class="val" style="color:var(--red)">'+rp(r.salurTotal)+'</div><div class="muted" style="font-size:12px;margin-top:4px">'+r.salurCount+' transaksi</div></div>'
+    + '<div class="stat"><div class="lbl">Selisih Hari Ini</div><div class="val" style="color:'+(r.selisih>=0?'var(--green)':'var(--red)')+'">'+rp(r.selisih)+'</div><div class="muted" style="font-size:12px;margin-top:4px">masuk dikurangi keluar</div></div>'
+    + '</div>';
+
+  if (!d.himpun.length && !d.salur.length) {
+    h += '<div class="empty" style="padding:30px"><div class="big">📄</div>Tidak ada transaksi pada tanggal ini.</div></div>';
+    el('lhPreview').innerHTML = h;
+    return;
+  }
+
+  if (d.himpun.length) {
+    h += '<h4 class="lh-judul">Penghimpunan <span class="muted">('+d.himpun.length+' transaksi)</span></h4>'
+      + '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
+      + '<th>No. Kwitansi</th><th>Donatur</th><th>Rekap</th><th>Jenis Dana</th><th>Metode</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
+      + '</tr></thead><tbody>';
+    d.himpun.forEach(function(x){
+      h += '<tr><td>'+esc(x.noKwitansi)+'</td><td><b>'+esc(x.namaDonatur)+'</b></td>'
+        + '<td class="muted">'+esc(x.layanan)+'</td>'
+        + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')+'</td>'
+        + '<td>'+esc(x.metode)+(x.bank?'<div class="muted" style="font-size:11px">'+esc(x.bank)+'</div>':'')+'</td>'
+        + '<td class="muted">'+esc(x.petugas)+'</td>'
+        + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--green)">'+rp(x.jumlah)+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>'
+      + '<div class="lh-rekap-grid">'
+      + lhRekapMini('Per Jenis Dana', r.perJenis, 'var(--green)')
+      + lhRekapMini('Per Metode', r.perMetode, 'var(--green)')
+      + lhRekapMini('Per Kantor / Unit Layanan', r.perLayanan, 'var(--green)')
+      + lhRekapMini('Per Fundraising', r.perFundraising, 'var(--green)')
+      + '</div>';
+  }
+
+  if (d.salur.length) {
+    h += '<h4 class="lh-judul">Pentasyarufan <span class="muted">('+d.salur.length+' transaksi)</span></h4>'
+      + '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
+      + '<th>No. Bukti</th><th>Penerima</th><th>Ashnaf</th><th>Program</th><th>Sumber</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
+      + '</tr></thead><tbody>';
+    d.salur.forEach(function(x){
+      h += '<tr><td>'+esc(x.noBukti)+'</td><td><b>'+esc(x.namaPenerima)+'</b></td>'
+        + '<td>'+esc(x.ashnaf)+'</td><td class="muted">'+esc(x.program)+'</td>'
+        + '<td>'+esc(x.sumberDana)+'</td><td class="muted">'+esc(x.petugas)+'</td>'
+        + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--red)">'+rp(x.jumlah)+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>'
+      + '<div class="lh-rekap-grid">'
+      + lhRekapMini('Per Ashnaf', r.perAshnaf, 'var(--red)')
+      + lhRekapMini('Per Program', r.perProgram, 'var(--red)')
+      + lhRekapMini('Per Sumber Dana', r.perSumber, 'var(--red)')
+      + '</div>';
+  }
+
+  h += '</div>';
+  el('lhPreview').innerHTML = h;
+}
+
+/* ---------------- dokumen cetak ---------------- */
+
+function lhTabelCetak(judul, kolom, baris, total, warnaTotal){
+  if (!baris.length) {
+    return '<div class="sec"><div class="sec-h">'+judul+'</div>'
+      + '<div class="kosong">Tidak ada transaksi pada bagian ini.</div></div>';
+  }
+  var h = '<div class="sec"><div class="sec-h">'+judul+' <span class="sec-n">'+baris.length+' transaksi</span></div>'
+    + '<table class="tbl"><thead><tr><th class="no">No</th>'
+    + kolom.map(function(k){ return '<th'+(k.kanan?' class="kanan"':'')+(k.lebar?' style="width:'+k.lebar+'"':'')+'>'+k.t+'</th>'; }).join('')
+    + '</tr></thead><tbody>';
+  baris.forEach(function(row, i){
+    h += '<tr><td class="no">'+(i+1)+'</td>'
+      + row.map(function(sel, j){ return '<td'+(kolom[j].kanan?' class="kanan nom"':'')+'>'+sel+'</td>'; }).join('')
+      + '</tr>';
+  });
+  h += '</tbody><tfoot><tr><td colspan="'+kolom.length+'" class="kanan">JUMLAH</td>'
+    + '<td class="kanan nom" style="color:'+warnaTotal+'">'+rpCetak(total)+'</td></tr></tfoot></table></div>';
+  return h;
+}
+
+function rpCetak(n){ return (Number(n)||0).toLocaleString('id-ID'); }
+
+function lhRekapCetak(judul, obj){
+  var keys = Object.keys(obj||{}).filter(function(k){ return (obj[k]||0) > 0; });
+  if (!keys.length) return '';
+  keys.sort(function(a,b){ return obj[b]-obj[a]; });
+  return '<div class="rk"><div class="rk-h">'+esc(judul)+'</div>'
+    + keys.map(function(k){
+        return '<div class="rk-r"><span>'+esc(k)+'</span><b>'+rpCetak(obj[k])+'</b></div>';
+      }).join('')
+    + '</div>';
+}
+
+function buildHarianHTML(d){
+  var s = d.settings || {};
+  var r = d.ringkas;
+  var logo = (s.logoData || s.logoUrl) ? '<img class="logo" src="'+esc(s.logoData||s.logoUrl)+'">' : '';
+  var kontak = [s.alamat, s.telepon, s.email, s.website].filter(Boolean).map(esc).join(' &middot; ');
+
+  var barisHimpun = d.himpun.map(function(x){
+    return [
+      esc(x.noKwitansi),
+      '<b>'+esc(x.namaDonatur)+'</b>' + (x.layanan && x.layanan !== 'Penghimpunan Daerah' ? '<div class="sub">'+esc(x.layanan)+'</div>' : ''),
+      esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : ''),
+      esc(x.metode) + (x.bank ? '<div class="sub">'+esc(x.bank)+'</div>' : ''),
+      esc(x.fundraising||'-'),
+      rpCetak(x.jumlah)
+    ];
+  });
+
+  var barisSalur = d.salur.map(function(x){
+    return [
+      esc(x.noBukti),
+      '<b>'+esc(x.namaPenerima)+'</b>' + (x.bentukBantuan ? '<div class="sub">'+esc(x.bentukBantuan)+'</div>' : ''),
+      esc(x.ashnaf),
+      esc(x.program),
+      esc(x.sumberDana) + (x.metode ? '<div class="sub">'+esc(x.metode)+'</div>' : ''),
+      rpCetak(x.jumlah)
+    ];
+  });
+
+  var isi = ''
+    + '<div class="kop">'
+      + '<div class="kop-kiri">'+logo+'<div>'
+        + '<div class="lembaga">'+esc(s.namaLembaga||'Lembaga Amil Zakat')+'</div>'
+        + (kontak ? '<div class="kontak">'+kontak+'</div>' : '')
+      + '</div></div>'
+      + '<div class="kop-kanan">'
+        + '<div class="judul">LAPORAN HARIAN</div>'
+        + '<div class="judul2">Penghimpunan &amp; Pentasyarufan</div>'
+        + '<div class="tgl">'+esc(tglIndo(d.tanggal))+'</div>'
+      + '</div>'
+    + '</div>'
+
+    + '<div class="ring">'
+      + '<div class="ring-k"><div class="ring-l">Total Penghimpunan</div><div class="ring-v hijau">'+rpCetak(r.himpunTotal)+'</div><div class="ring-s">'+r.himpunCount+' transaksi</div></div>'
+      + '<div class="ring-k"><div class="ring-l">Total Pentasyarufan</div><div class="ring-v merah">'+rpCetak(r.salurTotal)+'</div><div class="ring-s">'+r.salurCount+' transaksi</div></div>'
+      + '<div class="ring-k"><div class="ring-l">Selisih Hari Ini</div><div class="ring-v '+(r.selisih>=0?'hijau':'merah')+'">'+rpCetak(r.selisih)+'</div><div class="ring-s">penerimaan &minus; penyaluran</div></div>'
+    + '</div>'
+
+    + '<div class="terbilang"><span>Terbilang penerimaan:</span> <i>'+esc(terbilang(r.himpunTotal))+' rupiah</i></div>'
+
+    + lhTabelCetak('A. PENGHIMPUNAN',
+        [{t:'No. Kwitansi',lebar:'14%'},{t:'Donatur',lebar:'26%'},{t:'Jenis Dana',lebar:'16%'},
+         {t:'Metode',lebar:'18%'},{t:'Fundraising',lebar:'13%'},{t:'Jumlah (Rp)',kanan:true,lebar:'13%'}],
+        barisHimpun, r.himpunTotal, '#127a4b')
+
+    + (d.himpun.length ? '<div class="rk-grid">'
+        + lhRekapCetak('Rekap per Jenis Dana', r.perJenis)
+        + lhRekapCetak('Rekap per Metode', r.perMetode)
+        + lhRekapCetak('Rekap per Kantor / Unit Layanan', r.perLayanan)
+      + '</div>' : '')
+
+    + lhTabelCetak('B. PENTASYARUFAN',
+        [{t:'No. Bukti',lebar:'14%'},{t:'Penerima',lebar:'26%'},{t:'Ashnaf',lebar:'16%'},
+         {t:'Program',lebar:'18%'},{t:'Sumber Dana',lebar:'13%'},{t:'Jumlah (Rp)',kanan:true,lebar:'13%'}],
+        barisSalur, r.salurTotal, '#b3282d')
+
+    + (d.salur.length ? '<div class="rk-grid">'
+        + lhRekapCetak('Rekap per Ashnaf', r.perAshnaf)
+        + lhRekapCetak('Rekap per Program', r.perProgram)
+        + lhRekapCetak('Rekap per Sumber Dana', r.perSumber)
+      + '</div>' : '')
+
+    + '<div class="ttd">'
+      + '<div class="ttd-k"><div class="ttd-j">Disusun oleh,</div><div class="ttd-sp"></div><div class="ttd-n">Petugas Pencatat</div></div>'
+      + '<div class="ttd-k"><div class="ttd-j">Diperiksa oleh,</div><div class="ttd-sp"></div><div class="ttd-n">Bendahara</div></div>'
+      + '<div class="ttd-k"><div class="ttd-j">Mengetahui,</div><div class="ttd-sp"></div><div class="ttd-n">Pimpinan</div></div>'
+    + '</div>'
+
+    + '<div class="kaki">Dicetak dari '+esc(s.namaLembaga||'LAZ Digital')+' pada '+esc(jamIndo())
+      + ' oleh <b>'+esc((ME&&ME.nama)||'-')+'</b>. Dokumen ini dihasilkan otomatis dari data yang tercatat pada sistem.</div>';
+
+  return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
+    + '<title>Laporan Harian '+esc(d.tanggal)+'</title>'
+    + '<style>'
+    + '@page{size:A4 portrait;margin:14mm 12mm}'
+    + '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:"Segoe UI",Arial,Helvetica,sans-serif;color:#1b1f24;background:#f2f3f5;font-size:10.5pt;line-height:1.45}'
+    + '.lembar{max-width:210mm;margin:14px auto;background:#fff;padding:16mm 14mm;box-shadow:0 2px 18px rgba(0,0,0,.12)}'
+
+    + '.kop{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;'
+      + 'border-bottom:2.5pt solid #1b1f24;padding-bottom:10px;margin-bottom:14px}'
+    + '.kop-kiri{display:flex;gap:11px;align-items:flex-start}'
+    + '.logo{height:46px;width:auto;object-fit:contain}'
+    + '.lembaga{font-size:15pt;font-weight:800;letter-spacing:-.2px;line-height:1.15}'
+    + '.kontak{font-size:8pt;color:#5b6470;margin-top:3px;max-width:78mm;line-height:1.4}'
+    + '.kop-kanan{text-align:right;white-space:nowrap}'
+    + '.judul{font-size:12.5pt;font-weight:800;letter-spacing:1.1px}'
+    + '.judul2{font-size:8.5pt;color:#5b6470;margin-top:1px}'
+    + '.tgl{font-size:9.5pt;font-weight:600;margin-top:5px}'
+
+    + '.ring{display:flex;gap:9px;margin-bottom:11px}'
+    + '.ring-k{flex:1;border:1pt solid #d7dbe0;border-radius:6px;padding:8px 11px;background:#fbfcfd}'
+    + '.ring-l{font-size:8pt;color:#5b6470;font-weight:600;text-transform:uppercase;letter-spacing:.4px}'
+    + '.ring-v{font-size:13.5pt;font-weight:800;margin-top:2px}'
+    + '.ring-s{font-size:7.8pt;color:#7a828c;margin-top:1px}'
+    + '.hijau{color:#127a4b}.merah{color:#b3282d}'
+
+    + '.terbilang{font-size:9pt;color:#3d444d;margin-bottom:14px;padding:6px 11px;'
+      + 'background:#f6f7f9;border-left:2.5pt solid #1b1f24;border-radius:0 5px 5px 0}'
+    + '.terbilang span{color:#7a828c}'
+
+    + '.sec{margin-bottom:14px;break-inside:auto}'
+    + '.sec-h{font-size:10pt;font-weight:800;letter-spacing:.5px;padding:6px 10px;'
+      + 'background:#1b1f24;color:#fff;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}'
+    + '.sec-n{font-weight:500;font-size:8.5pt;opacity:.8}'
+    /* jangan memutus halaman tepat setelah judul bagian */
+    + '.sec-h{break-after:avoid}'
+    + '.kosong{border:1pt solid #d7dbe0;border-top:none;padding:14px;text-align:center;color:#7a828c;font-size:9pt;border-radius:0 0 4px 4px}'
+
+    + 'table.tbl{width:100%;border-collapse:collapse;font-size:8.8pt}'
+    + 'table.tbl th{background:#eef0f3;border:0.6pt solid #c9ced5;padding:5px 6px;text-align:left;'
+      + 'font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.3px}'
+    + 'table.tbl td{border:0.6pt solid #d7dbe0;padding:5px 6px;vertical-align:top}'
+    + 'table.tbl td.no,table.tbl th.no{width:22px;text-align:center;color:#7a828c}'
+    + 'table.tbl .kanan{text-align:right}'
+    + 'table.tbl .nom{font-variant-numeric:tabular-nums;white-space:nowrap}'
+    + 'table.tbl .sub{font-size:7.6pt;color:#7a828c;margin-top:1px}'
+    + 'table.tbl tbody tr:nth-child(even){background:#fafbfc}'
+    + 'table.tbl tfoot td{background:#eef0f3;border:0.6pt solid #c9ced5;padding:6px;font-weight:800;font-size:9.2pt}'
+    + 'table.tbl thead{display:table-header-group;break-after:avoid}'
+    /* tfoot bawaannya diulang di tiap halaman; dijadikan baris biasa agar
+       "JUMLAH" hanya muncul sekali di akhir tabel */
+    + 'table.tbl tfoot{display:table-row-group}'
+    + 'table.tbl tr{break-inside:avoid}'
+
+    + '.rk-grid{display:flex;gap:9px;margin:-4px 0 16px;flex-wrap:wrap}'
+    + '.rk{flex:1;min-width:52mm;border:0.6pt solid #d7dbe0;border-radius:5px;padding:8px 10px;break-inside:avoid}'
+    + '.rk-h{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.35px;color:#5b6470;'
+      + 'border-bottom:0.6pt solid #e6e8ec;padding-bottom:4px;margin-bottom:5px}'
+    + '.rk-r{display:flex;justify-content:space-between;gap:10px;font-size:8.6pt;padding:2px 0}'
+    + '.rk-r span{color:#3d444d}'
+    + '.rk-r b{font-variant-numeric:tabular-nums;white-space:nowrap}'
+
+    + '.ttd{display:flex;justify-content:space-between;gap:14px;margin-top:22px;break-inside:avoid}'
+    + '.ttd-k{flex:1;text-align:center;font-size:9pt}'
+    + '.ttd-j{color:#3d444d}'
+    + '.ttd-sp{height:56px}'
+    + '.ttd-n{border-top:0.8pt solid #1b1f24;padding-top:4px;font-weight:700}'
+
+    + '.kaki{margin-top:18px;padding-top:8px;border-top:0.6pt solid #e6e8ec;'
+      + 'font-size:7.8pt;color:#7a828c;line-height:1.5}'
+
+    + '.bar{text-align:center;margin:16px 0 30px}'
+    + '.bar button{font:inherit;font-weight:700;font-size:10pt;background:#1b1f24;color:#fff;border:none;'
+      + 'padding:10px 24px;border-radius:999px;cursor:pointer}'
+    + '.bar button:hover{background:#000}'
+
+    + '@media print{body{background:#fff}.lembar{margin:0;box-shadow:none;padding:0;max-width:none}.bar{display:none}}'
+    + '</style></head><body>'
+    + '<div class="lembar">'+isi+'</div>'
+    + '<div class="bar"><button onclick="window.print()">🖨 Cetak / Simpan PDF</button></div>'
+    + '</body></html>';
+}
+
+/* ================================================================
+   FORMULIR A2 — LAPORAN PENERIMAAN HARIAN
+   ----------------------------------------------------------------
+   Lembar kasir harian ukuran A5 melintang. Penerimaan dipisah hanya
+   menjadi DONASI CASH dan DONASI BANK; di dalam masing-masing semua
+   digabung per jenis dana — tidak dipecah lagi per KLL, ULL, atau
+   daerah. Kolom denominasi bisa diisi otomatis (pecahan disusun dari
+   total tunai) atau diisi sendiri oleh kasir.
+   ================================================================ */
+var A2_PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000];
+var A2_KOIN    = [1000, 500, 200, 100];
+var A2_MODE    = 'otomatis';
+var A2_MANUAL  = {};        // { 'p100000': 3, 'k500': 4, ... }
+/* Formulir A2 punya datanya sendiri, terpisah dari tab Cetak Harian.
+   Keduanya dokumen yang berbeda: Cetak Harian adalah lembar rekap lengkap
+   (rincian transaksi, rekap per pilar/ashnaf/program, A4), sedangkan A2
+   adalah lembar serah terima kasir yang ringkas (A5, hanya cash vs bank). */
+var A2_DATA    = null;
+
+function a2Kunci(nilai, koin){ return (koin ? 'k' : 'p') + nilai; }
+
+/* Nama jenis dana disamakan dengan istilah pada formulir. */
+function a2Label(jenis){
+  var j = String(jenis || '').toLowerCase();
+  if (j.indexOf('zakat') >= 0) return 'Zakat';
+  if (j.indexOf('infak') >= 0 || j.indexOf('infaq') >= 0 || j.indexOf('sedekah') >= 0) return 'Infak Sedekah';
+  if (j.indexOf('wakaf') >= 0) return 'Wakaf';
+  if (j.indexOf('amil') >= 0) return 'Amil';
+  if (j.indexOf('kurban') >= 0 || j.indexOf('qurban') >= 0) return 'Kurban';
+  if (j.indexOf('fidyah') >= 0) return 'Fidyah';
+  return jenis || 'Lainnya';
+}
+var A2_URUT = ['Zakat', 'Infak Sedekah', 'Wakaf', 'Kurban', 'Fidyah', 'Amil'];
+
+/* Pisahkan penerimaan menjadi tunai dan bank, lalu gabungkan per jenis dana. */
+function a2Kelompok(rows){
+  var tunai = {}, bank = {}, petugasT = {}, petugasB = {};
+  (rows || []).forEach(function(x){
+    var keBank = isTransferMethod(x.metode);
+    var label = a2Label(x.jenisDana);
+    var kotak = keBank ? bank : tunai;
+    var pet = keBank ? petugasB : petugasT;
+    kotak[label] = (kotak[label] || 0) + (Number(x.jumlah) || 0);
+    var nama = String(x.fundraising || x.petugas || '').trim();
+    if (nama) {
+      pet[label] = pet[label] || {};
+      pet[label][nama] = true;
+    }
+  });
+  function jadikan(kotak, pet){
+    return Object.keys(kotak).sort(function(a,b){
+      var ia = A2_URUT.indexOf(a), ib = A2_URUT.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    }).map(function(k){
+      var nama = Object.keys(pet[k] || {});
+      return { label: k, jumlah: kotak[k],
+               petugas: nama.length > 2 ? (nama.slice(0,2).join(', ') + ' +' + (nama.length-2)) : nama.join(', ') };
+    });
+  }
+  var barisT = jadikan(tunai, petugasT), barisB = jadikan(bank, petugasB);
+  var totalT = barisT.reduce(function(a,b){ return a + b.jumlah; }, 0);
+  var totalB = barisB.reduce(function(a,b){ return a + b.jumlah; }, 0);
+  return { tunai: barisT, bank: barisB, totalTunai: totalT, totalBank: totalB, total: totalT + totalB };
+}
+
+/* Susun pecahan dari total tunai, dari yang terbesar. */
+function a2Otomatis(total){
+  var sisa = Math.max(0, Math.round(Number(total) || 0));
+  var hasil = {};
+  A2_PECAHAN.forEach(function(p){ var n = Math.floor(sisa / p); hasil[a2Kunci(p,false)] = n; sisa -= n * p; });
+  A2_KOIN.forEach(function(p){ var n = Math.floor(sisa / p); hasil[a2Kunci(p,true)] = n; sisa -= n * p; });
+  hasil.sisa = sisa;
+  return hasil;
+}
+
+function a2Nilai(){
+  if (A2_MODE === 'otomatis') return a2Otomatis(a2Kelompok(A2_DATA ? A2_DATA.himpun : []).totalTunai);
+  var h = { sisa: 0 };
+  A2_PECAHAN.forEach(function(p){ h[a2Kunci(p,false)] = Number(A2_MANUAL[a2Kunci(p,false)]) || 0; });
+  A2_KOIN.forEach(function(p){ h[a2Kunci(p,true)] = Number(A2_MANUAL[a2Kunci(p,true)]) || 0; });
+  return h;
+}
+
+function a2TotalDenominasi(nilai){
+  var t = 0;
+  A2_PECAHAN.forEach(function(p){ t += (nilai[a2Kunci(p,false)] || 0) * p; });
+  A2_KOIN.forEach(function(p){ t += (nilai[a2Kunci(p,true)] || 0) * p; });
+  return t;
+}
+
+/* ---------------- panel di layar ---------------- */
+
+function a2Panel(){
+  var g = a2Kelompok(A2_DATA ? A2_DATA.himpun : []);
+  var nilai = a2Nilai();
+  var totalDen = a2TotalDenominasi(nilai);
+  var selisih = totalDen - g.totalTunai;
+
+  var s = (typeof SETTINGS === 'object' && SETTINGS) ? SETTINGS : {};
+  var baris = function(p, koin){
+    var k = a2Kunci(p, koin);
+    var v = nilai[k] || 0;
+    return '<div class="a2-den-r">'
+      + '<span>' + p.toLocaleString('id-ID') + '</span>'
+      + (A2_MODE === 'otomatis'
+          ? '<b>' + (v || '') + '</b>'
+          : '<input type="number" min="0" step="1" value="' + (A2_MANUAL[k] || '') + '" data-den="' + k + '" oninput="a2Isi(this)">')
+      + '</div>';
+  };
+
+  var h = '<div class="card" id="a2Card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px">'
+      + '<div><h3>Pratinjau Formulir A2</h3>'
+      + '<div class="muted" style="font-size:13px">'+esc(tglIndo(A2_DATA?A2_DATA.tanggal:''))+'</div></div>'
+      + '<button class="btn btn-primary btn-sm" onclick="cetakA2()">🖨 Cetak Formulir A2</button>'
+    + '</div>';
+
+  h += '<div class="a2-grid">';
+
+  /* --- ringkas isi formulir --- */
+  h += '<div class="a2-kolom">'
+    + '<div class="a2-sub">Isi formulir</div>'
+    + '<table class="log-tabel"><thead><tr><th>Bagian</th><th>Keterangan</th><th>Petugas</th><th style="text-align:right">Jumlah</th></tr></thead><tbody>';
+  function blokBaris(judul, arr, total){
+    if (!arr.length) {
+      h += '<tr><td><b>' + judul + '</b></td><td colspan="3" class="muted">Tidak ada penerimaan</td></tr>';
+      return;
+    }
+    arr.forEach(function(b, i){
+      h += '<tr>' + (i === 0 ? '<td rowspan="' + (arr.length + 1) + '"><b>' + judul + '</b></td>' : '')
+        + '<td>' + esc(b.label) + '</td><td class="muted">' + esc(b.petugas || '-') + '</td>'
+        + '<td style="text-align:right;font-weight:700;white-space:nowrap">' + rp(b.jumlah) + '</td></tr>';
+    });
+    h += '<tr><td colspan="2" style="text-align:right;font-weight:700">Total</td>'
+      + '<td style="text-align:right;font-weight:800;white-space:nowrap">' + rp(total) + '</td></tr>';
+  }
+  blokBaris('Donasi Cash', g.tunai, g.totalTunai);
+  blokBaris('Donasi Bank', g.bank, g.totalBank);
+  h += '<tr><td colspan="3" style="text-align:right;font-weight:800">JUMLAH</td>'
+    + '<td style="text-align:right;font-weight:800;color:var(--accent-d);white-space:nowrap">' + rp(g.total) + '</td></tr>'
+    + '</tbody></table></div>';
+
+  /* --- denominasi --- */
+  h += '<div class="a2-kolom">'
+    + '<div class="a2-sub">Denominasi tunai</div>'
+    + '<div class="a2-mode">'
+      + '<label class="a2-pil' + (A2_MODE === 'otomatis' ? ' on' : '') + '"><input type="radio" name="a2mode" ' + (A2_MODE === 'otomatis' ? 'checked' : '') + ' onchange="a2Mode(\'otomatis\')"> Otomatis</label>'
+      + '<label class="a2-pil' + (A2_MODE === 'manual' ? ' on' : '') + '"><input type="radio" name="a2mode" ' + (A2_MODE === 'manual' ? 'checked' : '') + ' onchange="a2Mode(\'manual\')"> Manual</label>'
+    + '</div>'
+    + '<div class="muted" style="font-size:11.5px;margin-bottom:9px">'
+      + (A2_MODE === 'otomatis'
+          ? 'Pecahan disusun otomatis dari total tunai ' + rp(g.totalTunai) + ', dimulai dari yang terbesar.'
+          : 'Isi sendiri jumlah tiap pecahan. Dikosongkan pun boleh — kolomnya akan dicetak kosong untuk diisi tangan.')
+    + '</div>'
+    + '<div class="a2-den"><div class="a2-den-h">Pecahan Kertas</div>'
+    + A2_PECAHAN.map(function(p){ return baris(p, false); }).join('')
+    + '<div class="a2-den-h">Koin</div>'
+    + A2_KOIN.map(function(p){ return baris(p, true); }).join('')
+    + '</div>';
+
+  h += '<div class="a2-cek' + (selisih === 0 ? ' pas' : ' beda') + '">'
+    + 'Total denominasi <b>' + rp(totalDen) + '</b>'
+    + (selisih === 0
+        ? ' — sama dengan penerimaan tunai.'
+        : (' — ' + (selisih > 0 ? 'lebih' : 'kurang') + ' <b>' + rp(Math.abs(selisih)) + '</b> dari penerimaan tunai ' + rp(g.totalTunai) + '.'))
+    + (nilai.sisa ? ' Sisa ' + rp(nilai.sisa) + ' tidak terwakili pecahan.' : '')
+    + '</div>';
+
+  h += '</div>';   /* kolom denominasi */
+
+  /* --- identitas penanda tangan --- */
+  h += '<div class="a2-kolom">'
+    + '<div class="a2-sub">Tanda tangan &amp; tempat</div>'
+    + '<div class="fgrid">'
+      + fld(12,'Tempat','<input id="a2_kota" value="'+esc(s.formA2Kota||'')+'" placeholder="cth: Kabupaten Bantul">')
+      + fld(12,'Nama Kasir','<input id="a2_kasir" value="'+esc(s.formA2Kasir||'')+'" placeholder="nama kasir">')
+      + fld(12,'Nama Bagian Keuangan','<input id="a2_keuangan" value="'+esc(s.formA2Keuangan||'')+'" placeholder="nama bagian keuangan">')
+      + fld(12,'Jumlah lembar kuitansi','<input type="number" min="0" id="a2_lembar" value="'+((A2_DATA&&A2_DATA.ringkas.himpunCount)||0)+'">')
+    + '</div>'
+    + '<div class="muted" style="font-size:11.5px;margin-top:8px">Tempat dan kedua nama disimpan sebagai bawaan saat formulir dicetak, jadi tidak perlu diketik ulang besok.</div>'
+    + '</div>';
+
+  h += '</div></div>';
+  return h;
+}
+
+/* ---------------- tab Formulir A2 ---------------- */
+
+function renderA2Form(){
+  var form = '<div class="fgrid">'
+    + fld(3,'Tanggal Formulir','<input type="date" id="a2_tanggal" value="'+esc(A2_DATA?A2_DATA.tanggal:today())+'">')
+    + fld(9,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Lembar serah terima kasir ukuran A5 melintang. Penerimaan hanya dipisah tunai dan bank; semua digabung per jenis dana, tidak dipecah per KLL atau daerah.</div>')
+    + '</div>';
+  var acts = '<button class="btn" onclick="a2Geser(-1)">&laquo; Hari sebelumnya</button>'
+    + '<button class="btn" onclick="a2Geser(1)">Hari berikutnya &raquo;</button>'
+    + '<button class="btn btn-primary" onclick="loadA2()">Tampilkan</button>';
+  el('lapBody').innerHTML = lapPanel('Formulir A2 — Laporan Penerimaan Harian',
+      'Formulir kasir yang ringkas. Untuk rekap lengkap beserta rincian transaksi dan pentasyarufan, gunakan tab Cetak Harian.',
+      form, acts)
+    + '<div id="a2Host" class="lap-result"></div>';
+  if (A2_DATA) el('a2Host').innerHTML = a2Panel();
+}
+
+function a2Geser(hari){
+  var inp = el('a2_tanggal'); if (!inp) return;
+  var d = new Date((inp.value || today()) + 'T00:00:00');
+  d.setDate(d.getDate() + hari);
+  var p2 = function(n){ return ('0'+n).slice(-2); };
+  inp.value = d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+  var btn = document.querySelector('.datepicker-enhanced-btn span');
+  if (btn && typeof formatIndoDate === 'function') btn.textContent = formatIndoDate(inp.value);
+  loadA2();
+}
+
+function loadA2(){
+  var tgl = el('a2_tanggal').value;
+  if (!tgl) { toast('Pilih tanggal dulu', true); return; }
+  el('a2Host').innerHTML = BOXES_SPINNER;
+  gas('apiLaporanHarian')(TOKEN, tgl).then(function(d){
+    A2_DATA = d;
+    el('a2Host').innerHTML = a2Panel();
+    if (typeof runEnhancers === 'function') runEnhancers();
+  }).catch(function(e){ el('a2Host').innerHTML=''; handleErr(e); });
+}
+
+function a2Mode(m){
+  A2_MODE = m;
+  a2Refresh();
+}
+function a2Isi(inp){
+  var k = inp.getAttribute('data-den');
+  var v = parseInt(inp.value, 10);
+  if (isFinite(v) && v > 0) A2_MANUAL[k] = v; else delete A2_MANUAL[k];
+  /* hanya kotak pemeriksaan yang perlu disegarkan, supaya fokus ketikan tidak lompat */
+  var cek = document.querySelector('.a2-cek');
+  if (!cek) return;
+  var g = a2Kelompok(A2_DATA ? A2_DATA.himpun : []);
+  var totalDen = a2TotalDenominasi(a2Nilai());
+  var selisih = totalDen - g.totalTunai;
+  cek.className = 'a2-cek ' + (selisih === 0 ? 'pas' : 'beda');
+  cek.innerHTML = 'Total denominasi <b>' + rp(totalDen) + '</b>'
+    + (selisih === 0 ? ' — sama dengan penerimaan tunai.'
+       : (' — ' + (selisih > 0 ? 'lebih' : 'kurang') + ' <b>' + rp(Math.abs(selisih)) + '</b> dari penerimaan tunai ' + rp(g.totalTunai) + '.'));
+}
+function a2Refresh(){
+  var host = el('a2Host');
+  if (host) { host.innerHTML = a2Panel(); if (typeof runEnhancers === 'function') runEnhancers(); }
+}
+
+/* ---------------- dokumen cetak A5 ---------------- */
+
+function cetakA2(){
+  if (!A2_DATA) { toast('Tampilkan datanya dulu', true); return; }
+  var kota = (el('a2_kota')||{}).value || '';
+  var kasir = (el('a2_kasir')||{}).value || '';
+  var keuangan = (el('a2_keuangan')||{}).value || '';
+  var lembar = (el('a2_lembar')||{}).value || '';
+  printDoc(buildA2HTML(A2_DATA, {kota:kota, kasir:kasir, keuangan:keuangan, lembar:lembar}));
+  /* simpan sebagai bawaan supaya tidak perlu diketik ulang */
+  var s = (typeof SETTINGS === 'object' && SETTINGS) ? SETTINGS : {};
+  if (kota !== (s.formA2Kota||'') || kasir !== (s.formA2Kasir||'') || keuangan !== (s.formA2Keuangan||'')) {
+    gas('apiSaveSettings')(TOKEN, {formA2Kota:kota, formA2Kasir:kasir, formA2Keuangan:keuangan})
+      .then(function(baru){ SETTINGS = baru; }).catch(function(){});
+  }
+}
+
+function a2Angka(n){ return (Number(n)||0).toLocaleString('id-ID'); }
+
+function buildA2HTML(d, opt){
+  opt = opt || {};
+  var s = d.settings || {};
+  var g = a2Kelompok(d.himpun);
+  var nilai = a2Nilai();
+  var manualKosong = (A2_MODE === 'manual' && !Object.keys(A2_MANUAL).length);
+
+  var tglPanjang = tglIndo(d.tanggal);          /* "Rabu, 12 Agustus 2026" */
+  var tglRingkas = tglPanjang.replace(/^[^,]+,\s*/, '');   /* "12 Agustus 2026" */
+  var hari = (tglPanjang.split(',')[0] || '').trim();
+
+  /* Baris isi + baris kosong penyeimbang supaya tinggi formulir tetap sama
+     walau transaksinya sedikit. */
+  function blok(judul, arr, total, minBaris){
+    var h = '<tr class="grup"><td colspan="3">' + judul + '</td></tr>'
+          + '<tr class="kol"><td>Keterangan</td><td>Petugas</td><td>Jumlah</td></tr>';
+    var n = 0;
+    arr.forEach(function(b){
+      h += '<tr><td>' + esc(b.label) + '</td><td>' + esc(b.petugas || '') + '</td>'
+         + '<td class="num">' + a2Angka(b.jumlah) + '</td></tr>';
+      n++;
+    });
+    for (; n < minBaris; n++) h += '<tr><td>&nbsp;</td><td></td><td></td></tr>';
+    h += '<tr class="tot"><td></td><td>Total :</td><td class="num">' + a2Angka(total) + '</td></tr>';
+    return h;
+  }
+
+  function denBaris(p, koin){
+    var k = a2Kunci(p, koin);
+    var v = nilai[k] || 0;
+    return '<tr><td>' + a2Angka(p) + '</td><td class="num">' + (manualKosong ? '' : (v || '')) + '</td></tr>';
+  }
+
+  var kiri = '<table class="kiri">'
+    + '<tr class="kuitansi"><td colspan="2">Dokumen Kuitansi Penerimaan : ' + esc(opt.lembar || '') + ' lembar</td><td></td></tr>'
+    + blok('DONASI CASH', g.tunai, g.totalTunai, 3)
+    + '<tr class="spasi"><td colspan="3"></td></tr>'
+    + blok('DONASI BANK', g.bank, g.totalBank, 4)
+    + '<tr class="jml"><td></td><td>JUMLAH</td><td class="num">' + a2Angka(g.total) + '</td></tr>'
+    + '</table>'
+    + '<table class="ttd">'
+      + '<tr><td colspan="2" class="tempat">' + esc(opt.kota || '') + (opt.kota ? ', ' : '') + esc(tglRingkas) + '</td></tr>'
+      + '<tr class="kol"><td>Kasir</td><td>Keuangan</td></tr>'
+      + '<tr class="ruang"><td></td><td></td></tr>'
+      + '<tr class="nama"><td>' + esc(opt.kasir || '') + '</td><td>' + esc(opt.keuangan || '') + '</td></tr>'
+    + '</table>';
+
+  var kanan = '<table class="kanan">'
+    + '<tr class="grup"><td colspan="2">DENOMINASI TUNAI</td></tr>'
+    + '<tr class="kol"><td>Pecahan Kertas</td><td>Jumlah</td></tr>'
+    + A2_PECAHAN.map(function(p){ return denBaris(p, false); }).join('')
+    + '<tr class="kol"><td>Koin</td><td>Jumlah</td></tr>'
+    + A2_KOIN.map(function(p){ return denBaris(p, true); }).join('')
+    + '</table>';
+
+  return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
+    + '<title>Formulir A2 ' + esc(d.tanggal) + '</title><style>'
+    + '@page{size:A5 landscape;margin:7mm}'
+    + '*{box-sizing:border-box;margin:0;padding:0}'
+    + 'body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#e9eaec;font-size:7.6pt;line-height:1.3}'
+    + '.lembar{width:196mm;min-height:134mm;margin:12px auto;background:#fff;padding:4mm 5mm;box-shadow:0 2px 14px rgba(0,0,0,.16)}'
+
+    + '.kop{display:flex;border:1pt solid #000;border-bottom:none}'
+    + '.kop .j{flex:1;text-align:center;font-weight:700;font-size:9.5pt;padding:2.5pt 4pt;letter-spacing:.2px}'
+    + '.kop .f{width:34mm;text-align:center;font-weight:700;font-size:9pt;padding:2.5pt 4pt;border-left:1pt solid #000}'
+    + '.basmalah{border:1pt solid #000;padding:4pt 6pt;text-align:center;font-size:7.8pt;line-height:1.45}'
+    + '.basmalah b{font-weight:700}'
+
+    + '.isi{display:flex;gap:0;margin-top:0}'
+    + '.isi>.sisi{flex:1;min-width:0}'
+    + '.isi>.sisi.kn{width:64mm;flex:0 0 64mm;padding-left:4mm}'
+
+    + 'table{width:100%;border-collapse:collapse;table-layout:fixed}'
+    + 'td{border:0.6pt solid #000;padding:1.6pt 3pt;vertical-align:middle;height:4.6mm;overflow:hidden}'
+    + '.num{text-align:right;font-variant-numeric:tabular-nums}'
+
+    + 'table.kiri td:nth-child(1){width:38%}'
+    + 'table.kiri td:nth-child(2){width:29%}'
+    + 'table.kiri td:nth-child(3){width:33%}'
+    + 'table.kiri tr.kuitansi td{border-right:none}'
+    + 'table.kiri tr.kuitansi td:first-child{border-right:none;padding-left:12pt}'
+    + 'table.kiri tr.grup td{font-weight:700;letter-spacing:.2px}'
+    + 'table.kiri tr.kol td{text-align:center}'
+    + 'table.kiri tr.kol td:first-child{text-align:left;padding-left:12pt}'
+    + 'table.kiri tr.tot td:nth-child(2){font-weight:700}'
+    + 'table.kiri tr.spasi td{border:none;height:3mm}'
+    + 'table.kiri tr.jml td{font-weight:700;background:#e6e6e6}'
+    + 'table.kiri tr.jml td:first-child{border:none;background:#fff}'
+
+    + 'table.kanan td{text-align:center;height:6.4mm}'
+    + 'table.kanan tr.grup td{font-weight:700;font-size:8.4pt}'
+    + 'table.kanan tr.kol td{font-weight:400}'
+    + 'table.kanan td:nth-child(1){width:52%;text-align:right;padding-right:9pt}'
+    + 'table.kanan td:nth-child(2){width:48%}'
+
+    + 'table.ttd{margin-top:6mm}'
+    + 'table.ttd td{text-align:center}'
+    + 'table.ttd tr.tempat td{border:none;text-align:center;padding-bottom:3pt}'
+    + 'table.ttd tr.ruang td{height:17mm}'
+    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline}'
+
+    + '.bar{text-align:center;margin:10px 0 22px}'
+    + '.bar button{font:inherit;font-size:9pt;font-weight:700;background:#16161d;color:#fff;border:none;padding:8px 20px;border-radius:999px;cursor:pointer}'
+    + '@media print{body{background:#fff}.lembar{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}.bar{display:none}}'
+    + '</style></head><body>'
+
+    + '<div class="lembar">'
+      + '<div class="kop"><div class="j">LAPORAN PENERIMAAN HARIAN</div><div class="f">Formulir A 2</div></div>'
+      + '<div class="basmalah">Bissmillahirrohmanirrohim Pada Hari Ini <b>' + esc(hari) + ', ' + esc(tglRingkas) + '</b> , '
+        + 'Alhamdulillah telah diterima dana Zakat, Infaq dan Shodaqoh dengan rincian:</div>'
+      + '<div class="isi"><div class="sisi">' + kiri + '</div><div class="sisi kn">' + kanan + '</div></div>'
+    + '</div>'
+    + '<div class="bar"><button onclick="window.print()">🖨 Cetak / Simpan PDF (A5 melintang)</button></div>'
+    + '</body></html>';
 }

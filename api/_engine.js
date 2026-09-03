@@ -964,16 +964,25 @@ function _getJurnalData(year, month) {
       debitAcc = (via==='BANK'?'Bank ':'Kas ')+debitBase;
     }
     
-    /* Keterangan jurnal mengikuti berkas acuan "Jurnal Bank":
-         {Nama Donatur / KLL / ULL} {Jenis Dana}[ {Peruntukan}]
+    /* Keterangan jurnal: {Nama Donatur / KLL / ULL} {Jenis Dana}[ {Peruntukan}]
        Nama petugas fundraising sengaja TIDAK dicantumkan di jurnal.
-       Catatan bebas hanya ditambahkan bila memang membawa keterangan baru. */
-    var _peruntukan = String(r.program||'').trim();
-    if (/^(penerimaan|setor tunai)/i.test(_peruntukan)) _peruntukan = '';
-    if (_peruntukan && jpNorm(_peruntukan) === jpNorm(ketPrefix)) _peruntukan = '';
-    var ket = jpBersih(donorLabel(r) + ' ' + ketPrefix + (_peruntukan ? ' ' + _peruntukan : ''));
-    var _catatan = String(r.keterangan||'').trim();
-    if (_catatan && jpInti(ket).indexOf(jpInti(_catatan)) < 0) ket += ' — ' + _catatan;
+
+       Khusus INFAK/SEDEKAH TERIKAT keterangannya berhenti di "Infak Terikat".
+       Pilar dan peruntukannya (Kesehatan, Ambulan, Bencana NTT, ...) tetap
+       tersimpan di basis data dan tetap muncul di Laporan — hanya tidak ikut
+       dicetak di jurnal supaya kolomnya ringkas dan seragam. */
+    var _terikat = /terikat/i.test(ketPrefix);
+    var ket;
+    if (_terikat) {
+      ket = jpBersih(donorLabel(r) + ' ' + ketPrefix);
+    } else {
+      var _peruntukan = String(r.program||'').trim();
+      if (/^(penerimaan|setor tunai)/i.test(_peruntukan)) _peruntukan = '';
+      if (_peruntukan && jpNorm(_peruntukan) === jpNorm(ketPrefix)) _peruntukan = '';
+      ket = jpBersih(donorLabel(r) + ' ' + ketPrefix + (_peruntukan ? ' ' + _peruntukan : ''));
+      var _catatan = String(r.keterangan||'').trim();
+      if (_catatan && jpInti(ket).indexOf(jpInti(_catatan)) < 0) ket += ' — ' + _catatan;
+    }
     
     var tgl=Utilities.formatDate(new Date(r.tanggal),TZ,'dd/MM/yyyy'); var amt=Number(r.jumlah)||0; var ref=r.noKwitansi||'-';
     secMap[secKey]=secMap[secKey]||{title:secKey,lines:[],subtotal:0};
@@ -3675,6 +3684,127 @@ function apiHapusAudit(t){
   return { ok: true, dihapus: jml };
 }
 
+/* ================================================================
+   LAPORAN HARIAN
+   ----------------------------------------------------------------
+   Rekap satu tanggal: seluruh penerimaan dan penyaluran hari itu
+   beserta ringkasannya, siap dicetak sebagai lembar pertanggung-
+   jawaban harian.
+   ================================================================ */
+function _lhTanggalSama(nilai, tgl){
+  return String(nilai || '').split('T')[0] === tgl;
+}
+
+function _lhJumlah(peta, kunci, n){
+  var k = String(kunci || '').trim() || 'Lainnya';
+  peta[k] = (peta[k] || 0) + n;
+}
+
+function apiLaporanHarian(t, tanggal){
+  _requirePerm(t, 'laporan', 'view');
+  var tgl = String(tanggal || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid.');
+
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ if (l && l.id) layMap[l.id] = l; });
+  var listRek = readAll(SHEETS.REKENING) || [];
+  var rekMap = {}; listRek.forEach(function(r){ if (r && r.id) rekMap[r.id] = r; });
+
+  function namaRek(r){
+    if (r.rekeningId && rekMap[r.rekeningId]) {
+      var k = rekMap[r.rekeningId];
+      return k.namaBank + ' - ' + k.nomor;
+    }
+    return String(r.bank || '').trim();
+  }
+
+  var himpun = (readAll(SHEETS.PENGHIMPUNAN) || [])
+    .filter(function(r){ return _lhTanggalSama(r.tanggal, tgl); })
+    .map(function(r){
+      /* Transaksi KLL/ULL dicatat atas nama layanannya, bukan petugas
+         fundraising — aturan yang sama dipakai di rekap dan impor.
+         cleanFundraisingName() akan memaksa nama di luar daftar petugas
+         menjadi "Lazismu Daerah Bantul", jadi jangan dipakai di sini. */
+      var _lay = resolveLayananName(r, layList, layMap);
+      var _fr = (_lay !== LAYANAN_DAERAH) ? _lay : cleanFundraisingName(r.fundraising);
+      return {
+        noKwitansi: r.noKwitansi || '-',
+        namaDonatur: r.namaDonatur || '-',
+        layanan: _lay,
+        jenisDana: r.jenisDana || '-',
+        subJenis: r.subJenis || '',
+        pilar: r.pilar || '',
+        program: r.program || '',
+        metode: r.metode || '-',
+        bank: namaRek(r),
+        fundraising: _fr,
+        petugas: r.petugas || '-',
+        keterangan: r.keterangan || '',
+        jumlah: Number(r.jumlah) || 0
+      };
+    })
+    .sort(function(a,b){ return String(a.noKwitansi).localeCompare(String(b.noKwitansi)); });
+
+  var salur = (readAll(SHEETS.PENTASYARUFAN) || [])
+    .filter(function(r){ return _lhTanggalSama(r.tanggal, tgl); })
+    .map(function(r){
+      return {
+        noBukti: r.noBukti || '-',
+        namaPenerima: r.namaPenerima || '-',
+        ashnaf: r.ashnaf || '-',
+        program: r.program || '-',
+        sumberDana: r.sumberDana || '-',
+        bentukBantuan: r.bentukBantuan || '',
+        metode: r.metode || '-',
+        bank: namaRek(r),
+        petugas: r.petugas || '-',
+        keterangan: r.keterangan || '',
+        jumlah: Number(r.jumlah) || 0
+      };
+    })
+    .sort(function(a,b){ return String(a.noBukti).localeCompare(String(b.noBukti)); });
+
+  var rk = {
+    himpunTotal: 0, salurTotal: 0,
+    perJenis: {}, perMetode: {}, perLayanan: {}, perFundraising: {},
+    perAshnaf: {}, perProgram: {}, perSumber: {},
+    petugasHimpun: {}, petugasSalur: {}
+  };
+
+  himpun.forEach(function(r){
+    rk.himpunTotal += r.jumlah;
+    var labelJenis = r.jenisDana + (r.subJenis && r.subJenis !== r.jenisDana ? ' — ' + r.subJenis : '');
+    _lhJumlah(rk.perJenis, labelJenis, r.jumlah);
+    _lhJumlah(rk.perMetode, r.metode, r.jumlah);
+    _lhJumlah(rk.perLayanan, r.layanan, r.jumlah);
+    _lhJumlah(rk.perFundraising, r.fundraising, r.jumlah);
+    _lhJumlah(rk.petugasHimpun, r.petugas, r.jumlah);
+  });
+  salur.forEach(function(r){
+    rk.salurTotal += r.jumlah;
+    _lhJumlah(rk.perAshnaf, r.ashnaf, r.jumlah);
+    _lhJumlah(rk.perProgram, r.program, r.jumlah);
+    _lhJumlah(rk.perSumber, r.sumberDana, r.jumlah);
+    _lhJumlah(rk.petugasSalur, r.petugas, r.jumlah);
+  });
+
+  return {
+    tanggal: tgl,
+    himpun: himpun,
+    salur: salur,
+    ringkas: {
+      himpunTotal: rk.himpunTotal, himpunCount: himpun.length,
+      salurTotal: rk.salurTotal, salurCount: salur.length,
+      selisih: rk.himpunTotal - rk.salurTotal,
+      perJenis: rk.perJenis, perMetode: rk.perMetode, perLayanan: rk.perLayanan,
+      perFundraising: rk.perFundraising, perAshnaf: rk.perAshnaf,
+      perProgram: rk.perProgram, perSumber: rk.perSumber,
+      petugasHimpun: rk.petugasHimpun, petugasSalur: rk.petugasSalur
+    },
+    settings: getAllSettings()
+  };
+}
+
 var REGISTRY={};
 REGISTRY['apiListMutasi']=apiListMutasi;
 REGISTRY['apiSaveMutasiRows']=apiSaveMutasiRows;
@@ -3872,6 +4002,7 @@ REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
 REGISTRY['apiListAudit']=apiListAudit;
+REGISTRY['apiLaporanHarian']=apiLaporanHarian;
 REGISTRY['apiHapusAudit']=apiHapusAudit;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
 async function runRPC(db, fn, args, ctx){
