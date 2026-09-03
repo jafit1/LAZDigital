@@ -86,8 +86,8 @@ function setup(){
   if(!ss){ ss=SpreadsheetApp.create('LAZ Digital - Database'); props.setProperty('SS_ID',ss.getId()); }
 
   ensureSheet(ss,SHEETS.USERS,['id','username','passwordHash','salt','nama','role','permissions','aktif','dibuat']);
-  ensureSheet(ss,SHEETS.PENGHIMPUNAN,['id','noKwitansi','tanggal','jenisDana','subJenis','pilar','program','namaDonatur','tipeDonatur','layananId','telepon','email','alamat','jumlah','metode','rekeningId','bank','statusBayar','atasNama','keterangan','petugas','dibuat','fundraising']);
-  ensureSheet(ss,SHEETS.PENTASYARUFAN,['id','noBukti','tanggal','ashnaf','program','sumberDana','namaPenerima','nik','telepon','alamat','jumlah','bentukBantuan','metode','statusSalur','petugas','keterangan','dibuat','fundraising','rekeningId','bank']);
+  ensureSheet(ss,SHEETS.PENGHIMPUNAN,['id','noKwitansi','tanggal','jenisDana','subJenis','pilar','program','namaDonatur','tipeDonatur','layananId','telepon','email','alamat','jumlah','metode','rekeningId','bank','statusBayar','atasNama','keterangan','petugas','dibuat','fundraising','akunKredit']);
+  ensureSheet(ss,SHEETS.PENTASYARUFAN,['id','noBukti','tanggal','ashnaf','program','sumberDana','namaPenerima','nik','telepon','alamat','jumlah','bentukBantuan','metode','statusSalur','petugas','keterangan','dibuat','fundraising','rekeningId','bank','section']);
   ensureSheet(ss,SHEETS.REKENING,['id','namaBank','nomor','atasNama','fundGroup','aktif','dibuat']);
   ensureSheet(ss,SHEETS.LAYANAN,['id','tipe','kode','nama','wilayah','penanggungJawab','telepon','aktif','dibuat']);
   ensureSheet(ss,SHEETS.MUTASI,['id','tanggal','deskripsi','tipe','nominal','dibuat']);
@@ -1106,9 +1106,12 @@ function _getJurnalData(year, month, rentang) {
     'PENERIMAAN WAKAF VIA KAS', 'PENERIMAAN WAKAF VIA BANK',
     'BAGI HASIL', 'BAGI HASIL BANK', 'PENGEMBALIAN UMP',
     'SETOR TUNAI',
-    'BIAYA ADMINISTRASI BANK',
+    /* --- Pentasyarufan --- */
+    'UMP ZAKAT', 'UMP INFAK', 'UMP AMIL',
+    'PENYALURAN ZAKAT', 'PENYALURAN INFAK UMUM', 'PENYALURAN INFAK TERIKAT',
+    'PENGELUARAN OPERASIONAL VIA BANK', 'PENGELUARAN OPERASIONAL VIA KAS',
     'OPERASIONAL AMIL VIA BANK', 'OPERASIONAL AMIL VIA KAS',
-    'PENYALURAN INFAK TERIKAT', 'PENYALURAN INFAK UMUM',
+    'BIAYA ADMINISTRASI BANK',
     'UMP LPJ ZAKAT', 'UMP LPJ INFAK', 'UMP LPJ AMIL'
   ];
   
@@ -1465,25 +1468,24 @@ function fuzzyMatch(val, options, defaultVal) {
   return defaultVal;
 }
 
+/* Nama fundraiser. Sebelumnya SEMUA nama di luar 6 nama baku dipaksa jadi
+   "Lazismu Daerah Bantul" — itu menghapus rincian sumber (Kantor, Qris,
+   Muh Ariyanto, dll) yang dibutuhkan Closing Bulanan. Sekarang nama apa pun
+   dipertahankan apa adanya; hanya yang KOSONG yang default ke daerah, dan
+   beberapa alias baku dirapikan kapitalnya agar tidak terpecah. */
 function cleanFundraisingName(name) {
-  if (!name) return 'Lazismu Daerah Bantul';
-  var clean = String(name).trim().toLowerCase();
-  var options = ['lazismu daerah bantul', 'sherli', 'renata', 'ariya', 'nur yulianto', 'muzakki'];
-  var originalOptions = ['Lazismu Daerah Bantul', 'Sherli', 'Renata', 'Ariya', 'Nur Yulianto', 'Muzakki'];
-  for (var i = 0; i < options.length; i++) {
-    if (clean === options[i] || clean.indexOf(options[i]) >= 0 || options[i].indexOf(clean) >= 0) {
-      return originalOptions[i];
-    }
-  }
-  for (var i = 0; i < options.length; i++) {
-    var parts = options[i].split(' ');
-    for (var j = 0; j < parts.length; j++) {
-      if (parts[j].length > 3 && clean.indexOf(parts[j]) >= 0) {
-        return originalOptions[i];
-      }
-    }
-  }
-  return 'Lazismu Daerah Bantul';
+  var s = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
+  if (!s) return 'Lazismu Daerah Bantul';
+  var alias = {
+    'lazismu daerah bantul': 'Lazismu Daerah Bantul',
+    'daerah': 'Lazismu Daerah Bantul',
+    'kantor': 'Kantor',
+    'sherli': 'Sherli', 'renata': 'Renata', 'ariya': 'Ariya',
+    'nur yulianto': 'Nur Yulianto', 'muzakki': 'Muzakki'
+  };
+  var low = s.toLowerCase();
+  if (alias[low]) return alias[low];
+  return s;
 }
 
 function extractFundraisingFromText(text) {
@@ -2068,8 +2070,34 @@ function jpSeksiHimpun(sec){
   if (!s) return false;
   if (s.indexOf('BAGI HASIL') === 0) return true;
   if (s.indexOf('PENERIMAAN') === 0) return true;
-  if (s === 'SETOR TUNAI' || s === 'PENGEMBALIAN UMP') return true;
+  if (s === 'PENGEMBALIAN UMP') return true;
+  /* SETOR TUNAI sengaja TIDAK dihitung penghimpunan: itu perpindahan uang
+     kas (yang sudah tercatat di Jurnal Kas) ke rekening bank, bukan
+     penerimaan baru dari donatur — kalau dihitung akan dobel. */
   return false;
+}
+
+/* Kumpulkan baris yang tanggal debet & kreditnya beda (kemungkinan salah ketik),
+   untuk ditampilkan sebagai peringatan sebelum data disimpan. */
+function _kumpulAnomaliTgl(himpun, salur){
+  var out = [];
+  function sisir(rows, jenis){
+    (rows || []).forEach(function(r){
+      if (r && r.tglBeda){
+        out.push({
+          jenis: jenis,
+          nama: r.namaDonatur || r.namaPenerima || '-',
+          tglDebet: r.tglBeda.debet,
+          tglKredit: r.tglBeda.kredit,
+          jumlah: r.jumlah,
+          keterangan: r.keterangan || ''
+        });
+      }
+    });
+  }
+  sisir(himpun, 'Penghimpunan');
+  sisir(salur, 'Pentasyarufan');
+  return out;
 }
 
 function transformJurnalToImportData(rawRows, listRek, listLayanan) {
@@ -2077,8 +2105,18 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
   var salurRows = [];
   var currentSection = '';
 
+  /* Seksi perpindahan uang internal & UANG MUKA — bukan penerimaan donatur
+     maupun penyaluran aktual, jadi tidak diimpor:
+       SETOR TUNAI  : kas disetor ke bank (sudah tercatat di Jurnal Kas)
+       MUTASI DANA / MUTASI BANK : pemindahan dana antar rekening (mis. hak amil)
+       TARIK TUNAI  : penarikan tunai dari bank
+       UMP ZAKAT/INFAK/AMIL : UANG MUKA program yang diberikan ke KLL/ULL —
+         BUKAN penyaluran. Penyaluran nyata dicatat lewat LPJ (UMP LPJ ...),
+         yang mengelompokkan per program sebenarnya. Kalau UMP advance dihitung
+         juga, akan dobel dengan LPJ. */
   var skipSections = [
-    'MUTASI BANK', 'UMP ZAKAT', 'UMP INFAK', 'UMP AMIL', 'TARIK TUNAI'
+    'SETOR TUNAI', 'MUTASI DANA', 'MUTASI BANK', 'TARIK TUNAI',
+    'UMP ZAKAT', 'UMP INFAK', 'UMP AMIL'
   ];
 
   /* Sebagian berkas jurnal — misalnya rekap bagi hasil bulanan — hanya berisi
@@ -2117,15 +2155,23 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
       if (debet > 0 && kredit === 0) {
         // Look ahead to the next row to find the bank/cash account for pentasyarufan
         var bankAccName = '';
+        /* Anomali tanggal: baris debet dan baris kredit pasangannya seharusnya
+           bertanggal sama. Kalau beda (mis. debet 28-09 tapi kredit 28-08),
+           kemungkinan salah ketik — ditandai agar bisa diperiksa saat impor. */
+        var _tglPasangan = '';
         var nextRow = rawRows[i+1];
         if (nextRow && isValidDateStringOrObject(nextRow[0])) {
           var nextDebet = parseAmount(nextRow[2]);
           var nextKredit = parseAmount(nextRow[3]);
           if (nextKredit > 0 && nextDebet === 0) {
             bankAccName = String(nextRow[1] || '').trim();
+            _tglPasangan = parseImportDate(nextRow[0]);
           }
         }
         
+        var _tglBeda = (_tglPasangan && _tglPasangan !== dateStr)
+          ? { debet: dateStr, kredit: _tglPasangan } : null;
+
         /* Akun kredit baris pasangannya — dipakai untuk menentukan jenis dana,
            sekaligus untuk mengenali penerimaan pada berkas tanpa judul seksi. */
         var _akunKredit = '';
@@ -2333,7 +2379,8 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
               ? namaDonatur
               : cleanFundraisingName(extractFundraisingFromText(uraian)),
             akunKredit: _akunKredit,
-            bedaDana: _bedaDana
+            bedaDana: _bedaDana,
+            tglBeda: _tglBeda
           });
         }
         
@@ -2341,8 +2388,14 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         else if (
           currentSection === 'OPERASIONAL AMIL VIA BANK' ||
           currentSection === 'OPERASIONAL AMIL VIA KAS' ||
+          currentSection === 'PENGELUARAN OPERASIONAL VIA BANK' ||
+          currentSection === 'PENGELUARAN OPERASIONAL VIA KAS' ||
+          currentSection === 'PENYALURAN ZAKAT' ||
           currentSection === 'PENYALURAN INFAK TERIKAT' ||
           currentSection === 'PENYALURAN INFAK UMUM' ||
+          currentSection === 'UMP ZAKAT' ||
+          currentSection === 'UMP INFAK' ||
+          currentSection === 'UMP AMIL' ||
           currentSection === 'UMP LPJ ZAKAT' ||
           currentSection === 'UMP LPJ INFAK' ||
           currentSection === 'UMP LPJ AMIL' ||
@@ -2352,42 +2405,57 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           var ashnaf = 'Fi Sabilillah';
           var program = accName;
           var namaPenerima = 'Lazismu Daerah Bantul';
-          
-          var matchedDest = extractLayananFromText(uraian, listLayanan);
-          if (matchedDest) {
-            namaPenerima = (matchedDest.tipe === 'KLL' ? 'KLL ' : 'ULL ') + matchedDest.nama;
+          /* LPJ (pertanggungjawaban UMP) = penyaluran AKTUAL oleh KLL/ULL, jadi
+             dicatat atas nama KLL/ULL-nya (nama ada di keterangan). Penyaluran &
+             operasional langsung tingkat daerah tetap DAERAH walau nama KLL
+             kebetulan disebut. (UMP advance sendiri sudah dilewati di skip.) */
+          var _isKLLsec = /^UMP\s+LPJ\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection)
+                       || /^UMP\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection);
+          if (_isKLLsec) {
+            var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(uraian) : null;
+            var _lay = extractLayananFromText(uraian, listLayanan);
+            if (_lay) namaPenerima = (String(_lay.tipe).toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + _lay.nama;
+            else if (_pre) namaPenerima = _pre.tipe + ' ' + _pre.nama;
           }
-          
-          if (currentSection === 'OPERASIONAL AMIL VIA BANK' || currentSection === 'OPERASIONAL AMIL VIA KAS') {
+
+          if (currentSection === 'OPERASIONAL AMIL VIA BANK' || currentSection === 'OPERASIONAL AMIL VIA KAS' ||
+              currentSection === 'PENGELUARAN OPERASIONAL VIA BANK' || currentSection === 'PENGELUARAN OPERASIONAL VIA KAS') {
+            /* Pengeluaran operasional lembaga: dibebankan ke dana Amil. */
             sumberDana = 'Amil';
             ashnaf = 'Amil';
-          } else if (currentSection === 'PENYALURAN INFAK TERIKAT' || currentSection === 'PENYALURAN INFAK UMUM') {
-            sumberDana = 'Infak';
-            ashnaf = fuzzyMatch(accName, ASHNAF, 'Fi Sabilillah');
             namaPenerima = 'Lazismu Daerah Bantul';
-          } else if (currentSection === 'UMP LPJ ZAKAT') {
+          } else if (currentSection === 'PENYALURAN ZAKAT' || currentSection === 'UMP ZAKAT' || currentSection === 'UMP LPJ ZAKAT') {
             sumberDana = 'Zakat';
-            ashnaf = fuzzyMatch(accName, ASHNAF, 'Miskin');
-          } else if (currentSection === 'UMP LPJ INFAK') {
+            /* ashnaf dibaca dari nama akun "Penyaluran Zakat - Fakir Miskin". */
+            var _zEkor = accName.split(/[-–—]/).slice(1).join(' ').trim();
+            ashnaf = fuzzyMatch(_zEkor || accName, ASHNAF, 'Fakir');
+          } else if (currentSection === 'UMP AMIL' || currentSection === 'UMP LPJ AMIL') {
+            sumberDana = 'Amil';
+            ashnaf = 'Amil';
+          } else if (currentSection === 'PENYALURAN INFAK TERIKAT' || currentSection === 'PENYALURAN INFAK UMUM' ||
+                     currentSection === 'UMP INFAK' || currentSection === 'UMP LPJ INFAK') {
             sumberDana = 'Infak';
-            ashnaf = fuzzyMatch(accName, ASHNAF, 'Fi Sabilillah');
-          } else if (currentSection === 'UMP LPJ AMIL') {
-            sumberDana = 'Amil';
-            ashnaf = 'Amil';
+            ashnaf = 'Fi Sabilillah';
           } else if (currentSection === 'BIAYA ADMINISTRASI BANK') {
-            sumberDana = 'Amil';
+            /* Dana dibaca dari nama akun debet ("Administrasi Bank Infak/Zakat/
+               Terikat") agar biaya membebani dana yang benar. Akun debet aslinya
+               dipertahankan sebagai program supaya jurnal tereproduksi persis. */
+            var _al = accName.toLowerCase();
+            if (_al.indexOf('zakat') >= 0) sumberDana = 'Zakat';
+            else if (_al.indexOf('infa') >= 0 || _al.indexOf('sedekah') >= 0) sumberDana = 'Infak';
+            else sumberDana = 'Amil';
             ashnaf = 'Amil';
-            program = 'Biaya Administrasi Bank';
+            program = accName || 'Biaya Administrasi Bank';
             namaPenerima = 'Lazismu Daerah Bantul';
           }
-          
+
           var metode = 'Transfer Bank';
           if (currentSection.indexOf('KAS') >= 0 || accName.toLowerCase().indexOf('kas') >= 0 || (bankAccName && bankAccName.toLowerCase().indexOf('kas') >= 0)) {
             metode = 'Cash/Tunai';
           }
-          
+
           var bentukBantuan = (metode === 'Transfer Bank') ? 'Transfer' : 'Uang Tunai';
-          
+
           salurRows.push({
             tanggal: dateStr,
             ashnaf: ashnaf,
@@ -2404,7 +2472,11 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             keterangan: uraian,
             fundraising: cleanFundraisingName(extractFundraisingFromText(uraian)),
             rekeningId: rekId,
-            bank: bankLabel
+            bank: bankLabel,
+            /* Seksi asal disimpan agar jurnal dapat dikelompokkan persis
+               seperti berkas sumber, tanpa menebak dari nama akun. */
+            section: currentSection,
+            tglBeda: _tglBeda
           });
         }
       }
@@ -2506,6 +2578,7 @@ async function apiParseImportUrl(t, url, type) {
         salurValid: salurValid,
         salurInvalid: salurInvalid,
         bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
+        anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid),
         totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length
       };
     } else {
@@ -2967,6 +3040,7 @@ async function apiParseImportText(t, text, type) {
         salurValid: salurValid,
         salurInvalid: salurInvalid,
         bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
+        anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid),
         totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length
       };
     }
@@ -3993,6 +4067,169 @@ function _lhJumlah(peta, kunci, n){
   peta[k] = (peta[k] || 0) + n;
 }
 
+/* ===== CLOSING BULANAN =====
+   Rekap satu bulan bergaya "REKAP LAZISMU SE BANTUL":
+     - SE BANTUL   : seluruh transaksi (daerah + KLL/ULL)
+     - LAZISMU DAERAH : hanya transaksi tingkat daerah (tanpa penanda KLL/ULL)
+     - KLL/ULL     : selisih SE BANTUL - DAERAH
+   Plus rincian sumber/fundraising (penghimpunan daerah per fundraiser) dan
+   rincian satu fundraiser dipecah per peruntukan/pilar (mis. "Detail Kantor").
+
+   Penghimpunan dikelompokkan: Zakat, Infak Terikat, Infak Umum, Amil, dan
+   Bagi Hasil (zakat/infak terikat/infak/amil). Penyaluran: Zakat, Infak
+   Terikat, Infak Umum, Amil. Terikat/umum penyaluran dibaca dari seksi/
+   keterangan (sinyal yang tersedia di jurnal). */
+function _closingKatH(r){
+  var jl = _norm(r.jenisDana), sl = _norm(r.subJenis), ak = _norm(r.akunKredit);
+  var bh = sl.indexOf('bagi hasil') >= 0;
+  if (jl.indexOf('zakat') >= 0) return bh ? 'bhZakat' : 'zakat';
+  if (jl.indexOf('amil')  >= 0) return bh ? 'bhAmil'  : 'amil';
+  if (jl.indexOf('infa') >= 0 || jl.indexOf('sedekah') >= 0){
+    if (bh) return (ak.indexOf('terikat') >= 0) ? 'bhInfakTerikat' : 'bhInfak';
+    var terikat = sl.indexOf('terikat') >= 0 || (!!String(r.pilar||'').trim() && sl.indexOf('umum') < 0);
+    return terikat ? 'infakTerikat' : 'infakUmum';
+  }
+  return 'lain';
+}
+function _closingKatT(r){
+  var sd = _norm(r.sumberDana), sec = _norm(r.section), prog = _norm(r.program), ket = _norm(r.keterangan);
+  if (sd.indexOf('zakat') >= 0) return 'zakat';
+  if (sd.indexOf('amil')  >= 0) return 'amil';
+  if (sd.indexOf('infa') >= 0 || sd.indexOf('sedekah') >= 0){
+    var terikat = sec.indexOf('terikat') >= 0 || prog.indexOf('terikat') >= 0 || ket.indexOf('terikat') >= 0;
+    return terikat ? 'infakTerikat' : 'infakUmum';
+  }
+  return 'lain';
+}
+
+function apiClosingBulanan(t, bulan){
+  _requirePerm(t, 'laporan', 'view');
+  var prefix = /^\d{4}-\d{2}$/.test(String(bulan || '')) ? String(bulan) : null;
+  if (!prefix) throw new Error('Pilih bulan yang valid (YYYY-MM).');
+
+  var inBulan = function(r){ return r.tanggal && String(r.tanggal).slice(0,7) === prefix; };
+  var H = (readAll(SHEETS.PENGHIMPUNAN) || []).filter(inBulan);
+  var T = (readAll(SHEETS.PENTASYARUFAN) || []).filter(inBulan);
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ if (l && l.id) layMap[l.id] = l; });
+
+  function isDaerah(r){ return resolveLayananName(r, layList, layMap) === LAYANAN_DAERAH; }
+
+  function kosongH(){ return { zakat:0, infakTerikat:0, infakUmum:0, amil:0, bhZakat:0, bhInfakTerikat:0, bhInfak:0, bhAmil:0, lain:0, total:0 }; }
+  function kosongT(){ return { zakat:0, infakTerikat:0, infakUmum:0, amil:0, lain:0, total:0 }; }
+
+  var seBantul = { penghimpunan: kosongH(), penyaluran: kosongT() };
+  var daerah   = { penghimpunan: kosongH(), penyaluran: kosongT() };
+
+  /* Bagi hasil bank adalah pendapatan lembaga (kas/bank), BUKAN penghimpunan
+     tingkat daerah dari fundraiser. Karena itu bagi hasil dihitung di SE BANTUL
+     tetapi TIDAK dimasukkan ke blok DAERAH — sesuai rekap manual. */
+  function _isBagiHasil(r){ return /bagi hasil/i.test(String(r.subJenis || '')); }
+  /* Bagi hasil dari rekening BDW (Bank BDW / BDW Umum / BDW Kebencanaan) tidak
+     dihitung di rekap, sesuai patokan rekap manual. */
+  function _bagiHasilBDW(r){
+    if (!_isBagiHasil(r)) return false;
+    var blob = _norm((r.bank || '') + ' ' + (r.namaDonatur || '') + ' ' + (r.akunKredit || ''));
+    return /\bbdw\b/.test(blob);
+  }
+
+  H.forEach(function(r){
+    if (_bagiHasilBDW(r)) return;          // dikecualikan dari rekap
+    var k = _closingKatH(r), n = Number(r.jumlah) || 0;
+    seBantul.penghimpunan[k] += n; seBantul.penghimpunan.total += n;
+    if (isDaerah(r) && !_isBagiHasil(r)){ daerah.penghimpunan[k] += n; daerah.penghimpunan.total += n; }
+  });
+  /* Penyaluran closing = penyaluran AKTUAL: LPJ (per program) + penyaluran
+     langsung daerah + operasional amil. TIDAK termasuk:
+       - UMP advance (uang muka; sudah dilewati saat impor, tetapi disaring
+         lagi di sini agar data lama pun aman),
+       - Biaya Administrasi Bank (biaya bank, bukan distribusi ke mustahik). */
+  function _skipPenyaluranClosing(r){
+    var sec = String(r.section || '').toUpperCase();
+    if (/^UMP\s+(ZAKAT|INFAK|AMIL)$/.test(sec)) return true;
+    if (sec === 'BIAYA ADMINISTRASI BANK') return true;
+    if (/administrasi bank/i.test(r.program || '')) return true;
+    return false;
+  }
+
+  T.forEach(function(r){
+    if (_skipPenyaluranClosing(r)) return;
+    var k = _closingKatT(r), n = Number(r.jumlah) || 0;
+    seBantul.penyaluran[k] += n; seBantul.penyaluran.total += n;
+    if (isDaerah(r)){ daerah.penyaluran[k] += n; daerah.penyaluran.total += n; }
+  });
+
+  // KLL/ULL = SE BANTUL - DAERAH
+  function selisih(a, b){ var o = {}; Object.keys(a).forEach(function(k){ o[k] = a[k] - b[k]; }); return o; }
+  var kll = {
+    penghimpunan: selisih(seBantul.penghimpunan, daerah.penghimpunan),
+    penyaluran: selisih(seBantul.penyaluran, daerah.penyaluran)
+  };
+
+  // Detail Sumber/Fundraising: penghimpunan DAERAH per nama fundraising (mentah).
+  // Bagi hasil dikecualikan agar JUMLAH-nya = total penghimpunan daerah.
+  var frPeta = {};
+  H.forEach(function(r){
+    if (!isDaerah(r) || _isBagiHasil(r)) return;
+    var nama = String(r.fundraising || '').trim() || 'Lainnya';
+    frPeta[nama] = (frPeta[nama] || 0) + (Number(r.jumlah) || 0);
+  });
+  var detailFundraising = Object.keys(frPeta).map(function(k){ return { nama: k, jumlah: frPeta[k] }; })
+    .sort(function(a, b){ return b.jumlah - a.jumlah; });
+  var totalFundraising = detailFundraising.reduce(function(a, b){ return a + b.jumlah; }, 0);
+
+  // Rincian per fundraiser (default 'Kantor') dipecah per peruntukan/pilar.
+  var pilihanKantor = '';
+  detailFundraising.forEach(function(f){ if (!pilihanKantor && /kantor/i.test(f.nama)) pilihanKantor = f.nama; });
+  function rincianFundraiser(namaFr){
+    if (!namaFr) return { fundraiser: '', rincian: [], total: 0 };
+    var peta = {};
+    H.forEach(function(r){
+      if (!isDaerah(r) || _isBagiHasil(r)) return;
+      if (_norm(r.fundraising) !== _norm(namaFr)) return;
+      var per = String(r.pilar || '').trim() || String(r.program || '').trim() || String(r.subJenis || r.jenisDana || 'Lainnya').trim();
+      peta[per] = (peta[per] || 0) + (Number(r.jumlah) || 0);
+    });
+    var rincian = Object.keys(peta).map(function(k){ return { peruntukan: k, jumlah: peta[k] }; })
+      .sort(function(a, b){ return b.jumlah - a.jumlah; });
+    return { fundraiser: namaFr, rincian: rincian, total: rincian.reduce(function(a, b){ return a + b.jumlah; }, 0) };
+  }
+
+  return {
+    bulan: prefix,
+    periode: (BULAN[Number(prefix.split('-')[1])] || '') + ' ' + prefix.split('-')[0],
+    seBantul: seBantul,
+    daerah: daerah,
+    kll: kll,
+    detailFundraising: detailFundraising,
+    totalFundraising: totalFundraising,
+    daftarFundraiser: detailFundraising.map(function(f){ return f.nama; }),
+    detailKantor: rincianFundraiser(pilihanKantor),
+    jumlahTransaksi: { himpun: H.length, salur: T.length },
+    settings: getAllSettings()
+  };
+}
+
+/* Rincian satu fundraiser tertentu (untuk mengganti "Detail Kantor" di layar). */
+function apiClosingRincianFundraiser(t, bulan, namaFr){
+  var full = apiClosingBulanan(t, bulan);
+  var prefix = full.bulan;
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ if (l && l.id) layMap[l.id] = l; });
+  var H = (readAll(SHEETS.PENGHIMPUNAN) || []).filter(function(r){ return r.tanggal && String(r.tanggal).slice(0,7) === prefix; });
+  var peta = {};
+  H.forEach(function(r){
+    if (resolveLayananName(r, layList, layMap) !== LAYANAN_DAERAH) return;
+    if (/bagi hasil/i.test(String(r.subJenis || ''))) return;
+    if (_norm(r.fundraising) !== _norm(namaFr)) return;
+    var per = String(r.pilar || '').trim() || String(r.program || '').trim() || String(r.subJenis || r.jenisDana || 'Lainnya').trim();
+    peta[per] = (peta[per] || 0) + (Number(r.jumlah) || 0);
+  });
+  var rincian = Object.keys(peta).map(function(k){ return { peruntukan: k, jumlah: peta[k] }; })
+    .sort(function(a, b){ return b.jumlah - a.jumlah; });
+  return { fundraiser: namaFr, rincian: rincian, total: rincian.reduce(function(a, b){ return a + b.jumlah; }, 0) };
+}
+
 function apiLaporanHarian(t, tanggal){
   _requirePerm(t, 'laporan', 'view');
   var tgl = String(tanggal || '').slice(0, 10);
@@ -4298,6 +4535,8 @@ REGISTRY['apiCadanganDB']=apiCadanganDB;
 REGISTRY['apiHapusRentang']=apiHapusRentang;
 REGISTRY['apiListAudit']=apiListAudit;
 REGISTRY['apiLaporanHarian']=apiLaporanHarian;
+REGISTRY['apiClosingBulanan']=apiClosingBulanan;
+REGISTRY['apiClosingRincianFundraiser']=apiClosingRincianFundraiser;
 REGISTRY['apiHapusAudit']=apiHapusAudit;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
 async function runRPC(db, fn, args, ctx){

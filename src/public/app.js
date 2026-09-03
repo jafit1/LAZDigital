@@ -94,7 +94,21 @@ var PILAR=['Pendidikan','Kesehatan','Ekonomi & Pemberdayaan','Dakwah & Advokasi'
 var KATEGORI_TERIKAT=['Kesehatan','Pendidikan','Sosial Dakwah','DAM','Kemanusiaan','Fidyah','Qurban'];
 var METODE=['Cash/Tunai','Transfer Bank','QRIS','E-Wallet','Debit/Kartu'];
 var TIPE_DONATUR=['Perorangan','Lembaga/Perusahaan','Hamba Allah','Kantor Layanan (KLL)','Unit Layanan (ULL)'];
-var FUNDRAISING_OPTIONS=['Lazismu Daerah Bantul','Sherli','Renata','Ariya','Nur Yulianto','Muzakki'];
+var FUNDRAISING_OPTIONS=['Lazismu Daerah Bantul','Kantor','Qris','Sherli','Renata','Ariya','Nur Yulianto','Muzakki'];
+
+/* Input fundraiser bebas dengan saran (datalist) — nama apa pun boleh, tidak
+   lagi terkunci ke daftar tetap, supaya rincian sumber di Closing lengkap.
+   Saran digabung dari daftar bawaan + fundraiser yang pernah dipakai. */
+function frInput(id, val){
+  var pakai = (window.CACHE && CACHE.frNames) || [];
+  var set = {}; var opts = [];
+  FUNDRAISING_OPTIONS.concat(pakai).forEach(function(n){
+    n = String(n||'').trim(); if(!n) return; var k=n.toLowerCase();
+    if(!set[k]){ set[k]=1; opts.push(n); }
+  });
+  return '<input id="'+id+'" list="'+id+'_list" value="'+esc(val||'')+'" placeholder="Nama fundraiser / sumber" autocomplete="off">'
+    + '<datalist id="'+id+'_list">'+opts.map(function(n){return '<option value="'+esc(n)+'"></option>';}).join('')+'</datalist>';
+}
 function cleanFR(fr) {
   if (!fr || fr === '-' || fr.toLowerCase() === 'tanpa fundraising') return 'Lazismu Daerah Bantul';
   return fr;
@@ -481,7 +495,7 @@ function formHimpun(id,host){
       moneyField('f_jumlah',r.jumlah,'Jumlah <b class="req">*</b>')
     + fld(2,'Metode <b class="req">*</b>',selOpt('f_metode',METODE,r.metode,'onMetodeChange()'))
     + fld(2,'Status',selOpt('f_statusBayar',['Lunas','Pending'],r.statusBayar||'Lunas'))
-    + fld(4,'Fundraising <b class="req">*</b>',selOpt('f_fundraising',FUNDRAISING_OPTIONS,r.fundraising||'',''))
+    + fld(4,'Fundraising <b class="req">*</b>',frInput('f_fundraising',r.fundraising||''))
     + '<div class="fld" id="rekWrap" data-col="4" style="display:none"><label>Rekening Tujuan</label><span id="rekSel"></span></div>'
     + fld(8,'Keterangan','<textarea id="f_keterangan" rows="2" placeholder="Catatan tambahan...">'+esc(r.keterangan||'')+'</textarea>',{cls:'fld-note'})
   );
@@ -708,7 +722,7 @@ function formTasyaruf(id,host){
       moneyField('f_jumlah',r.jumlah,'Jumlah / Nilai <b class="req">*</b>')
     + fld(2,'Metode',selOpt('f_metode',METODE,r.metode))
     + fld(2,'Status',selOpt('f_statusSalur',['Tersalur','Pending'],r.statusSalur||'Tersalur'))
-    + fld(4,'Fundraising <b class="req">*</b>',selOpt('f_fundraising',FUNDRAISING_OPTIONS,r.fundraising||'',''))
+    + fld(4,'Fundraising <b class="req">*</b>',frInput('f_fundraising',r.fundraising||''))
     + fld(8,'Keterangan','<textarea id="f_keterangan" rows="2" placeholder="Catatan tambahan...">'+esc(r.keterangan||'')+'</textarea>',{cls:'fld-note'})
   );
 
@@ -1065,7 +1079,7 @@ function renderLapRekap(mode){
 function renderLaporanShell(){
   var tabs=[['himpun','Detail Penghimpunan'],['salur','Detail Pentasyarufan'],
             ['harian','Cetak Harian'],['a2','Formulir A2'],
-            ['jurnal','Jurnal Penerimaan'],['broadcast','Broadcast WhatsApp']];
+            ['jurnal','Jurnal Penerimaan'],['closing','Closing Bulanan'],['broadcast','Broadcast WhatsApp']];
   var h='<div class="page-head"><div><h2>Laporan</h2><div class="desc">Rekap per kantor layanan, jurnal, dan broadcast</div></div></div>';
   h+='<div class="lap-tabs">'+tabs.map(function(t){
     return '<button class="lap-tab'+(LAP_TAB===t[0]?' on':'')+'" data-tab="'+t[0]+'" onclick="setLapTab(\''+t[0]+'\')">'+t[1]+'</button>';
@@ -1077,6 +1091,7 @@ function renderLaporanShell(){
   else if(LAP_TAB==='harian')renderHarianForm();
   else if(LAP_TAB==='a2')renderA2Form();
   else if(LAP_TAB==='jurnal')renderJurnalForm();
+  else if(LAP_TAB==='closing')renderClosingForm();
   else renderBroadcastForm();
 }
 function setLapTab(t){
@@ -1090,6 +1105,7 @@ function setLapTab(t){
   else if(t==='harian')renderHarianForm();
   else if(t==='a2')renderA2Form();
   else if(t==='jurnal')renderJurnalForm();
+  else if(t==='closing')renderClosingForm();
   else renderBroadcastForm();
 }
 /* Panel seragam untuk tab Jurnal & Broadcast, mengikuti gaya kartu Laporan. */
@@ -3213,6 +3229,21 @@ function tarikImportData() {
           + 'Transaksi KLL/ULL tercatat atas nama layanannya.'
           + ((res.bedaDana || 0) ? ' <b style="color:var(--red)">' + res.bedaDana + ' baris</b> menulis jenis dana berbeda dengan akun kreditnya — ditandai di bawah.' : '')
           + '</div>';
+
+        /* Peringatan anomali tanggal: baris yang tanggal debet & kreditnya beda. */
+        var anom = res.anomaliTanggal || [];
+        if (anom.length) {
+          h += '<div class="imp-note imp-warn"><b>⚠️ ' + anom.length + ' kemungkinan salah tanggal.</b> '
+            + 'Baris berikut punya tanggal debet dan kredit yang berbeda — periksa sebelum menyimpan:'
+            + '<ul style="margin:6px 0 0;padding-left:18px">'
+            + anom.slice(0, 8).map(function(a) {
+                return '<li style="margin:2px 0">' + esc(tglIndo(a.tglDebet)) + ' &ne; ' + esc(tglIndo(a.tglKredit))
+                  + ' &middot; ' + esc(a.nama) + ' &middot; Rp ' + rpCetak(a.jumlah)
+                  + (a.keterangan ? ' <span class="muted">(' + esc(a.keterangan.slice(0, 50)) + ')</span>' : '') + '</li>';
+              }).join('')
+            + (anom.length > 8 ? '<li>… dan ' + (anom.length - 8) + ' lagi</li>' : '')
+            + '</ul></div>';
+        }
         h += '<div style="margin-bottom:12px;font-weight:600;font-size:13.5px">' +
           'Analisis Jurnal selesai: <span style="color:var(--green)">' + totalValid + ' Baris Valid</span> (Penghimpunan: ' + res.himpunValid.length + ', Pentasyarufan: ' + res.salurValid.length + '), ' +
           '<span style="color:var(--red)">' + totalInvalid + ' Baris Tidak Valid</span> (diabaikan)' +
@@ -6106,6 +6137,165 @@ function lhTabelCetak(judul, kolom, baris, total, warnaTotal){
 }
 
 function rpCetak(n){ return (Number(n)||0).toLocaleString('id-ID'); }
+
+/* ============================================================
+   CLOSING BULANAN — rekap bergaya "REKAP LAZISMU SE BANTUL"
+   ============================================================ */
+var CLOSING_DATA = null;
+var CLOSING_FR = '';   // fundraiser yang sedang dirinci di blok hijau
+
+/* Baris penghimpunan & penyaluran (urutan mengikuti foto). */
+var CL_HIMPUN = [
+  ['zakat', 'Zakat Mal'], ['infakTerikat', 'Infak Terikat'], ['infakUmum', 'Infak Umum'], ['amil', 'Amil'],
+  ['bhZakat', 'Bagi hasil bank zakat'], ['bhInfakTerikat', 'Bagi hasil bank infak terikat'],
+  ['bhInfak', 'Bagi hasil bank infak'], ['bhAmil', 'Bagi hasil amil'], ['lain', 'Lainnya']
+];
+var CL_SALUR = [
+  ['zakat', 'Zakat'], ['infakTerikat', 'Infak Terikat'], ['infakUmum', 'Infak Umum'], ['amil', 'Amil'], ['lain', 'Lainnya']
+];
+
+function renderClosingForm(){
+  var now = new Date();
+  var yopt = ''; for (var y = now.getFullYear() + 1; y >= now.getFullYear() - 3; y--) yopt += '<option ' + (y === now.getFullYear() ? 'selected' : '') + '>' + y + '</option>';
+  var mopt = ''; for (var m = 1; m <= 12; m++) mopt += '<option value="' + m + '" ' + ((m - 1) === now.getMonth() ? 'selected' : '') + '>' + BULAN[m] + '</option>';
+  var form = '<div class="fgrid">'
+    + fld(3, 'Bulan', '<select id="cl_bulan">' + mopt + '</select>')
+    + fld(3, 'Tahun', '<select id="cl_tahun">' + yopt + '</select>')
+    + '</div>';
+  var acts = '<button class="btn btn-primary" onclick="loadClosing()">Tampilkan Closing</button>';
+  el('lapBody').innerHTML = lapPanel('Closing Bulanan',
+      'Rekap satu bulan: SE BANTUL (daerah + semua KLL/ULL) dan LAZISMU DAERAH (tanpa KLL/ULL), lengkap dengan rincian sumber/fundraising. Pilih bulan lalu tampilkan.',
+      form, acts)
+    + '<div id="closingPreview" class="lap-result"></div>';
+}
+
+function loadClosing(){
+  var m = el('cl_bulan').value, y = el('cl_tahun').value;
+  var bulan = y + '-' + ('0' + m).slice(-2);
+  el('closingPreview').innerHTML = BOXES_SPINNER;
+  gas('apiClosingBulanan')(TOKEN, bulan).then(function(d){
+    CLOSING_DATA = d;
+    CLOSING_FR = (d.detailKantor && d.detailKantor.fundraiser) || (d.daftarFundraiser[0] || '');
+    renderClosingPreview(d);
+  }).catch(function(e){ el('closingPreview').innerHTML = ''; handleErr(e); });
+}
+
+/* Satu blok dana (penghimpunan / penyaluran) sebagai tabel label→nilai. */
+function clBlok(judul, peta, baris){
+  var rows = baris.map(function(p){
+    var v = Number((peta || {})[p[0]]) || 0;
+    if (p[0] === 'lain' && v === 0) return '';
+    return '<tr><td>' + esc(p[1]) + '</td><td class="cl-num">' + rpCetak(v) + '</td></tr>';
+  }).join('');
+  return '<table class="cl-tbl"><thead><tr><th colspan="2">' + esc(judul) + '</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '<tfoot><tr><td>Total</td><td class="cl-num">' + rpCetak((peta || {}).total) + '</td></tr></tfoot></table>';
+}
+
+function clPasangan(blokJudul, obj){
+  return '<div class="cl-pair">'
+    + clBlok('PENGHIMPUNAN', obj.penghimpunan, CL_HIMPUN)
+    + clBlok('PENYALURAN', obj.penyaluran, CL_SALUR)
+    + '</div>';
+}
+
+function renderClosingPreview(d){
+  var h = '<div class="card cl-card">'
+    + '<div class="cl-head">'
+    + '<div><h3 style="margin:0">Closing Bulanan</h3><div class="muted" style="font-size:13px">REKAP ' + esc((SETTINGS.namaLembaga || 'LAZISMU').toUpperCase()) + ' — ' + esc(d.periode) + '</div></div>'
+    + '<button class="btn btn-primary btn-sm" onclick="cetakClosing()">🖨 Cetak / Simpan PDF</button>'
+    + '</div>';
+
+  h += '<div class="cl-sec-title">SE BANTUL <span class="muted">(daerah + seluruh KLL/ULL)</span></div>';
+  h += clPasangan('SE BANTUL', d.seBantul);
+
+  h += '<div class="cl-sec-title">LAZISMU DAERAH <span class="muted">(tanpa KLL/ULL)</span></div>';
+  h += clPasangan('DAERAH', d.daerah);
+
+  /* Detail Fundraising (oranye) + Detail per fundraiser (hijau) */
+  h += '<div class="cl-detail">';
+  h += '<div class="cl-box cl-orange"><div class="cl-box-h">Detail Sumber / Fundraising</div>'
+    + (d.detailFundraising.length
+        ? d.detailFundraising.map(function(f){ return '<div class="cl-box-r"><span>' + esc(f.nama) + '</span><b>' + rpCetak(f.jumlah) + '</b></div>'; }).join('')
+        : '<div class="muted" style="padding:8px 0;font-size:12px">Belum ada data fundraising daerah.</div>')
+    + '<div class="cl-box-r cl-box-tot"><span>JUMLAH</span><b>' + rpCetak(d.totalFundraising) + '</b></div></div>';
+
+  var frOpts = (d.daftarFundraiser || []).map(function(n){ return '<option value="' + esc(n) + '"' + (n === CLOSING_FR ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+  var dk = d.detailKantor || { rincian: [], total: 0 };
+  h += '<div class="cl-box cl-green"><div class="cl-box-h">Detail <select id="cl_frPilih" onchange="closingPilihFr()">' + frOpts + '</select></div>'
+    + '<div id="cl_frRincian">' + clRincianHTML(dk) + '</div></div>';
+  h += '</div>';
+
+  h += '</div>';
+  el('closingPreview').innerHTML = h;
+}
+
+function clRincianHTML(dk){
+  if (!dk || !dk.rincian || !dk.rincian.length)
+    return '<div class="muted" style="padding:8px 0;font-size:12px">Tidak ada rincian untuk sumber ini.</div>';
+  return dk.rincian.map(function(r){ return '<div class="cl-box-r"><span>' + esc(r.peruntukan) + '</span><b>' + rpCetak(r.jumlah) + '</b></div>'; }).join('')
+    + '<div class="cl-box-r cl-box-tot"><span>JUMLAH</span><b>' + rpCetak(dk.total) + '</b></div>';
+}
+
+function closingPilihFr(){
+  var nama = el('cl_frPilih').value;
+  CLOSING_FR = nama;
+  el('cl_frRincian').innerHTML = BOXES_SPINNER;
+  gas('apiClosingRincianFundraiser')(TOKEN, CLOSING_DATA.bulan, nama).then(function(dk){
+    el('cl_frRincian').innerHTML = clRincianHTML(dk);
+  }).catch(handleErr);
+}
+
+function cetakClosing(){
+  if (!CLOSING_DATA) { toast('Tampilkan datanya dulu', true); return; }
+  printDoc(buildClosingHTML(CLOSING_DATA));
+}
+
+function buildClosingHTML(d){
+  function blok(judul, peta, baris){
+    var rows = baris.map(function(p){
+      var v = Number((peta || {})[p[0]]) || 0;
+      if (p[0] === 'lain' && v === 0) return '';
+      return '<tr><td>' + esc(p[1]) + '</td><td class="n">' + rpCetak(v) + '</td></tr>';
+    }).join('');
+    return '<table class="t"><thead><tr><th colspan="2">' + esc(judul) + '</th></tr></thead><tbody>' + rows
+      + '</tbody><tfoot><tr><td>Total</td><td class="n">' + rpCetak((peta || {}).total) + '</td></tr></tfoot></table>';
+  }
+  function pair(o){ return '<div class="pair">' + blok('PENGHIMPUNAN', o.penghimpunan, CL_HIMPUN) + blok('PENYALURAN', o.penyaluran, CL_SALUR) + '</div>'; }
+  var dk = d.detailKantor || { rincian: [], total: 0 };
+  var nm = (SETTINGS.namaLembaga || 'LAZISMU').toUpperCase();
+
+  return '<!doctype html><html><head><meta charset="utf-8"><title>Closing ' + esc(d.periode) + '</title><style>'
+    + '@page{size:A4 portrait;margin:14mm 12mm}'
+    + '*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:11px;margin:0}'
+    + 'h1{font-size:15px;text-align:center;margin:0 0 2px}.sub{text-align:center;font-size:11px;color:#444;margin-bottom:12px}'
+    + '.sec{font-weight:bold;font-size:12px;background:#eee;padding:4px 8px;margin:12px 0 6px;border:1px solid #bbb}'
+    + '.pair{display:flex;gap:10px}.pair>.t{flex:1}'
+    + 'table.t{width:100%;border-collapse:collapse;margin-bottom:2px}'
+    + '.t th,.t td{border:1px solid #999;padding:3px 7px}.t th{background:#f2f2f2;text-align:left;font-size:11px}'
+    + '.t td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'
+    + '.t tfoot td{font-weight:bold;background:#f7f7f7}'
+    + '.detail{display:flex;gap:10px;margin-top:12px}.box{flex:1;border:1px solid #999}'
+    + '.box .bh{font-weight:bold;padding:4px 8px;border-bottom:1px solid #999}'
+    + '.orange .bh{background:#f6d9b8}.green .bh{background:#cfe6cf}'
+    + '.box .r{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px solid #e5e5e5}'
+    + '.box .r b{font-variant-numeric:tabular-nums}.box .tot{font-weight:bold;background:#fafafa;border-top:1px solid #999}'
+    + '</style></head><body>'
+    + '<h1>REKAP ' + esc(nm) + ' SE BANTUL BULAN ' + esc(d.periode.toUpperCase()) + '</h1>'
+    + '<div class="sub">Ringkasan closing penghimpunan &amp; penyaluran</div>'
+    + '<div class="sec">SE BANTUL — daerah + seluruh KLL/ULL</div>' + pair(d.seBantul)
+    + '<div class="sec">LAZISMU DAERAH — tanpa KLL/ULL</div>' + pair(d.daerah)
+    + '<div class="detail">'
+    + '<div class="box orange"><div class="bh">Detail Sumber / Fundraising</div>'
+    + d.detailFundraising.map(function(f){ return '<div class="r"><span>' + esc(f.nama) + '</span><b>' + rpCetak(f.jumlah) + '</b></div>'; }).join('')
+    + '<div class="r tot"><span>JUMLAH</span><b>' + rpCetak(d.totalFundraising) + '</b></div></div>'
+    + '<div class="box green"><div class="bh">Detail ' + esc(dk.fundraiser || 'Kantor') + '</div>'
+    + (dk.rincian || []).map(function(r){ return '<div class="r"><span>' + esc(r.peruntukan) + '</span><b>' + rpCetak(r.jumlah) + '</b></div>'; }).join('')
+    + '<div class="r tot"><span>JUMLAH</span><b>' + rpCetak(dk.total) + '</b></div></div>'
+    + '</div>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+}
 
 function lhRekapCetak(judul, obj){
   var keys = Object.keys(obj||{}).filter(function(k){ return (obj[k]||0) > 0; });

@@ -3420,3 +3420,47 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
   .rt-sel,.rt-sel.ujung,.rt-sel.tunggal,.rt-chip,.rt-nav,.rt-terap,.rt-btn .rt-car{transition:none}
   .rt-sel:active,.rt-chip:active,.rt-nav:active,.rt-terap:active{transform:none}
 }
+
+/* ============================================================
+   45. Closing Bulanan (pratinjau layar)
+   ============================================================ */
+.cl-card .cl-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.cl-sec-title{
+  font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.01em;
+  color:var(--accent);margin:18px 0 8px;padding-bottom:5px;border-bottom:2px solid rgba(var(--accent-rgb),.25);
+}
+.cl-sec-title:first-of-type{margin-top:4px}
+.cl-sec-title .muted{font-weight:500;font-size:12px}
+
+.cl-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){.cl-pair{grid-template-columns:1fr}}
+
+.cl-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.cl-tbl th,.cl-tbl td{border:1px solid var(--border);padding:5px 9px}
+.cl-tbl thead th{
+  background:var(--surface2);text-align:left;font-family:var(--head);font-weight:700;
+  font-size:11.5px;letter-spacing:.03em;color:var(--text);
+}
+.cl-tbl td.cl-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cl-tbl tfoot td{font-weight:700;background:var(--surface2)}
+
+.cl-detail{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+@media (max-width:640px){.cl-detail{grid-template-columns:1fr}}
+.cl-box{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.cl-box-h{
+  font-family:var(--head);font-weight:700;font-size:12.5px;padding:7px 11px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:6px;
+}
+.cl-orange .cl-box-h{background:rgba(234,138,44,.16);color:#9a5a12}
+.cl-green .cl-box-h{background:rgba(18,160,106,.15);color:#0d7a4f}
+[data-theme="dark"] .cl-orange .cl-box-h{color:#f0b072}
+[data-theme="dark"] .cl-green .cl-box-h{color:#6dd4a0}
+.cl-box-h select{
+  margin-left:auto;font:inherit;font-size:12px;font-weight:600;padding:2px 6px;border-radius:7px;
+  background:var(--surface);border:1px solid var(--border);color:var(--text);max-width:60%;
+}
+.cl-box-r{display:flex;justify-content:space-between;gap:10px;padding:5px 11px;border-bottom:1px solid var(--border2);font-size:12.5px}
+.cl-box-r span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-box-r b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.cl-box-r:last-child{border-bottom:0}
+.cl-box-tot{font-weight:700;background:var(--surface2)}
