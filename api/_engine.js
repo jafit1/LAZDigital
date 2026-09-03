@@ -63,14 +63,15 @@ var ACTIONS = ['view','create','edit','delete'];
 
 var BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
-var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL'];
+var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL','Amil'];
 var SUBJENIS={
-  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Setor Tunai'],
-  'Infak':['Infak Umum','Infak Terikat','Setor Tunai'],
-  'Sedekah':['Sedekah Umum','Sedekah Terikat'],
-  'Wakaf':['Wakaf Uang','Wakaf Melalui Uang'],
+  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Bagi Hasil Bank','Setor Tunai'],
+  'Infak':['Infak Umum','Infak Terikat','Bagi Hasil Bank','Setor Tunai'],
+  'Sedekah':['Sedekah Umum','Sedekah Terikat','Bagi Hasil Bank'],
+  'Wakaf':['Wakaf Uang','Wakaf Melalui Uang','Bagi Hasil Bank'],
   'Kurban':['Kurban'],'Fidyah':['Fidyah'],
-  'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya']
+  'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya'],
+  'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank','Setor Tunai']
 };
 var METODE=['Cash/Tunai','Transfer Bank','QRIS','E-Wallet','Debit/Kartu'];
 var TIPE_DONATUR=['Perorangan','Lembaga/Perusahaan','Hamba Allah','Kantor Layanan (KLL)','Unit Layanan (ULL)'];
@@ -426,7 +427,25 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
   var filterPrefix = filterMonth && filterMonth !== 'Semua' ? filterMonth : null;
   var H = H_all;
   var T = T_all;
-  if (filterPrefix) {
+
+  /* `filterHari` boleh berupa satu tanggal (seperti dulu) atau {dari, sampai}.
+     Rentang tanggal berdiri sendiri: bila diisi, ia yang menentukan dan
+     pilihan bulan/pekan tidak ikut menyempitkan. Versi lama hanya menerapkan
+     saringan tanggal saat bulan juga dipilih, sehingga memilih tanggal saja
+     tidak berpengaruh apa-apa. */
+  var rDari = '', rSampai = '';
+  if (filterHari && typeof filterHari === 'object'){
+    rDari   = String(filterHari.dari   || '').slice(0,10);
+    rSampai = String(filterHari.sampai || '').slice(0,10);
+  }
+  var pakaiRentang = !!(rDari && rSampai);
+  if (pakaiRentang && rDari > rSampai){ var _tk = rDari; rDari = rSampai; rSampai = _tk; }
+
+  if (pakaiRentang) {
+    filterPrefix = null;
+    H = H_all.filter(function(r) { return _dalamRentang(r.tanggal, rDari, rSampai); });
+    T = T_all.filter(function(r) { return _dalamRentang(r.tanggal, rDari, rSampai); });
+  } else if (filterPrefix) {
     H = H_all.filter(function(r) { return r.tanggal && String(r.tanggal).indexOf(filterPrefix) === 0; });
     T = T_all.filter(function(r) { return r.tanggal && String(r.tanggal).indexOf(filterPrefix) === 0; });
     
@@ -530,6 +549,35 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
   
   // Calculate byRekening (Saldo per Rekening)
   var byRekening = {};
+
+  // Label untuk transaksi non-tunai yang rekeningnya tidak terisi / tidak dikenal.
+  // Tanpa ini, uang masuk via bank bisa hilang dari dashboard.
+  function _labelRekLepas(r) {
+    var b = String(r.bank || '').trim();
+    if (b) return b;
+    var m = String(r.metode || '').trim();
+    if (/qris/i.test(m)) return 'QRIS (rekening belum dipilih)';
+    if (/wallet|e-?wallet/i.test(m)) return 'E-Wallet (rekening belum dipilih)';
+    return 'Transfer Bank (rekening belum dipilih)';
+  }
+
+  // Cocokkan label bebas ke rekening terdaftar. Nomor kosong TIDAK boleh dianggap cocok
+  // (bug lama: ''.indexOf() mengembalikan 0 sehingga semua label ikut tercocokkan).
+  function _cariRekMirip(peta, label) {
+    var hit = null;
+    var lab = String(label || '');
+    Object.keys(peta).forEach(function(k) {
+      if (hit) return;
+      var rek = peta[k];
+      if (rek.nama === lab) { hit = k; return; }
+      var no = String(rek.nomor || '').trim();
+      if (no && lab.indexOf(no) >= 0) { hit = k; return; }
+      var nb = String(rek.nama || '').split(' - ')[0].trim();
+      if (nb && lab.trim().toLowerCase() === nb.toLowerCase()) { hit = k; }
+    });
+    return hit;
+  }
+
   var listRek = readAll(SHEETS.REKENING) || [];
   
   // 1. Initialize active bank accounts
@@ -550,21 +598,18 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     if (!isCash && r.rekeningId && byRekening[r.rekeningId]) {
       byRekening[r.rekeningId].penerimaan += n;
       byRekening[r.rekeningId].saldo += n;
-    } else if (!isCash && r.bank) {
-      var label = r.bank;
+    } else if (!isCash) {
+      // Transaksi non-tunai tanpa rekeningId yang cocok tetap WAJIB masuk hitungan.
+      // Sebelumnya baris seperti ini hilang total dari dashboard (hanya kas yang terbaca).
+      var label = _labelRekLepas(r);
       var grp = getBankGroupName(label);
-      var matchedId = null;
-      Object.keys(byRekening).forEach(function(k) {
-        if (byRekening[k].nama === label || label.indexOf(byRekening[k].nomor) >= 0) {
-          matchedId = k;
-        }
-      });
+      var matchedId = _cariRekMirip(byRekening, label);
       if (matchedId) {
         byRekening[matchedId].penerimaan += n;
         byRekening[matchedId].saldo += n;
       } else {
         if (!byRekening[label]) {
-          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0 };
+          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, lepas: true };
         }
         byRekening[label].penerimaan += n;
         byRekening[label].saldo += n;
@@ -582,21 +627,16 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     if (!isCash && r.rekeningId && byRekening[r.rekeningId]) {
       byRekening[r.rekeningId].pentasyarufan += n;
       byRekening[r.rekeningId].saldo -= n;
-    } else if (!isCash && r.bank) {
-      var label = r.bank;
+    } else if (!isCash) {
+      var label = _labelRekLepas(r);
       var grp = getBankGroupName(label);
-      var matchedId = null;
-      Object.keys(byRekening).forEach(function(k) {
-        if (byRekening[k].nama === label || label.indexOf(byRekening[k].nomor) >= 0) {
-          matchedId = k;
-        }
-      });
+      var matchedId = _cariRekMirip(byRekening, label);
       if (matchedId) {
         byRekening[matchedId].pentasyarufan += n;
         byRekening[matchedId].saldo -= n;
       } else {
         if (!byRekening[label]) {
-          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0 };
+          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, lepas: true };
         }
         byRekening[label].pentasyarufan += n;
         byRekening[label].saldo -= n;
@@ -693,8 +733,10 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
       });
       return detail;
     })(),
-    selectedPekan: filterPekan || 'Semua',
-    selectedHari: filterHari || 'Semua',
+    selectedPekan: pakaiRentang ? 'Semua' : (filterPekan || 'Semua'),
+    selectedHari: (filterHari && typeof filterHari === 'object') ? 'Semua' : (filterHari || 'Semua'),
+    selectedRentang: pakaiRentang ? { dari: rDari, sampai: rSampai } : null,
+    labelRentang: pakaiRentang ? _labelRentang(rDari, rSampai) : '',
     settings: getAllSettings()
   };
 }
@@ -868,21 +910,25 @@ function getMonthFromDate(dStr) {
   return '';
 }
 
-function _getJurnalData(year, month) {
+/* `rentang` (opsional) = {dari, sampai} dalam 'yyyy-mm-dd'. Bila diisi, jurnal
+   disusun untuk rentang tanggal bebas, bukan satu bulan penuh. */
+function _getJurnalData(year, month, rentang) {
   var listRek = readAll(SHEETS.REKENING) || [];
   var layMap={}; readAll(SHEETS.LAYANAN).forEach(function(l){layMap[l.id]=l;});
-  
-  var himpunRows=readAll(SHEETS.PENGHIMPUNAN).filter(function(r){
-    if(!r.tanggal)return false;
+
+  var pakaiRentang = !!(rentang && rentang.dari && rentang.sampai);
+  var rDari = pakaiRentang ? String(rentang.dari).slice(0,10) : '';
+  var rSampai = pakaiRentang ? String(rentang.sampai).slice(0,10) : '';
+
+  function dalamPeriode(r){
+    if(!r.tanggal) return false;
+    if (pakaiRentang) return _dalamRentang(r.tanggal, rDari, rSampai);
     var d=new Date(r.tanggal);
     return d.getFullYear()===year&&(d.getMonth()+1)===month;
-  });
-  
-  var salurRows=readAll(SHEETS.PENTASYARUFAN).filter(function(r){
-    if(!r.tanggal)return false;
-    var d=new Date(r.tanggal);
-    return d.getFullYear()===year&&(d.getMonth()+1)===month;
-  });
+  }
+
+  var himpunRows=readAll(SHEETS.PENGHIMPUNAN).filter(dalamPeriode);
+  var salurRows=readAll(SHEETS.PENTASYARUFAN).filter(dalamPeriode);
   
   function catTerikat(r){ var s=(r.pilar||r.subJenis||'').replace(/infak/ig,'').replace(/terikat/ig,'').replace(/[-•]/g,' ').trim(); return s||'Umum'; }
   var _layList = readAll(SHEETS.LAYANAN) || [];
@@ -934,7 +980,24 @@ function _getJurnalData(year, month) {
     }
 
     var groupLabel, creditAcc, debitBase, ketPrefix;
-    if(jl.indexOf('zakat')>=0){
+    /* Bagi hasil bank punya seksi dan akun kredit sendiri, mengikuti berkas
+       acuan: "Penerimaan Bagi Hasil Rek {Dana}". Dananya tetap dana rekening
+       asalnya, jadi saldo Zakat/Infak/Amil ikut bertambah sebagaimana mestinya. */
+    var _bagiHasil = sl.indexOf('bagi hasil') >= 0;
+    if (_bagiHasil) {
+      var _bhDana = jl.indexOf('zakat')>=0 ? 'Zakat'
+                  : jl.indexOf('amil')>=0  ? 'Amil'
+                  : jl.indexOf('wakaf')>=0 ? 'Wakaf'
+                  : (jl.indexOf('infak')>=0||jl.indexOf('infaq')>=0||jl.indexOf('sedekah')>=0)
+                      ? (r.pilar ? 'Infak Terikat' : 'Infak')
+                      : (r.jenisDana||'Lainnya');
+      var _bhKat = (_bhDana === 'Infak Terikat' && r.pilar) ? (' ' + jpBersih(r.pilar)) : '';
+      groupLabel = 'BAGI HASIL';
+      debitBase  = _bhDana.replace(/\s*terikat\s*$/i, '');
+      creditAcc  = 'Penerimaan Bagi Hasil Rek ' + _bhDana + _bhKat;
+      ketPrefix  = 'Bagi Hasil Bank';
+    }
+    else if(jl.indexOf('zakat')>=0){
       groupLabel='ZAKAT';
       debitBase='Zakat';
       var cleanSub = r.subJenis ? String(r.subJenis).replace(/^zakat\s+/i, '') : '';
@@ -954,7 +1017,8 @@ function _getJurnalData(year, month) {
     if (r.section) {
       secKey = r.section;
     } else {
-      if (groupLabel === 'BAGI HASIL BANK') secKey = 'BAGI HASIL BANK';
+      if (groupLabel === 'BAGI HASIL') secKey = 'BAGI HASIL';
+      else if (groupLabel === 'BAGI HASIL BANK') secKey = 'BAGI HASIL BANK';
       else if (groupLabel === 'PENGEMBALIAN UMP') secKey = 'PENGEMBALIAN UMP';
       else secKey = 'PENERIMAAN '+groupLabel+' VIA '+via;
     }
@@ -973,7 +1037,10 @@ function _getJurnalData(year, month) {
        dicetak di jurnal supaya kolomnya ringkas dan seragam. */
     var _terikat = /terikat/i.test(ketPrefix);
     var ket;
-    if (_terikat) {
+    if (_bagiHasil) {
+      /* Keterangan bagi hasil menyebut dana dan rekening asalnya, bukan nama donatur. */
+      ket = jpBersih(String(r.keterangan||'').trim() || ('Bagi hasil bank ' + debitBase.toLowerCase()));
+    } else if (_terikat) {
       ket = jpBersih(donorLabel(r) + ' ' + ketPrefix);
     } else {
       var _peruntukan = String(r.program||'').trim();
@@ -1037,7 +1104,7 @@ function _getJurnalData(year, month) {
     'PENERIMAAN INFAK TERIKAT VIA KAS', 'PENERIMAAN INFAK TERIKAT VIA BANK',
     'PENERIMAAN AMIL VIA KAS', 'PENERIMAAN AMIL VIA BANK',
     'PENERIMAAN WAKAF VIA KAS', 'PENERIMAAN WAKAF VIA BANK',
-    'BAGI HASIL BANK', 'PENGEMBALIAN UMP',
+    'BAGI HASIL', 'BAGI HASIL BANK', 'PENGEMBALIAN UMP',
     'SETOR TUNAI',
     'BIAYA ADMINISTRASI BANK',
     'OPERASIONAL AMIL VIA BANK', 'OPERASIONAL AMIL VIA KAS',
@@ -1051,9 +1118,12 @@ function _getJurnalData(year, month) {
   var totalCount = himpunRows.length + salurRows.length;
   return {
     title: 'JURNAL TRANSAKSI',
-    periode: (BULAN[month]||'')+' '+year,
+    periode: pakaiRentang ? _labelRentang(rDari, rSampai) : ((BULAN[month]||'')+' '+year),
     bulan: month,
     tahun: year,
+    dari: rDari,
+    sampai: rSampai,
+    modeRentang: pakaiRentang,
     sections: sections,
     grandTotal: grand,
     count: totalCount,
@@ -1061,8 +1131,29 @@ function _getJurnalData(year, month) {
   };
 }
 
-function apiJurnalData(t,year,month){
+/* Label periode untuk rentang bebas: "5 – 20 Agustus 2026" bila masih satu
+   bulan, "28 Juli – 3 Agustus 2026" bila beda bulan, lengkap dengan tahun
+   di kedua sisi bila tahunnya juga berbeda. */
+function _labelRentang(dari, sampai){
+  var a = String(dari||'').split('-'), b = String(sampai||'').split('-');
+  if (a.length < 3 || b.length < 3) return (dari||'') + ' – ' + (sampai||'');
+  var ta = Number(a[0]), ba = Number(a[1]), ha = Number(a[2]);
+  var tb = Number(b[0]), bb = Number(b[1]), hb = Number(b[2]);
+  if (dari === sampai) return ha + ' ' + BULAN[ba] + ' ' + ta;
+  if (ta === tb && ba === bb) return ha + ' – ' + hb + ' ' + BULAN[bb] + ' ' + tb;
+  if (ta === tb) return ha + ' ' + BULAN[ba] + ' – ' + hb + ' ' + BULAN[bb] + ' ' + tb;
+  return ha + ' ' + BULAN[ba] + ' ' + ta + ' – ' + hb + ' ' + BULAN[bb] + ' ' + tb;
+}
+
+/* `rentang` opsional: {dari, sampai}. Bila diisi, bulan & tahun diabaikan. */
+function apiJurnalData(t,year,month,rentang){
   _requirePerm(t,'laporan','view');
+  if (rentang && rentang.dari && rentang.sampai){
+    var dari = String(rentang.dari).slice(0,10), sampai = String(rentang.sampai).slice(0,10);
+    if (!_tglSah(dari) || !_tglSah(sampai)) throw new Error('Tanggal awal dan tanggal akhir harus diisi.');
+    if (dari > sampai) throw new Error('Tanggal awal tidak boleh melewati tanggal akhir.');
+    return _getJurnalData(0, 0, { dari: dari, sampai: sampai });
+  }
   return _getJurnalData(Number(year), Number(month));
 }
 
@@ -1136,85 +1227,106 @@ function apiBroadcastReport(t,start,end){
   var s=new Date(start); s.setHours(0,0,0,0); var e=new Date(end); e.setHours(23,59,59,999);
   function inRange(r){ if(!r.tanggal)return false; var d=new Date(r.tanggal); return d>=s&&d<=e; }
   var H=readAll(SHEETS.PENGHIMPUNAN).filter(inRange), T=readAll(SHEETS.PENTASYARUFAN).filter(inRange);
-  
+
+  /* ----------------------------------------------------------------
+     Pengelompokan harus MENYELURUH: setiap rupiah wajib masuk tepat
+     satu keranjang, supaya rincian yang ditampilkan selalu berjumlah
+     sama dengan totalnya.
+
+     Versi lama memakai pencocokan persis (g === 'zakat') dan tidak
+     punya keranjang cadangan pada cabang uang muka program, sehingga
+     penyaluran ber-sumberDana selain Zakat/Infak/Amil ikut terhitung
+     di total tetapi hilang dari rinciannya — itulah yang membuat
+     penjumlahan broadcast tidak pernah cocok.
+     ---------------------------------------------------------------- */
+  function bcJenis(r){
+    var g = _norm(r.jenisDana), sub = _norm(r.subJenis);
+    var terikat = sub.indexOf('terikat') >= 0;
+    if (g.indexOf('zakat') >= 0) return 'zakat';
+    if (g.indexOf('infa') >= 0 || g.indexOf('sedekah') >= 0 || g.indexOf('shodaqoh') >= 0)
+      return terikat ? 'infakTerikat' : 'infakUmum';
+    if (g.indexOf('amil') >= 0) return 'amil';
+    if (g.indexOf('wakaf') >= 0) return 'wakaf';
+    if (g.indexOf('kurban') >= 0 || g.indexOf('qurban') >= 0) return 'kurban';
+    if (g.indexOf('fidyah') >= 0) return 'fidyah';
+    if (g.indexOf('dskl') >= 0) return 'dskl';
+    return 'lainnya';
+  }
+  function bcSumber(r){
+    var sd = _norm(r.sumberDana);
+    if (sd.indexOf('zakat') >= 0) return 'zakat';
+    if (sd.indexOf('infa') >= 0 || sd.indexOf('sedekah') >= 0) return 'infak';
+    if (sd.indexOf('amil') >= 0) return 'amil';
+    if (sd.indexOf('wakaf') >= 0) return 'wakaf';
+    if (sd.indexOf('kurban') >= 0 || sd.indexOf('qurban') >= 0) return 'kurban';
+    if (sd.indexOf('dskl') >= 0) return 'dskl';
+    return 'lainnya';
+  }
+  function jumlahPeta(p){ var t=0; Object.keys(p).forEach(function(k){ t += p[k]||0; }); return t; }
+
   var tH = 0;
-  var himpunBreakdown = { zakat: 0, infakUmum: 0, infakTerikat: 0, amil: 0, dskl: 0 };
-  H.forEach(function(r) {
+  var himpunBreakdown = { zakat:0, infakUmum:0, infakTerikat:0, amil:0, wakaf:0, kurban:0, fidyah:0, dskl:0, lainnya:0 };
+  H.forEach(function(r){
     var n = Number(r.jumlah) || 0;
     tH += n;
-    var g = String(r.jenisDana || '').toLowerCase();
-    var sub = String(r.subJenis || '').toLowerCase();
-    if (g === 'zakat') {
-      himpunBreakdown.zakat += n;
-    } else if (g === 'infak' || g === 'infaq') {
-      if (sub.indexOf('terikat') >= 0) {
-        himpunBreakdown.infakTerikat += n;
-      } else {
-        himpunBreakdown.infakUmum += n;
+    himpunBreakdown[bcJenis(r)] += n;
+  });
+
+  var salurBreakdown = { zakat:0, infak:0, amil:0, wakaf:0, kurban:0, dskl:0, lainnya:0 };
+  var umpBreakdown   = { zakat:0, infakTerikat:0, infakUmum:0, amil:0, lainnya:0 };
+  var tT = 0;
+
+  T.forEach(function(r){
+    var n = Number(r.jumlah) || 0;
+    tT += n;
+    var prog = _norm(r.program), ket = _norm(r.keterangan);
+    var isUmp = (prog.indexOf('ump') >= 0 || prog.indexOf('uang muka') >= 0
+              || ket.indexOf('ump') >= 0 || ket.indexOf('lpj') >= 0 || ket.indexOf('pertanggungjawaban') >= 0);
+    var sumber = bcSumber(r);
+
+    if (isUmp) {
+      if (sumber === 'zakat') umpBreakdown.zakat += n;
+      else if (sumber === 'infak') {
+        if (prog.indexOf('terikat') >= 0 || ket.indexOf('terikat') >= 0) umpBreakdown.infakTerikat += n;
+        else umpBreakdown.infakUmum += n;
       }
-    } else if (g === 'amil') {
-      himpunBreakdown.amil += n;
+      else if (sumber === 'amil') umpBreakdown.amil += n;
+      else umpBreakdown.lainnya += n;          /* keranjang cadangan — dulu tidak ada */
     } else {
-      himpunBreakdown.dskl += n;
+      salurBreakdown[sumber] = (salurBreakdown[sumber] || 0) + n;
     }
   });
 
-  var salurBreakdown = { zakat: 0, infak: 0, amil: 0, dskl: 0 };
-  var umpBreakdown = { zakat: 0, infakTerikat: 0, infakUmum: 0, amil: 0 };
-  var tT = 0;
-  
-  T.forEach(function(r) {
-    var n = Number(r.jumlah) || 0;
-    tT += n;
-    var sd = String(r.sumberDana || '').toLowerCase();
-    var prog = String(r.program || '').toLowerCase();
-    var ket = String(r.keterangan || '').toLowerCase();
-    var isUmp = (prog.indexOf('ump') >= 0 || prog.indexOf('uang muka') >= 0 || ket.indexOf('ump') >= 0 || ket.indexOf('lpj') >= 0 || ket.indexOf('pertanggungjawaban') >= 0);
-    
-    if (isUmp) {
-      if (sd === 'zakat') {
-        umpBreakdown.zakat += n;
-      } else if (sd === 'infak' || sd === 'infaq') {
-        if (prog.indexOf('terikat') >= 0 || ket.indexOf('terikat') >= 0) {
-          umpBreakdown.infakTerikat += n;
-        } else {
-          umpBreakdown.infakUmum += n;
-        }
-      } else if (sd === 'amil') {
-        umpBreakdown.amil += n;
-      }
-    } else {
-      if (sd === 'zakat') {
-        salurBreakdown.zakat += n;
-      } else if (sd === 'infak' || sd === 'infaq') {
-        salurBreakdown.infak += n;
-      } else if (sd === 'amil') {
-        salurBreakdown.amil += n;
-      } else {
-        salurBreakdown.dskl += n;
-      }
-    }
-  });
+  var totalUmp = jumlahPeta(umpBreakdown);
+  var totalSalurLangsung = jumlahPeta(salurBreakdown);
 
   function fmtTgl(d){return Utilities.formatDate(d,TZ,'dd MMMM yyyy');}
   var pRaw = start === end ? fmtTgl(s) : fmtTgl(s) + ' s/d ' + fmtTgl(e);
-  
-  return { 
-    periode: fmtTgl(s)+' s/d '+fmtTgl(e), 
+
+  return {
+    periode: fmtTgl(s)+' s/d '+fmtTgl(e),
     periodeRaw: pRaw,
-    totalHimpun: tH, 
-    totalTasyaruf: tT, 
+    totalHimpun: tH,
+    totalTasyaruf: tT,
+    totalUmp: totalUmp,
+    totalSalurLangsung: totalSalurLangsung,
+    saldo: tH - tT,
     himpunBreakdown: himpunBreakdown,
     salurBreakdown: salurBreakdown,
     umpBreakdown: umpBreakdown,
-    donatur: uniq(H,'namaDonatur'), 
-    mustahik: uniq(T,'namaPenerima'), 
-    trxHimpun: H.length, 
-    trxTasyaruf: T.length, 
-    settings: getAllSettings() 
+    /* Selisih harus nol. Dikirim apa adanya supaya ketidakcocokan
+       terlihat di layar, bukan diam-diam menempel di salah satu baris. */
+    cek: {
+      himpun: tH - jumlahPeta(himpunBreakdown),
+      tasyaruf: tT - (totalSalurLangsung + totalUmp)
+    },
+    donatur: uniq(H,'namaDonatur'),
+    mustahik: uniq(T,'namaPenerima'),
+    trxHimpun: H.length,
+    trxTasyaruf: T.length,
+    settings: getAllSettings()
   };
 }
-
 function convertGoogleSheetUrl(url) {
   var m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (m) {
@@ -1857,8 +1969,29 @@ function jpDanaDariAkun(akunKredit){
     out.subJenis  = jpBersih(s) || 'Wakaf Uang';
     return out;
   }
+  /* Bagi hasil bank mengikuti dana rekening asalnya, sesuai akun kreditnya:
+       "Bagi Hasil Rek Zakat"                       -> Zakat
+       "Bagi Hasil Rek Amil"                        -> Amil
+       "Bagi Hasil Rek Infak Terikat Kemanusiaan"   -> Infak terikat, pilar Kemanusiaan
+       "Bagi Hasil Bank" (tanpa asal dana)          -> DSKL
+     Sub jenisnya selalu "Bagi Hasil Bank" supaya mudah dipisah di laporan. */
   if (low.indexOf('bagi hasil') >= 0){
-    out.jenisDana = 'DSKL'; out.subJenis = 'Bagi Hasil Bank';
+    out.subJenis = 'Bagi Hasil Bank';
+    var asal = jpBersih(s.replace(/^.*?bagi\s+hasil\s*/i, '')
+                         .replace(/^(bank|rek(?:ening)?)\s+/i, '')
+                         .replace(/^(bank|rek(?:ening)?)$/i, ''));
+    var mBT = asal.match(/^(infa[kq]|sedekah)\s+terikat\s*(?:[-–—:]\s*)?(.*)$/i);
+    if (mBT){
+      out.jenisDana = /sedekah/i.test(mBT[1]) ? 'Sedekah' : 'Infak';
+      out.terikat   = true;
+      out.pilar     = jpBersih(mBT[2]);
+    }
+    else if (/^zakat\b/i.test(asal))    out.jenisDana = 'Zakat';
+    else if (/^amil\b/i.test(asal))     out.jenisDana = 'Amil';
+    else if (/^wakaf\b/i.test(asal))    out.jenisDana = 'Wakaf';
+    else if (/^sedekah\b/i.test(asal))  out.jenisDana = 'Sedekah';
+    else if (/^infa[kq]\b/i.test(asal)) out.jenisDana = 'Infak';
+    else                                out.jenisDana = 'DSKL';
     return out;
   }
   if (/^(infa[kq]|sedekah)\b/i.test(s)){
@@ -1928,30 +2061,50 @@ function jpCariRekening(namaAkun, listRek){
   return hit;
 }
 
+/* Judul seksi mana yang berisi penerimaan. Dulu daftarnya harus cocok persis,
+   sehingga berkas berjudul "BAGI HASIL" (bukan "BAGI HASIL BANK") terbaca nol baris. */
+function jpSeksiHimpun(sec){
+  var s = String(sec || '').toUpperCase().trim();
+  if (!s) return false;
+  if (s.indexOf('BAGI HASIL') === 0) return true;
+  if (s.indexOf('PENERIMAAN') === 0) return true;
+  if (s === 'SETOR TUNAI' || s === 'PENGEMBALIAN UMP') return true;
+  return false;
+}
+
 function transformJurnalToImportData(rawRows, listRek, listLayanan) {
   var himpunRows = [];
   var salurRows = [];
   var currentSection = '';
-  
+
   var skipSections = [
     'MUTASI BANK', 'UMP ZAKAT', 'UMP INFAK', 'UMP AMIL', 'TARIK TUNAI'
   ];
-  
+
+  /* Sebagian berkas jurnal — misalnya rekap bagi hasil bulanan — hanya berisi
+     pasangan debet/kredit tanpa judul seksi sama sekali. Berkas seperti itu
+     harus tetap terbaca, jadi baris tanpa seksi diproses HANYA bila memang
+     tidak ada satu pun judul seksi di sepanjang berkas. Dengan begitu berkas
+     jurnal berseksi tetap berperilaku persis seperti sebelumnya. */
+  var adaSeksi = false;
+  for (var s0 = 0; s0 < rawRows.length; s0++) {
+    if (rawRows[s0] && getSectionHeader(rawRows[s0])) { adaSeksi = true; break; }
+  }
+
   for (var i = 0; i < rawRows.length; i++) {
     var r = rawRows[i];
     if (!r) continue;
-    
+
     // Check if it's a section header
     var secHeader = getSectionHeader(r);
     if (secHeader) {
       currentSection = secHeader;
       continue;
     }
-    
-    if (!currentSection || skipSections.indexOf(currentSection) >= 0) {
-      continue;
-    }
-    
+
+    if (skipSections.indexOf(currentSection) >= 0) continue;
+    if (!currentSection && adaSeksi) continue;
+
     // It's a data row, must have date in col 0
     if (r.length >= 3 && isValidDateStringOrObject(r[0])) {
       var dateStr = parseImportDate(r[0]);
@@ -1973,20 +2126,16 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           }
         }
         
+        /* Akun kredit baris pasangannya — dipakai untuk menentukan jenis dana,
+           sekaligus untuk mengenali penerimaan pada berkas tanpa judul seksi. */
+        var _akunKredit = '';
+        var _nx = rawRows[i+1];
+        if (_nx && parseAmount(_nx[3]) > 0 && !parseAmount(_nx[2])) _akunKredit = String(_nx[1] || '').trim();
+
         // Match bank account
-        var isHimpunSec = (
-          currentSection === 'PENERIMAAN ZAKAT VIA BANK' ||
-          currentSection === 'PENERIMAAN INFAK TERIKAT VIA BANK' ||
-          currentSection === 'PENERIMAAN INFAK UMUM VIA BANK' ||
-          currentSection === 'PENERIMAAN AMIL VIA BANK' ||
-          currentSection === 'BAGI HASIL BANK' ||
-          currentSection === 'PENGEMBALIAN UMP' ||
-          currentSection === 'PENERIMAAN ZAKAT VIA KAS' ||
-          currentSection === 'PENERIMAAN INFAK TERIKAT VIA KAS' ||
-          currentSection === 'PENERIMAAN INFAK UMUM VIA KAS' ||
-          currentSection === 'PENERIMAAN AMIL VIA KAS' ||
-          currentSection === 'SETOR TUNAI'
-        );
+        var isHimpunSec = currentSection
+          ? jpSeksiHimpun(currentSection)
+          : /^penerimaan\b/i.test(_akunKredit);
         var lookupName = isHimpunSec ? accName : (bankAccName || accName);
         var matchedRek = null;
         var rekNum = '';
@@ -2016,19 +2165,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         var matchedLay = extractLayananFromText(uraian, listLayanan);
         
         // PENGHIMPUNAN
-        if (
-          currentSection === 'PENERIMAAN ZAKAT VIA BANK' ||
-          currentSection === 'PENERIMAAN INFAK TERIKAT VIA BANK' ||
-          currentSection === 'PENERIMAAN INFAK UMUM VIA BANK' ||
-          currentSection === 'PENERIMAAN AMIL VIA BANK' ||
-          currentSection === 'BAGI HASIL BANK' ||
-          currentSection === 'PENGEMBALIAN UMP' ||
-          currentSection === 'PENERIMAAN ZAKAT VIA KAS' ||
-          currentSection === 'PENERIMAAN INFAK TERIKAT VIA KAS' ||
-          currentSection === 'PENERIMAAN INFAK UMUM VIA KAS' ||
-          currentSection === 'PENERIMAAN AMIL VIA KAS' ||
-          currentSection === 'SETOR TUNAI'
-        ) {
+        if (isHimpunSec) {
           // For PENERIMAAN sections, skip if it's the revenue/category row (usually doesn't have bank name)
           if (accName.toLowerCase().indexOf('penerimaan') >= 0) {
             continue;
@@ -2043,9 +2180,6 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           var layananId = '';
 
           /* --- Jenis dana dibaca dari AKUN KREDIT (baris pasangannya) --- */
-          var _akunKredit = '';
-          var _nx = rawRows[i+1];
-          if (_nx && parseAmount(_nx[3]) > 0 && !parseAmount(_nx[2])) _akunKredit = String(_nx[1] || '').trim();
           var _dana = _akunKredit ? jpDanaDariAkun(_akunKredit) : null;
           var _pecah = jpPecahUraian(uraian, _dana);
           var _namaBersih = _pecah.nama || uraian;
@@ -2082,7 +2216,24 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             program = _pecah.program || '';
             if (jDana === 'Infak' && sJenis === 'Infak Terikat' && !pilar) {
               pilar = detectPilarFromText(program || uraian);
+            } else if (_dana.terikat && !pilar) {
+              /* Bagi hasil terikat: pakai penebak tegas supaya pilar tidak
+                 dikarang saat uraiannya memang tidak menyebut pilar apa pun. */
+              pilar = (typeof detectPilarTegas === 'function')
+                ? detectPilarTegas(uraian) : '';
             }
+          }
+
+          /* Bagi hasil bank: pemberinya bank, bukan donatur perorangan.
+             Nama rekening dipakai sebagai identitas pemberi supaya jelas
+             bagi hasil itu berasal dari rekening yang mana. */
+          if (_dana && _dana.subJenis === 'Bagi Hasil Bank') {
+            namaDonatur = matchedRek
+              ? (matchedRek.namaBank + ' - ' + matchedRek.nomor)
+              : (accName || 'Bagi Hasil Bank');
+            tipeDonatur = 'Lembaga/Perusahaan';
+            program     = 'Bagi Hasil Bank';
+            layananId   = '';
           }
 
           /* Tandai bila tulisan di uraian bertentangan dengan akun kredit,
@@ -2093,7 +2244,11 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           if (_dana && _dana.jenisDana) {
             var _uN = ' ' + jpNorm(uraian) + ' ';
             var _adaTerikat = _uN.indexOf(' terikat ') >= 0;
-            if (_adaTerikat !== /terikat/i.test(_dana.subJenis)) _bedaDana = true;
+            /* Untuk bagi hasil, sifat terikat ada di akun kreditnya, bukan di sub jenis. */
+            var _danaTerikat = (_dana.subJenis === 'Bagi Hasil Bank')
+              ? !!_dana.terikat
+              : /terikat/i.test(_dana.subJenis);
+            if (_adaTerikat !== _danaTerikat) _bedaDana = true;
             var _pokok = ['zakat','infak','infaq','sedekah','wakaf','amil'].filter(function(k){ return _uN.indexOf(' '+k+' ') >= 0; });
             var _jd = _dana.jenisDana.toLowerCase();
             if (_pokok.length && _jd !== 'dskl' && _pokok.indexOf(_jd) < 0 && !(_jd === 'infak' && _pokok.indexOf('infaq') >= 0)) _bedaDana = true;
@@ -3496,6 +3651,144 @@ function _pdAdaPenandaLayanan(r){
   return td.indexOf('kantor layanan') >= 0 || td.indexOf('unit layanan') >= 0 || td === 'kll' || td === 'ull';
 }
 
+/* ===== CADANGAN & HAPUS DATA PER RENTANG TANGGAL ===== */
+
+/* Tanggal disimpan sebagai 'yyyy-mm-dd' sehingga perbandingan teks sudah tepat. */
+function _tglSah(s){ return /^\d{4}-\d{2}-\d{2}$/.test(String(s == null ? '' : s).slice(0,10)); }
+function _dalamRentang(tgl, dari, sampai){
+  var t = String(tgl == null ? '' : tgl).slice(0,10);
+  if (!_tglSah(t)) return false;
+  if (dari && t < dari) return false;
+  if (sampai && t > sampai) return false;
+  return true;
+}
+
+/* Cadangan seluruh data untuk diunduh dan disimpan sendiri.
+   Sesi login tidak ikut (tidak berguna saat dipulihkan) dan kata sandi
+   dikosongkan — berkas cadangan bisa berpindah tangan, hash kata sandi
+   tidak boleh ikut berpindah. */
+function apiCadanganDB(t){
+  var u = _requirePerm(t, 'settings', 'edit');
+  var hasil = { versi:1, dibuat:new Date().toISOString(), oleh:u.username, sheets:{}, props:{} };
+
+  Object.keys((DB && DB.sheets) || {}).forEach(function(nama){
+    if (nama === SHEETS.SESSIONS) return;
+    hasil.sheets[nama] = (DB.sheets[nama] || []).map(function(r){ return (r || []).slice(); });
+  });
+
+  var us = hasil.sheets[SHEETS.USERS];
+  if (us && us.length){
+    var kol = [];
+    (us[0] || []).forEach(function(nm, i){ if (/password|sandi|hash|salt/i.test(String(nm))) kol.push(i); });
+    for (var i = 1; i < us.length; i++) kol.forEach(function(c){ us[i][c] = ''; });
+  }
+
+  /* Properti kecil ikut; berkas Excel bulanan yang tersimpan sebagai base64
+     dilewati supaya berkas cadangan tidak membengkak percuma. */
+  Object.keys((DB && DB.props) || {}).forEach(function(k){
+    if (k === '_aksesTerakhir') return;
+    var v = DB.props[k];
+    if (typeof v === 'string' && v.length > 20000) return;
+    hasil.props[k] = v;
+  });
+
+  var jml = {};
+  Object.keys(hasil.sheets).forEach(function(n){ jml[n] = Math.max(0, hasil.sheets[n].length - 1); });
+  hasil.ringkas = {
+    baris: jml,
+    ukuran: JSON.stringify(hasil).length,
+    tanpa: ['Sessions', 'kata sandi pengguna', 'berkas Excel bulanan']
+  };
+
+  audit(u.id, u.username, 'cadangan_db', 'unduh cadangan',
+    { modul:'settings', ringkas:'Penghimpunan '+(jml[SHEETS.PENGHIMPUNAN]||0)+' baris · Pentasyarufan '+(jml[SHEETS.PENTASYARUFAN]||0)+' baris' });
+  return hasil;
+}
+
+/* Hapus penghimpunan / pentasyarufan pada rentang tanggal tertentu.
+   Selalu dijalankan dua tahap: `terapkan:false` hanya menghitung dan
+   merinci, `terapkan:true` baru menghapus. Rentang harian maupun bulanan
+   sama-sama dinyatakan sebagai tanggal awal dan tanggal akhir. */
+async function apiHapusRentang(t, d){
+  var u = _requirePerm(t, 'settings', 'delete');
+  d = d || {};
+  var dari   = String(d.dari   == null ? '' : d.dari).slice(0,10);
+  var sampai = String(d.sampai == null ? '' : d.sampai).slice(0,10);
+  if (!_tglSah(dari) || !_tglSah(sampai)) throw new Error('Tanggal awal dan tanggal akhir harus diisi.');
+  if (dari > sampai) throw new Error('Tanggal awal tidak boleh melewati tanggal akhir.');
+
+  var ambil = {};
+  ambil[SHEETS.PENGHIMPUNAN] = (d.himpun !== false);
+  ambil[SHEETS.PENTASYARUFAN] = (d.salur !== false);
+  if (!ambil[SHEETS.PENGHIMPUNAN] && !ambil[SHEETS.PENTASYARUFAN])
+    throw new Error('Pilih minimal satu jenis data yang akan dihapus.');
+
+  var terapkan = (d.terapkan === true);
+  var out = {
+    dari:dari, sampai:sampai, diterapkan:terapkan,
+    himpun:{ jumlah:0, nominal:0 }, salur:{ jumlah:0, nominal:0 },
+    perBulan:{}, contoh:[], bulanTersentuh:{}
+  };
+
+  function sisir(sheet, kunci){
+    if (!ambil[sheet]) return;
+    var rows = readAll(sheet) || [];
+    rows.forEach(function(r){
+      if (!_dalamRentang(r.tanggal, dari, sampai)) return;
+      var n = Number(r.jumlah) || 0;
+      out[kunci].jumlah += 1;
+      out[kunci].nominal += n;
+      var bln = String(r.tanggal).slice(0,7);
+      out.bulanTersentuh[bln] = true;
+      var b = out.perBulan[bln] || (out.perBulan[bln] = { bulan:bln, himpunJml:0, himpunRp:0, salurJml:0, salurRp:0 });
+      b[kunci + 'Jml'] += 1;
+      b[kunci + 'Rp']  += n;
+      if (out.contoh.length < 12) out.contoh.push({
+        jenis: (kunci === 'himpun' ? 'Penghimpunan' : 'Pentasyarufan'),
+        tanggal: String(r.tanggal).slice(0,10),
+        nama: r.namaDonatur || r.namaPenerima || '-',
+        bukti: r.noKwitansi || r.noBukti || '-',
+        jumlah: n
+      });
+    });
+  }
+  sisir(SHEETS.PENGHIMPUNAN, 'himpun');
+  sisir(SHEETS.PENTASYARUFAN, 'salur');
+
+  out.totalBaris   = out.himpun.jumlah + out.salur.jumlah;
+  out.totalNominal = out.himpun.nominal + out.salur.nominal;
+  out.daftarBulan  = Object.keys(out.perBulan).sort().map(function(k){ return out.perBulan[k]; });
+
+  if (!terapkan || out.totalBaris === 0) return out;
+
+  /* Penghapusan dari belakang supaya nomor baris yang belum diproses tidak bergeser. */
+  function buang(sheet){
+    if (!ambil[sheet]) return 0;
+    var sh = getSS().getSheetByName(sheet);
+    if (!sh) return 0;
+    var v = sh.getDataRange().getValues();
+    var ct = (v[0] || []).indexOf('tanggal');
+    if (ct < 0) return 0;
+    var n = 0;
+    for (var i = v.length - 1; i >= 1; i--){
+      if (_dalamRentang(v[i][ct], dari, sampai)){ sh.deleteRow(i + 1); n++; }
+    }
+    return n;
+  }
+  out.terhapusHimpun = buang(SHEETS.PENGHIMPUNAN);
+  out.terhapusSalur  = buang(SHEETS.PENTASYARUFAN);
+  out.terhapus = out.terhapusHimpun + out.terhapusSalur;
+
+  audit(u.id, u.username, 'hapus_rentang', dari + ' s/d ' + sampai,
+    { modul:'settings',
+      ringkas: out.terhapusHimpun + ' penghimpunan + ' + out.terhapusSalur + ' pentasyarufan dihapus · Rp '
+             + (out.totalNominal || 0).toLocaleString('id-ID') });
+
+  var bulan = Object.keys(out.bulanTersentuh);
+  for (var i = 0; i < bulan.length; i++) await syncMonthlySpreadsheet(bulan[i]);
+  return out;
+}
+
 function apiPerbaikiDataLama(t, terapkan){
   var u = _requirePerm(t, 'settings', 'edit');
   var rows = readAll(SHEETS.PENGHIMPUNAN) || [];
@@ -4001,6 +4294,8 @@ REGISTRY['apiPublicDashboard']=apiPublicDashboard;
 REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
+REGISTRY['apiCadanganDB']=apiCadanganDB;
+REGISTRY['apiHapusRentang']=apiHapusRentang;
 REGISTRY['apiListAudit']=apiListAudit;
 REGISTRY['apiLaporanHarian']=apiLaporanHarian;
 REGISTRY['apiHapusAudit']=apiHapusAudit;

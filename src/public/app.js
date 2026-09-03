@@ -80,14 +80,15 @@ var MENU=[
 function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }
 
 /* ============ MASTER DATA (cascading) ============ */
-var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL'];
+var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL','Amil'];
 var SUBJENIS={
-  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Setor Tunai'],
-  'Infak':['Infak Umum','Infak Terikat','Setor Tunai'],
-  'Sedekah':['Sedekah Umum','Sedekah Terikat'],
-  'Wakaf':['Wakaf Uang','Wakaf Melalui Uang'],
+  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Bagi Hasil Bank','Setor Tunai'],
+  'Infak':['Infak Umum','Infak Terikat','Bagi Hasil Bank','Setor Tunai'],
+  'Sedekah':['Sedekah Umum','Sedekah Terikat','Bagi Hasil Bank'],
+  'Wakaf':['Wakaf Uang','Wakaf Melalui Uang','Bagi Hasil Bank'],
   'Kurban':['Kurban'],'Fidyah':['Fidyah'],
-  'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya']
+  'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya'],
+  'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank','Setor Tunai']
 };
 var PILAR=['Pendidikan','Kesehatan','Ekonomi & Pemberdayaan','Dakwah & Advokasi','Sosial Kemanusiaan','Lingkungan'];
 var KATEGORI_TERIKAT=['Kesehatan','Pendidikan','Sosial Dakwah','DAM','Kemanusiaan','Fidyah','Qurban'];
@@ -197,6 +198,7 @@ function closeModal(){
 el('modalBg').addEventListener('click',function(e){if(e.target===el('modalBg'))closeModal();});
 
 /* ============ DASHBOARD ============ */
+function _dashR(){ var r = window.DASH_RENTANG || {}; return { dari:r.dari||'', sampai:r.sampai||'' }; }
 function viewDashboard(){
   if (typeof window.DASH_SELECTED_MONTH === 'undefined') {
     window.DASH_SELECTED_MONTH = getCurrentMonthString();
@@ -205,13 +207,12 @@ function viewDashboard(){
   }
   var monthEl = el('dashFilterMonth');
   var pekanEl = el('dashFilterPekan');
-  var hariEl = el('dashFilterHari');
   if (monthEl) window.DASH_SELECTED_MONTH = monthEl.value;
   if (pekanEl) window.DASH_SELECTED_PEKAN = pekanEl.value;
-  if (hariEl) window.DASH_SELECTED_HARI = hariEl.value || 'Semua';
+  if (_RT['dash_rt']) window.DASH_RENTANG = rentangNilai('dash_rt');
 
   Promise.all([
-    gas('apiDashboard')(TOKEN, window.DASH_SELECTED_MONTH, window.DASH_SELECTED_PEKAN, window.DASH_SELECTED_HARI),
+    gas('apiDashboard')(TOKEN, window.DASH_SELECTED_MONTH, window.DASH_SELECTED_PEKAN, dashArgHari()),
     gas('apiGetRAPBData')(TOKEN, new Date().getFullYear()).catch(function(){ return null; })
   ]).then(function(res){
     var d = res[0];
@@ -220,19 +221,34 @@ function viewDashboard(){
     renderDashboard(d);
   }).catch(handleErr);
 }
+/* Rentang tanggal dikirim sebagai {dari,sampai}; kalau kosong dipakai
+   saringan tanggal tunggal seperti versi lama. */
+function dashArgHari(){
+  var r = window.DASH_RENTANG || {};
+  if (r.dari && r.sampai) return { dari:r.dari, sampai:r.sampai };
+  return window.DASH_SELECTED_HARI || 'Semua';
+}
 function applyDashFilter(){
   var monthEl = el('dashFilterMonth');
   var pekanEl = el('dashFilterPekan');
-  var hariEl = el('dashFilterHari');
   window.DASH_SELECTED_MONTH = monthEl ? monthEl.value : 'Semua';
   window.DASH_SELECTED_PEKAN = pekanEl ? pekanEl.value : 'Semua';
-  window.DASH_SELECTED_HARI = hariEl ? (hariEl.value || 'Semua') : 'Semua';
+  if (_RT['dash_rt']) window.DASH_RENTANG = rentangNilai('dash_rt');
+  viewDashboard();
+}
+/* Memilih rentang membuat saringan bulan & minggu tidak lagi relevan,
+   jadi keduanya dikembalikan ke "Semua" supaya tampilan tidak menyesatkan. */
+function dashSetRentang(a, b){
+  window.DASH_RENTANG = { dari:a, sampai:b };
+  if (a && b){ window.DASH_SELECTED_MONTH = 'Semua'; window.DASH_SELECTED_PEKAN = 'Semua'; }
+  window.DASH_SELECTED_HARI = 'Semua';
   viewDashboard();
 }
 function resetDashFilter(){
   window.DASH_SELECTED_MONTH = getCurrentMonthString();
   window.DASH_SELECTED_PEKAN = 'Semua';
   window.DASH_SELECTED_HARI = 'Semua';
+  window.DASH_RENTANG = null;
   viewDashboard();
 }
 function renderDashboard(d){
@@ -248,8 +264,8 @@ function renderDashboard(d){
     '<select id="dashFilterMonth" onchange="applyDashFilter()" style="padding:8px 12px;font-size:13px;width:100%"><option value="Semua" '+(window.DASH_SELECTED_MONTH==='Semua'?'selected':'')+'>Semua Waktu</option>'+monthsOpts+'</select></div>' +
     '<div class="field" style="margin:0;min-width:150px"><label style="font-size:11.5px;margin-bottom:4px;font-weight:600">\uD83D\uDCC6 Minggu</label>' +
     '<select id="dashFilterPekan" onchange="applyDashFilter()" style="padding:8px 12px;font-size:13px;width:100%"><option value="Semua" '+(window.DASH_SELECTED_PEKAN==='Semua'?'selected':'')+'>Semua</option><option value="1" '+(window.DASH_SELECTED_PEKAN==='1'?'selected':'')+'>Minggu 1 (1-7)</option><option value="2" '+(window.DASH_SELECTED_PEKAN==='2'?'selected':'')+'>Minggu 2 (8-14)</option><option value="3" '+(window.DASH_SELECTED_PEKAN==='3'?'selected':'')+'>Minggu 3 (15-21)</option><option value="4" '+(window.DASH_SELECTED_PEKAN==='4'?'selected':'')+'>Minggu 4 (22-28)</option><option value="5" '+(window.DASH_SELECTED_PEKAN==='5'?'selected':'')+'>Minggu 5 (29-31)</option></select></div>' +
-    '<div class="field" style="margin:0;min-width:140px"><label style="font-size:11.5px;margin-bottom:4px;font-weight:600">\uD83D\uDCCD Tanggal</label>' +
-    '<input type="date" id="dashFilterHari" onchange="applyDashFilter()" style="padding:8px 12px;font-size:13px;width:100%" value="'+(window.DASH_SELECTED_HARI!=='Semua'?window.DASH_SELECTED_HARI:'')+'"></div>' +
+    '<div class="field" style="margin:0;min-width:210px"><label style="font-size:11.5px;margin-bottom:4px;font-weight:600">\uD83D\uDCCD Rentang Tanggal</label>' +
+    rentangHTML('dash_rt', _dashR().dari, _dashR().sampai, {rapat:true, kosong:'Semua tanggal'}) + '</div>' +
     '<div class="field" style="margin:0;flex:1;text-align:right"><button class="btn btn-ghost btn-sm" onclick="resetDashFilter()">\u21BA Reset Filter</button></div>' +
     '</div>';
   h+=filterControls;
@@ -280,6 +296,9 @@ function renderDashboard(d){
   h+='<div class="dash-grid'+edit+'" id="dashGrid">'+cells.join('')+'</div>';
   if(window.DASH_EDIT)h+='<div class="dash-edit-hint">\uD83D\uDCA1 Mode Atur Layout aktif \u2014 geser kartu untuk menyusun ulang, gunakan \u25AA/\u25AC untuk ukuran, \u2715 untuk sembunyikan. Klik <b>Selesai</b> untuk menyimpan.</div>';
   el('content').innerHTML=h;
+  var _r = _dashR();
+  rentangPasang('dash_rt', { dari:_r.dari, sampai:_r.sampai, bolehKosong:true,
+    kosong:'Semua tanggal', onTerap:dashSetRentang });
 }
 function sCard(key,l,v,ic,a){return '<div class="stat" onclick="openDashDetail(\''+key+'\')"><div class="lbl">'+l+' <span class="ic">'+ic+'</span></div><div class="val'+(a?' accent':'')+'">'+v+'</div><div class="tap">Ketuk untuk detail ›</div></div>';}
 function previewBars(obj){var k=Object.keys(obj||{});if(!k.length)return '<div class="muted" style="padding:12px 0">Belum ada data.</div>';k.sort(function(a,b){return obj[b]-obj[a];});var mx=obj[k[0]]||1;return k.slice(0,3).map(function(x){return '<div class="bar-row"><div class="name">'+esc(x)+'<span class="num">'+rp(obj[x])+'</span></div><div class="bar-track"><div class="bar-fill" style="width:'+(obj[x]/mx*100)+'%"></div></div></div>';}).join('')+(k.length>3?'<div class="muted" style="font-size:12px;margin-top:6px">+'+(k.length-3)+' lainnya…</div>':'');}
@@ -350,7 +369,7 @@ function renderPenghimpunan(rows){
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Donatur / Kwitansi</label><input type="text" id="himpunTable_search" placeholder="Cari..." oninput="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
-    '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Tanggal</label><input type="date" id="himpunTable_filter_date" onchange="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
+    '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Rentang Tanggal</label>' + rentangHTML('himpunTable_rt', '', '', {rapat:true, kosong:'Semua tanggal'}) + '</div>' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Jenis Dana</label>' +
       '<select id="himpunTable_filter_type" onchange="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px">' +
         '<option value="">Semua</option>' +
@@ -383,6 +402,7 @@ function renderPenghimpunan(rows){
     h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">🧾</button>'+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">✎</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">🗑</button>':'')+'</div></td></tr>';
   });
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
+  rtPasangFilter('himpunTable');
   if(canDo('penghimpunan','create'))formHimpun('','himpunFormHost');
 }
 function setupSearchDropdown(inputId, menuId, suggestions, onSelect) {
@@ -535,7 +555,13 @@ function onMetodeChange(keepRek){
   }
 }
 function onTipeChange(keepLay){var tp=el('f_tipeDonatur').value;var w=el('layWrap');var tipe=tp.indexOf('KLL')>=0?'KLL':(tp.indexOf('ULL')>=0?'ULL':'');if(tipe){w.style.display='';el('laySel').innerHTML=layOptions(tipe,keepLay);}else w.style.display='none';}
-function rekOptions(sel,jDana){var list=CACHE.rekening||[];if(!jDana&&el('f_jenisDana'))jDana=el('f_jenisDana').value;var m=el('f_metode')?el('f_metode').value:'';if(m==='QRIS'){list=list.filter(function(r){var num=String(r.nomor||'');return num.endsWith('742')||num.endsWith('510')||num.endsWith('511');});}else if(jDana){var jd=jDana.toLowerCase();list=list.filter(function(r){var fg=String(r.fundGroup||'').toLowerCase();var rNo=String(r.nomor||'');if(fg===jd)return true;if(jd==='zakat'&&fg==='zakat')return true;if(jd==='zakat'&&(rNo.indexOf('9004')>=0||rNo.indexOf('880')>=0))return true;if(jd==='dskl'&&fg==='amil')return true;var isInfakLike=(jd==='infak'||jd==='sedekah'||jd==='wakaf'||jd==='kurban'||jd==='fidyah');var isRekInfakLike=(fg==='infak'||fg==='sedekah'||fg==='wakaf'||fg==='kurban'||fg==='umum');if(isInfakLike&&isRekInfakLike)return true;return false;});}if(!list.length)return '<select id="f_rekeningId"><option value="">(Belum ada rekening untuk kelompok ini)</option></select>';return '<select id="f_rekeningId">'+'<option value="">- pilih -</option>'+list.map(function(r){var label = r.namaBank+' '+r.nomor+' ('+(r.fundGroup||'Umum')+')';return '<option value="'+esc(r.id)+'" '+(String(sel)===String(r.id)?'selected':'')+'>'+esc(label)+'</option>';}).join('')+'</select>';}
+function rekOptions(sel,jDana){var list=CACHE.rekening||[];if(!jDana&&el('f_jenisDana'))jDana=el('f_jenisDana').value;var m=el('f_metode')?el('f_metode').value:'';if(m==='QRIS'){list=list.filter(function(r){var num=String(r.nomor||'');return num.endsWith('742')||num.endsWith('510')||num.endsWith('511');});}else if(jDana){var jd=jDana.toLowerCase();list=list.filter(function(r){var fg=String(r.fundGroup||'').toLowerCase();var rNo=String(r.nomor||'');if(fg===jd)return true;if(jd==='zakat'&&fg==='zakat')return true;if(jd==='zakat'&&(rNo.indexOf('9004')>=0||rNo.indexOf('880')>=0))return true;if(jd==='dskl'&&fg==='amil')return true;if(jd==='amil'&&(fg==='amil'||fg==='umum'))return true;var isInfakLike=(jd==='infak'||jd==='sedekah'||jd==='wakaf'||jd==='kurban'||jd==='fidyah');var isRekInfakLike=(fg==='infak'||fg==='sedekah'||fg==='wakaf'||fg==='kurban'||fg==='umum');if(isInfakLike&&isRekInfakLike)return true;return false;});}var semua=CACHE.rekening||[];
+  // Jangan pernah mengunci pengguna: kalau filter kelompok dana tidak menyisakan rekening,
+  // tampilkan seluruh rekening aktif. Rekening kosong = transaksi bank tidak terbaca dashboard.
+  var lain=semua.filter(function(r){return list.indexOf(r)<0;});
+  function opt(r,pre){var label=(pre||'')+r.namaBank+' '+r.nomor+' ('+(r.fundGroup||'Umum')+')';return '<option value="'+esc(r.id)+'" '+(String(sel)===String(r.id)?'selected':'')+'>'+esc(label)+'</option>';}
+  if(!list.length){if(!semua.length)return '<select id="f_rekeningId"><option value="">(Belum ada rekening terdaftar)</option></select>';return '<select id="f_rekeningId"><option value="">- pilih -</option>'+semua.map(function(r){return opt(r,'');}).join('')+'</select>';}
+  return '<select id="f_rekeningId">'+'<option value="">- pilih -</option>'+list.map(function(r){return opt(r,'');}).join('')+lain.map(function(r){return opt(r,'· ');}).join('')+'</select>';}
 function layOptions(tipe,sel){var list=(CACHE.layanan||[]).filter(function(l){return l.tipe===tipe;});if(!list.length)return '<select id="f_layananId"><option value="">(Belum ada '+tipe+' — tambah di menu KLL/ULL)</option></select>';return '<select id="f_layananId" onchange="onLayPick()">'+'<option value="">- pilih -</option>'+list.map(function(l){return '<option value="'+esc(l.id)+'" data-nama="'+esc(l.nama)+'" '+(String(sel)===String(l.id)?'selected':'')+'>'+esc((l.kode?l.kode+' - ':'')+l.nama)+'</option>';}).join('')+'</select>';}
 function onLayPick(){var s=el('f_layananId');var o=s.options[s.selectedIndex];if(o&&o.dataset.nama)el('f_namaDonatur').value=o.dataset.nama;}
 function saveHimpun(id){
@@ -619,7 +645,7 @@ function renderPentasyarufan(rows){
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Penerima / Bukti</label><input type="text" id="tasyTable_search" placeholder="Cari..." oninput="applyFilters(\'tasyTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
-    '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Tanggal</label><input type="date" id="tasyTable_filter_date" onchange="applyFilters(\'tasyTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
+    '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Rentang Tanggal</label>' + rentangHTML('tasyTable_rt', '', '', {rapat:true, kosong:'Semua tanggal'}) + '</div>' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Ashnaf</label>' +
       '<select id="tasyTable_filter_type" onchange="applyFilters(\'tasyTable\')" style="padding:6px 10px;font-size:12.5px">' +
         '<option value="">Semua</option>' +
@@ -653,6 +679,7 @@ function renderPentasyarufan(rows){
     h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.ashnaf)+'" data-metode="'+esc(r.bentukBantuan)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noBukti)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaPenerima||'-')+'</b>'+frText+'</td><td><span class="badge purple">'+esc(r.ashnaf)+'</span></td><td>'+esc(r.program||'-')+'</td><td style="font-weight:700;color:var(--amber)">'+rp(r.jumlah)+'</td><td>'+statusBadge(r.statusSalur||'Tersalur')+'</td><td><div class="actions-cell"><button class="icon-btn" onclick="cetakBukti(\''+r.id+'\')">🧾</button>'+(canDo('pentasyarufan','edit')?'<button class="icon-btn" onclick="formTasyaruf(\''+r.id+'\')">✎</button>':'')+(canDo('pentasyarufan','delete')?'<button class="icon-btn" onclick="delTasyaruf(\''+r.id+'\')">🗑</button>':'')+'</div></td></tr>';
   });
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
+  rtPasangFilter('tasyTable');
   if(canDo('pentasyarufan','create'))formTasyaruf('','tasyarufFormHost');}
 function statusBadge(s){s=s||'Lunas';var c=s==='Lunas'||s==='Tersalur'?'green':(s==='Pending'?'amber':'blue');return '<span class="badge '+c+'">'+esc(s)+'</span>';}
 function formTasyaruf(id,host){
@@ -1077,35 +1104,78 @@ function lapPanel(title,desc,inner,actions){
     + '</div>';
 }
 
+var J_MODE = 'bulan';   /* 'bulan' = satu bulan penuh, 'rentang' = tanggal bebas */
+
 function renderJurnalForm(){
   var now=new Date();
   var yopt='';for(var y=now.getFullYear()+1;y>=now.getFullYear()-3;y--)yopt+='<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>';
   var mopt='';for(var m=1;m<=12;m++)mopt+='<option value="'+m+'" '+((m-1)===now.getMonth()?'selected':'')+'>'+BULAN[m]+'</option>';
-  var form='<div class="fgrid">'
-    + fld(3,'Bulan','<select id="j_bulan">'+mopt+'</select>')
-    + fld(3,'Tahun','<select id="j_tahun">'+yopt+'</select>')
+
+  var awalBln = new Date(now.getFullYear(), now.getMonth(), 1);
+  var jDari = window.__jDari || rtIso(awalBln);
+  var jSampai = window.__jSampai || today();
+
+  var pilihMode = '<div class="j-mode">'
+    + '<button type="button" class="j-mode-btn'+(J_MODE==='bulan'?' on':'')+'" onclick="jurnalMode(\'bulan\')">Per Bulan</button>'
+    + '<button type="button" class="j-mode-btn'+(J_MODE==='rentang'?' on':'')+'" onclick="jurnalMode(\'rentang\')">Rentang Tanggal</button>'
     + '</div>';
+
+  var form = pilihMode + '<div class="fgrid">'
+    + (J_MODE==='bulan'
+        ? fld(3,'Bulan','<select id="j_bulan">'+mopt+'</select>')
+          + fld(3,'Tahun','<select id="j_tahun">'+yopt+'</select>')
+        : fld(6,'Rentang Tanggal', rentangHTML('j_rt', jDari, jSampai)))
+    + '</div>';
+
   var acts='<button class="btn" onclick="loadJurnal()">Lihat Laporan</button>'
     + '<button class="btn btn-primary" onclick="loadJurnalAndDownload()">Unduh Excel</button>';
   el('lapBody').innerHTML = lapPanel('Jurnal Penerimaan',
-      'Pilih periode, lalu tampilkan rinciannya atau unduh sebagai Excel (.xlsx) sesuai format standar Pusat.',
+      J_MODE==='bulan'
+        ? 'Pilih periode, lalu tampilkan rinciannya atau unduh sebagai Excel (.xlsx) sesuai format standar Pusat.'
+        : 'Klik kalender, pilih tanggal awal lalu tanggal akhir. Jurnal disusun persis untuk rentang itu.',
       form, acts)
     + '<div id="jurnalPreview" class="lap-result"></div>';
+
+  /* Dropdown bulan/tahun dirapikan sendiri oleh enhancer global. */
+  if (J_MODE==='rentang'){
+    rentangPasang('j_rt', { dari:jDari, sampai:jSampai, onTerap:function(a,b){
+      window.__jDari=a; window.__jSampai=b;
+    }});
+  }
+}
+
+function jurnalMode(m){
+  if (J_MODE === m) return;
+  J_MODE = m;
+  renderJurnalForm();
+}
+
+/* Argumen untuk apiJurnalData sesuai mode yang sedang dipakai. */
+function jurnalArg(){
+  if (J_MODE === 'rentang'){
+    var v = rentangNilai('j_rt');
+    if (!v.dari || !v.sampai) return null;
+    window.__jDari = v.dari; window.__jSampai = v.sampai;
+    return [TOKEN, 0, 0, { dari:v.dari, sampai:v.sampai }];
+  }
+  return [TOKEN, el('j_tahun').value, el('j_bulan').value, null];
 }
 
 function loadJurnal(){
-  var m=el('j_bulan').value,y=el('j_tahun').value;
+  var a = jurnalArg();
+  if (!a){ toast('Lengkapi rentang tanggal',true); return; }
   el('jurnalPreview').innerHTML=BOXES_SPINNER;
-  gas('apiJurnalData')(TOKEN,y,m).then(function(d){
+  gas('apiJurnalData').apply(null,a).then(function(d){
     CACHE.jurnal=d;
     renderJurnalPreview(d);
   }).catch(handleErr);
 }
 
 function loadJurnalAndDownload(){
-  var m=el('j_bulan').value,y=el('j_tahun').value;
+  var a = jurnalArg();
+  if (!a){ toast('Lengkapi rentang tanggal',true); return; }
   el('jurnalPreview').innerHTML=BOXES_SPINNER;
-  gas('apiJurnalData')(TOKEN,y,m).then(function(d){
+  gas('apiJurnalData').apply(null,a).then(function(d){
     CACHE.jurnal=d;
     renderJurnalPreview(d);
     if(d.count>0) exportJurnalXlsx(d);
@@ -1260,75 +1330,155 @@ function exportJurnalXlsx(d){
 function renderBroadcastForm(){
   var e=today();var st=new Date();st.setDate(st.getDate()-6);var sStr=st.toISOString().slice(0,10);
   var form='<div class="fgrid">'
-    + fld(3,'Dari Tanggal','<input type="date" id="bc_start" value="'+sStr+'">')
-    + fld(3,'Sampai Tanggal','<input type="date" id="bc_end" value="'+e+'">')
+    + fld(6,'Rentang Tanggal', rentangHTML('bc_rt', sStr, e))
     + '</div>';
   var acts='<button class="btn btn-primary" onclick="loadBroadcast()">Buat Laporan</button>';
   el('lapBody').innerHTML = lapPanel('Broadcast WhatsApp',
-      'Pilih rentang tanggal bebas. Sistem menyusun ringkasan siap kirim ke donatur.',
+      'Klik kalender, pilih tanggal awal lalu tanggal akhir. Sistem menyusun ringkasan siap kirim ke donatur.',
       form, acts)
     + '<div id="bcResult" class="lap-result"></div>';
+  rentangPasang('bc_rt', { dari: sStr, sampai: e });
 }
-function loadBroadcast(){var s=el('bc_start').value,e=el('bc_end').value;if(!s||!e){toast('Lengkapi rentang tanggal',true);return;}el('bcResult').innerHTML=BOXES_SPINNER;
+function loadBroadcast(){var v=rentangNilai('bc_rt'),s=v.dari,e=v.sampai;if(!s||!e){toast('Lengkapi rentang tanggal',true);return;}el('bcResult').innerHTML=BOXES_SPINNER;
   gas('apiBroadcastReport')(TOKEN,s,e).then(function(d){CACHE.bc=d;renderBroadcastResult(d);}).catch(handleErr);}
+/* ================================================================
+   TEKS BROADCAST
+   ----------------------------------------------------------------
+   Rincian dan totalnya dibangun dari daftar baris yang sama, lalu
+   totalnya DIHITUNG dari baris-baris itu. Jadi apa yang dijumlahkan
+   pembaca pasti sama dengan angka total yang tertulis.
+
+   Kalau ternyata masih ada selisih dengan total dari server (mis.
+   ada jenis dana baru yang belum dikenali), selisihnya dimunculkan
+   sebagai baris "Lainnya" — bukan disembunyikan.
+   ================================================================ */
+var BC_LABEL_HIMPUN = [
+  ['zakat',        'Zakat'],
+  ['infakUmum',    'Infak / Sedekah Umum'],
+  ['infakTerikat', 'Infak / Sedekah Terikat'],
+  ['amil',         'Amil'],
+  ['wakaf',        'Wakaf'],
+  ['kurban',       'Kurban'],
+  ['fidyah',       'Fidyah'],
+  ['dskl',         'DSKL'],
+  ['lainnya',      'Lainnya']
+];
+var BC_LABEL_SALUR = [
+  ['zakat',   'Dana Zakat'],
+  ['infak',   'Dana Infak / Sedekah'],
+  ['amil',    'Dana Amil'],
+  ['wakaf',   'Dana Wakaf'],
+  ['kurban',  'Dana Kurban'],
+  ['dskl',    'Dana DSKL'],
+  ['lainnya', 'Dana Lainnya']
+];
+var BC_LABEL_UMP = [
+  ['zakat',        'Zakat'],
+  ['infakTerikat', 'Infak Terikat'],
+  ['infakUmum',    'Infak Umum'],
+  ['amil',         'Amil'],
+  ['lainnya',      'Lainnya']
+];
+
+/* Ambil hanya pos yang ada isinya, lalu cocokkan jumlahnya dengan
+   total dari server; sisa yang tidak terjelaskan ditambahkan sebagai
+   baris tersendiri agar penjumlahannya selalu utuh. */
+function bcBaris(peta, label, totalServer){
+  var out = [];
+  label.forEach(function(p){
+    var v = Number((peta || {})[p[0]]) || 0;
+    if (v !== 0) out.push({ label: p[1], nilai: v });
+  });
+  var jml = out.reduce(function(a,b){ return a + b.nilai; }, 0);
+  var sisa = (Number(totalServer) || 0) - jml;
+  if (sisa !== 0) out.push({ label: 'Lainnya (belum terklasifikasi)', nilai: sisa });
+  return out;
+}
+function bcJumlah(baris){ return baris.reduce(function(a,b){ return a + b.nilai; }, 0); }
+
 function buildBroadcastText(d){
   var s = d.settings || {};
   var nm = s.namaLembaga || 'Kantor Lazismu Daerah Bantul';
-  var hb = d.himpunBreakdown || { zakat: 0, infakUmum: 0, infakTerikat: 0, amil: 0, dskl: 0 };
-  var sb = d.salurBreakdown || { zakat: 0, infak: 0, amil: 0, dskl: 0 };
-  var ub = d.umpBreakdown || { zakat: 0, infakTerikat: 0, infakUmum: 0, amil: 0 };
-  
-  function fmtVal(n, isUmp) {
-    if (!n || n <= 0) return isUmp ? '*Rp-*' : '-';
-    return '*' + rp(n) + '*';
-  }
-  
+
+  var bH = bcBaris(d.himpunBreakdown, BC_LABEL_HIMPUN, d.totalHimpun);
+  var bU = bcBaris(d.umpBreakdown,    BC_LABEL_UMP,    d.totalUmp);
+  var bS = bcBaris(d.salurBreakdown,  BC_LABEL_SALUR,  d.totalSalurLangsung);
+
+  var totH = bcJumlah(bH), totU = bcJumlah(bU), totS = bcJumlah(bS);
+  var totSalur = totS + totU;
+
+  function pos(x){ return '• ' + x.label + ' : *' + rp(x.nilai) + '*'; }
+
   var L = [];
   L.push('*Bismillahirrahmanirrahim*');
   L.push('');
   L.push('*Laporan Keuangan ' + nm + '*');
-  L.push('*' + d.periodeRaw + '*.');
+  L.push('*' + d.periodeRaw + '*');
   L.push('');
-  L.push('*📥 Penerimaan Dana*');
-  L.push('*Zakat*');
-  L.push('* Penerimaan Zakat : ' + fmtVal(hb.zakat, true));
+
+  L.push('*📥 PENERIMAAN DANA*');
+  if (bH.length) bH.forEach(function(x){ L.push(pos(x)); });
+  else L.push('• Tidak ada penerimaan pada periode ini');
+  L.push('*Total Penerimaan : ' + rp(totH) + '*');
+  L.push('_' + d.trxHimpun + ' transaksi dari ' + d.donatur + ' donatur_');
   L.push('');
-  L.push('*Infak*');
-  L.push('* Infak Umum : ' + fmtVal(hb.infakUmum, true));
-  if (hb.infakTerikat > 0) {
-    L.push('* Infak Terikat : ' + fmtVal(hb.infakTerikat, true));
-  }
-  if (hb.amil > 0) {
-    L.push('* Amil : ' + fmtVal(hb.amil, true));
-  }
-  if (hb.dskl > 0) {
-    L.push('* DSKL : ' + fmtVal(hb.dskl, true));
-  }
-  L.push('*Total Penerimaan : ' + rp(d.totalHimpun) + '*');
+
+  L.push('*📤 PENYALURAN DANA*');
+  if (bS.length) bS.forEach(function(x){ L.push(pos(x)); });
+  else L.push('• Tidak ada penyaluran langsung pada periode ini');
+  L.push('*Subtotal Penyaluran : ' + rp(totS) + '*');
   L.push('');
-  L.push('*📤 Penyaluran Dana*');
-  L.push('1. Dana Zakat : ' + fmtVal(sb.zakat, false));
-  L.push('2. Dana Infak : ' + fmtVal(sb.infak, false));
-  L.push('3. Dana Amil : ' + fmtVal(sb.amil, false));
-  if (sb.dskl > 0) {
-    L.push('Dana DSKL : ' + fmtVal(sb.dskl, false));
-  }
-  
-  var totalUmp = ub.zakat + ub.infakTerikat + ub.infakUmum + ub.amil;
-  L.push('*4. Uang Muka Program*');
-  L.push('Zakat : ' + fmtVal(ub.zakat, true));
-  L.push('Infak Terikat : ' + fmtVal(ub.infakTerikat, true));
-  L.push('Infak Umum : ' + fmtVal(ub.infakUmum, true));
-  L.push('Amil : ' + fmtVal(ub.amil, true));
-  L.push('*Total Uang Muka Program : ' + (totalUmp > 0 ? rp(totalUmp) : 'Rp-') + '*');
-  
+
+  L.push('*💼 UANG MUKA PROGRAM*');
+  if (bU.length) bU.forEach(function(x){ L.push(pos(x)); });
+  else L.push('• Tidak ada uang muka program pada periode ini');
+  L.push('*Subtotal Uang Muka : ' + rp(totU) + '*');
+  L.push('');
+
+  L.push('*Total Penyaluran : ' + rp(totSalur) + '*');
+  L.push('_' + d.trxTasyaruf + ' transaksi kepada ' + d.mustahik + ' penerima_');
+  L.push('');
+  L.push('*Selisih Periode Ini : ' + rp(totH - totSalur) + '*');
+  L.push('_penerimaan dikurangi penyaluran_');
+  L.push('');
+  L.push('Jazakumullahu khairan katsiran atas amanah yang telah dititipkan.');
+
   return L.join('\n');
 }
-function renderBroadcastResult(d){var txt=buildBroadcastText(d);
-  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3>Teks Broadcast (bisa diedit)</h3><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="copyBC()">📋 Salin</button><button class="btn btn-primary btn-sm" onclick="waBC()">📲 Kirim via WhatsApp</button></div></div>';
-  h+='<textarea id="bcText" style="min-height:330px;font-family:var(--font-body);line-height:1.6">'+esc(txt)+'</textarea>';
-  h+='<div class="muted" style="font-size:12px;margin-top:8px">Tips: tanda * membuat teks tebal di WhatsApp. Klik "Kirim via WhatsApp" untuk broadcast ke kontak/grup.</div></div>';
-  el('bcResult').innerHTML=h;
+
+function renderBroadcastResult(d){
+  var txt = buildBroadcastText(d);
+  var bH = bcBaris(d.himpunBreakdown, BC_LABEL_HIMPUN, d.totalHimpun);
+  var bU = bcBaris(d.umpBreakdown,    BC_LABEL_UMP,    d.totalUmp);
+  var bS = bcBaris(d.salurBreakdown,  BC_LABEL_SALUR,  d.totalSalurLangsung);
+  var totH = bcJumlah(bH), totSalur = bcJumlah(bS) + bcJumlah(bU);
+  var cek = d.cek || {himpun:0, tasyaruf:0};
+  var cocok = (cek.himpun === 0 && cek.tasyaruf === 0
+            && totH === d.totalHimpun && totSalur === d.totalTasyaruf);
+
+  var h = '<div class="card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+      + '<h3>Teks Broadcast (bisa diedit)</h3>'
+      + '<div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="copyBC()">📋 Salin</button>'
+      + '<button class="btn btn-primary btn-sm" onclick="waBC()">📲 Kirim via WhatsApp</button></div>'
+    + '</div>';
+
+  /* Pemeriksaan penjumlahan ditampilkan terbuka: rincian yang dikirim
+     harus benar-benar berjumlah sama dengan total tercatat. */
+  h += '<div class="bc-cek ' + (cocok ? 'pas' : 'beda') + '">'
+    + '<div class="bc-cek-b"><span>Rincian penerimaan</span><b>' + rp(totH) + '</b></div>'
+    + '<div class="bc-cek-b"><span>Total tercatat</span><b>' + rp(d.totalHimpun) + '</b></div>'
+    + '<div class="bc-cek-b"><span>Rincian penyaluran (langsung + uang muka)</span><b>' + rp(totSalur) + '</b></div>'
+    + '<div class="bc-cek-b"><span>Total tercatat</span><b>' + rp(d.totalTasyaruf) + '</b></div>'
+    + '<div class="bc-cek-k">' + (cocok
+        ? '✓ Penjumlahan cocok — rincian pada teks sama persis dengan total transaksi periode ini.'
+        : '⚠️ Ada selisih ' + rp(Math.abs((d.totalHimpun-totH)) + Math.abs((d.totalTasyaruf-totSalur)))
+          + '. Selisihnya sudah dimunculkan sebagai baris tersendiri pada teks, bukan disembunyikan.')
+    + '</div></div>';
+
+  h += '<textarea id="bcText" style="min-height:360px;font-family:var(--sans);line-height:1.6">'+esc(txt)+'</textarea>';
+  h += '<div class="muted" style="font-size:12px;margin-top:8px">Tanda * membuat teks tebal dan _ membuat miring di WhatsApp.</div></div>';
+  el('bcResult').innerHTML = h;
 }
 function copyBC(){var t=el('bcText');t.select();document.execCommand('copy');toast('Teks disalin');}
 function waBC(){var t=el('bcText').value;window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');}
@@ -1370,7 +1520,7 @@ function setTab(t){
 function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
-  else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();}
+  else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();rentangPasang('hr_rt',{dari:hrAwalBulan(),sampai:today(),onTerap:function(){hrReset();}});}
   else {
     window.REK_HOST='';window.LAY_HOST='';
     host.innerHTML=(SET_TAB==='tampilan')?tampilanHTML(s):lembagaHTML(s);
@@ -1587,9 +1737,19 @@ document.addEventListener('keydown',function(e){
 });
 function selOpt(id,opts,val,onchange){return '<select id="'+id+'"'+(onchange?' onchange="'+onchange+'"':'')+'>'+opts.map(function(o){return '<option value="'+esc(o)+'" '+(String(val)===String(o)?'selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';}
 function filterTable(q,tid){q=(q||'').toLowerCase();document.querySelectorAll('#'+tid+' tbody tr').forEach(function(r){r.style.display=r.textContent.toLowerCase().indexOf(q)>=0?'':'none';});}
+/* Saringan tanggal pada tabel riwayat: satu kalender, boleh dikosongkan
+   kembali ke "semua tanggal". */
+function rtPasangFilter(tid){
+  var v = rentangNilai(tid + '_rt');
+  rentangPasang(tid + '_rt', {
+    dari: v.dari, sampai: v.sampai, bolehKosong: true, kosong: 'Semua tanggal',
+    onTerap: function(){ applyFilters(tid); }
+  });
+}
+
 function applyFilters(tid) {
   var q = el(tid + '_search') ? el(tid + '_search').value.toLowerCase() : '';
-  var dateVal = el(tid + '_filter_date') ? el(tid + '_filter_date').value : '';
+  var rg = (typeof rentangNilai === 'function') ? rentangNilai(tid + '_rt') : {dari:'',sampai:''};
   var typeVal = el(tid + '_filter_type') ? el(tid + '_filter_type').value : '';
   var methodVal = el(tid + '_filter_method') ? el(tid + '_filter_method').value : '';
   var frVal = el(tid + '_filter_fr') ? el(tid + '_filter_fr').value.toLowerCase() : '';
@@ -1604,7 +1764,9 @@ function applyFilters(tid) {
     var rowFr = row.getAttribute('data-fr') || '';
     
     var matchSearch = !q || textContent.indexOf(q) >= 0;
-    var matchDate = !dateVal || rowDate === dateVal;
+    var hariBaris = String(rowDate).slice(0,10);
+    var matchDate = (!rg.dari || !rg.sampai)
+      || (hariBaris >= rg.dari && hariBaris <= rg.sampai);
     var matchType = !typeVal || rowJenis === typeVal;
     var matchMethod = !methodVal || rowMetode === methodVal;
     var matchFr = !frVal || rowFr.toLowerCase().indexOf(frVal) >= 0;
@@ -3353,6 +3515,254 @@ function eksekusiHapusRentangTanggal(type) {
    menyesuaikan ruang yang benar-benar tersedia, dan membuka ke atas
    bila ruang di bawah sempit.
    ================================================================ */
+/* ============================================================
+   PEMILIH RENTANG TANGGAL
+   Satu tombol, satu kalender. Klik pertama menetapkan tanggal awal,
+   klik kedua tanggal akhir — tidak perlu dua kotak tanggal terpisah.
+   ============================================================ */
+var _RT = {};
+
+function rtIso(d){
+  return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+}
+function rtUrai(s){
+  var p = String(s||'').split('-');
+  if (p.length < 3) return null;
+  var d = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+  return isNaN(d.getTime()) ? null : d;
+}
+var RT_BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+var RT_HARI  = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+
+/* "5 – 20 Agustus 2026" bila sebulan, "28 Jul – 3 Agu 2026" bila beda bulan. */
+function rtLabel(dari, sampai){
+  var a = rtUrai(dari), b = rtUrai(sampai);
+  if (!a || !b) return 'Pilih rentang tanggal';
+  var sng = function(d){ return RT_BULAN[d.getMonth()].slice(0,3); };
+  if (dari === sampai) return a.getDate() + ' ' + RT_BULAN[a.getMonth()] + ' ' + a.getFullYear();
+  if (a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth())
+    return a.getDate() + ' – ' + b.getDate() + ' ' + RT_BULAN[b.getMonth()] + ' ' + b.getFullYear();
+  if (a.getFullYear() === b.getFullYear())
+    return a.getDate() + ' ' + sng(a) + ' – ' + b.getDate() + ' ' + sng(b) + ' ' + b.getFullYear();
+  return a.getDate() + ' ' + sng(a) + ' ' + a.getFullYear() + ' – ' + b.getDate() + ' ' + sng(b) + ' ' + b.getFullYear();
+}
+
+function rentangHTML(id, dari, sampai, opsi){
+  opsi = opsi || {};
+  var kls = 'rt' + (opsi.rapat ? ' rt-rapat' : '');
+  var teks = (dari && sampai) ? rtLabel(dari, sampai) : (opsi.kosong || 'Pilih rentang tanggal');
+  return '<div class="'+kls+'" id="'+id+'_wrap">'
+    + '<button type="button" class="rt-btn'+((dari&&sampai)?'':' rt-hampa')+'" id="'+id+'_btn" aria-haspopup="dialog">'
+    + '<span class="rt-ic" aria-hidden="true">📅</span>'
+    + '<span class="rt-teks" id="'+id+'_teks">'+esc(teks)+'</span>'
+    + '<span class="rt-car" aria-hidden="true">▾</span>'
+    + '</button></div>';
+}
+
+function rentangNilai(id){
+  var s = _RT[id] || {};
+  return { dari: s.dari || '', sampai: s.sampai || '' };
+}
+
+function rentangPasang(id, opsi){
+  opsi = opsi || {};
+  var btn = el(id + '_btn');
+  if (!btn) return;
+
+  var lama = _RT[id];
+  if (lama && lama.pop && lama.pop.parentNode) lama.pop.parentNode.removeChild(lama.pop);
+
+  var pop = document.createElement('div');
+  pop.className = 'dropdown-popover datepicker-enhanced-popover rt-pop hidden';
+
+  var s = _RT[id] = {
+    dari: opsi.dari || '', sampai: opsi.sampai || '',
+    tahap: 'awal', bayang: '', pop: pop, btn: btn,
+    onTerap: opsi.onTerap || null,
+    bolehKosong: opsi.bolehKosong === true,
+    kosong: opsi.kosong || 'Semua tanggal'
+  };
+  var awal = rtUrai(s.dari) || new Date();
+  s.lihat = new Date(awal.getFullYear(), awal.getMonth(), 1);
+
+  pop.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+  pop.addEventListener('click', function(e){ e.stopPropagation(); });
+
+  btn.addEventListener('click', function(e){
+    e.stopPropagation();
+    var tertutup = pop.classList.contains('hidden');
+    popTutupSemua(pop);
+    if (!tertutup){ pop.classList.add('hidden'); return; }
+    s.tahap = 'awal'; s.bayang = '';
+    var a = rtUrai(s.dari) || new Date();
+    s.lihat = new Date(a.getFullYear(), a.getMonth(), 1);
+    rtGambar(id);
+    popBuka(btn, pop);
+  });
+
+  rtGambar(id);
+  rtTeksBaru(id);
+}
+
+function rtTeksBaru(id){
+  var s = _RT[id]; if (!s) return;
+  var isi = !!(s.dari && s.sampai);
+  var t = el(id + '_teks');
+  if (t) t.textContent = isi ? rtLabel(s.dari, s.sampai) : (s.bolehKosong ? s.kosong : 'Pilih rentang tanggal');
+  if (s.btn) s.btn.classList.toggle('rt-hampa', !isi);
+}
+
+/* Kosongkan pilihan — dipakai saringan yang boleh "semua tanggal". */
+function rtHapus(id){
+  var s = _RT[id]; if (!s) return;
+  s.dari = ''; s.sampai = ''; s.tahap = 'awal'; s.bayang = '';
+  rtGambar(id); rtTeksBaru(id);
+  s.pop.classList.add('hidden');
+  if (s.onTerap) s.onTerap('', '');
+}
+
+function rtGambar(id){
+  var s = _RT[id]; if (!s) return;
+  var v = s.lihat;
+  var thn = v.getFullYear(), bln = v.getMonth();
+  var pertama = new Date(thn, bln, 1);
+  var jmlHari = new Date(thn, bln + 1, 0).getDate();
+  var geser = pertama.getDay();
+  var hariIni = rtIso(new Date());
+
+  var lo = s.dari, hi = s.sampai;
+  if (s.tahap === 'akhir' && s.dari && s.bayang){
+    lo = s.dari < s.bayang ? s.dari : s.bayang;
+    hi = s.dari < s.bayang ? s.bayang : s.dari;
+  }
+
+  var h = '<div class="rt-preset">'
+    + '<button type="button" class="rt-chip" onclick="rtPreset(\''+id+'\',\'7\')">7 hari</button>'
+    + '<button type="button" class="rt-chip" onclick="rtPreset(\''+id+'\',\'30\')">30 hari</button>'
+    + '<button type="button" class="rt-chip" onclick="rtPreset(\''+id+'\',\'bln\')">Bulan ini</button>'
+    + '<button type="button" class="rt-chip" onclick="rtPreset(\''+id+'\',\'blnLalu\')">Bulan lalu</button>'
+    + '<button type="button" class="rt-chip" onclick="rtPreset(\''+id+'\',\'thn\')">Tahun ini</button>'
+    + '</div>';
+
+  h += '<div class="rt-head">'
+    + '<button type="button" class="rt-nav" onclick="rtGeser(\''+id+'\',-1)" aria-label="Bulan sebelumnya">‹</button>'
+    + '<div class="rt-judul">'+RT_BULAN[bln]+' '+thn+'</div>'
+    + '<button type="button" class="rt-nav" onclick="rtGeser(\''+id+'\',1)" aria-label="Bulan berikutnya">›</button>'
+    + '</div>';
+
+  h += '<div class="rt-hari">' + RT_HARI.map(function(x){ return '<span>'+x+'</span>'; }).join('') + '</div>';
+  h += '<div class="rt-grid">';
+  for (var i = 0; i < geser; i++) h += '<span class="rt-kosong"></span>';
+  for (var d = 1; d <= jmlHari; d++){
+    var iso = thn + '-' + ('0'+(bln+1)).slice(-2) + '-' + ('0'+d).slice(-2);
+    h += '<button type="button" class="rt-sel' + (iso === hariIni ? ' kini' : '') + '" data-iso="'+iso+'"'
+      + ' onclick="rtKlik(\''+id+'\',\''+iso+'\')" onmouseenter="rtBayang(\''+id+'\',\''+iso+'\')">'+d+'</button>';
+  }
+  h += '</div>';
+
+  h += '<div class="rt-kaki">'
+    + '<span class="rt-info" id="'+id+'_info"></span>'
+    + (s.bolehKosong ? '<button type="button" class="rt-hapus" onclick="rtHapus(\''+id+'\')">Semua</button>' : '')
+    + '<button type="button" class="rt-terap" onclick="rtTutup(\''+id+'\')">Selesai</button>'
+    + '</div>';
+
+  s.pop.innerHTML = h;
+  rtTandai(id);
+  if (!s.pop.classList.contains('hidden')) popUkur(s.btn, s.pop);
+}
+
+/* Menandai ujung dan pita rentang dengan mengubah kelas pada tombol yang
+   SUDAH ada. Versi awal membangun ulang seluruh kalender tiap kali kursor
+   pindah hari — transisi CSS jadi tidak pernah sempat berjalan dan geraknya
+   patah-patah. Sekarang yang berubah hanya kelasnya. */
+function rtTandai(id){
+  var s = _RT[id]; if (!s || !s.pop) return;
+  var lo = s.dari, hi = s.sampai;
+  if (s.tahap === 'akhir' && s.dari && s.bayang){
+    lo = s.dari < s.bayang ? s.dari : s.bayang;
+    hi = s.dari < s.bayang ? s.bayang : s.dari;
+  }
+  var hariIni = rtIso(new Date());
+  s.pop.querySelectorAll('.rt-sel').forEach(function(b){
+    var iso = b.getAttribute('data-iso');
+    var k = ['rt-sel'];
+    if (iso === hariIni) k.push('kini');
+    if (lo && hi && iso > lo && iso < hi) k.push('dalam');
+    if (lo && hi && iso === lo && iso === hi) k.push('tunggal');
+    else if (iso === lo) k.push('ujung awal');
+    else if (iso === hi) k.push('ujung akhir');
+    var baru = k.join(' ');
+    if (b.className !== baru) b.className = baru;
+  });
+  var info = s.pop.querySelector('#' + id + '_info');
+  if (info){
+    info.innerHTML = s.tahap === 'akhir' ? 'Pilih <b>tanggal akhir</b>'
+      : (s.dari && s.sampai) ? esc(rtLabel(s.dari, s.sampai))
+      : 'Klik <b>tanggal awal</b>';
+  }
+}
+
+function rtGeser(id, delta){
+  var s = _RT[id]; if (!s) return;
+  s.lihat = new Date(s.lihat.getFullYear(), s.lihat.getMonth() + delta, 1);
+  rtGambar(id);
+}
+
+function rtBayang(id, iso){
+  var s = _RT[id]; if (!s || s.tahap !== 'akhir' || !s.dari) return;
+  if (s.bayang === iso) return;
+  s.bayang = iso;
+  rtTandai(id);
+}
+
+function rtKlik(id, iso){
+  var s = _RT[id]; if (!s) return;
+  if (s.tahap === 'awal'){
+    s.dari = iso; s.sampai = ''; s.bayang = iso; s.tahap = 'akhir';
+    rtTandai(id); rtTeksBaru(id);
+    return;
+  }
+  /* Klik kedua: urutan tanggal dirapikan sendiri bila terbalik. */
+  if (iso < s.dari){ s.sampai = s.dari; s.dari = iso; }
+  else s.sampai = iso;
+  s.tahap = 'awal'; s.bayang = '';
+  rtTandai(id); rtTeksBaru(id);
+  /* jeda pendek supaya pita rentang sempat terlihat sebelum menutup */
+  setTimeout(function(){ rtSelesai(id); }, 180);
+}
+
+function rtPreset(id, jenis){
+  var s = _RT[id]; if (!s) return;
+  var n = new Date(), a, b;
+  if (jenis === '7'){ b = n; a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 6); }
+  else if (jenis === '30'){ b = n; a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 29); }
+  else if (jenis === 'bln'){ a = new Date(n.getFullYear(), n.getMonth(), 1); b = new Date(n.getFullYear(), n.getMonth()+1, 0); }
+  else if (jenis === 'blnLalu'){ a = new Date(n.getFullYear(), n.getMonth()-1, 1); b = new Date(n.getFullYear(), n.getMonth(), 0); }
+  else { a = new Date(n.getFullYear(), 0, 1); b = new Date(n.getFullYear(), 11, 31); }
+  s.dari = rtIso(a); s.sampai = rtIso(b);
+  s.tahap = 'awal'; s.bayang = '';
+  s.lihat = new Date(a.getFullYear(), a.getMonth(), 1);
+  rtGambar(id); rtTeksBaru(id);
+  rtSelesai(id);
+}
+
+function rtTutup(id){
+  var s = _RT[id]; if (!s) return;
+  /* "Selesai" ditekan saat baru satu tanggal terpilih: dianggap satu hari. */
+  if (s.tahap === 'akhir' && s.dari && !s.sampai){
+    s.sampai = s.dari; s.tahap = 'awal'; s.bayang = '';
+    rtGambar(id); rtTeksBaru(id);
+  }
+  s.pop.classList.add('hidden');
+  if (s.dari && s.sampai && s.onTerap) s.onTerap(s.dari, s.sampai);
+}
+
+function rtSelesai(id){
+  var s = _RT[id]; if (!s) return;
+  s.pop.classList.add('hidden');
+  if (s.onTerap) s.onTerap(s.dari, s.sampai);
+}
+
 var _POP_DAFTAR = [];
 
 function popUkur(btn, pop){
@@ -3362,7 +3772,8 @@ function popUkur(btn, pop){
      jadi tingginya dibiarkan apa adanya dan letaknya yang digeser. */
   var kaku = pop.classList.contains('datepicker-enhanced-popover');
 
-  var lebar = Math.min(Math.max(r.width, kaku ? 268 : 210), vw - 16);
+  var minLebar = pop.classList.contains('rt-pop') ? 304 : (kaku ? 268 : 210);
+  var lebar = Math.min(Math.max(r.width, minLebar), vw - 16);
   var kiri  = Math.min(Math.max(8, r.left), Math.max(8, vw - lebar - 8));
 
   pop.style.position = 'fixed';
@@ -4006,7 +4417,7 @@ function enhanceDatePickers(containerId) {
    pengecekan tidak bisa lagi lewat .closest('.custom-dropdown') dari
    popovernya — yang diperiksa adalah letak klik itu sendiri. */
 document.addEventListener('click', function(e) {
-  if (e.target.closest && e.target.closest('.select-enhanced-popover, .datepicker-enhanced-popover, .custom-dropdown')) return;
+  if (e.target.closest && e.target.closest('.select-enhanced-popover, .datepicker-enhanced-popover, .custom-dropdown, .rt')) return;
   popTutupSemua(null);
 });
 
@@ -5268,7 +5679,8 @@ function logBersihkan(){
    PERAWATAN DATA — perbaikan sekali jalan
    ================================================================ */
 function perawatanHTML(){
-  return '<div class="card set-panel">'
+  return cadanganHTML() + hapusRentangHTML()
+    + '<div class="card set-panel">'
     + '<h3>Perbaikan Data Lama</h3>'
     + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
     + 'Aturan rekap dan pilar sudah diperbaiki, tetapi baris yang sudah terlanjur tersimpan masih membawa nilai lama. '
@@ -5285,6 +5697,208 @@ function perawatanHTML(){
     + '</div>'
     + '<div id="perbaikanHasil" style="margin-top:16px"></div>'
     + '</div>';
+}
+
+/* ===== CADANGAN & EKSPOR ===== */
+function cadanganHTML(){
+  return '<div class="card set-panel">'
+    + '<h3>Cadangan &amp; Ekspor Data</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Seluruh data tersimpan di satu basis data daring milik lembaga, bukan di komputer ini — '
+    + 'jadi data tetap sama dibuka dari perangkat mana pun. Karena tersimpan di satu tempat, '
+    + '<b>ambil cadangan sebelum menghapus apa pun</b>.<br>'
+    + '<b>Cadangan (.json)</b> berisi seluruh isi basis data dan dipakai untuk memulihkan bila terjadi apa-apa. '
+    + 'Sesi login dan kata sandi pengguna sengaja tidak disertakan demi keamanan berkasnya.<br>'
+    + '<b>Ekspor (.xlsx)</b> berisi penghimpunan dan pentasyarufan dalam bentuk tabel siap olah di Excel.'
+    + '</p>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary" onclick="unduhCadangan()">Unduh cadangan (.json)</button>'
+    + '<button class="btn btn-ghost" onclick="unduhEksporExcel()">Ekspor Excel (.xlsx)</button>'
+    + '</div>'
+    + '<div id="cadanganHasil" style="margin-top:14px"></div>'
+    + '</div>';
+}
+
+function _stempelWaktu(){
+  var d = new Date(), p = function(n){ return (n<10?'0':'')+n; };
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes());
+}
+
+function _simpanBerkas(isi, namaBerkas, tipe){
+  var blob = new Blob([isi], { type: tipe || 'application/octet-stream' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = namaBerkas;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+}
+
+function unduhCadangan(){
+  var host = el('cadanganHasil');
+  host.innerHTML = BOXES_SPINNER;
+  gas('apiCadanganDB')(TOKEN).then(function(d){
+    var teks = JSON.stringify(d);
+    _simpanBerkas(teks, 'cadangan-lazdigital-' + _stempelWaktu() + '.json', 'application/json');
+    var b = (d.ringkas && d.ringkas.baris) || {};
+    host.innerHTML = '<div class="imp-note">Cadangan diunduh — <b>' + rpCetak(teks.length) + ' byte</b>. '
+      + 'Berisi <b>' + rpCetak(b.Penghimpunan || 0) + '</b> baris penghimpunan dan <b>'
+      + rpCetak(b.Pentasyarufan || 0) + '</b> baris pentasyarufan. '
+      + 'Simpan berkas ini di tempat aman — isinya data donatur.</div>';
+    toast('Cadangan diunduh');
+  }).catch(function(e){ host.innerHTML=''; handleErr(e); });
+}
+
+function unduhEksporExcel(){
+  var host = el('cadanganHasil');
+  host.innerHTML = BOXES_SPINNER;
+  gas('apiCadanganDB')(TOKEN).then(function(d){
+    var wb = XLSX.utils.book_new();
+    var isi = 0;
+    [['Penghimpunan','Penghimpunan'],['Pentasyarufan','Pentasyarufan'],
+     ['Rekening','Rekening'],['Layanan','Layanan'],['Donatur','Donatur']].forEach(function(p){
+      var aoa = (d.sheets && d.sheets[p[0]]) || [];
+      if (aoa.length < 2) return;
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      for (var k in ws){ if (ws[k] && ws[k].t === 'n') ws[k].z = '0'; }
+      XLSX.utils.book_append_sheet(wb, ws, p[1]);
+      isi += aoa.length - 1;
+    });
+    if (!isi){ host.innerHTML = '<div class="imp-note">Belum ada data yang bisa diekspor.</div>'; return; }
+    XLSX.writeFile(wb, 'Data LAZ Digital ' + _stempelWaktu() + '.xlsx');
+    host.innerHTML = '<div class="imp-note">Ekspor Excel diunduh — <b>' + rpCetak(isi) + '</b> baris dalam beberapa lembar.</div>';
+    toast('Ekspor Excel diunduh');
+  }).catch(function(e){ host.innerHTML=''; handleErr(e); });
+}
+
+/* ===== HAPUS DATA PER RENTANG TANGGAL ===== */
+function hrAwalBulan(){ var d=new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10); }
+
+function hapusRentangHTML(){
+  return '<div class="card set-panel hr-panel">'
+    + '<h3>Hapus Data per Rentang Tanggal</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Menghapus penghimpunan dan/atau pentasyarufan pada rentang tanggal yang Anda tentukan. '
+    + 'Untuk menghapus satu bulan penuh, isi tanggal 1 sampai tanggal terakhir bulan itu; '
+    + 'untuk beberapa hari saja, isi tanggalnya langsung.<br>'
+    + '<b>Penghapusan bersifat permanen dan tidak bisa dibatalkan.</b> Unduh cadangan lebih dulu.'
+    + '</p>'
+    + '<div class="fgrid">'
+    + fld(6,'Rentang Tanggal', rentangHTML('hr_rt', hrAwalBulan(), today()))
+    + fld(6,'Data yang dihapus',
+        '<label class="hr-cek"><input type="checkbox" id="hr_himpun" checked> Penghimpunan</label>'
+      + '<label class="hr-cek"><input type="checkbox" id="hr_salur" checked> Pentasyarufan</label>')
+    + '</div>'
+    + '<div class="hr-cepat">Pilih cepat:'
+    + ' <button class="btn btn-mini" onclick="hrBulan(0)">Bulan ini</button>'
+    + ' <button class="btn btn-mini" onclick="hrBulan(-1)">Bulan lalu</button>'
+    + ' <button class="btn btn-mini" onclick="hrTahun()">Tahun ini</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
+    + '<button class="btn btn-primary" onclick="hrPeriksa()">Periksa dulu</button>'
+    + '<button class="btn btn-danger hidden" id="btnHapusRentang" onclick="hrKonfirmasi()">Hapus data ini</button>'
+    + '</div>'
+    + '<div id="hrHasil" style="margin-top:16px"></div>'
+    + '</div>';
+}
+
+function hrIsi(dari, sampai){
+  var s = _RT['hr_rt'];
+  if (s){ s.dari = dari; s.sampai = sampai; rtGambar('hr_rt'); rtTeksBaru('hr_rt'); }
+  hrReset();
+}
+function hrBulan(geser){
+  var n = new Date(); var d = new Date(n.getFullYear(), n.getMonth() + geser, 1);
+  var akhir = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  hrIsi(d.toISOString().slice(0,10), akhir.toISOString().slice(0,10));
+}
+function hrTahun(){ var y = new Date().getFullYear(); hrIsi(y+'-01-01', y+'-12-31'); }
+function hrReset(){ el('hrHasil').innerHTML=''; el('btnHapusRentang').classList.add('hidden'); window.__hrPratinjau=null; }
+
+function hrParam(terapkan){
+  var v = rentangNilai('hr_rt');
+  return { dari: v.dari, sampai: v.sampai,
+           himpun: el('hr_himpun').checked, salur: el('hr_salur').checked,
+           terapkan: !!terapkan };
+}
+
+function hrPeriksa(){
+  var host = el('hrHasil');
+  host.innerHTML = BOXES_SPINNER;
+  el('btnHapusRentang').classList.add('hidden');
+  gas('apiHapusRentang')(TOKEN, hrParam(false)).then(function(d){
+    window.__hrPratinjau = d;
+    host.innerHTML = hrHasilHTML(d);
+    if (d.totalBaris > 0) el('btnHapusRentang').classList.remove('hidden');
+  }).catch(function(e){ host.innerHTML=''; handleErr(e); });
+}
+
+function hrKonfirmasi(){
+  var d = window.__hrPratinjau;
+  if (!d || !d.totalBaris) return;
+  var rinci = [];
+  if (d.himpun.jumlah) rinci.push('<b>'+rpCetak(d.himpun.jumlah)+'</b> penghimpunan (Rp '+rpCetak(d.himpun.nominal)+')');
+  if (d.salur.jumlah)  rinci.push('<b>'+rpCetak(d.salur.jumlah)+'</b> pentasyarufan (Rp '+rpCetak(d.salur.nominal)+')');
+  confirmDialog({
+    title:'Hapus permanen?',
+    message: rinci.join(' dan ') + ' pada rentang <b>'+tglIndo(d.dari)+'</b> sampai <b>'+tglIndo(d.sampai)+'</b> '
+      + 'akan dihapus dan <b>tidak bisa dikembalikan</b>. Pastikan Anda sudah mengunduh cadangan.',
+    okText:'Ya, hapus permanen', cancelText:'Batal', icon:'🗑️', danger:true
+  }).then(function(setuju){ if (setuju) hrJalankan(); });
+}
+
+function hrJalankan(){
+  var host = el('hrHasil');
+  host.innerHTML = BOXES_SPINNER;
+  gas('apiHapusRentang')(TOKEN, hrParam(true)).then(function(d){
+    el('btnHapusRentang').classList.add('hidden');
+    window.__hrPratinjau = null;
+    host.innerHTML = '<div class="imp-note">Selesai. <b>'+rpCetak(d.terhapus)+'</b> baris dihapus '
+      + '('+rpCetak(d.terhapusHimpun)+' penghimpunan, '+rpCetak(d.terhapusSalur)+' pentasyarufan). '
+      + 'Tercatat di Log Aktivitas.</div>';
+    toast(d.terhapus + ' baris dihapus');
+    CACHE.dash = null;
+  }).catch(function(e){ host.innerHTML=''; handleErr(e); });
+}
+
+function hrHasilHTML(d){
+  if (!d.totalBaris){
+    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+      + 'Tidak ada data pada rentang '+tglIndo(d.dari)+' – '+tglIndo(d.sampai)+'. Tidak ada yang dihapus.</div>';
+  }
+  var h = '<div class="imp-note imp-warn">Akan dihapus: <b>'+rpCetak(d.totalBaris)+'</b> baris senilai <b>Rp '
+    + rpCetak(d.totalNominal)+'</b> pada rentang '+tglIndo(d.dari)+' – '+tglIndo(d.sampai)+'. '
+    + 'Belum ada yang dihapus — periksa rinciannya dulu.</div>';
+
+  h += '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
+    + '<th>Bulan</th><th class="r">Penghimpunan</th><th class="r">Nominal</th>'
+    + '<th class="r">Pentasyarufan</th><th class="r">Nominal</th></tr></thead><tbody>';
+  d.daftarBulan.forEach(function(b){
+    h += '<tr><td>'+esc(namaBulanDari(b.bulan))+'</td>'
+      + '<td class="r jnum">'+rpCetak(b.himpunJml)+'</td><td class="r jnum">'+rpCetak(b.himpunRp)+'</td>'
+      + '<td class="r jnum">'+rpCetak(b.salurJml)+'</td><td class="r jnum">'+rpCetak(b.salurRp)+'</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td>Jumlah</td>'
+    + '<td class="r jnum">'+rpCetak(d.himpun.jumlah)+'</td><td class="r jnum">'+rpCetak(d.himpun.nominal)+'</td>'
+    + '<td class="r jnum">'+rpCetak(d.salur.jumlah)+'</td><td class="r jnum">'+rpCetak(d.salur.nominal)+'</td></tr></tfoot></table></div></div>';
+
+  if (d.contoh && d.contoh.length){
+    h += '<p class="muted" style="font-size:12px;margin:14px 0 6px">Contoh baris yang akan terhapus'
+      + (d.totalBaris > d.contoh.length ? ' ('+d.contoh.length+' dari '+rpCetak(d.totalBaris)+')' : '')+':</p>';
+    h += '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nama</th><th>No. Bukti</th><th class="r">Jumlah</th></tr></thead><tbody>';
+    d.contoh.forEach(function(c){
+      h += '<tr><td>'+esc(tglIndo(c.tanggal))+'</td><td>'+esc(c.jenis)+'</td><td>'+esc(c.nama)+'</td>'
+        + '<td>'+esc(c.bukti)+'</td><td class="r jnum">'+rpCetak(c.jumlah)+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+  return h;
+}
+
+function namaBulanDari(ym){
+  var p = String(ym||'').split('-');
+  var b = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  return (b[Number(p[1])] || ym) + ' ' + (p[0] || '');
 }
 
 function perbaikanPeriksa(){

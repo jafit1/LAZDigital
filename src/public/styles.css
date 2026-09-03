@@ -3222,3 +3222,201 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 }
 .a2-cek.pas{ background:var(--green-bg); border-color:rgba(26,162,96,.35); color:var(--text); }
 .a2-cek.beda{ background:var(--amber-bg); border-color:rgba(245,165,36,.4); color:var(--text); }
+
+/* ================================================================
+   41. PEMERIKSAAN PENJUMLAHAN BROADCAST
+   ================================================================ */
+.bc-cek{
+  border:1px solid; border-radius:13px; padding:11px 14px; margin-bottom:12px;
+  font-size:12.5px;
+}
+.bc-cek.pas{ background:var(--green-bg); border-color:rgba(26,162,96,.32); }
+.bc-cek.beda{ background:var(--amber-bg); border-color:rgba(245,165,36,.4); }
+.bc-cek-b{
+  display:flex; justify-content:space-between; gap:12px; padding:3px 0;
+  color:var(--text2);
+}
+.bc-cek-b b{ color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.bc-cek-k{
+  margin-top:7px; padding-top:7px; border-top:1px solid var(--border2);
+  font-size:12px; font-weight:600; color:var(--text);
+}
+
+/* ============================================================
+   42. Cadangan, ekspor, dan hapus data per rentang tanggal
+   ============================================================ */
+.hr-panel{border-color:var(--red-bg)}
+.hr-panel h3{color:var(--red)}
+
+.hr-cek{
+  display:inline-flex; align-items:center; gap:7px;
+  margin-right:18px; font-size:13px; font-weight:600; color:var(--text);
+  cursor:pointer; user-select:none;
+}
+.hr-cek input{
+  width:16px; height:16px; margin:0; cursor:pointer;
+  accent-color:var(--accent);
+}
+
+.hr-cepat{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin-top:12px; font-size:12px; color:var(--muted);
+}
+
+.btn-mini{
+  padding:4px 11px; font-size:12px; font-weight:600;
+  border-radius:8px; line-height:1.5;
+  background:var(--glass-card); border:1px solid var(--glass-bd); color:var(--text);
+}
+.btn-mini:hover{border-color:var(--accent); color:var(--accent)}
+
+.imp-note.imp-warn{
+  background:var(--red-bg);
+  border-color:var(--red);
+}
+.imp-note.imp-warn b{color:var(--red)}
+
+/* ============================================================
+   43. Pemilih rentang tanggal (satu kalender, awal → akhir)
+   ============================================================ */
+.rt{width:100%}
+.rt-btn{
+  width:100%; display:flex; align-items:center; gap:9px;
+  background:var(--surface); border:1px solid var(--border); color:var(--text);
+  padding:10px 12px; border-radius:10px; font:inherit; font-size:14px; font-weight:500;
+  cursor:pointer; text-align:left; transition:border-color .16s, box-shadow .16s;
+}
+.rt-btn:hover{border-color:var(--accent)}
+.rt-btn:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.16)}
+.rt-ic{font-size:13px;opacity:.6;flex:none}
+.rt-teks{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-car{flex:none;opacity:.5;font-size:11px}
+
+.rt-pop{padding:10px !important;background:var(--surface);border:1px solid var(--border)}
+
+.rt-preset{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px}
+.rt-chip{
+  padding:4px 9px; font-size:11.5px; font-weight:600; line-height:1.5;
+  border-radius:999px; cursor:pointer;
+  background:var(--surface2); border:1px solid var(--border); color:var(--muted);
+  transition:background .14s,border-color .14s,color .14s;
+}
+.rt-chip:hover{background:rgba(var(--accent-rgb),.1);border-color:var(--accent);color:var(--accent)}
+
+.rt-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px}
+.rt-judul{font-size:13.5px;font-weight:700;color:var(--text)}
+.rt-nav{
+  width:26px;height:26px;flex:none;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;cursor:pointer;font-size:16px;line-height:1;
+  background:transparent;border:1px solid transparent;color:var(--muted);
+}
+.rt-nav:hover{background:var(--surface2);border-color:var(--border);color:var(--accent)}
+
+.rt-hari,.rt-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.rt-hari{margin-bottom:3px}
+.rt-hari span{
+  text-align:center;font-size:10.5px;font-weight:700;letter-spacing:.03em;
+  color:var(--muted);padding:3px 0;
+}
+.rt-kosong{height:32px}
+.rt-sel{
+  height:32px;display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;font-weight:500;cursor:pointer;
+  background:transparent;border:1px solid transparent;border-radius:8px;
+  color:var(--text);position:relative;
+  transition:background .12s,color .12s;
+}
+.rt-sel:hover{background:var(--surface2)}
+.rt-sel.kini{font-weight:800;color:var(--accent)}
+.rt-sel.kini::after{
+  content:"";position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+  width:3px;height:3px;border-radius:50%;background:currentColor;
+}
+/* Hari di antara dua ujung: latar tipis dan sudut rata agar terbaca sebagai satu pita. */
+.rt-sel.dalam{background:rgba(var(--accent-rgb),.12);border-radius:0;color:var(--text)}
+.rt-sel.ujung{
+  background:var(--grad-accent,linear-gradient(135deg,rgba(var(--accent-rgb),1),rgba(var(--accent-rgb),.85)));
+  color:#fff;font-weight:700;
+}
+.rt-sel.ujung.kini{color:#fff}
+.rt-sel.ujung.kini::after{background:#fff}
+.rt-sel.ujung.awal{border-radius:8px 0 0 8px}
+.rt-sel.ujung.akhir{border-radius:0 8px 8px 0}
+.rt-sel.tunggal{
+  background:var(--grad-accent,linear-gradient(135deg,rgba(var(--accent-rgb),1),rgba(var(--accent-rgb),.85)));
+  color:#fff;font-weight:700;border-radius:8px;
+}
+.rt-sel.tunggal.kini::after{background:#fff}
+
+.rt-kaki{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  margin-top:9px;padding-top:8px;border-top:1px solid var(--border);
+}
+.rt-info{font-size:11.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-info b{color:var(--accent)}
+.rt-terap{
+  flex:none;padding:5px 13px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;
+  background:var(--grad-accent,rgba(var(--accent-rgb),1));border:1px solid transparent;color:#fff;
+}
+.rt-terap:hover{filter:brightness(1.06)}
+
+/* Pilihan mode periode jurnal */
+.j-mode{display:inline-flex;gap:3px;padding:3px;margin-bottom:12px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.j-mode-btn{
+  padding:5px 13px;font-size:12.5px;font-weight:600;border-radius:7px;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--muted);
+  transition:background .14s,color .14s,box-shadow .14s;
+}
+.j-mode-btn:hover{color:var(--text)}
+.j-mode-btn.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+
+/* ============================================================
+   44. Rentang tanggal — varian ringkas, keadaan kosong, animasi
+   ============================================================ */
+
+/* Dipakai di panel saringan (dashboard & riwayat) yang kotaknya lebih rapat. */
+.rt-rapat .rt-btn{padding:7px 11px;font-size:12.5px;border-radius:9px}
+.rt-rapat .rt-ic{font-size:12px}
+
+/* Belum ada rentang dipilih: teksnya diredupkan seperti placeholder. */
+.rt-btn.rt-hampa .rt-teks{color:var(--muted);font-weight:500}
+
+.rt-hapus{
+  flex:none;padding:5px 11px;font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  transition:background .15s ease,border-color .15s ease,color .15s ease;
+}
+.rt-hapus:hover{background:var(--surface2);border-color:var(--accent);color:var(--accent)}
+
+/* ---- Animasi ---- */
+@keyframes rtMuncul{
+  from{opacity:0;transform:translateY(-6px) scale(.975)}
+  to  {opacity:1;transform:translateY(0) scale(1)}
+}
+.rt-pop:not(.hidden){
+  animation:rtMuncul .19s cubic-bezier(.16,1,.3,1) both;
+  will-change:transform,opacity;
+}
+
+/* Pita rentang dianimasikan lembut. Kalender tidak lagi dibangun ulang saat
+   kursor melintas, jadi transisi ini benar-benar sempat berjalan. */
+.rt-sel{
+  transition:background-color .17s ease, color .17s ease,
+             border-radius .17s ease, transform .12s ease;
+}
+.rt-sel:active{transform:scale(.9)}
+.rt-sel.ujung,.rt-sel.tunggal{
+  transition:background .2s cubic-bezier(.16,1,.3,1), color .17s ease,
+             border-radius .2s ease, transform .14s cubic-bezier(.34,1.56,.64,1);
+}
+.rt-chip,.rt-nav,.rt-terap{transition:background .15s ease,border-color .15s ease,color .15s ease,filter .15s ease,transform .12s ease}
+.rt-chip:active,.rt-nav:active,.rt-terap:active{transform:scale(.95)}
+.rt-btn .rt-car{transition:transform .2s cubic-bezier(.16,1,.3,1),opacity .15s ease}
+.rt-info{transition:opacity .15s ease}
+
+@media (prefers-reduced-motion: reduce){
+  .rt-pop:not(.hidden){animation:none}
+  .rt-sel,.rt-sel.ujung,.rt-sel.tunggal,.rt-chip,.rt-nav,.rt-terap,.rt-btn .rt-car{transition:none}
+  .rt-sel:active,.rt-chip:active,.rt-nav:active,.rt-terap:active{transform:none}
+}
