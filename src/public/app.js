@@ -82,13 +82,13 @@ function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return t
 /* ============ MASTER DATA (cascading) ============ */
 var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL','Amil'];
 var SUBJENIS={
-  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Bagi Hasil Bank','Setor Tunai'],
-  'Infak':['Infak Umum','Infak Terikat','Bagi Hasil Bank','Setor Tunai'],
+  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Bagi Hasil Bank'],
+  'Infak':['Infak Umum','Infak Terikat','Bagi Hasil Bank'],
   'Sedekah':['Sedekah Umum','Sedekah Terikat','Bagi Hasil Bank'],
   'Wakaf':['Wakaf Uang','Wakaf Melalui Uang','Bagi Hasil Bank'],
   'Kurban':['Kurban'],'Fidyah':['Fidyah'],
   'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya'],
-  'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank','Setor Tunai']
+  'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank']
 };
 var PILAR=['Pendidikan','Kesehatan','Ekonomi & Pemberdayaan','Dakwah & Advokasi','Sosial Kemanusiaan','Lingkungan'];
 var KATEGORI_TERIKAT=['Kesehatan','Pendidikan','Sosial Dakwah','DAM','Kemanusiaan','Fidyah','Qurban'];
@@ -514,16 +514,10 @@ function formHimpun(id,host){
       uniqueNames.push(x.namaDonatur);
     }
   });
-  uniqueNames = ['NN', 'Setor Tunai', 'Bagi Hasil Bank', 'Pengembalian UMP'].concat(uniqueNames.slice(0, 100));
+  uniqueNames = ['NN', 'Bagi Hasil Bank', 'Pengembalian UMP'].concat(uniqueNames.slice(0, 100));
   bindMoney('f_jumlah');
   setupSearchDropdown('f_namaDonatur', 'donaturMenu', uniqueNames, function(val) {
-    if (val === 'Setor Tunai') {
-      var subSel = el('f_subJenis');
-      if (subSel) {
-        subSel.value = 'Setor Tunai';
-        onSubChange();
-      }
-    } else if (val === 'NN') {
+    if (val === 'NN') {
       var tipeSel = el('f_tipeDonatur');
       if (tipeSel) {
         tipeSel.value = 'Hamba Allah';
@@ -543,11 +537,6 @@ function onSubChange(keepPilar){
       w.style.display='';
       if(keepPilar)el('f_pilar').value=keepPilar;
     }else w.style.display='none';
-  }
-  if (s === 'Setor Tunai') {
-    if (el('f_namaDonatur')) el('f_namaDonatur').value = 'Setor Tunai';
-    if (el('f_tipeDonatur')) el('f_tipeDonatur').value = 'Lembaga/Perusahaan';
-    if (el('f_program')) el('f_program').value = 'Setor Tunai';
   }
 }
 function onMetodeChange(keepRek){
@@ -587,12 +576,6 @@ function saveHimpun(id){
     metode:el('f_metode').value,statusBayar:el('f_statusBayar').value,
     rekeningId:(el('rekWrap').style.display!=='none'&&el('f_rekeningId'))?el('f_rekeningId').value:'',keterangan:el('f_keterangan').value,
     fundraising:el('f_fundraising')?el('f_fundraising').value:''};
-  if (d.subJenis === 'Setor Tunai') {
-    d.namaDonatur = 'Setor Tunai';
-    d.tipeDonatur = 'Lembaga/Perusahaan';
-    d.bank = d.jenisDana === 'Zakat' ? 'Kas Zakat' : 'Kas Infak';
-    d.program = 'Setor Tunai';
-  }
   if(d.rekeningId){var rk=(CACHE.rekening||[]).find(function(x){return x.id===d.rekeningId;});if(rk){d.bank=rk.namaBank;d.atasNama=rk.atasNama;}}
   clearFieldErrors('.fform');
   var bad=false;
@@ -5687,7 +5670,7 @@ function logBersihkan(){
    PERAWATAN DATA — perbaikan sekali jalan
    ================================================================ */
 function perawatanHTML(){
-  return cadanganHTML() + hapusRentangHTML()
+  return cadanganHTML() + hapusRentangHTML() + setorTunaiHTML()
     + '<div class="card set-panel">'
     + '<h3>Perbaikan Data Lama</h3>'
     + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
@@ -5705,6 +5688,75 @@ function perawatanHTML(){
     + '</div>'
     + '<div id="perbaikanHasil" style="margin-top:16px"></div>'
     + '</div>';
+}
+
+/* ===== BERSIHKAN SETOR TUNAI DARI PENGHIMPUNAN ===== */
+function setorTunaiHTML(){
+  return '<div class="card set-panel">'
+    + '<h3>Bersihkan "Setor Tunai" dari Penghimpunan</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Setor tunai adalah perpindahan uang kas ke rekening bank — <b>bukan penerimaan baru dari donatur</b>. '
+    + 'Impor sekarang sudah otomatis melewatinya, tetapi data yang diimpor sebelum aturan ini mungkin masih '
+    + 'terlanjur tercatat sebagai penghimpunan sehingga totalnya menggelembung. Alat ini menyisir dan menghapusnya. '
+    + '<b>Nominal & data lain tidak disentuh</b> — hanya baris setor tunai yang dibuang.'
+    + '</p>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary" onclick="setorTunaiPeriksa()">Periksa dulu</button>'
+    + '<button class="btn btn-danger hidden" id="btnBersihSetor" onclick="setorTunaiKonfirmasi()">Hapus baris setor tunai</button>'
+    + '</div>'
+    + '<div id="setorTunaiHasil" style="margin-top:16px"></div>'
+    + '</div>';
+}
+function setorTunaiPeriksa(){
+  var host = el('setorTunaiHasil');
+  host.innerHTML = BOXES_SPINNER;
+  el('btnBersihSetor').classList.add('hidden');
+  gas('apiBersihkanSetorTunai')(TOKEN, false).then(function(d){
+    window.__setorPratinjau = d;
+    host.innerHTML = setorTunaiHasilHTML(d);
+    if (d.jumlah > 0) el('btnBersihSetor').classList.remove('hidden');
+  }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
+}
+function setorTunaiHasilHTML(d){
+  if (!d.jumlah) {
+    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+      + 'Tidak ada baris setor tunai di penghimpunan. Data Anda sudah bersih.</div>';
+  }
+  var h = '<div class="imp-note imp-warn">Ditemukan <b>' + rpCetak(d.jumlah) + '</b> baris setor tunai senilai <b>Rp '
+    + rpCetak(d.nominal) + '</b> yang salah tercatat sebagai penghimpunan. Ini akan dihapus.</div>';
+  if (d.contoh && d.contoh.length){
+    h += '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
+      + '<th>Tanggal</th><th>Nama</th><th>Jenis</th><th>No. Kwitansi</th><th class="r">Jumlah</th></tr></thead><tbody>';
+    d.contoh.forEach(function(c){
+      h += '<tr><td>' + esc(tglIndo(c.tanggal)) + '</td><td>' + esc(c.nama) + '</td><td>' + esc(c.jenis)
+        + '</td><td>' + esc(c.bukti) + '</td><td class="r jnum">' + rpCetak(c.jumlah) + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    if (d.jumlah > d.contoh.length) h += '<p class="muted" style="font-size:12px;margin-top:6px">… dan ' + rpCetak(d.jumlah - d.contoh.length) + ' baris lagi.</p>';
+  }
+  return h;
+}
+function setorTunaiKonfirmasi(){
+  var d = window.__setorPratinjau;
+  if (!d || !d.jumlah) return;
+  confirmDialog({
+    title: 'Hapus baris setor tunai?',
+    message: '<b>' + rpCetak(d.jumlah) + ' baris</b> setor tunai (Rp ' + rpCetak(d.nominal) + ') akan dihapus dari penghimpunan. '
+      + 'Ini memperbaiki total yang menggelembung. Tidak bisa dibatalkan — unduh cadangan dulu bila perlu.',
+    okText: 'Ya, hapus', cancelText: 'Batal', icon: '🧹', danger: true
+  }).then(function(setuju){ if (setuju) setorTunaiJalankan(); });
+}
+function setorTunaiJalankan(){
+  var host = el('setorTunaiHasil');
+  host.innerHTML = BOXES_SPINNER;
+  gas('apiBersihkanSetorTunai')(TOKEN, true).then(function(d){
+    el('btnBersihSetor').classList.add('hidden');
+    window.__setorPratinjau = null;
+    host.innerHTML = '<div class="imp-note">Selesai. <b>' + rpCetak(d.terhapus || 0) + '</b> baris setor tunai dihapus. '
+      + 'Total penghimpunan sekarang sudah benar. Tercatat di Log Aktivitas.</div>';
+    toast((d.terhapus || 0) + ' baris setor tunai dihapus');
+    CACHE.dash = null;
+  }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
 }
 
 /* ===== CADANGAN & EKSPOR ===== */

@@ -65,13 +65,13 @@ var BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustu
 
 var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL','Amil'];
 var SUBJENIS={
-  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Bagi Hasil Bank','Setor Tunai'],
-  'Infak':['Infak Umum','Infak Terikat','Bagi Hasil Bank','Setor Tunai'],
+  'Zakat':['Zakat Mal','Zakat Fitrah','Zakat Profesi/Penghasilan','Zakat Perdagangan','Zakat Pertanian','Zakat Emas & Perak','Zakat Simpanan','Bagi Hasil Bank'],
+  'Infak':['Infak Umum','Infak Terikat','Bagi Hasil Bank'],
   'Sedekah':['Sedekah Umum','Sedekah Terikat','Bagi Hasil Bank'],
   'Wakaf':['Wakaf Uang','Wakaf Melalui Uang','Bagi Hasil Bank'],
   'Kurban':['Kurban'],'Fidyah':['Fidyah'],
   'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya'],
-  'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank','Setor Tunai']
+  'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank']
 };
 var METODE=['Cash/Tunai','Transfer Bank','QRIS','E-Wallet','Debit/Kartu'];
 var TIPE_DONATUR=['Perorangan','Lembaga/Perusahaan','Hamba Allah','Kantor Layanan (KLL)','Unit Layanan (ULL)'];
@@ -471,6 +471,10 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
       T = T.filter(function(r) { return r.tanggal && String(r.tanggal).indexOf(filterHari) === 0; });
     }
   }
+
+  /* Setor tunai = perpindahan kas -> bank, BUKAN penghimpunan. Data lama yang
+     terlanjur menyimpannya dikecualikan dari seluruh hitungan dashboard. */
+  H = H.filter(function(r){ return !_isSetorTunaiHimpun(r); });
 
   var tH = 0, tT = 0, byJenis = {}, byFundraising = {}, byAshnaf = {}, byBank = {}, byPilar = {};
   var byProgramSalur = {};   /* penyaluran dikelompokkan per program/kegiatan */
@@ -3863,6 +3867,38 @@ async function apiHapusRentang(t, d){
   return out;
 }
 
+/* Setor tunai adalah perpindahan uang kas -> bank, BUKAN penghimpunan. Impor
+   sekarang sudah melewatinya, tetapi data lama (diimpor sebelum aturan ini)
+   mungkin masih menyimpannya sebagai penghimpunan. Alat ini menyisirnya:
+   preview lalu hapus. */
+function _isSetorTunaiHimpun(r){
+  var sj = _norm(r.subJenis), nd = _norm(r.namaDonatur), pr = _norm(r.program);
+  return sj === 'setor tunai' || nd === 'setor tunai' || pr === 'setor tunai';
+}
+async function apiBersihkanSetorTunai(t, terapkan){
+  var u = _requirePerm(t, 'settings', 'delete');
+  var rows = readAll(SHEETS.PENGHIMPUNAN) || [];
+  var kena = rows.filter(_isSetorTunaiHimpun);
+  var nominal = kena.reduce(function(a, b){ return a + (Number(b.jumlah) || 0); }, 0);
+  var contoh = kena.slice(0, 12).map(function(r){
+    return { tanggal: String(r.tanggal || '').slice(0,10), nama: r.namaDonatur || '-',
+             jenis: (r.jenisDana || '') + ' / ' + (r.subJenis || ''),
+             bukti: r.noKwitansi || '-', jumlah: Number(r.jumlah) || 0 };
+  });
+
+  var out = { diterapkan: !!terapkan, jumlah: kena.length, nominal: nominal, contoh: contoh };
+  if (!terapkan || !kena.length) return out;
+
+  var bulan = {};
+  kena.forEach(function(r){ var m = getMonthFromDate(r.tanggal); if (m) bulan[m] = true; deleteRowById(SHEETS.PENGHIMPUNAN, r.id); });
+  out.terhapus = kena.length;
+  audit(u.id, u.username, 'bersih_setor_tunai', kena.length + ' baris setor tunai dihapus',
+    { modul: 'settings', ringkas: kena.length + ' baris · Rp ' + nominal.toLocaleString('id-ID') });
+  var keys = Object.keys(bulan);
+  for (var i = 0; i < keys.length; i++) await syncMonthlySpreadsheet(keys[i]);
+  return out;
+}
+
 function apiPerbaikiDataLama(t, terapkan){
   var u = _requirePerm(t, 'settings', 'edit');
   var rows = readAll(SHEETS.PENGHIMPUNAN) || [];
@@ -4135,6 +4171,7 @@ function apiClosingBulanan(t, bulan){
 
   H.forEach(function(r){
     if (_bagiHasilBDW(r)) return;          // dikecualikan dari rekap
+    if (_isSetorTunaiHimpun(r)) return;    // setor tunai bukan penghimpunan
     var k = _closingKatH(r), n = Number(r.jumlah) || 0;
     seBantul.penghimpunan[k] += n; seBantul.penghimpunan.total += n;
     if (isDaerah(r) && !_isBagiHasil(r)){ daerah.penghimpunan[k] += n; daerah.penghimpunan.total += n; }
@@ -4531,6 +4568,7 @@ REGISTRY['apiPublicDashboard']=apiPublicDashboard;
 REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
+REGISTRY['apiBersihkanSetorTunai']=apiBersihkanSetorTunai;
 REGISTRY['apiCadanganDB']=apiCadanganDB;
 REGISTRY['apiHapusRentang']=apiHapusRentang;
 REGISTRY['apiListAudit']=apiListAudit;
