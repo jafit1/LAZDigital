@@ -61,6 +61,10 @@ var SHEETS = {
 var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log'];
 var ACTIONS = ['view','create','edit','delete'];
 
+/* Daftar nama fundraising/sumber. Disimpan di Settings (kunci fundraisingList)
+   supaya bisa ditambah sendiri lewat menu Pengaturan, bukan terkunci di kode. */
+var FUNDRAISING_DEFAULT = ['Lazismu Daerah Bantul','Kantor','Qris','Sherli','Renata','Ariya','Nur Yulianto','Muzakki'];
+
 var BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
 var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL','Amil'];
@@ -96,7 +100,7 @@ function setup(){
   ensureSheet(ss,SHEETS.SESSIONS,['token','userId','expired']);
   ensureSheet(ss,SHEETS.LOG,['waktu','userId','username','aksi','modul','entitasId','ringkas','detail','ip','ua']);
 
-  var defaults={namaLembaga:'Lembaga Amil Zakat',singkatan:'LAZ',alamat:'Alamat lembaga Anda',telepon:'021-0000000',email:'info@laz.org',website:'www.laz.org',logoUrl:'',publicToken:'',publicEnabled:'false'};
+  var defaults={namaLembaga:'Lembaga Amil Zakat',singkatan:'LAZ',alamat:'Alamat lembaga Anda',telepon:'021-0000000',email:'info@laz.org',website:'www.laz.org',logoUrl:'',publicToken:'',publicEnabled:'false',fundraisingList:JSON.stringify(FUNDRAISING_DEFAULT)};
   Object.keys(defaults).forEach(function(k){ if(getSetting(k)===null) setSetting(k,defaults[k]); });
 
   if(readAll(SHEETS.USERS).length===0){
@@ -322,6 +326,76 @@ function apiSaveRekening(t,d){ var baru=!d.id; var u=_requirePerm(t,'rekening',b
 function apiDeleteRekening(t,id){ var u=_requirePerm(t,'rekening','delete'); var rk=findById(SHEETS.REKENING,id); deleteRowById(SHEETS.REKENING,id);
   audit(u.id,u.username,'delete_rekening',(rk&&rk.namaBank)||id,{modul:'rekening',entitasId:id,ringkas:rk?((rk.namaBank||'')+' '+(rk.nomor||'')):''}); return {ok:true}; }
 
+/* ===== FUNDRAISING (daftar sumber, dikelola dari menu Pengaturan) ===== */
+function _bacaFundraising(){
+  var raw = getSetting('fundraisingList');
+  var arr = null;
+  if(raw){ try{ arr = JSON.parse(raw); }catch(e){ arr = null; } }
+  if(!arr || !arr.length) arr = FUNDRAISING_DEFAULT.slice();
+  var set={}, out=[];
+  arr.forEach(function(n){ n=String(n==null?'':n).trim(); if(!n) return;
+    var k=n.toLowerCase(); if(!set[k]){ set[k]=1; out.push(n); } });
+  return out;
+}
+function _tulisFundraising(list){ setSetting('fundraisingList', JSON.stringify(list)); }
+
+/* Dipakai formulir penghimpunan, jadi cukup butuh login — bukan izin settings. */
+function apiListFundraising(t){ authUser(t); return _bacaFundraising(); }
+
+function apiSaveFundraising(t,nama,namaLama){
+  var u=_requirePerm(t,'settings','edit');
+  nama=String(nama==null?'':nama).trim();
+  if(!nama) throw new Error('Nama fundraising tidak boleh kosong');
+  if(nama.length>60) throw new Error('Nama fundraising terlalu panjang');
+  var list=_bacaFundraising();
+  var lama=String(namaLama==null?'':namaLama).trim();
+  var bentrok=list.some(function(n){
+    return n.toLowerCase()===nama.toLowerCase() && n.toLowerCase()!==lama.toLowerCase(); });
+  if(bentrok) throw new Error('Nama "'+nama+'" sudah ada di daftar');
+  var aksi='tambah', dipakai=0;
+  if(lama){
+    var idx=-1;
+    list.forEach(function(n,i){ if(n.toLowerCase()===lama.toLowerCase()) idx=i; });
+    if(idx<0) throw new Error('Nama lama tidak ditemukan');
+    list[idx]=nama; aksi='ubah';
+    /* Ikut perbarui transaksi lama supaya rincian sumber di Closing tidak pecah. */
+    readAll(SHEETS.PENGHIMPUNAN).forEach(function(r){
+      if(String(r.fundraising||'').trim().toLowerCase()===lama.toLowerCase()){
+        updateRowById(SHEETS.PENGHIMPUNAN,r.id,{fundraising:nama}); dipakai++; }
+    });
+  } else list.push(nama);
+  _tulisFundraising(list);
+  audit(u.id,u.username,(lama?'edit_fundraising':'create_fundraising'),nama,
+    {modul:'settings',entitasId:nama,ringkas:(lama?(lama+' -> '+nama+(dipakai?(' ('+dipakai+' transaksi ikut diperbarui)'):'')):nama)});
+  return {ok:true,aksi:aksi,daftar:list,transaksiDiperbarui:dipakai};
+}
+
+function apiDeleteFundraising(t,nama){
+  var u=_requirePerm(t,'settings','delete');
+  nama=String(nama==null?'':nama).trim();
+  var list=_bacaFundraising();
+  var sisa=list.filter(function(n){ return n.toLowerCase()!==nama.toLowerCase(); });
+  if(sisa.length===list.length) throw new Error('Nama tidak ada di daftar');
+  if(!sisa.length) throw new Error('Daftar fundraising tidak boleh kosong');
+  /* Transaksi lama TIDAK diubah — namanya tetap tersimpan apa adanya. */
+  var dipakai=readAll(SHEETS.PENGHIMPUNAN).filter(function(r){
+    return String(r.fundraising||'').trim().toLowerCase()===nama.toLowerCase(); }).length;
+  _tulisFundraising(sisa);
+  audit(u.id,u.username,'delete_fundraising',nama,
+    {modul:'settings',entitasId:nama,ringkas:nama+(dipakai?(' (masih dipakai '+dipakai+' transaksi)'):'')});
+  return {ok:true,daftar:sisa,masihDipakai:dipakai};
+}
+
+/* Berapa transaksi memakai tiap nama — untuk peringatan sebelum hapus. */
+function apiPemakaianFundraising(t){
+  _requirePerm(t,'settings','view');
+  var pakai={};
+  readAll(SHEETS.PENGHIMPUNAN).forEach(function(r){
+    var n=String(r.fundraising||'').trim(); if(!n) return;
+    pakai[n]=(pakai[n]||0)+1; });
+  return {daftar:_bacaFundraising(),pemakaian:pakai};
+}
+
 /* ===== LAYANAN (KLL/ULL) ===== */
 function apiListLayanan(t){ _requirePerm(t,'layanan','view'); return readAll(SHEETS.LAYANAN); }
 function apiListLayananPublic(t){ authUser(t); return readAll(SHEETS.LAYANAN).filter(function(r){return String(r.aktif)!=='false';}); }
@@ -501,7 +575,26 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
   });
   byLayananHimpun[LAYANAN_DAERAH] = 0;
   byLayananSalur[LAYANAN_DAERAH] = 0;
-  
+
+  /* Rincian tiap kantor/unit layanan: penghimpunan dipecah per pilar,
+     pentasyarufan per program. Hanya angka gabungan — nama donatur maupun
+     mustahik tidak ikut, supaya aman dipakai halaman publik. */
+  var detailLayanan = {};
+  function _dlSlot(key){
+    if(!detailLayanan[key]) detailLayanan[key] = {
+      himpun:{ total:0, n:0, rinci:{} },
+      tasyaruf:{ total:0, n:0, rinci:{} }
+    };
+    return detailLayanan[key];
+  }
+  /* Label pilar penghimpunan: pilar -> sub jenis -> jenis dana. */
+  function _pilarHimpun(r){
+    if (r.pilar && String(r.pilar).trim()) return String(r.pilar).trim();
+    var sub = String(r.subJenis || '').trim();
+    if (sub) return sub;
+    return String(r.jenisDana || 'Lainnya').trim();
+  }
+
   H.forEach(function(r) {
     var n = Number(r.jumlah) || 0;
     tH += n;
@@ -512,6 +605,11 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     byLayananHimpun[finalKey] = (byLayananHimpun[finalKey] || 0) + n;
     if (finalKey === LAYANAN_DAERAH) { laySum.daerah += n; laySum.daerahCount++; }
     else { laySum.layanan += n; laySum.layananCount++; }
+
+    var slotH = _dlSlot(finalKey);
+    slotH.himpun.total += n; slotH.himpun.n++;
+    var pKey = _pilarHimpun(r);
+    slotH.himpun.rinci[pKey] = (slotH.himpun.rinci[pKey] || 0) + n;
     
     // Grouping Fundraising
     var frName = cleanFundraisingName(r.fundraising);
@@ -549,6 +647,11 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     // Rekap KLL/ULL untuk pentasyarufan — aturan pencocokan sama persis
     var finalKey = resolveLayananName(r, layList, layMap);
     byLayananSalur[finalKey] = (byLayananSalur[finalKey] || 0) + n;
+
+    var slotT = _dlSlot(finalKey);
+    slotT.tasyaruf.total += n; slotT.tasyaruf.n++;
+    var sKey = String(r.program || '').trim() || String(r.ashnaf || '').trim() || 'Lainnya';
+    slotT.tasyaruf.rinci[sKey] = (slotT.tasyaruf.rinci[sKey] || 0) + n;
   });
   
   // Calculate byRekening (Saldo per Rekening)
@@ -672,6 +775,7 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     byJenis: byJenis,
     byLayananHimpun: byLayananHimpun,
     byLayananSalur: byLayananSalur,
+    detailLayanan: detailLayanan,
     layananSummary: laySum,
     byLayanan: byLayananHimpun, // backward compatibility
     byFundraising: byFundraising,
@@ -4561,6 +4665,10 @@ REGISTRY['apiSaveUser']=apiSaveUser;
 REGISTRY['apiDeleteUser']=apiDeleteUser;
 REGISTRY['apiGetSettings']=apiGetSettings;
 REGISTRY['apiSaveSettings']=apiSaveSettings;
+REGISTRY['apiListFundraising']=apiListFundraising;
+REGISTRY['apiSaveFundraising']=apiSaveFundraising;
+REGISTRY['apiDeleteFundraising']=apiDeleteFundraising;
+REGISTRY['apiPemakaianFundraising']=apiPemakaianFundraising;
 REGISTRY['apiChangeMyPassword']=apiChangeMyPassword;
 REGISTRY['apiMe']=apiMe;
 REGISTRY['apiGetPermissionMeta']=apiGetPermissionMeta;

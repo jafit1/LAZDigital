@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm install",
-  "installCommand": "npm install",
+  "installCommand": "npm ci --omit=dev --no-audit --no-fund --prefer-offline",
+  "buildCommand": "echo \"Tidak ada build step: frontend statis + serverless functions\"",
   "outputDirectory": "src/public",
   "regions": ["sin1"],
   "functions": {

@@ -96,18 +96,26 @@ var METODE=['Cash/Tunai','Transfer Bank','QRIS','E-Wallet','Debit/Kartu'];
 var TIPE_DONATUR=['Perorangan','Lembaga/Perusahaan','Hamba Allah','Kantor Layanan (KLL)','Unit Layanan (ULL)'];
 var FUNDRAISING_OPTIONS=['Lazismu Daerah Bantul','Kantor','Qris','Sherli','Renata','Ariya','Nur Yulianto','Muzakki'];
 
-/* Input fundraiser bebas dengan saran (datalist) — nama apa pun boleh, tidak
-   lagi terkunci ke daftar tetap, supaya rincian sumber di Closing lengkap.
-   Saran digabung dari daftar bawaan + fundraiser yang pernah dipakai. */
+/* Daftar fundraising diambil dari server (bisa ditambah di menu Pengaturan).
+   FUNDRAISING_OPTIONS hanya cadangan bila daftar server belum termuat. */
+function frDaftar(){
+  var d = (window.CACHE && CACHE.fundraising) || [];
+  return d.length ? d : FUNDRAISING_OPTIONS;
+}
+
+/* Dropdown fundraiser — wajib dipilih. Nilai lama yang sudah tidak ada di
+   daftar tetap ditampilkan supaya mengedit transaksi lama tidak menghapusnya. */
 function frInput(id, val){
-  var pakai = (window.CACHE && CACHE.frNames) || [];
-  var set = {}; var opts = [];
-  FUNDRAISING_OPTIONS.concat(pakai).forEach(function(n){
-    n = String(n||'').trim(); if(!n) return; var k=n.toLowerCase();
-    if(!set[k]){ set[k]=1; opts.push(n); }
-  });
-  return '<input id="'+id+'" list="'+id+'_list" value="'+esc(val||'')+'" placeholder="Nama fundraiser / sumber" autocomplete="off">'
-    + '<datalist id="'+id+'_list">'+opts.map(function(n){return '<option value="'+esc(n)+'"></option>';}).join('')+'</datalist>';
+  val = String(val==null?'':val).trim();
+  var opts = frDaftar().slice();
+  if(val && !opts.some(function(n){ return String(n).toLowerCase()===val.toLowerCase(); })) opts.unshift(val);
+  return '<select id="'+id+'">'
+    + '<option value="">- pilih fundraiser / sumber -</option>'
+    + opts.map(function(n){
+        var sel = (String(n).toLowerCase()===val.toLowerCase()) ? ' selected' : '';
+        return '<option value="'+esc(n)+'"'+sel+'>'+esc(n)+'</option>';
+      }).join('')
+    + '</select>';
 }
 function cleanFR(fr) {
   if (!fr || fr === '-' || fr.toLowerCase() === 'tanpa fundraising') return 'Lazismu Daerah Bantul';
@@ -140,8 +148,18 @@ function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.
   }).catch(function(e){el('loginErr').textContent=(e.message||e);b.disabled=false;b.textContent='Masuk';});
   return false;}
 function doLogout(){if(TOKEN)gas('logout')(TOKEN);localStorage.removeItem('laz_token');clearSavedCreds();TOKEN='';ME=null;location.reload();}
+/* Muat daftar fundraising sekali dan simpan di CACHE; dipakai dropdown pada
+   formulir Penghimpunan & Pentasyarufan. Gagal memuat tidak menghentikan app —
+   frDaftar() otomatis jatuh ke daftar bawaan. */
+function muatFundraising(paksa){
+  if(!paksa && CACHE.fundraising && CACHE.fundraising.length) return Promise.resolve(CACHE.fundraising);
+  return gas('apiListFundraising')(TOKEN).then(function(rows){
+    CACHE.fundraising = rows || []; return CACHE.fundraising;
+  }).catch(function(){ return CACHE.fundraising || []; });
+}
 function startApp(){
   el('boot').classList.add('hidden');el('loginView').classList.add('hidden');el('appView').classList.remove('hidden');
+  muatFundraising();
   // Default sidebar ciut (ikon saja); klik logo untuk melebarkan.
   if (localStorage.getItem('sidebar_collapsed') !== 'false') {
     el('appView').classList.add('collapsed');
@@ -761,6 +779,63 @@ function formRek(id){var r=id?CACHE.rekening.find(function(x){return x.id===id;}
   openModal(id?'Edit Rekening':'Tambah Rekening',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveRek(\''+(id||'')+'\')">Simpan</button>');}
 function saveRek(id){var d={namaBank:el('r_namaBank').value,nomor:el('r_nomor').value,atasNama:el('r_atasNama').value,fundGroup:el('r_fundGroup').value,aktif:el('r_aktif').value};if(!d.namaBank||!d.nomor||!d.atasNama){toast('Bank, nomor & atas nama wajib',true);return;}if(id)d.id=id;gas('apiSaveRekening')(TOKEN,d).then(function(){closeModal();toast('Rekening tersimpan');viewRekening();}).catch(handleErr);}
 function delRek(id){uiConfirm('Hapus rekening ini?').then(function(__ok){if(!__ok)return;gas('apiDeleteRekening')(TOKEN,id).then(function(){toast('Terhapus');viewRekening();}).catch(handleErr);});}
+
+/* ============ FUNDRAISING (daftar sumber) ============ */
+function viewFundraising(){
+  gas('apiPemakaianFundraising')(TOKEN).then(function(d){
+    CACHE.fundraising = d.daftar || [];
+    renderFundraising(d);
+  }).catch(handleErr);
+}
+function renderFundraising(d){
+  var rows = d.daftar || [], pakai = d.pemakaian || {};
+  var add = canDo('settings','edit')
+    ? '<button class="btn btn-primary" onclick="formFr()">+ Tambah Fundraising</button>' : '';
+  var h='<div class="page-head"><div><h1>Fundraising</h1><div class="desc">Daftar nama fundraiser / sumber yang muncul di formulir Penghimpunan</div></div>'+add+'</div>';
+  h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Dipakai</th><th></th></tr></thead><tbody>';
+  if(!rows.length) h+='<tr><td colspan="3"><div class="empty"><div class="big">▢</div>Belum ada nama fundraising.</div></td></tr>';
+  rows.forEach(function(n){
+    var c = pakai[n]||0;
+    h+='<tr><td><b>'+esc(n)+'</b></td>'
+      + '<td>'+(c?('<span class="badge green">'+c+' transaksi</span>'):'<span class="muted">belum dipakai</span>')+'</td>'
+      + '<td><div class="actions-cell">'
+      + (canDo('settings','edit')?'<button class="icon-btn" title="Ubah nama" onclick="formFr(\''+esc(n).replace(/'/g,"\\'")+'\')">✎</button>':'')
+      + (canDo('settings','delete')?'<button class="icon-btn" title="Hapus" onclick="delFr(\''+esc(n).replace(/'/g,"\\'")+'\')">🗑</button>':'')
+      + '</div></td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  h+='<div class="muted" style="font-size:12px;margin-top:10px">Mengubah nama ikut memperbarui transaksi lama supaya rincian sumber di Closing tidak terpecah. Menghapus nama hanya mengeluarkannya dari pilihan — transaksi lama tetap utuh.</div>';
+  el('setFrBody').innerHTML=h;
+}
+function formFr(nama){
+  var edit = !!nama;
+  var b='<div class="field"><label>Nama Fundraising *</label>'
+    + '<input id="fr_nama" value="'+esc(nama||'')+'" placeholder="cth: Kantor / Qris / nama fundraiser" autocomplete="off"></div>'
+    + (edit?'<div class="muted" style="font-size:12px">Transaksi lama yang memakai nama ini ikut diperbarui.</div>':'');
+  openModal(edit?'Ubah Nama Fundraising':'Tambah Fundraising', b,
+    '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+    + '<button class="btn btn-primary" onclick="saveFr('+(edit?('\''+esc(nama).replace(/'/g,"\\'")+'\''):'\'\'')+')">Simpan</button>');
+}
+function saveFr(namaLama){
+  var v=(el('fr_nama').value||'').trim();
+  if(!v){ toast('Nama fundraising wajib diisi',true); return; }
+  gas('apiSaveFundraising')(TOKEN, v, namaLama||'').then(function(r){
+    closeModal();
+    CACHE.fundraising = r.daftar || [];
+    toast(r.transaksiDiperbarui ? ('Tersimpan, '+r.transaksiDiperbarui+' transaksi ikut diperbarui') : 'Fundraising tersimpan');
+    CACHE.dash=null; viewFundraising();
+  }).catch(handleErr);
+}
+function delFr(nama){
+  uiConfirm('Hapus "'+nama+'" dari daftar fundraising?').then(function(__ok){
+    if(!__ok) return;
+    gas('apiDeleteFundraising')(TOKEN, nama).then(function(r){
+      CACHE.fundraising = r.daftar || [];
+      toast(r.masihDipakai ? ('Terhapus dari pilihan ('+r.masihDipakai+' transaksi lama tetap utuh)') : 'Terhapus');
+      viewFundraising();
+    }).catch(handleErr);
+  });
+}
 
 /* ============ LAYANAN (KLL/ULL) ============ */
 function viewLayanan(){gas('apiListLayanan')(TOKEN).then(function(rows){CACHE.layanan=rows;renderLayanan(rows);}).catch(handleErr);}
@@ -1503,7 +1578,7 @@ function viewSettings(){gas('apiGetSettings')(TOKEN).then(function(s){SETTINGS=s
 var SET_TAB='lembaga';
 function renderSettings(s){
   var h='<div class="page-head"><div><h2>Pengaturan</h2><div class="desc">Identitas lembaga, rekening, unit layanan & tampilan</div></div></div>';
-  var tabSet=['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','tampilan|Tampilan'];
+  var tabSet=['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','fundraising|Fundraising','tampilan|Tampilan'];
   if(canDo('settings','edit')) tabSet.push('perawatan|Perawatan Data');
   h+='<div class="lap-tabs">'+tabSet.map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" data-tab="'+p[0]+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
   el('content').innerHTML=h;renderSetTab(s);
@@ -1519,6 +1594,7 @@ function setTab(t){
 function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
+  else if(SET_TAB==='fundraising'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML='<div id="setFrBody"></div>';viewFundraising();}
   else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();rentangPasang('hr_rt',{dari:hrAwalBulan(),sampai:today(),onTerap:function(){hrReset();}});}
   else {
     window.REK_HOST='';window.LAY_HOST='';
@@ -1673,7 +1749,7 @@ function fld(col,label,control,opt){
     + '><label'+(opt.for?' for="'+opt.for+'"':'')+'>'+label+'</label>'+control+'</div>';
 }
 /* Input nominal: prefix Rp, pemisah ribuan otomatis, pintasan nominal, terbilang. */
-var QUICK_AMOUNTS=[[50000,'50rb'],[100000,'100rb'],[500000,'500rb'],[1000000,'1jt']];
+var QUICK_AMOUNTS=[[1000,'1rb'],[2000,'2rb'],[5000,'5rb'],[10000,'10rb'],[20000,'20rb'],[50000,'50rb'],[100000,'100rb'],[500000,'500rb'],[1000000,'1jt']];
 function moneyField(id,val,label){
   var chips = QUICK_AMOUNTS.map(function(a){
     return '<button type="button" class="qchip" onclick="addMoney(\''+id+'\','+a[0]+')">+'+a[1]+'</button>';
@@ -4512,7 +4588,7 @@ function openImportMutasiModal() {
     return '<option value="' + esc(r.id) + '">' + esc(r.namaBank + ' ' + r.nomor + ' (' + r.atasNama + ')') + '</option>';
   }).join('');
 
-  var frList = window.FUNDRAISING_OPTIONS || ['Lazismu Daerah Bantul'];
+  var frList = frDaftar();
   var frOpts = frList.map(function(f) {
     var val = typeof f === 'string' ? f : f.nama;
     return '<option value="' + esc(val) + '">' + esc(val) + '</option>';

@@ -2283,11 +2283,12 @@ html[data-theme="dark"] .money-fld{background:var(--accent-soft);border-color:va
   background:transparent;color:var(--muted);font-size:17px;cursor:pointer;line-height:1;
 }
 .money-clear:hover{background:var(--surface2);color:var(--red)}
-.qchips{display:flex;flex-wrap:wrap;gap:6px}
+.qchips{display:flex;flex-wrap:wrap;gap:5px}
+/* 9 pintasan nominal (1rb s/d 1jt): dirapatkan sedikit agar tetap ringkas. */
 .qchip{
   border:1px solid var(--border);background:var(--surface);color:var(--text2);
-  font-family:var(--sans);font-size:11.5px;font-weight:600;
-  padding:5px 11px;border-radius:999px;cursor:pointer;
+  font-family:var(--sans);font-size:11px;font-weight:600;
+  padding:4px 9px;border-radius:999px;cursor:pointer;white-space:nowrap;
   transition:background .15s,border-color .15s,color .15s;
 }
 .qchip:hover{background:var(--accent);border-color:transparent;color:#fff}
