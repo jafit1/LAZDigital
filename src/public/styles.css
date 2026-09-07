@@ -359,11 +359,10 @@ html[data-theme="dark"] .dh-hi{color:#f8fafc}
   box-shadow:0 4px 12px -3px var(--kpi-accent,var(--accent))}
 .kpi-v2-value{font-family:var(--head);font-size:26px;font-weight:800;color:var(--text);letter-spacing:-.025em;line-height:1.15;margin-bottom:12px}
 html[data-theme="dark"] .kpi-v2-value{color:#f8fafc}
-.kpi-v2-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.kpi-v2-trend{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
-.kpi-v2-trend.up{background:rgba(16,185,129,.08);color:#059669;border:1px solid rgba(16,185,129,.18)}
-.kpi-v2-trend.down{background:rgba(239,68,68,.08);color:#dc2626;border:1px solid rgba(239,68,68,.18)}
-.kpi-v2-trend.flat{background:rgba(100,116,139,.08);color:var(--muted);border:1px solid rgba(100,116,139,.14)}
+/* Badge tren "% MoM" sudah dihapus; baris bawah kini hanya memuat grafik mini.
+   Tingginya dikunci setinggi grafik supaya kartu tanpa grafik tetap sejajar
+   saat menumpuk di layar HP. */
+.kpi-v2-bottom{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:32px}
 .kpi-v2-spark{height:32px;width:100px;opacity:.85}
 
 /* ===== RAPB GAUGE WIDGET ===== */
@@ -1791,7 +1790,6 @@ html[data-theme="dark"] .login-card,html[data-theme="dark"] .modal{
 .kpi-v2:first-child .kpi-v2-label{color:rgba(255,255,255,.86) !important}
 .kpi-v2:first-child .kpi-v2-value{color:#fff !important}
 .kpi-v2:first-child .kpi-v2-icon{background:rgba(255,255,255,.22) !important;box-shadow:none !important}
-.kpi-v2:first-child .kpi-v2-trend{background:rgba(255,255,255,.2) !important;color:#fff !important;border-color:rgba(255,255,255,.28) !important}
 .kpi-v2-icon{border-radius:12px}
 .kpi-v2-value{font-size:25px}
 
@@ -1824,7 +1822,7 @@ input:focus,select:focus,textarea:focus{
 .filter-panel{background:rgba(255,255,255,.55) !important;border-radius:16px !important;border-color:var(--glass-bd) !important}
 html[data-theme="dark"] .filter-panel{background:rgba(255,255,255,.03) !important}
 
-.badge,.kpi-v2-trend,.activity-badge,.rapb-badge{border-radius:999px}
+.badge,.activity-badge,.rapb-badge{border-radius:999px}
 .tabs,.activity-feed-tabs{background:rgba(255,255,255,.55);border:1px solid var(--glass-bd);border-radius:999px;padding:4px}
 html[data-theme="dark"] .tabs,html[data-theme="dark"] .activity-feed-tabs{background:rgba(255,255,255,.04)}
 .tab,.activity-feed-tab,.tab-btn{border-radius:999px}
@@ -3465,3 +3463,11 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 .cl-box-r b{font-variant-numeric:tabular-nums;white-space:nowrap}
 .cl-box-r:last-child{border-bottom:0}
 .cl-box-tot{font-weight:700;background:var(--surface2)}
+
+/* ---------- 46. CADANGAN OTOMATIS & PEMULIHAN ---------- */
+.cad-kotak{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 13px;border-radius:11px;background:var(--surface2);border:1px solid var(--border);font-size:13px}
+.cad-daftar{display:flex;flex-direction:column;gap:7px}
+.cad-baris{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 13px;border-radius:11px;background:var(--surface2);border:1px solid transparent;transition:border-color .15s}
+.cad-baris:hover{border-color:var(--border)}
+.cad-baris-n{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:520px){.cad-baris{flex-wrap:wrap}.cad-baris-n{flex:1 1 100%}}

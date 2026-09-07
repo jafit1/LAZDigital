@@ -3,12 +3,20 @@
   "installCommand": "npm ci --omit=dev --no-audit --no-fund --prefer-offline",
   "buildCommand": "echo \"Tidak ada build step: frontend statis + serverless functions\"",
   "outputDirectory": "src/public",
-  "regions": ["sin1"],
+  "regions": [
+    "sin1"
+  ],
   "functions": {
     "api/**/*.js": {
       "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/backup",
+      "schedule": "0 19 * * *"
+    }
+  ],
   "routes": [
     {
       "src": "/api/(.*)",

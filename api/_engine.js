@@ -181,9 +181,51 @@ function hashPassword(p,s){
     return legacyHashPassword(p, s);
   }
 }
-function login(u,p){ var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.length;i++){if(String(us[i].username).toLowerCase()===String(u).toLowerCase()){f=us[i];break;}}
-  if(!f){ audit('', String(u||'').slice(0,40), 'login_gagal', 'username tidak ditemukan'); return {ok:false,msg:'Username tidak ditemukan'}; }
-  if(String(f.aktif)!=='true'){ audit(f.id,f.username,'login_gagal','akun dinonaktifkan'); return {ok:false,msg:'Akun dinonaktifkan'}; }
+/* ===== PENGAMANAN LOGIN =====
+   Percobaan gagal dihitung per username DAN per alamat IP. Setelah 5 kali
+   gagal akun dikunci 1 menit, 8 kali 5 menit, 12 kali 30 menit — cukup untuk
+   mematahkan tebak-tebakan sandi tanpa mengganggu petugas yang sekadar salah
+   ketik. Pesan gagal dibuat seragam supaya tidak membocorkan username mana
+   yang ada. */
+function _kunciLoginKey(jenis, nilai){ return 'lg_' + jenis + '_' + String(nilai || '').toLowerCase().slice(0, 80); }
+function _bacaKunci(key){ try { return JSON.parse(getSetting(key) || 'null') || { n: 0, sampai: 0 }; } catch (e) { return { n: 0, sampai: 0 }; } }
+function _sisaKunci(key){ var k = _bacaKunci(key); var sisa = Math.ceil((Number(k.sampai || 0) - Date.now()) / 1000); return sisa > 0 ? sisa : 0; }
+function _catatGagalLogin(key){
+  var k = _bacaKunci(key); k.n = (Number(k.n) || 0) + 1;
+  var detik = k.n >= 12 ? 1800 : k.n >= 8 ? 300 : k.n >= 5 ? 60 : 0;
+  k.sampai = detik ? Date.now() + detik * 1000 : 0;
+  setSetting(key, JSON.stringify(k));
+  return detik;
+}
+function _hapusKunciLogin(key){ deleteRowBy(SHEETS.SETTINGS, 'key', key); }
+function _bersihkanSesiKedaluwarsa(){
+  var kini = new Date();
+  (readAll(SHEETS.SESSIONS) || []).forEach(function(s){ if (new Date(s.expired) < kini) deleteRowBy(SHEETS.SESSIONS, 'token', s.token); });
+}
+/* Sandi minimal 8 karakter dan memuat huruf serta angka. */
+function _periksaSandi(p){
+  p = String(p == null ? '' : p);
+  if (p.length < 8) throw new Error('Sandi minimal 8 karakter.');
+  if (!/[A-Za-z]/.test(p) || !/[0-9]/.test(p)) throw new Error('Sandi harus memuat huruf dan angka.');
+}
+var _PESAN_LOGIN_GAGAL = 'Username atau password salah';
+
+function login(u,p){
+  var kU = _kunciLoginKey('u', u), kIP = _kunciLoginKey('ip', (_LOG_CTX && _LOG_CTX.ip) || '-');
+  var sisa = Math.max(_sisaKunci(kU), _sisaKunci(kIP));
+  if (sisa > 0) {
+    audit('', String(u||'').slice(0,40), 'login_dikunci', 'masih terkunci ' + sisa + ' detik', {modul:'sesi'});
+    return {ok:false, msg:'Terlalu banyak percobaan. Coba lagi dalam ' + (sisa >= 60 ? Math.ceil(sisa/60) + ' menit' : sisa + ' detik') + '.', terkunci: sisa};
+  }
+  function gagal(alasan){
+    var d1 = _catatGagalLogin(kU), d2 = _catatGagalLogin(kIP);
+    audit('', String(u||'').slice(0,40), 'login_gagal', alasan, {modul:'sesi'});
+    var kunci = Math.max(d1, d2);
+    return {ok:false, msg:_PESAN_LOGIN_GAGAL + (kunci ? ' — akun dikunci ' + (kunci >= 60 ? Math.ceil(kunci/60) + ' menit' : kunci + ' detik') : ''), terkunci: kunci};
+  }
+  var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.length;i++){if(String(us[i].username).toLowerCase()===String(u).toLowerCase()){f=us[i];break;}}
+  if(!f){ return gagal('username tidak ditemukan'); }
+  if(String(f.aktif)!=='true'){ audit(f.id,f.username,'login_gagal','akun dinonaktifkan',{modul:'sesi'}); return {ok:false,msg:'Akun dinonaktifkan'}; }
   var inputHash = hashPassword(p, f.salt);
   if (inputHash !== f.passwordHash) {
     var legacy = legacyHashPassword(p, f.salt);
@@ -191,10 +233,11 @@ function login(u,p){ var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.lengt
       // Auto upgrade hash to scrypt
       updateRowById(SHEETS.USERS, f.id, { passwordHash: inputHash });
     } else {
-      audit(f.id,f.username,'login_gagal','password salah');
-      return {ok:false,msg:'Password salah'};
+      return gagal('password salah');
     }
   }
+  _hapusKunciLogin(kU); _hapusKunciLogin(kIP);
+  _bersihkanSesiKedaluwarsa();
   var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); audit(f.id,f.username,'login','',{modul:'sesi'}); return {ok:true,token:token,user:sanitizeUser(f)}; }
 function logout(t){
   var u=null; try{ u=authUser(t); }catch(e){}
@@ -256,6 +299,11 @@ async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.i
        ringkas:(d.namaDonatur||'-')+' · '+(d.jenisDana||'')+' '+(d.subJenis||'')+' · Rp '+(Number(d.jumlah)||0).toLocaleString('id-ID')});
     res = findById(SHEETS.PENGHIMPUNAN,d.id);
   }
+  /* Penyumbangnya ikut terdaftar di tabel Donatur (KLL/ULL & anonim dilewati). */
+  try {
+    var _layD = []; try { _layD = readAll(SHEETS.LAYANAN) || []; } catch(e){}
+    daftarkanDonatur(d, _layD, _petaDonatur());
+  } catch(e) {}
   if (newMonth) await syncMonthlySpreadsheet(newMonth);
   if (oldMonth && oldMonth !== newMonth) await syncMonthlySpreadsheet(oldMonth);
   return res;
@@ -411,13 +459,20 @@ function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); var l
 /* ===== USER MGMT ===== */
 function apiListUsers(t){ _requirePerm(t,'users','view'); return readAll(SHEETS.USERS).map(sanitizeUser); }
 function apiSaveUser(t,d){ var a=_requirePerm(t,'users',d.id?'edit':'create');
-  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.username)up.username=d.username; if(d.password){var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up);
+  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
     audit(a.id,a.username,'edit_user',d.username||d.id,{modul:'users',entitasId:d.id,
       ringkas:ringkasPerubahan(lamaU,up)+(d.password?(ringkasPerubahan(lamaU,up)?' | ':'')+'password diganti':'')}); }
-  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password||'password123',s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
+  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
   return {ok:true}; }
 function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=findById(SHEETS.USERS,id); if(tg&&tg.role==='superadmin'){ var sup=readAll(SHEETS.USERS).filter(function(x){return x.role==='superadmin'&&String(x.aktif)==='true';}); if(sup.length<=1) throw new Error('Tidak bisa menghapus satu-satunya Superadmin.'); } deleteRowById(SHEETS.USERS,id); audit(a.id,a.username,'delete_user',(tg&&tg.username)||id,{modul:'users',entitasId:id,ringkas:tg?((tg.nama||'')+' · peran '+(tg.role||'')):''}); return {ok:true}; }
-function apiChangeMyPassword(t,o,n){ var u=authUser(t); if(hashPassword(o,u.salt)!==u.passwordHash) throw new Error('Password lama salah'); var s=makeId(); updateRowById(SHEETS.USERS,u.id,{salt:s,passwordHash:hashPassword(n,s)}); return {ok:true}; }
+/* Setelah sandi diganti, semua sesi lain milik pengguna itu dimatikan —
+   kalau sandi diganti karena dicurigai bocor, pemegang sesi lama ikut keluar. */
+function _matikanSesiLain(userId, kecualiToken){
+  (readAll(SHEETS.SESSIONS) || []).forEach(function(s){
+    if (String(s.userId) === String(userId) && s.token !== kecualiToken) deleteRowBy(SHEETS.SESSIONS, 'token', s.token);
+  });
+}
+function apiChangeMyPassword(t,o,n){ var u=authUser(t); if(hashPassword(o,u.salt)!==u.passwordHash) throw new Error('Password lama salah'); _periksaSandi(n); var s=makeId(); updateRowById(SHEETS.USERS,u.id,{salt:s,passwordHash:hashPassword(n,s)}); _matikanSesiLain(u.id, t); audit(u.id,u.username,'ganti_sandi','',{modul:'sesi',ringkas:'sesi lain dimatikan'}); return {ok:true}; }
 
 function apiUpdateMyProfile(t,d){
   var u=authUser(t);
@@ -1268,8 +1323,16 @@ function apiJurnalData(t,year,month,rentang){
   return _getJurnalData(Number(year), Number(month));
 }
 
-async function syncMonthlySpreadsheet(filterMonth) {
-  if (!filterMonth || filterMonth === 'Semua') return;
+/* Membangun berkas Excel jurnal satu bulan SAAT DIMINTA dan mengembalikannya
+   sebagai data URL. Tidak disimpan ke database.
+
+   Versi lama menyimpan hasilnya sebagai base64 di Settings pada SETIAP simpan
+   transaksi. Karena seluruh database hidup di satu kunci Redis yang dibaca-
+   tulis tiap permintaan, setiap bulan menambah satu berkas Excel utuh ke
+   payload itu — sampai suatu saat melewati batas ukuran permintaan Upstash
+   dan semua penulisan gagal. */
+async function bangunJurnalXlsx(filterMonth) {
+  if (!filterMonth || filterMonth === 'Semua') return '';
   var parts = filterMonth.split('-');
   if (parts.length < 2) return;
   
@@ -1325,11 +1388,20 @@ async function syncMonthlySpreadsheet(filterMonth) {
   var buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   
   var base64 = buf.toString('base64');
-  var dataUrl = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
-  setSetting('sheet_data_' + filterMonth, dataUrl);
-  setSetting('sheet_url_' + filterMonth, dataUrl);
-  setSetting('sheet_updated_' + filterMonth, new Date().toISOString());
-  console.log('Synced Monthly Jurnal Spreadsheet for ' + filterMonth + ' (stored as base64)');
+  return 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
+}
+
+/* Dipanggil setelah setiap simpan transaksi (nama dipertahankan agar semua
+   pemanggil lama tetap berlaku). Kini hanya membersihkan berkas Excel lama
+   yang terlanjur tersimpan di Settings — sekali saja, lalu ditandai. */
+async function syncMonthlySpreadsheet(filterMonth) {
+  if (DB && DB.props && DB.props._xlsxDibersihkan) return;
+  var sisa = (readAll(SHEETS.SETTINGS) || []).filter(function(r){
+    return /^sheet_(data|url|updated)_/.test(String(r.key || ''));
+  });
+  sisa.forEach(function(r){ deleteRowBy(SHEETS.SETTINGS, 'key', r.key); });
+  if (DB && DB.props) DB.props._xlsxDibersihkan = true;
+  if (sisa.length) console.log('Dibersihkan ' + sisa.length + ' berkas Excel lama dari database');
 }
 
 /* ===== BROADCAST WHATSAPP ===== */
@@ -3250,8 +3322,11 @@ async function apiSaveImportedData(t, rows, type) {
   
   var currentRows = readAll(sheetName);
   var savedCount = 0;
-  
+
   var monthsToSync = {};
+  var _petaImp = isHimpun ? _petaDonatur() : null;
+  var _layImp = [];
+  if (isHimpun) { try { _layImp = readAll(SHEETS.LAYANAN) || []; } catch (e) {} }
   
   rows.forEach(function(row) {
     row.fundraising = cleanFundraisingName(row.fundraising);
@@ -3276,9 +3351,12 @@ async function apiSaveImportedData(t, rows, type) {
     }
     
     insertRow(sheetName, row);
+    /* Donatur ikut terdaftar dari impor juga. Peta & daftar layanan dibaca
+       sekali di luar loop supaya impor ratusan baris tetap ringan. */
+    if (isHimpun) { try { daftarkanDonatur(row, _layImp, _petaImp); } catch (e) {} }
     savedCount++;
   });
-  
+
   var keys = Object.keys(monthsToSync);
   for (var i = 0; i < keys.length; i++) {
     await syncMonthlySpreadsheet(keys[i]);
@@ -3373,11 +3451,7 @@ async function apiDeleteByDateRange(t, type, startDate, endDate) {
 async function apiGetMonthlySpreadsheet(t, year, month) {
   _requirePerm(t, 'laporan', 'view');
   var mStr = year + '-' + ('0' + month).slice(-2);
-  var data = getSetting('sheet_data_' + mStr) || '';
-  if (!data) {
-    await syncMonthlySpreadsheet(mStr);
-    data = getSetting('sheet_data_' + mStr) || '';
-  }
+  var data = await bangunJurnalXlsx(mStr);       /* dibangun saat diminta, tidak disimpan */
   return { data: data, url: data, month: mStr };
 }
 
@@ -3535,37 +3609,43 @@ async function apiImportMutasiToRecords(t, rows) {
   return { success: true, imported: imported, skipped: skipped };
 }
 
+/* Membersihkan nama donatur dari awalan jenis dana dan penanda anonim.
+
+   Versi lama memeriksa penanda anonim SEBELUM awalan dikupas dan tidak pernah
+   memeriksanya lagi sesudahnya, sehingga "Infak Umum NN" tersimpan sebagai
+   donatur bernama "NN" dan "Infak Terikat NN Mursi" jadi "NN Mursi". Nama itu
+   berubah lagi bila fungsinya dijalankan dua kali, jadi daftar donatur dan isi
+   tabel bisa berbeda. Sekarang pengupasan diulang sampai stabil, penanda anonim
+   ikut dikupas, dan pemeriksaannya dilakukan pada hasil akhir — hasilnya sama
+   berapa kali pun fungsi ini dipanggil. */
+var _DONATUR_ANONIM = ['nn', 'hamba allah', 'hambaallah', 'anonim', 'tanpa nama'];
+
 function cleanDonaturName(name) {
   if (!name) return '';
   var s = String(name).trim();
-  
-  var lower = s.toLowerCase();
-  if (lower === 'nn' || lower === 'hamba allah' || lower === 'hambaallah' || lower === 'anonim' || lower === 'tanpa nama') return '';
-  
-  // Strip NN, NN., NN. , NN -, etc.
-  s = s.replace(/^nn\s*[-.]*\s*/i, '').trim();
-  
-  // Robust prefix stripping
+
   var prefixes = [
-    /^(infak umum|infak terikat|zakat profesi|zakat fitrah|zakat mal|penerimaan zakat|penerimaan infak|penerimaan|setor tunai|mutasi)\s*[-.:]*\s*/i
+    /^(infak umum|infak terikat|zakat profesi|zakat fitrah|zakat mal|penerimaan zakat|penerimaan infak|penerimaan|setor tunai|mutasi)\s*[-.:]*\s*/i,
+    /* penanda anonim di depan nama asli: "NN Mursi", "NN - Budi", "NN." */
+    /^(nn|hamba allah|hambaallah|anonim|tanpa nama)\b[\s\-.:]*/i
   ];
-  
+
   var changed = true;
   while (changed) {
     changed = false;
     for (var i = 0; i < prefixes.length; i++) {
       if (prefixes[i].test(s)) {
-        s = s.replace(prefixes[i], '').trim();
-        changed = true;
+        var next = s.replace(prefixes[i], '').trim();
+        if (next !== s) { s = next; changed = true; }
       }
     }
   }
-  
-  var finalLower = s.toLowerCase();
-  if (!finalLower || finalLower === 'infak umum' || finalLower === 'infak terikat' || finalLower === 'zakat' || finalLower === 'infak' || finalLower === 'dskl') {
-    return '';
-  }
-  
+
+  var low = s.toLowerCase();
+  if (!low) return '';
+  if (_DONATUR_ANONIM.indexOf(low) >= 0) return '';
+  if (low === 'infak umum' || low === 'infak terikat' || low === 'zakat' || low === 'infak' || low === 'dskl') return '';
+
   return s;
 }
 
@@ -3625,6 +3705,119 @@ function resolveLayananNamaForDonatur(nama, layananId, layList) {
     if (nl.indexOf(ln) >= 0) return layList[j].nama;
   }
   return '';
+}
+
+/* ===== PENDAFTARAN DONATUR DARI PENGHIMPUNAN =====
+   Setiap penerimaan yang dicatat ikut mendaftarkan penyumbangnya ke tabel
+   Donatur, lengkap dengan alamat dan nomor telepon. Kantor Layanan (KLL) dan
+   Unit Layanan (ULL) sengaja DILEWATI: itu kantor sendiri, bukan penyumbang. */
+function _kategoriLayanan(kat) {
+  var k = String(kat || '');
+  return k.indexOf('Kantor Layanan') >= 0 || k.indexOf('Unit Layanan') >= 0;
+}
+
+/* Peta nama -> baris donatur, supaya impor massal tidak membaca sheet berulang. */
+function _petaDonatur() {
+  var peta = {};
+  (readAll(SHEETS.DONATUR) || []).forEach(function(r) {
+    var n = String(r.nama || '').trim().toLowerCase();
+    if (n) peta[n] = r;
+  });
+  return peta;
+}
+
+/* Mendaftarkan / melengkapi satu donatur dari sebuah baris penghimpunan.
+   Mengembalikan 'baru', 'lengkap' (data kosong terisi), atau '' bila dilewati. */
+function daftarkanDonatur(row, layList, peta) {
+  if (!row) return '';
+  var nama = cleanDonaturName(row.namaDonatur);
+  if (!nama) return '';                                   // NN / Hamba Allah / anonim
+  var kategori = detectKategoriDonatur(nama, row.tipeDonatur, row.layananId, layList || []);
+  if (_kategoriLayanan(kategori)) return '';              // KLL / ULL dikecualikan
+
+  var key = nama.toLowerCase();
+  var tel = String(row.telepon || '').trim();
+  var alm = String(row.alamat || '').trim();
+  var eml = String(row.email || '').trim();
+
+  var ada = peta[key];
+  if (ada) {
+    /* Lengkapi yang masih kosong saja — jangan menimpa data yang sudah diisi
+       petugas dengan nilai kosong dari transaksi berikutnya. */
+    var ubah = {};
+    if (!String(ada.telepon || '').trim() && tel) ubah.telepon = tel;
+    if (!String(ada.alamat  || '').trim() && alm) ubah.alamat  = alm;
+    if (!String(ada.email   || '').trim() && eml) ubah.email   = eml;
+    if (!String(ada.kategori || '').trim() && kategori) ubah.kategori = kategori;
+    if (!Object.keys(ubah).length) return '';
+    updateRowById(SHEETS.DONATUR, ada.id, ubah);
+    Object.keys(ubah).forEach(function(k) { ada[k] = ubah[k]; });
+    return 'lengkap';
+  }
+
+  var baru = {
+    id: makeId(), nama: nama, kategori: kategori,
+    telepon: tel, alamat: alm, email: eml,
+    dibuat: new Date().toISOString()
+  };
+  insertRow(SHEETS.DONATUR, baru);
+  peta[key] = baru;
+  return 'baru';
+}
+
+/* Mendaftarkan donatur dari transaksi penghimpunan yang sudah terlanjur
+   tersimpan (mis. hasil impor sebelum fitur ini ada).
+   terapkan=false hanya menghitung, tidak menulis apa pun. */
+function apiSinkronDonatur(t, terapkan) {
+  var u = _requirePerm(t, 'penghimpunan', terapkan ? 'edit' : 'view');
+  var layList = [];
+  try { layList = readAll(SHEETS.LAYANAN) || []; } catch (e) {}
+  var rows = readAll(SHEETS.PENGHIMPUNAN) || [];
+  var peta = _petaDonatur();
+
+  var baru = 0, lengkap = 0, dilewatiLayanan = 0, dilewatiAnonim = 0;
+  var contoh = [];
+  var sudah = {};
+
+  rows.forEach(function(r) {
+    var nama = cleanDonaturName(r.namaDonatur);
+    if (!nama) { dilewatiAnonim++; return; }
+    var kategori = detectKategoriDonatur(nama, r.tipeDonatur, r.layananId, layList);
+    if (_kategoriLayanan(kategori)) { dilewatiLayanan++; return; }
+
+    var key = nama.toLowerCase();
+    if (!terapkan) {
+      if (!peta[key] && !sudah[key]) {
+        sudah[key] = 1; baru++;
+        if (contoh.length < 8) contoh.push({
+          nama: nama, kategori: kategori,
+          telepon: String(r.telepon || '').trim(),
+          alamat: String(r.alamat || '').trim()
+        });
+      }
+      return;
+    }
+    var hasil = daftarkanDonatur(r, layList, peta);
+    if (hasil === 'baru') {
+      baru++;
+      if (contoh.length < 8) contoh.push({
+        nama: nama, kategori: kategori,
+        telepon: String(r.telepon || '').trim(),
+        alamat: String(r.alamat || '').trim()
+      });
+    } else if (hasil === 'lengkap') lengkap++;
+  });
+
+  if (terapkan) {
+    audit(u.id, u.username, 'sinkron_donatur',
+      baru + ' donatur baru, ' + lengkap + ' dilengkapi',
+      { modul: 'donatur', ringkas: 'KLL/ULL dilewati: ' + dilewatiLayanan + ', anonim: ' + dilewatiAnonim });
+  }
+  return {
+    diterapkan: !!terapkan, baru: baru, dilengkapi: lengkap,
+    dilewatiLayanan: dilewatiLayanan, dilewatiAnonim: dilewatiAnonim,
+    totalTransaksi: rows.length, contoh: contoh
+  };
 }
 
 function apiListDonatur(t) {
@@ -3693,7 +3886,11 @@ function apiListDonatur(t) {
     if (!obj.email && tx.email) obj.email = tx.email;
   });
   
-  var _donaturArr = Object.values(donaturMap);
+  /* Kantor Layanan (KLL) & Unit Layanan (ULL) bukan penyumbang — mereka kantor
+     sendiri, jadi tidak ikut ditampilkan sebagai donatur. */
+  var _donaturArr = Object.values(donaturMap).filter(function(o) {
+    return !_kategoriLayanan(o.kategori);
+  });
   _donaturArr.forEach(function(o) {
     o.layanan = Object.keys(o._layananSet || {});
     delete o._layananSet;
@@ -3849,9 +4046,10 @@ function _dalamRentang(tgl, dari, sampai){
    Sesi login tidak ikut (tidak berguna saat dipulihkan) dan kata sandi
    dikosongkan — berkas cadangan bisa berpindah tangan, hash kata sandi
    tidak boleh ikut berpindah. */
-function apiCadanganDB(t){
-  var u = _requirePerm(t, 'settings', 'edit');
-  var hasil = { versi:1, dibuat:new Date().toISOString(), oleh:u.username, sheets:{}, props:{} };
+/* Membangun isi cadangan dari basis data yang sedang dimuat. Tanpa sesi —
+   dipakai oleh cron cadangan harian (api/backup.js) dan oleh apiCadanganDB. */
+function buatCadangan(oleh){
+  var hasil = { versi:1, dibuat:new Date().toISOString(), oleh:oleh||'sistem', sheets:{}, props:{} };
 
   Object.keys((DB && DB.sheets) || {}).forEach(function(nama){
     if (nama === SHEETS.SESSIONS) return;
@@ -3881,10 +4079,63 @@ function apiCadanganDB(t){
     ukuran: JSON.stringify(hasil).length,
     tanpa: ['Sessions', 'kata sandi pengguna', 'berkas Excel bulanan']
   };
+  return hasil;
+}
 
+function apiCadanganDB(t){
+  var u = _requirePerm(t, 'settings', 'edit');
+  var hasil = buatCadangan(u.username);
+  var jml = hasil.ringkas.baris;
   audit(u.id, u.username, 'cadangan_db', 'unduh cadangan',
     { modul:'settings', ringkas:'Penghimpunan '+(jml[SHEETS.PENGHIMPUNAN]||0)+' baris · Pentasyarufan '+(jml[SHEETS.PENTASYARUFAN]||0)+' baris' });
   return hasil;
+}
+
+/* Cek izin tanpa efek samping — dipakai api/backup.js sebelum menjalankan
+   perintah manual (cadangkan/pulihkan) atas nama pengguna yang login. */
+function apiCekIzin(t, modul, aksi){ var u=_requirePerm(t, modul, aksi); return { ok:true, username:u.username, role:u.role }; }
+
+/* Status cadangan terakhir, dicatat oleh api/backup.js ke props. */
+function apiStatusCadangan(t){
+  _requirePerm(t, 'settings', 'view');
+  return (DB && DB.props && DB.props._cadanganTerakhir) || null;
+}
+function catatStatusCadangan(st){ if (DB && DB.props) DB.props._cadanganTerakhir = st; }
+
+/* ===== PULIHKAN CADANGAN =====
+   Hanya superadmin. Mengganti seluruh data transaksi & master dari berkas
+   cadangan, TETAPI akun pengguna dan sesi yang sedang berjalan dibiarkan:
+   cadangan sengaja tidak memuat kata sandi, jadi menimpa Users hanya akan
+   mengunci semua orang keluar. Salinan keadaan SEBELUM pemulihan disimpan
+   oleh api/backup.js sebagai cadangan tersendiri (nama "sebelum-pulih"),
+   bukan di dalam basis data, supaya ukurannya tidak menggelembung. */
+function apiPulihkanDB(t, cadangan, konfirmasi){
+  var u = authUser(t);
+  if (u.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh memulihkan basis data.');
+  if (konfirmasi !== 'PULIHKAN') throw new Error('Ketik PULIHKAN untuk mengonfirmasi.');
+  if (typeof cadangan === 'string') { try { cadangan = JSON.parse(cadangan); } catch (e) { throw new Error('Berkas cadangan bukan JSON yang sah.'); } }
+  if (!cadangan || !cadangan.sheets || typeof cadangan.sheets !== 'object') throw new Error('Berkas cadangan tidak dikenali (tidak ada bagian sheets).');
+  if (!cadangan.sheets[SHEETS.PENGHIMPUNAN]) throw new Error('Berkas cadangan tidak memuat data Penghimpunan.');
+
+  var lindungi = {}; lindungi[SHEETS.USERS] = 1; lindungi[SHEETS.SESSIONS] = 1;
+
+  var diganti = [];
+  Object.keys(cadangan.sheets).forEach(function(n){
+    if (lindungi[n]) return;
+    var rows = cadangan.sheets[n];
+    if (!Array.isArray(rows) || !rows.length || !Array.isArray(rows[0])) return;
+    DB.sheets[n] = rows.map(function(r){ return (r || []).slice(); });
+    diganti.push(n + ' (' + (rows.length - 1) + ')');
+  });
+  /* Properti kecil ikut dipulihkan; penanda internal dan status tetap milik sekarang. */
+  Object.keys(cadangan.props || {}).forEach(function(k){
+    if (/^_/.test(k)) return;
+    DB.props[k] = cadangan.props[k];
+  });
+  setup();                                     /* pastikan skema kolom terbaru */
+  audit(u.id, u.username, 'pulihkan_db', 'dari cadangan ' + (cadangan.dibuat || '?'),
+    { modul:'settings', ringkas: diganti.join(', ') });
+  return { ok:true, diganti: diganti, dariTanggal: cadangan.dibuat || '' };
 }
 
 /* Hapus penghimpunan / pentasyarufan pada rentang tanggal tertentu.
@@ -4482,6 +4733,7 @@ REGISTRY['apiSaveMutasiRows']=apiSaveMutasiRows;
 REGISTRY['apiImportMutasiToRecords']=apiImportMutasiToRecords;
 REGISTRY['apiListDonatur']=apiListDonatur;
 REGISTRY['apiImportDonaturText']=apiImportDonaturText;
+REGISTRY['apiSinkronDonatur']=apiSinkronDonatur;
 REGISTRY['apiGetMonthlySpreadsheet']=apiGetMonthlySpreadsheet;
 REGISTRY['apiDeleteByDateRange']=apiDeleteByDateRange;
 REGISTRY['apiBootstrap']=apiBootstrap;
@@ -4678,6 +4930,9 @@ REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
 REGISTRY['apiBersihkanSetorTunai']=apiBersihkanSetorTunai;
 REGISTRY['apiCadanganDB']=apiCadanganDB;
+REGISTRY['apiCekIzin']=apiCekIzin;
+REGISTRY['apiStatusCadangan']=apiStatusCadangan;
+REGISTRY['apiPulihkanDB']=apiPulihkanDB;
 REGISTRY['apiHapusRentang']=apiHapusRentang;
 REGISTRY['apiListAudit']=apiListAudit;
 REGISTRY['apiLaporanHarian']=apiLaporanHarian;
@@ -4697,4 +4952,7 @@ async function runRPC(db, fn, args, ctx){
   try{ _catatAkses(fn, (args && args[0]) || ''); }catch(e){}
   return { result: result, db: DB };
 }
-module.exports = { runRPC };
+/* buatCadangan & catatStatusCadangan dipakai api/backup.js di luar sesi
+   pengguna. Keduanya bekerja pada DB yang sedang dimuat lewat runRPC. */
+module.exports = { runRPC, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
+  catatStatusCadangan: function(db, st){ DB = db; catatStatusCadangan(st); return db; } };

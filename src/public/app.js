@@ -141,7 +141,19 @@ function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.
   var u=el('lUser').value.trim(), p=el('lPass').value;
   var remember=el('lRemember')?el('lRemember').checked:true;
   gas('login')(u,p).then(function(r){
-    if(!r.ok){el('loginErr').textContent=r.msg;b.disabled=false;b.textContent='Masuk';return;}
+    if(!r.ok){
+      el('loginErr').textContent=r.msg;
+      /* Akun terkunci sementara: tombol ikut dikunci dengan hitung mundur,
+         supaya petugas tahu harus menunggu, bukan mengulang-ulang. */
+      if(r.terkunci>0){
+        var sisa=r.terkunci; b.disabled=true;
+        var iv=setInterval(function(){ sisa--; if(sisa<=0){clearInterval(iv);b.disabled=false;b.textContent='Masuk';el('loginErr').textContent='';return;}
+          b.textContent='Tunggu '+(sisa>=60?Math.ceil(sisa/60)+' mnt':sisa+' dtk'); },1000);
+        b.textContent='Tunggu '+(sisa>=60?Math.ceil(sisa/60)+' mnt':sisa+' dtk');
+        return;
+      }
+      b.disabled=false;b.textContent='Masuk';return;
+    }
     TOKEN=r.token;localStorage.setItem('laz_token',TOKEN);ME=r.user;
     if(remember){ setSavedCreds(u,p); } else { clearSavedCreds(); }
     return gas('apiBootstrap')(TOKEN).then(function(bs){SETTINGS=bs.settings;startApp();});
@@ -861,7 +873,8 @@ function viewLaporan(){renderLaporanShell();}
    menjadi daftar transaksi dengan filter fundraising.
    ============================================================ */
 var LAP_SEL = null;                        // layanan yang terbuka
-var LAP_PILAR = null;                      // pilar yang terbuka di dalamnya
+var LAP_PILAR = null;                      // baris tingkat-1 (sub jenis) yang terbuka
+var LAP_SUB = null;                        // pilar yang terbuka di dalam sub jenis
 var LAP_SORT = { key: 'tanggal', dir: -1 };
 var LAP_Q = '';                            // cari transaksi
 var LAP_QLAY = '';                         // cari nama KLL/ULL
@@ -871,11 +884,27 @@ var LAP_FR = 'all';                        // filter fundraising di detail pilar
 function lapDec(v){ try { return decodeURIComponent(v); } catch(e) { return v; } }
 function lapEnc(v){ return encodeURIComponent(String(v == null ? '' : v)); }
 
+/* Tingkat pertama dikelompokkan menurut SUB JENIS (Infak Umum, Infak Terikat,
+   Amil, Bagi Hasil Bank, Zakat Mal ...), bukan langsung pilar. Pilar baru
+   muncul sebagai tingkat kedua ketika sub jenisnya dibuka — lihat lapPunyaPilar.
+
+   Efek sampingnya disengaja: penerimaan Amil yang pilarnya tertulis
+   "Lain-lain" kini masuk ke baris Amil, karena jenis dananya memang Amil. */
 function lapPilarOf(r){
-  if (r.pilar && String(r.pilar).trim()) return String(r.pilar).trim();
   var sub = String(r.subJenis || '').trim();
   if (sub) return sub;
+  if (r.pilar && String(r.pilar).trim()) return String(r.pilar).trim();
   return String(r.jenisDana || 'Lainnya').trim();
+}
+/* Pilar sebenarnya, dipakai untuk rincian tingkat kedua. */
+function lapPilarAsli(r){ return String(r.pilar || '').trim() || 'Tanpa pilar'; }
+/* Sebuah kelompok layak dibuka per pilar bila isinya menyebar ke lebih dari
+   satu pilar — dalam praktiknya Infak Terikat. Kelompok berpilar tunggal
+   (mis. Amil) langsung ke daftar transaksi supaya tidak menambah klik. */
+function lapPunyaPilar(rows){
+  var s = {};
+  rows.forEach(function(r){ var p = String(r.pilar || '').trim(); if (p) s[p] = 1; });
+  return Object.keys(s).length > 1;
 }
 function lapKeyOf(r){
   return (window.__lapMode === 'salur') ? (r.ashnaf || 'Lainnya') : lapPilarOf(r);
@@ -921,9 +950,9 @@ function lapFilterBar(){
     + (LAP_MONTH!=='all'||LAP_QLAY ? '<button class="btn btn-sm lap-filter-reset" onclick="lapResetFilter()">Reset</button>' : '')
     + '</div>';
 }
-function setLapMonth(v){ LAP_MONTH = v; LAP_SEL = null; LAP_PILAR = null; lapRefreshAll(); }
+function setLapMonth(v){ LAP_MONTH = v; LAP_SEL = null; LAP_PILAR = null; LAP_SUB = null; lapRefreshAll(); }
 function setLapQLay(v){ LAP_QLAY = v || ''; lapRefreshList(); }
-function lapResetFilter(){ LAP_MONTH='all'; LAP_QLAY=''; LAP_SEL=null; LAP_PILAR=null; renderLapRekap(window.__lapMode||'himpun'); }
+function lapResetFilter(){ LAP_MONTH='all'; LAP_QLAY=''; LAP_SEL=null; LAP_PILAR=null; LAP_SUB=null; renderLapRekap(window.__lapMode||'himpun'); }
 
 /* ---- ringkasan ---- */
 function lapSummary(rows, mode){
@@ -991,29 +1020,70 @@ function lapDetail(rows, name){
   var keys = lapSortedKeys(g);
 
   var h = '<div class="lap-detail-head">'
-    + '<div><b>' + (mode==='himpun'?'Rincian per pilar':'Rincian per ashnaf') + '</b>'
+    + '<div><b>' + (mode==='himpun'?'Rincian per jenis':'Rincian per ashnaf') + '</b>'
     + ' <span class="muted">&middot; ' + sub.length + ' transaksi</span></div>'
     + '<div class="lap-detail-total">' + rp(total) + '</div></div>'
     + '<table class="lap-table"><thead><tr>'
-    + '<th>' + (mode==='himpun'?'Pilar / Jenis':'Ashnaf') + '</th>'
+    + '<th>' + (mode==='himpun'?'Jenis Penerimaan':'Ashnaf') + '</th>'
     + '<th class="num">Transaksi</th><th class="num">Jumlah</th><th class="num">Porsi</th><th></th>'
     + '</tr></thead><tbody>';
   keys.forEach(function(k){
     var pct = total ? Math.round(g[k].total / total * 100) : 0;
     var open = (LAP_PILAR === k);
+    var isiK = sub.filter(function(r){ return lapKeyOf(r) === k; });
+    /* Hanya kelompok yang menyebar ke beberapa pilar (Infak Terikat) yang
+       dibuka menjadi rincian pilar; sisanya langsung ke daftar transaksi. */
+    var berpilar = (mode === 'himpun') && lapPunyaPilar(isiK);
     h += '<tr class="' + (open?'on':'') + '"><td>' + esc(k) + '</td>'
       + '<td class="num">' + g[k].n + '</td>'
       + '<td class="num strong">' + rp(g[k].total) + '</td>'
       + '<td class="num"><span class="lap-pct"><i style="width:' + pct + '%"></i></span>' + pct + '%</td>'
       + '<td class="num"><button class="lap-mini" onclick="setLapPilar(\'' + lapEnc(k) + '\')">'
-      + (open ? 'Tutup' : 'Detail') + '</button></td></tr>';
+      + (open ? 'Tutup' : (berpilar ? 'Pilar' : 'Detail')) + '</button></td></tr>';
     if (open) {
       h += '<tr class="lap-sub-row"><td colspan="5">'
-        + lapPilarPanel(sub.filter(function(r){ return lapKeyOf(r) === k; }), k, mode)
+        + (berpilar ? lapPilarTingkat2(isiK, k, mode) : lapPilarPanel(isiK, k, mode))
         + '</td></tr>';
     }
   });
   h += '</tbody><tfoot><tr><td>Total</td><td class="num">' + sub.length + '</td>'
+    + '<td class="num strong">' + rp(total) + '</td><td class="num">100%</td><td></td></tr></tfoot></table>';
+  return h;
+}
+
+/* ---- tingkat 2: pecahan pilar di dalam satu sub jenis (mis. Infak Terikat) ----
+   Tiap pilar tetap bisa dibuka lagi menjadi daftar transaksi lengkap dengan
+   filter fundraising, jadi fitur Detail tidak hilang, hanya turun satu tingkat. */
+function lapPilarTingkat2(rows, subJenis, mode){
+  var total = lapSum(rows);
+  var g = lapGroup(rows, lapPilarAsli);
+  var keys = lapSortedKeys(g);
+
+  var h = '<div class="lap-pilar-head">'
+    + '<div class="lap-pilar-t">' + esc(subJenis) + '</div>'
+    + '<div class="lap-pilar-tot"><span>Total</span><b>' + rp(total) + '</b>'
+    + '<em>' + rows.length + ' transaksi</em></div></div>'
+    + '<table class="lap-table"><thead><tr><th>Pilar</th>'
+    + '<th class="num">Transaksi</th><th class="num">Jumlah</th><th class="num">Porsi</th><th></th>'
+    + '</tr></thead><tbody>';
+
+  keys.forEach(function(k){
+    var pct = total ? Math.round(g[k].total / total * 100) : 0;
+    var open = (LAP_SUB === k);
+    h += '<tr class="' + (open?'on':'') + '"><td>' + esc(k) + '</td>'
+      + '<td class="num">' + g[k].n + '</td>'
+      + '<td class="num strong">' + rp(g[k].total) + '</td>'
+      + '<td class="num"><span class="lap-pct"><i style="width:' + pct + '%"></i></span>' + pct + '%</td>'
+      + '<td class="num"><button class="lap-mini" onclick="setLapSub(\'' + lapEnc(k) + '\')">'
+      + (open ? 'Tutup' : 'Detail') + '</button></td></tr>';
+    if (open) {
+      h += '<tr class="lap-sub-row"><td colspan="5">'
+        + lapPilarPanel(rows.filter(function(r){ return lapPilarAsli(r) === k; }), k, mode)
+        + '</td></tr>';
+    }
+  });
+
+  h += '</tbody><tfoot><tr><td>Total</td><td class="num">' + rows.length + '</td>'
     + '<td class="num strong">' + rp(total) + '</td><td class="num">100%</td><td></td></tr></tfoot></table>';
   return h;
 }
@@ -1047,6 +1117,13 @@ function lapPilarPanel(rows, pilar, mode){
 function setLapPilar(enc){
   var k = lapDec(enc);
   LAP_PILAR = (LAP_PILAR === k) ? null : k;
+  LAP_SUB = null;                       /* pindah sub jenis: tutup pilar yang terbuka */
+  LAP_FR = 'all'; LAP_Q = '';
+  lapRefreshList();
+}
+function setLapSub(enc){
+  var k = lapDec(enc);
+  LAP_SUB = (LAP_SUB === k) ? null : k;
   LAP_FR = 'all'; LAP_Q = '';
   lapRefreshList();
 }
@@ -1105,7 +1182,7 @@ function lapRefreshAll(){
 function setLapSel(enc){
   var name = lapDec(enc);
   LAP_SEL = (LAP_SEL === name) ? null : name;
-  LAP_PILAR = null; LAP_FR = 'all'; LAP_Q = '';
+  LAP_PILAR = null; LAP_SUB = null; LAP_FR = 'all'; LAP_Q = '';
   lapRefreshList();
 }
 function setLapSort(key){
@@ -1568,7 +1645,7 @@ function renderUsers(rows){var add=canDo('users','create')?'<button class="btn b
 function countPerm(p){var n=0;p=p||{};Object.keys(p).forEach(function(m){Object.keys(p[m]||{}).forEach(function(a){if(p[m][a])n++;});});return n;}
 function permGrid(p){p=p||{};var h='<div style="overflow:auto"><table class="perm-table"><thead><tr><th>Modul</th>'+PERM_META.actions.map(function(a){return '<th>'+a+'</th>';}).join('')+'</tr></thead><tbody>';PERM_META.modules.forEach(function(m){h+='<tr><td>'+m+'</td>'+PERM_META.actions.map(function(a){var ck=(p[m]&&p[m][a])?'checked':'';return '<td><input type="checkbox" style="width:auto" data-mod="'+m+'" data-act="'+a+'" '+ck+'></td>';}).join('')+'</tr>';});h+='</tbody></table></div>';return h;}
 function formUser(id){var u=id?CACHE.users.find(function(x){return x.id===id;}):{role:'staff',aktif:true,permissions:{}};
-  var b='<div class="row"><div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div><div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div></div><div class="row"><div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 6 karakter')+'"></div><div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div></div><div class="field"><label>Status Akun</label>'+selOpt('u_aktif',['true','false'],String(u.aktif===true||String(u.aktif)==='true'))+'</div><div class="divider"></div><label style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;display:block">HAK AKSES (Permission) — diabaikan jika role Superadmin</label>'+permGrid(u.permissions);
+  var b='<div class="row"><div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div><div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div></div><div class="row"><div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div><div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div></div><div class="field"><label>Status Akun</label>'+selOpt('u_aktif',['true','false'],String(u.aktif===true||String(u.aktif)==='true'))+'</div><div class="divider"></div><label style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;display:block">HAK AKSES (Permission) — diabaikan jika role Superadmin</label>'+permGrid(u.permissions);
   openModal(id?'Edit User':'Tambah User',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveUser(\''+(id||'')+'\')">Simpan</button>');}
 function saveUser(id){var perm={};document.querySelectorAll('.perm-table input[type=checkbox]').forEach(function(c){var m=c.dataset.mod,a=c.dataset.act;perm[m]=perm[m]||{};perm[m][a]=c.checked;});var d={nama:el('u_nama').value,username:el('u_username').value.trim(),role:el('u_role').value,aktif:el('u_aktif').value,permissions:perm};var pw=el('u_password').value;if(pw)d.password=pw;if(id)d.id=id;if(!d.nama||!d.username){toast('Nama & username wajib',true);return;}if(!id&&!pw){toast('Password wajib untuk user baru',true);return;}gas('apiSaveUser')(TOKEN,d).then(function(){closeModal();toast('User tersimpan');viewUsers();}).catch(handleErr);}
 function delUser(id){uiConfirm('Hapus user ini?').then(function(__ok){if(!__ok)return;gas('apiDeleteUser')(TOKEN,id).then(function(){toast('User dihapus');viewUsers();}).catch(handleErr);});}
@@ -1595,7 +1672,7 @@ function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
   else if(SET_TAB==='fundraising'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML='<div id="setFrBody"></div>';viewFundraising();}
-  else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();rentangPasang('hr_rt',{dari:hrAwalBulan(),sampai:today(),onTerap:function(){hrReset();}});}
+  else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();rentangPasang('hr_rt',{dari:hrAwalBulan(),sampai:today(),onTerap:function(){hrReset();}});cadOtoMuat();}
   else {
     window.REK_HOST='';window.LAY_HOST='';
     host.innerHTML=(SET_TAB==='tampilan')?tampilanHTML(s):lembagaHTML(s);
@@ -1854,7 +1931,7 @@ function applyFilters(tid) {
   });
 }
 function openPassword(){openModal('Ubah Password','<div class="field"><label>Password Lama</label><input type="password" id="p_old"></div><div class="field"><label>Password Baru</label><input type="password" id="p_new"></div><div class="field"><label>Konfirmasi Password Baru</label><input type="password" id="p_new2"></div>','<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="savePassword()">Simpan</button>');}
-function savePassword(){var o=el('p_old').value,n=el('p_new').value,n2=el('p_new2').value;if(n.length<6){toast('Password baru minimal 6 karakter',true);return;}if(n!==n2){toast('Konfirmasi tidak cocok',true);return;}gas('apiChangeMyPassword')(TOKEN,o,n).then(function(){closeModal();toast('Password diubah');}).catch(handleErr);}
+function savePassword(){var o=el('p_old').value,n=el('p_new').value,n2=el('p_new2').value;if(n.length<8||!/[A-Za-z]/.test(n)||!/[0-9]/.test(n)){toast('Sandi minimal 8 karakter dan memuat huruf serta angka',true);return;}if(n!==n2){toast('Konfirmasi tidak cocok',true);return;}gas('apiChangeMyPassword')(TOKEN,o,n).then(function(){closeModal();toast('Password diubah');}).catch(handleErr);}
 
 
 /* ====== v4: loader, modal konfirmasi, animasi transisi ====== */
@@ -2038,25 +2115,14 @@ function kpiSpark(series,key){
   return '<svg class="kpi-v2-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+col+'" stop-opacity=".25"/><stop offset="1" stop-color="'+col+'" stop-opacity="0"/></linearGradient></defs><path d="'+area+'" fill="url(#'+gid+')"/><path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 }
 
-function calcMoM(series,key){
-  if(!series||series.length<2)return {pct:'0.0',dir:'flat',text:'0.0% MoM'};
-  var cur=series[series.length-1][key]||0;
-  var prev=series[series.length-2][key]||0;
-  if(prev===0)return {pct:cur>0?'100.0':'0.0',dir:cur>0?'up':'flat',text:cur>0?'+100% MoM':'stabil'};
-  var pct=((cur-prev)/prev*100);
-  var dir=pct>0?'up':pct<0?'down':'flat';
-  var sign=pct>0?'+':'';
-  return {pct:Math.abs(pct).toFixed(1),dir:dir,text:sign+pct.toFixed(1)+'% MoM'};
-}
-
-function kpiCardV2(key,label,val,icon,accentColor,trend,trendText,sparkHtml){
-  var tClass=trend==='up'?'up':trend==='down'?'down':'flat';
-  var tArrow=trend==='up'?'▲':trend==='down'?'▼':'●';
+/* Kartu KPI: label, nominal, dan grafik mini. Keterangan kecil di bawah
+   nominal (badge tren "% MoM" dan jumlah transaksi) sudah dihilangkan. */
+function kpiCardV2(key,label,val,icon,accentColor,sparkHtml){
   return '<div class="kpi-v2" style="--kpi-accent:'+accentColor+'" onclick="openDashDetail(\''+key+'\')">'+
     '<div class="kpi-v2-top"><div class="kpi-v2-label">'+label+'</div>'+
     '<div class="kpi-v2-icon" style="background:'+accentColor+'">'+icon+'</div></div>'+
     '<div class="kpi-v2-value">'+val+'</div>'+
-    '<div class="kpi-v2-bottom"><div class="kpi-v2-trend '+tClass+'">'+tArrow+' '+trendText+'</div>'+(sparkHtml||'')+'</div></div>';
+    '<div class="kpi-v2-bottom">'+(sparkHtml||'')+'</div></div>';
 }
 
 function renderDonutChart(obj){
@@ -2740,17 +2806,14 @@ function renderDashboard(d){
     '</div>' +
   '</div>';
 
-  var trH=d.transaksiHimpun||0,trT=d.transaksiTasyaruf||0;
-  var momH=calcMoM(d.series,'himpun');
-  var momT=calcMoM(d.series,'tasyaruf');
   var saldoKas=d.saldo||0;
   var totalPeople=(d.jumlahDonatur||0)+' / '+(d.jumlahMustahik||0);
 
   var kpis='<div class="kpis-v2">'+
-    kpiCardV2('himpun','Total Penghimpunan',rp(d.totalHimpun),SVG_ICONS.arrowUp,'#ea6a1e',momH.dir,momH.text+' ('+trH+' tx)',kpiSpark(d.series,'himpun'))+
-    kpiCardV2('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),SVG_ICONS.arrowDown,'#3b82f6',momT.dir,momT.text+' ('+trT+' tx)',kpiSpark(d.series,'tasyaruf'))+
-    kpiCardV2('saldo','Saldo Kas & Dana',rp(saldoKas),SVG_ICONS.wallet,'#059669','flat','Dana Siap Salur','')+
-    kpiCardV2('donatur','Donatur & Mustahik',totalPeople,SVG_ICONS.users,'#8b5cf6','flat',d.jumlahMustahik+' mustahik terbantu','')+
+    kpiCardV2('himpun','Total Penghimpunan',rp(d.totalHimpun),SVG_ICONS.arrowUp,'#ea6a1e',kpiSpark(d.series,'himpun'))+
+    kpiCardV2('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),SVG_ICONS.arrowDown,'#3b82f6',kpiSpark(d.series,'tasyaruf'))+
+    kpiCardV2('saldo','Saldo Kas & Dana',rp(saldoKas),SVG_ICONS.wallet,'#059669','')+
+    kpiCardV2('donatur','Donatur & Mustahik',totalPeople,SVG_ICONS.users,'#8b5cf6','')+
     '</div>';
 
   var hint=window.DASH_EDIT?'<div class="edit-hint"><b>Mode Atur Layout Aktif</b> — Tarik <b>tepi atau sudut</b> kartu untuk mengubah lebar dan tinggi ke segala arah — klik ganda pada pegangan untuk mengembalikan ukuran asal. Seret header kartu (<b>⋮⋮</b>) untuk menyusun posisi, dan <b>✕</b> untuk menyembunyikan.</div>':'';
@@ -5174,13 +5237,55 @@ function viewDonatur() {
   });
 }
 
+/* ---- Sinkronkan donatur dari transaksi penghimpunan yang sudah tersimpan ----
+   Dipakai untuk data lama yang terlanjur diimpor sebelum pendaftaran otomatis
+   ada. Selalu tampilkan pratinjau dulu supaya jelas apa yang akan ditambahkan. */
+function sinkronDonaturPeriksa() {
+  toast('Memeriksa data penghimpunan...');
+  gas('apiSinkronDonatur')(TOKEN, false).then(function(r) {
+    if (!r.baru) {
+      uiAlert
+        ? uiAlert('Semua donatur sudah terdaftar. Tidak ada yang perlu ditambahkan.')
+        : toast('Semua donatur sudah terdaftar');
+      return;
+    }
+    var daftar = (r.contoh || []).map(function(x) {
+      return '<li><b>' + esc(x.nama) + '</b> <span class="muted">· ' + esc(x.kategori) + '</span></li>';
+    }).join('');
+    var b = '<div style="font-size:13.5px;line-height:1.7">'
+      + 'Ditemukan <b>' + r.baru + ' donatur</b> dari ' + r.totalTransaksi + ' transaksi penghimpunan '
+      + 'yang belum terdaftar di database donatur.'
+      + '<div style="margin-top:10px;padding:11px 13px;border-radius:10px;background:var(--surface2);font-size:12.5px">'
+      + 'Dilewati: <b>' + r.dilewatiLayanan + '</b> transaksi KLL/ULL (kantor sendiri, bukan penyumbang) '
+      + 'dan <b>' + r.dilewatiAnonim + '</b> transaksi tanpa nama (NN / Hamba Allah).'
+      + '</div>'
+      + (daftar ? '<div style="margin-top:12px;font-weight:600;font-size:12.5px">Contoh:</div><ul style="margin:6px 0 0 18px;padding:0;font-size:12.5px">' + daftar + '</ul>' : '')
+      + '</div>';
+    openModal('Sinkronkan Donatur', b,
+      '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+      + '<button class="btn btn-primary" onclick="sinkronDonaturJalankan()">Tambahkan ' + r.baru + ' Donatur</button>');
+  }).catch(handleErr);
+}
+
+function sinkronDonaturJalankan() {
+  gas('apiSinkronDonatur')(TOKEN, true).then(function(r) {
+    closeModal();
+    toast(r.baru + ' donatur ditambahkan'
+      + (r.dilengkapi ? ', ' + r.dilengkapi + ' dilengkapi' : ''));
+    viewDonatur();
+  }).catch(handleErr);
+}
+
 function renderDonatur(rows) {
   var h = '<div class="page-head">' +
     '  <div>' +
     '    <h2>Database Donatur</h2>' +
-    '    <div class="desc">Daftar profil donatur terdaftar serta donatur dari transaksi penghimpunan</div>' +
+    '    <div class="desc">Donatur tercatat otomatis dari setiap penghimpunan. Kantor & unit layanan (KLL/ULL) tidak dihitung sebagai donatur.</div>' +
     '  </div>' +
+    '  <div style="display:flex;gap:8px;flex-wrap:wrap">' +
+    (canDo('penghimpunan','edit') ? '  <button class="btn btn-ghost" onclick="sinkronDonaturPeriksa()">🔄 Sinkronkan dari Penghimpunan</button>' : '') +
     '  <button class="btn btn-primary" onclick="openImportDonaturModal()">📥 Impor Donatur (Teks)</button>' +
+    '  </div>' +
     '</div>';
 
   h += '<div class="table-wrap">' +
@@ -5193,8 +5298,6 @@ function renderDonatur(rows) {
     '        <option value="Perorangan">Perorangan</option>' +
     '        <option value="Lembaga/Perusahaan">Lembaga/Perusahaan</option>' +
     '        <option value="Hamba Allah">Hamba Allah</option>' +
-    '        <option value="Kantor Layanan (KLL)">Kantor Layanan (KLL)</option>' +
-    '        <option value="Unit Layanan (ULL)">Unit Layanan (ULL)</option>' +
     '      </select>' +
     '    </div>' +
     '    <div class="field" id="kll_ull_dropdown_container" style="display:none;margin:0;flex:1;min-width:180px;position:relative">' +
@@ -5746,7 +5849,7 @@ function logBersihkan(){
    PERAWATAN DATA — perbaikan sekali jalan
    ================================================================ */
 function perawatanHTML(){
-  return cadanganHTML() + hapusRentangHTML() + setorTunaiHTML()
+  return cadanganHTML() + cadanganOtomatisHTML() + hapusRentangHTML() + setorTunaiHTML()
     + '<div class="card set-panel">'
     + '<h3>Perbaikan Data Lama</h3>'
     + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
@@ -5853,6 +5956,132 @@ function cadanganHTML(){
     + '</div>'
     + '<div id="cadanganHasil" style="margin-top:14px"></div>'
     + '</div>';
+}
+
+/* ============ CADANGAN OTOMATIS & PEMULIHAN ============
+   Berbicara ke /api/backup (bukan /api/rpc), karena cadangan hidup di luar
+   basis data utama: salinan cepat di Redis (14 hari) + berkas di Google Drive. */
+function cadanganApi(aksi, tambahan){
+  __barShow();
+  var body = Object.assign({ aksi: aksi, token: TOKEN }, tambahan || {});
+  return fetch('/api/backup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(j){ __barHide(); if (j && j.__error) throw new Error(j.__error); return j.result; })
+    .catch(function(e){ __barHide(); throw e; });
+}
+function cadanganOtomatisHTML(){
+  return '<div class="card set-panel">'
+    + '<h3>Cadangan Otomatis &amp; Pemulihan</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 12px">'
+    + 'Setiap hari pukul 02.00 WIB sistem membuat cadangan sendiri: salinan cepat disimpan 14 hari '
+    + 'untuk pulih dalam hitungan detik, dan berkas .json diunggah ke Google Drive lembaga (30 terakhir) '
+    + 'sebagai cadangan lepas-pantai. Anda juga bisa mencadangkan kapan saja dari sini.</p>'
+    + '<div id="cadOtoIsi"><div class="muted" style="font-size:12.5px">Memuat status...</div></div>'
+    + '</div>';
+}
+function cadOtoMuat(){
+  var host = el('cadOtoIsi'); if (!host) return;
+  cadanganApi('daftar').then(function(d){ host.innerHTML = cadOtoRender(d); })
+    .catch(function(e){ host.innerHTML = '<div class="imp-note imp-warn">' + esc(e.message) + '</div>'; });
+}
+function _kb(n){ n = Number(n)||0; return n >= 1048576 ? (n/1048576).toFixed(2)+' MB' : Math.round(n/1024)+' KB'; }
+function _waktuID(iso){ try { return new Date(iso).toLocaleString('id-ID', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){ return iso||'-'; } }
+function cadOtoRender(d){
+  var st = d.status;
+  function lampu(ok){ return '<span class="badge ' + (ok ? 'green' : 'amber') + '">' + (ok ? 'aktif' : 'belum') + '</span>'; }
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px">'
+    + '<div class="cad-kotak"><div class="muted" style="font-size:11px;font-weight:600">JADWAL HARIAN (CRON)</div>' + lampu(d.cronSiap)
+      + (d.cronSiap ? '' : '<div class="muted" style="font-size:11.5px">Setel <code>CRON_SECRET</code> di Vercel</div>') + '</div>'
+    + '<div class="cad-kotak"><div class="muted" style="font-size:11px;font-weight:600">GOOGLE DRIVE</div>' + lampu(d.driveSiap)
+      + (d.driveSiap ? '' : '<div class="muted" style="font-size:11.5px">Ikuti PANDUAN-CADANGAN.md</div>')
+      + (d.driveGalat ? '<div style="font-size:11.5px;color:var(--red)">' + esc(d.driveGalat) + '</div>' : '') + '</div>'
+    + '<div class="cad-kotak"><div class="muted" style="font-size:11px;font-weight:600">UKURAN BASIS DATA</div>'
+      + '<b>' + _kb(d.ukuranDB) + '</b>' + (d.ukuranDB > d.batasPeringatan ? '<div style="font-size:11.5px;color:var(--red)">Mendekati batas 1 MB paket gratis Upstash</div>' : '') + '</div>'
+    + '</div>';
+
+  h += '<div style="font-size:12.5px;margin-bottom:10px">';
+  if (!st) h += '<span class="muted">Belum pernah ada cadangan otomatis.</span>';
+  else {
+    h += 'Cadangan terakhir <b>' + esc(_waktuID(st.waktu)) + '</b> (' + esc(st.jenis) + ', ' + esc(st.oleh) + ') — '
+      + 'salinan cepat ' + (st.redis && st.redis.ok ? '<span style="color:var(--green)">berhasil</span>' : '<span style="color:var(--red)">gagal</span>')
+      + ', Drive ' + (st.drive && st.drive.ok ? '<span style="color:var(--green)">berhasil</span>' : '<span style="color:var(--red)">gagal</span>');
+    if (st.drive && !st.drive.ok && st.drive.galat) h += '<div class="muted" style="font-size:11.5px;margin-top:3px">' + esc(st.drive.galat) + '</div>';
+    (st.peringatan || []).forEach(function(p){ h += '<div class="imp-note imp-warn" style="margin-top:6px">' + esc(p) + '</div>'; });
+  }
+  h += '</div>';
+
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    + '<button class="btn btn-primary" onclick="cadOtoSekarang()">Cadangkan sekarang</button>'
+    + (ME && ME.role === 'superadmin' ? '<label class="btn btn-ghost" style="cursor:pointer">Pulihkan dari berkas .json <input type="file" accept=".json,application/json" style="display:none" onchange="cadOtoDariBerkas(this)"></label>' : '')
+    + '</div>';
+
+  var sal = d.salinan || [];
+  h += '<div style="font-size:12px;font-weight:600;margin-bottom:6px">Salinan cepat (' + esc(d.tempat) + ')</div>';
+  if (!sal.length) h += '<div class="muted" style="font-size:12.5px">Belum ada salinan.</div>';
+  else {
+    h += '<div class="cad-daftar">' + sal.map(function(x){
+      var label = x.nama === 'sebelum-pulih' ? 'Keadaan sebelum pemulihan terakhir' : x.nama;
+      return '<div class="cad-baris"><div class="cad-baris-n"><b>' + esc(label) + '</b><div class="muted" style="font-size:11px">' + esc(_waktuID(x.waktu)) + ' · ' + _kb(x.ukuran) + '</div></div>'
+        + '<div style="display:flex;gap:6px">'
+        + '<button class="btn btn-ghost btn-sm" onclick="cadOtoUnduh(\'' + esc(x.nama) + '\')">Unduh</button>'
+        + (ME && ME.role === 'superadmin' ? '<button class="btn btn-sm ' + (x.nama === 'sebelum-pulih' ? 'btn-ghost' : 'btn-danger') + '" onclick="cadOtoPulihkan(\'' + esc(x.nama) + '\')">' + (x.nama === 'sebelum-pulih' ? 'Batalkan pemulihan' : 'Pulihkan') + '</button>' : '')
+        + '</div></div>';
+    }).join('') + '</div>';
+  }
+  if (d.drive && d.drive.length) {
+    h += '<div style="font-size:12px;font-weight:600;margin:12px 0 6px">Di Google Drive (10 terbaru)</div><div class="cad-daftar">'
+      + d.drive.map(function(f){ return '<div class="cad-baris"><div class="cad-baris-n">' + esc(f.name) + '<div class="muted" style="font-size:11px">' + esc(_waktuID(f.createdTime)) + ' · ' + _kb(f.size) + '</div></div></div>'; }).join('')
+      + '</div>';
+  }
+  return h;
+}
+function cadOtoSekarang(){
+  toast('Membuat cadangan...');
+  cadanganApi('cadangkan').then(function(st){
+    var ok = (st.redis && st.redis.ok) || (st.drive && st.drive.ok);
+    toast(ok ? 'Cadangan dibuat: ' + st.nama : 'Cadangan GAGAL', !ok);
+    cadOtoMuat();
+  }).catch(handleErr);
+}
+function cadOtoUnduh(nama){
+  cadanganApi('ambil', { nama: nama }).then(function(r){
+    var blob = new Blob([r.isi], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'laz-cadangan-' + nama + '.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }).catch(handleErr);
+}
+function _cadOtoKonfirmasi(judul, pesan, lanjut){
+  var b = '<div style="font-size:13.5px;line-height:1.6">' + pesan
+    + '<div class="imp-note imp-warn" style="margin-top:10px">Seluruh data transaksi dan master akan DIGANTI dengan isi cadangan. Akun pengguna tidak disentuh. Keadaan sekarang disimpan dulu sebagai "sebelum-pulih" sehingga bisa dibatalkan satu kali.</div>'
+    + '<div class="field" style="margin-top:12px"><label>Ketik <b>PULIHKAN</b> untuk melanjutkan</label><input id="cadKonf" autocomplete="off"></div></div>';
+  openModal(judul, b, '<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-danger" id="cadKonfBtn">Pulihkan sekarang</button>');
+  el('cadKonfBtn').onclick = function(){
+    var k = (el('cadKonf').value || '').trim();
+    if (k !== 'PULIHKAN') { toast('Ketik PULIHKAN persis', true); return; }
+    el('cadKonfBtn').disabled = true;
+    lanjut(k).then(function(r){
+      closeModal(); CACHE = {}; toast('Pemulihan selesai: ' + (r.diganti || []).length + ' tabel');
+      cadOtoMuat();
+    }).catch(function(e){ el('cadKonfBtn').disabled = false; handleErr(e); });
+  };
+}
+function cadOtoPulihkan(nama){
+  var batal = nama === 'sebelum-pulih';
+  _cadOtoKonfirmasi(batal ? 'Batalkan Pemulihan' : 'Pulihkan Cadangan',
+    batal ? 'Kembalikan basis data ke keadaan <b>sebelum pemulihan terakhir</b>?' : 'Pulihkan basis data dari salinan <b>' + esc(nama) + '</b>?',
+    function(k){ return cadanganApi('pulihkan', { nama: nama, konfirmasi: k }); });
+}
+function cadOtoDariBerkas(inp){
+  var f = inp.files && inp.files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function(ev){
+    var isi = String(ev.target.result || '');
+    try { var j = JSON.parse(isi); if (!j.sheets) throw new Error(); } catch(e){ toast('Berkas bukan cadangan LAZ Digital yang sah', true); inp.value=''; return; }
+    _cadOtoKonfirmasi('Pulihkan dari Berkas', 'Pulihkan basis data dari berkas <b>' + esc(f.name) + '</b>?',
+      function(k){ return cadanganApi('pulihkan', { isi: isi, konfirmasi: k }); });
+    inp.value = '';
+  };
+  rd.readAsText(f);
 }
 
 function _stempelWaktu(){

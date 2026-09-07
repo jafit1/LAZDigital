@@ -16,6 +16,12 @@ app.post('/api/rpc', (req, res) => {
   rpcHandler(req, res);
 });
 
+// Cadangan & pemulihan (mode lokal: salinan masuk ke data/cadangan/)
+const backupHandler = require('./api/backup.js');
+app.all('/api/backup', (req, res) => {
+  backupHandler(req, res);
+});
+
 // Fallback to index.html for SPA routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'src/public/index.html'));
