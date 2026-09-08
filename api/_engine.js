@@ -90,7 +90,7 @@ function setup(){
   if(ssId){ try{ss=SpreadsheetApp.openById(ssId);}catch(e){ss=null;} }
   if(!ss){ ss=SpreadsheetApp.create('LAZ Digital - Database'); props.setProperty('SS_ID',ss.getId()); }
 
-  ensureSheet(ss,SHEETS.USERS,['id','username','passwordHash','salt','nama','role','permissions','aktif','dibuat']);
+  ensureSheet(ss,SHEETS.USERS,['id','username','passwordHash','salt','nama','role','permissions','aktif','dibuat','layanan']);
   ensureSheet(ss,SHEETS.PENGHIMPUNAN,['id','noKwitansi','tanggal','jenisDana','subJenis','pilar','program','namaDonatur','tipeDonatur','layananId','telepon','email','alamat','jumlah','metode','rekeningId','bank','statusBayar','atasNama','keterangan','petugas','dibuat','fundraising','akunKredit']);
   ensureSheet(ss,SHEETS.PENTASYARUFAN,['id','noBukti','tanggal','ashnaf','program','sumberDana','namaPenerima','nik','telepon','alamat','jumlah','bentukBantuan','metode','statusSalur','petugas','keterangan','dibuat','fundraising','rekeningId','bank','section']);
   ensureSheet(ss,SHEETS.REKENING,['id','namaBank','nomor','atasNama','fundGroup','aktif','dibuat']);
@@ -254,7 +254,7 @@ function deleteRowBy(name,col,val){ var sh=getSS().getSheetByName(name); var v=s
 function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.'); var ss=readAll(SHEETS.SESSIONS),s=null; for(var i=0;i<ss.length;i++)if(ss[i].token===t){s=ss[i];break;}
   if(!s) throw new Error('AUTH: sesi tidak valid, login ulang.'); if(new Date(s.expired)<new Date()){deleteRowBy(SHEETS.SESSIONS,'token',t);throw new Error('AUTH: sesi berakhir, login ulang.');}
   var u=findById(SHEETS.USERS,s.userId); if(!u) throw new Error('AUTH: user tidak ditemukan.'); return u; }
-function sanitizeUser(u){ return {id:u.id,username:u.username,nama:u.nama,role:u.role,permissions:typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{})}; }
+function sanitizeUser(u){ return {id:u.id,username:u.username,nama:u.nama,role:u.role,layanan:String(u.layanan||''),permissions:typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{})}; }
 function can(u,m,a){ if(u.role==='superadmin')return true; var p=typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{}); return !!(p[m]&&p[m][a]); }
 function _requirePerm(t,m,a){ var u=authUser(t); if(!can(u,m,a)) throw new Error('IZIN: tidak punya akses '+a+' pada modul '+m+'.'); return u; }
 /* Satu catatan aktivitas. `opt` boleh berisi {modul, entitasId, ringkas}.
@@ -464,10 +464,10 @@ function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); var l
 /* ===== USER MGMT ===== */
 function apiListUsers(t){ _requirePerm(t,'users','view'); return readAll(SHEETS.USERS).map(sanitizeUser); }
 function apiSaveUser(t,d){ var a=_requirePerm(t,'users',d.id?'edit':'create');
-  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
+  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.layanan!==undefined) up.layanan=(d.role==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
     audit(a.id,a.username,'edit_user',d.username||d.id,{modul:'users',entitasId:d.id,
       ringkas:ringkasPerubahan(lamaU,up)+(d.password?(ringkasPerubahan(lamaU,up)?' | ':'')+'password diganti':'')}); }
-  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
+  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString(),layanan:(d.role==='superadmin')?'':String(d.layanan||'').trim()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
   return {ok:true}; }
 function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=findById(SHEETS.USERS,id); if(tg&&tg.role==='superadmin'){ var sup=readAll(SHEETS.USERS).filter(function(x){return x.role==='superadmin'&&String(x.aktif)==='true';}); if(sup.length<=1) throw new Error('Tidak bisa menghapus satu-satunya Superadmin.'); } deleteRowById(SHEETS.USERS,id); audit(a.id,a.username,'delete_user',(tg&&tg.username)||id,{modul:'users',entitasId:id,ringkas:tg?((tg.nama||'')+' · peran '+(tg.role||'')):''}); return {ok:true}; }
 /* Setelah sandi diganti, semua sesi lain milik pengguna itu dimatikan —
@@ -1013,6 +1013,12 @@ function _kodeAkun(rekeningId, kasNama){ if (rekeningId) return 'rek:' + rekenin
 function _akhirBulan(ym){ var p = String(ym).split('-'); var d = new Date(Number(p[0]), Number(p[1]), 0); return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2); }
 function _hariIni(){ var d = new Date(Date.now() + 7*3600*1000); return d.toISOString().slice(0,10); }
 
+/* Nama kantor layanan disatukan walau ejaannya beda huruf besar/kecil
+   ("KLL SDUA Bantul" dan "KLL Sdua Bantul" adalah kantor yang sama). */
+function _kunciLayanan(nama){
+  var n = String(nama || '').replace(/\s+/g, ' ').trim();
+  return { k: n.toLowerCase(), nama: n };
+}
 function hitungSaldo(sampai){
   sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
   var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
@@ -1057,9 +1063,9 @@ function hitungSaldo(sampai){
     var dana = _danaKas(r.sumberDana);
     if (/^UMP\s+LPJ/i.test(String(r.section || ''))) {
       ump[dana].lpj += n;
-      var lay = String(r.namaPenerima || '').trim() || 'Lainnya';
-      umpLay[lay] = umpLay[lay] || { layanan:lay, dana:dana, keluar:0, lpj:0, kembali:0 };
-      umpLay[lay].lpj += n;
+      var lay = _kunciLayanan(String(r.namaPenerima || '').trim() || 'Lainnya');
+      umpLay[lay.k] = umpLay[lay.k] || { layanan:lay.nama, dana:dana, keluar:0, lpj:0, kembali:0 };
+      umpLay[lay.k].lpj += n;
       return;
     }
     /* penyaluran berupa barang mengurangi persediaan, bukan kas */
@@ -1074,10 +1080,10 @@ function hitungSaldo(sampai){
     if (!r.rekeningId && _akunNonKas(r.akun || r.kasNama)) return;
     var kode = _kodeAkun(r.rekeningId, r.kasNama);
     var a = slot(kode, r.akun, d);
-    var lay = String(r.layanan || '').trim() || 'Lainnya';
-    umpLay[lay] = umpLay[lay] || { layanan:lay, dana:d, keluar:0, lpj:0, kembali:0 };
-    if (r.jenis === 'kembali') { a.masuk += n; ump[d].kembali += n; umpLay[lay].kembali += n; }
-    else { a.keluar += n; ump[d].keluar += n; umpLay[lay].keluar += n; }
+    var lay = _kunciLayanan(String(r.layanan || '').trim() || 'Lainnya');
+    umpLay[lay.k] = umpLay[lay.k] || { layanan:lay.nama, dana:d, keluar:0, lpj:0, kembali:0 };
+    if (r.jenis === 'kembali') { a.masuk += n; ump[d].kembali += n; umpLay[lay.k].kembali += n; }
+    else { a.keluar += n; ump[d].keluar += n; umpLay[lay.k].keluar += n; }
   });
   /* transfer antar akun */
   var transferTotal = 0;
@@ -1118,6 +1124,201 @@ function hitungSaldo(sampai){
     ump: { perDana: ump, perLayanan: umpPerLayanan, totalTransfer: transferTotal },
     catatan: adaSaldoAwal ? '' : 'Saldo awal tahun ' + tahun + ' belum diisi (Pengaturan > Saldo Awal); angka ini baru menghitung pergerakan sejak 1 Januari.'
   };
+}
+
+/* ================= SALDO PER KANTOR LAYANAN (KLL / ULL) =================
+   Alur uang satu KLL/ULL:
+     setoran (penghimpunan atas nama KLL)      -> disetor ke daerah
+     - hak amil (persen, sebagian setoran bisa dikecualikan)
+     = SALDO KLL                                 hak KLL yang dititipkan di daerah
+     - uang muka program (UMP) yang sudah diambil (+ yang dikembalikan)
+     = SISA SALDO DI DAERAH                      masih tersimpan di kas/bank daerah
+     UMP - LPJ - dikembalikan
+     = BELUM LPJ                                 uangnya ada di tangan KLL
+   ======================================================================= */
+var HAK_AMIL_BAWAAN = { Zakat: 12.5, Infak: 12.5, Sedekah: 12.5, DSKL: 12.5, Amil: 0 };
+
+function _bacaHakAmil(){
+  var persen = {}, kecuali = [];
+  try { persen = JSON.parse(getSetting('hakAmilPersen') || 'null') || {}; } catch (e) { persen = {}; }
+  try { kecuali = JSON.parse(getSetting('hakAmilKecuali') || 'null') || []; } catch (e) { kecuali = []; }
+  var out = {};
+  Object.keys(HAK_AMIL_BAWAAN).forEach(function(k){
+    var v = Number(persen[k]);
+    out[k] = isFinite(v) && v >= 0 && v <= 100 ? v : HAK_AMIL_BAWAAN[k];
+  });
+  Object.keys(persen).forEach(function(k){
+    if (out[k] === undefined) { var v = Number(persen[k]); if (isFinite(v) && v >= 0 && v <= 100) out[k] = v; }
+  });
+  return { persen: out, kecuali: (kecuali || []).map(function(x){ return String(x || '').trim(); }).filter(function(x){ return x; }) };
+}
+function apiHakAmil(t){ authUser(t); return _bacaHakAmil(); }
+function apiSaveHakAmil(t, d){
+  var u = _requirePerm(t, 'settings', 'edit');
+  d = d || {};
+  var persen = {};
+  Object.keys(d.persen || {}).forEach(function(k){
+    var v = Number(d.persen[k]);
+    if (!isFinite(v) || v < 0 || v > 100) throw new Error('Persentase hak amil ' + k + ' harus antara 0 dan 100.');
+    persen[String(k).trim()] = v;
+  });
+  var kecuali = (d.kecuali || []).map(function(x){ return String(x || '').trim(); }).filter(function(x){ return x; });
+  setSetting('hakAmilPersen', JSON.stringify(persen));
+  setSetting('hakAmilKecuali', JSON.stringify(kecuali));
+  audit(u.id, u.username, 'edit_hak_amil', '', { modul:'settings',
+    ringkas: Object.keys(persen).map(function(k){ return k + ' ' + persen[k] + '%'; }).join(', ') + (kecuali.length ? ' · dikecualikan: ' + kecuali.join(', ') : '') });
+  return { ok:true, persen:persen, kecuali:kecuali };
+}
+
+/* Satu penerimaan dikecualikan dari hak amil bila sub jenis / pilar / program-nya
+   ada di daftar pengecualian (mis. "Infak Terikat Kemanusiaan" murni disalurkan). */
+function _bebasHakAmil(r, kecuali){
+  if (!kecuali || !kecuali.length) return false;
+  var kandidat = [r.subJenis, r.pilar, r.program, (r.subJenis || '') + ' ' + (r.pilar || '')]
+    .map(function(x){ return _norm(x); }).filter(function(x){ return x; });
+  for (var i = 0; i < kecuali.length; i++) {
+    var k = _norm(kecuali[i]);
+    if (!k) continue;
+    for (var j = 0; j < kandidat.length; j++) if (kandidat[j] === k) return true;
+  }
+  return false;
+}
+
+/* Nama KLL/ULL pada baris uang muka & LPJ. */
+function _layananUmp(nama){
+  var s = String(nama || '').trim();
+  if (!s) return LAYANAN_DAERAH;
+  return s;
+}
+
+function hitungSaldoLayanan(sampai){
+  sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
+  var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
+  var dalam = function(t){ t = String(t || '').slice(0,10); return t >= awalTahun && t <= sampai; };
+  var cfg = _bacaHakAmil();
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+
+  var rekap = {}, urut = [];
+  function slot(nama){
+    var k = _norm(nama);
+    if (!rekap[k]) {
+      var tipe = /^ull\b/i.test(nama) ? 'ULL' : /^kll\b/i.test(nama) ? 'KLL' : 'Daerah';
+      rekap[k] = { layanan: String(nama), tipe: tipe, himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0,
+        saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0, nHimpun:0, nUmp:0, nLpj:0 };
+      urut.push(k);
+    }
+    return rekap[k];
+  }
+
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    var n = Number(r.jumlah) || 0;
+    var s = slot(resolveLayananName(r, layList, layMap));
+    s.himpun += n; s.nHimpun++;
+    if (_bebasHakAmil(r, cfg.kecuali)) { s.bebasAmil += n; return; }
+    var d = String(r.jenisDana || 'Infak').trim();
+    var p = cfg.persen[d];
+    if (p === undefined) p = cfg.persen.Infak || 0;
+    /* hak amil dibulatkan ke rupiah utuh per transaksi, seperti pencatatan manual */
+    s.kenaAmil += n; s.hakAmil += Math.round(n * p / 100);
+  });
+
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    var n = Number(r.nominal) || 0;
+    var s = slot(_layananUmp(r.layanan));
+    if (r.jenis === 'kembali') s.umpKembali += n; else { s.umpKeluar += n; s.nUmp++; }
+  });
+
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    var n = Number(r.jumlah) || 0;
+    var s = slot(_layananUmp(r.namaPenerima));
+    s.lpj += n; s.nLpj++;
+  });
+
+  var daftar = urut.map(function(k){
+    var s = rekap[k];
+    s.saldoKLL  = s.himpun - s.hakAmil;
+    s.sisaSaldo = s.saldoKLL - s.umpKeluar + s.umpKembali;
+    s.belumLPJ  = s.umpKeluar - s.lpj - s.umpKembali;
+    return s;
+  }).sort(function(a,b){ return b.sisaSaldo - a.sisaSaldo; });
+
+  var total = { himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
+  daftar.forEach(function(s){ Object.keys(total).forEach(function(f){ total[f] += s[f]; }); });
+
+  return { tanggal: sampai, tahun: tahun, persen: cfg.persen, kecuali: cfg.kecuali,
+    daftar: daftar, total: total, jumlahLayanan: daftar.filter(function(s){ return s.tipe !== 'Daerah'; }).length };
+}
+
+/* Pengurus KLL hanya boleh melihat kantornya sendiri. Kosong = boleh semua. */
+function _layananSaya(u){ return String((u && u.layanan) || '').trim(); }
+function _bolehLihatLayanan(u, nama){
+  var milik = _layananSaya(u);
+  if (!milik) return true;
+  return _norm(milik) === _norm(nama);
+}
+
+function apiSaldoLayanan(t, sampai){
+  var u = _requirePerm(t, 'dashboard', 'view');
+  var hasil = hitungSaldoLayanan(sampai);
+  var milik = _layananSaya(u);
+  if (milik) {
+    hasil.daftar = hasil.daftar.filter(function(s){ return _norm(s.layanan) === _norm(milik); });
+    var total = { himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
+    hasil.daftar.forEach(function(s){ Object.keys(total).forEach(function(f){ total[f] += s[f]; }); });
+    hasil.total = total;
+    hasil.jumlahLayanan = hasil.daftar.length;
+    hasil.dibatasi = milik;
+  }
+  return hasil;
+}
+
+/* Rincian satu KLL/ULL: setoran, uang muka, dan LPJ-nya baris per baris. */
+function apiDetailSaldoLayanan(t, nama, sampai){
+  var u = _requirePerm(t, 'dashboard', 'view');
+  nama = String(nama || '').trim();
+  if (!nama) throw new Error('Kantor layanan belum dipilih.');
+  if (!_bolehLihatLayanan(u, nama)) throw new Error('IZIN: hanya boleh melihat ' + _layananSaya(u) + '.');
+  sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
+  var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
+  var dalam = function(x){ x = String(x || '').slice(0,10); return x >= awalTahun && x <= sampai; };
+  var cfg = _bacaHakAmil();
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+  var sama = function(x){ return _norm(x) === _norm(nama); };
+
+  var setoran = [], uangMuka = [], lpj = [];
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal) || !sama(resolveLayananName(r, layList, layMap))) return;
+    var n = Number(r.jumlah) || 0;
+    var bebas = _bebasHakAmil(r, cfg.kecuali);
+    var d = String(r.jenisDana || 'Infak').trim();
+    var p = cfg.persen[d]; if (p === undefined) p = cfg.persen.Infak || 0;
+    setoran.push({ tanggal:String(r.tanggal).slice(0,10), jenis:(r.subJenis || r.jenisDana || ''), pilar:r.pilar || '',
+      donatur:r.namaDonatur || '', metode:r.metode || '', jumlah:n,
+      bebasAmil:bebas, persen: bebas ? 0 : p, hakAmil: bebas ? 0 : Math.round(n * p / 100), bersih: bebas ? n : n - Math.round(n * p / 100) });
+  });
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!dalam(r.tanggal) || !sama(_layananUmp(r.layanan))) return;
+    uangMuka.push({ tanggal:String(r.tanggal).slice(0,10), jenis:r.jenis === 'kembali' ? 'Dikembalikan' : 'Uang muka keluar',
+      dana:r.dana || '', akun:r.akun || '', keterangan:r.keterangan || '', jumlah:Number(r.nominal) || 0 });
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal) || !/^UMP\s+LPJ/i.test(String(r.section || '')) || !sama(_layananUmp(r.namaPenerima))) return;
+    lpj.push({ tanggal:String(r.tanggal).slice(0,10), program:r.program || '', ashnaf:r.ashnaf || '',
+      dana:r.sumberDana || '', keterangan:r.keterangan || '', jumlah:Number(r.jumlah) || 0 });
+  });
+  var urutTgl = function(a,b){ return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0; };
+  setoran.sort(urutTgl); uangMuka.sort(urutTgl); lpj.sort(urutTgl);
+
+  var ring = hitungSaldoLayanan(sampai).daftar.filter(function(s){ return sama(s.layanan); })[0]
+    || { layanan:nama, tipe:'KLL', himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
+  return { layanan:nama, tanggal:sampai, tahun:tahun, ringkas:ring, persen:cfg.persen, kecuali:cfg.kecuali,
+    setoran:setoran, uangMuka:uangMuka, lpj:lpj };
 }
 
 /* Buku mutasi satu akun (rekening / kas): semua pergerakan dalam rentang,
@@ -1262,7 +1463,12 @@ function _containsWord(haystack, needle){
    kalimat seperti "KLL Srandakan pekan 2" menjadi "Srandakan". */
 var _LAY_STOP = ['pekan','bulan','tanggal','tgl','infak','infaq','zakat','sedekah','shodaqoh',
   'wakaf','kurban','qurban','fidyah','terikat','umum','setoran','setor','transfer','tunai',
-  'cash','qris','dari','an','a.n','atas','nama','via','bank','kas','donasi','sumbangan'];
+  'cash','qris','dari','an','a.n','atas','nama','via','bank','kas','donasi','sumbangan',
+  /* ekor kalimat pada jurnal uang muka & LPJ: "KLL Pundong Uang Muka Program",
+     "KLL Imogiri kegiatan sosial" — bukan bagian dari nama kantornya */
+  'uang','muka','program','progaram','ump','lpj','pengembalian','sisa','kegiatan',
+  'pentasharufan','pentasyarufan','penyaluran','bantuan','honor','fee','biaya',
+  'pembayaran','pembelian','operasional','support','subsidi'];
 
 /* Tangkap penanda "KLL <nama>" / "ULL <nama>" / "KL <nama>" dari teks asli
    (bukan versi lowercase) supaya kapitalisasi nama tetap seperti yang diketik. */
@@ -5411,6 +5617,10 @@ REGISTRY['apiGetBuktiPentasyarufan']=apiGetBuktiPentasyarufan;
 REGISTRY['apiListRekening']=apiListRekening;
 REGISTRY['apiSaldo']=apiSaldo;
 REGISTRY['apiMutasiAkun']=apiMutasiAkun;
+REGISTRY['apiSaldoLayanan']=apiSaldoLayanan;
+REGISTRY['apiDetailSaldoLayanan']=apiDetailSaldoLayanan;
+REGISTRY['apiHakAmil']=apiHakAmil;
+REGISTRY['apiSaveHakAmil']=apiSaveHakAmil;
 REGISTRY['apiListSaldoAwal']=apiListSaldoAwal;
 REGISTRY['apiSaveSaldoAwal']=apiSaveSaldoAwal;
 REGISTRY['apiListUangMuka']=apiListUangMuka;

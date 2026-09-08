@@ -3473,5 +3473,50 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 @media(max-width:520px){.cad-baris{flex-wrap:wrap}.cad-baris-n{flex:1 1 100%}}
 
 /* ---------- 47. MENU SALDO KAS & BANK ---------- */
-.saldo-buku{margin:-2px 0 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface);animation:pubBuka .2s ease}
+.saldo-head{align-items:flex-end}
+.saldo-head-alat{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;flex:0 0 auto}
+.saldo-kpi{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.sk-card{display:block;padding:16px 18px;margin-bottom:14px}
+.sk-card:last-child{margin-bottom:0}
+/* judul kartu (kelas ini aslinya hanya ada di halaman publik) */
+#saldoBody .pub-card-t{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--head);font-weight:700;font-size:15px}
+#saldoBody .pub-card-t .dot{width:8px;height:8px;border-radius:50%;flex:none}
+#saldoBody .pub-card-t .ket{font-family:inherit;font-weight:500;font-size:12px;color:var(--muted)}
+/* tabel lebar cukup digeser mendatar di dalam kartunya, halaman tidak ikut melebar */
+.tabel-geser{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.saldo-tabel{min-width:560px;font-size:12.5px}
+.saldo-tabel th,.saldo-tabel td{padding:7px 9px;white-space:nowrap}
+.saldo-tabel td.saldo-ket{white-space:normal;max-width:340px;min-width:180px}
+
+/* kelompok per bank -> rekening -> buku mutasi */
+.saldo-grup{margin-bottom:7px}
+.saldo-grup-h{cursor:pointer;background:var(--surface2);border-color:var(--border)}
+.saldo-grup.buka>.saldo-grup-h{border-color:var(--accent);border-bottom-left-radius:0;border-bottom-right-radius:0}
+.saldo-anak{border:1px solid var(--accent);border-top:0;border-radius:0 0 11px 11px;padding:8px 8px 4px;margin-bottom:2px;background:var(--surface);animation:pubBuka .18s ease}
+.saldo-akun{cursor:pointer;background:var(--surface);border-color:var(--border);margin-bottom:6px}
+.saldo-akun.buka{border-color:var(--accent)}
+.saldo-nilai{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.saldo-angka{font-family:var(--head);font-weight:700;white-space:nowrap;font-size:14px}
+.saldo-buku{margin:-2px 0 8px;border:1px solid var(--border);border-radius:12px;background:var(--surface2);animation:pubBuka .2s ease;overflow:hidden}
+.saldo-buku-h{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 12px 6px;font-size:12.5px}
 @keyframes pubBuka{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+/* alur uang satu KLL: setoran - amil = saldo KLL - uang muka = sisa di daerah */
+.kll-alur{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;padding:12px 12px 6px}
+.kll-alur-k{flex:1 1 130px;min-width:120px;padding:9px 11px;border-radius:11px;background:var(--surface2);border:1px solid var(--border)}
+.kll-alur-k.kuat{border-color:var(--accent);background:var(--surface)}
+.kll-alur-l{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.02em}
+.kll-alur-v{font-family:var(--head);font-weight:800;font-size:15px;margin:2px 0 1px}
+.kll-alur-k2{font-size:10.5px;color:var(--muted);line-height:1.35}
+.kll-alur-op{display:flex;align-items:center;font-weight:800;color:var(--muted);font-size:15px}
+.kll-rinci-j{font-weight:700;font-size:12.5px;padding:10px 12px 6px}
+tr.lay-klik{cursor:pointer}
+tr.lay-klik:hover td{background:var(--surface2)}
+@media(max-width:720px){
+  .kll-alur{padding:10px 8px 4px}
+  .kll-alur-op{display:none}
+  .kll-alur-k{flex:1 1 46%}
+  .saldo-head-alat{width:100%}
+  .sk-card{padding:13px 12px}
+  .saldo-angka{font-size:13px}
+  .saldo-buku-h{font-size:11.5px}
+}

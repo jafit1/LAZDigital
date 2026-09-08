@@ -67,12 +67,14 @@ var NAV_ICONS={
   panel: navIcon('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/>'),
   log: navIcon('<path d="M12 8v4l2.5 2.5"/><circle cx="12" cy="12" r="8.5"/>'),
   saldo: navIcon('<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M16 15h2"/>')
-};
+,
+  kll:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>'};
 var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
   {id:'penghimpunan',label:'Penghimpunan',ic:NAV_ICONS.penghimpunan,mod:'penghimpunan'},
   {id:'pentasyarufan',label:'Pentasyarufan',ic:NAV_ICONS.pentasyarufan,mod:'pentasyarufan'},
   {id:'saldo',label:'Saldo Kas & Bank',ic:NAV_ICONS.saldo,mod:'dashboard'},
+  {id:'kll',label:'Saldo KLL & ULL',ic:NAV_ICONS.kll,mod:'dashboard'},
   {id:'donatur',label:'Donatur',ic:NAV_ICONS.donatur,mod:'penghimpunan'},
   {id:'laporan',label:'Laporan',ic:NAV_ICONS.laporan,mod:'laporan'},
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
@@ -233,7 +235,7 @@ function saveProfile(){
   gas('apiUpdateMyProfile')(TOKEN,d).then(function(){ME.nama=nama;if(PROF_FOTO)SETTINGS['uf_'+ME.id]=PROF_FOTO;PROF_FOTO=null;closeModal();startApp();toast('Profil tersimpan');}).catch(handleErr);
 }
 function resizeImg(file,max,cb,fmt){var r=new FileReader();r.onload=function(ev){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>h){if(w>max){h=h*max/w;w=max;}}else{if(h>max){w=w*max/h;h=max;}}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.85));};img.src=ev.target.result;};r.readAsDataURL(file);}
-function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,saldo:viewSaldo,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,log:viewLog}[view]||viewDashboard)();}
+function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,saldo:viewSaldo,kll:viewKll,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,log:viewLog}[view]||viewDashboard)();}
 
 /* ============ MODAL ============ */
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
@@ -1637,19 +1639,23 @@ function copyBC(){var t=el('bcText');t.select();document.execCommand('copy');toa
 function waBC(){var t=el('bcText').value;window.open('https://wa.me/?text='+encodeURIComponent(t),'_blank');}
 
 /* ============ USERS ============ */
-function viewUsers(){gas('apiListUsers')(TOKEN).then(function(rows){CACHE.users=rows;renderUsers(rows);}).catch(handleErr);}
+function viewUsers(){
+  /* daftar KLL/ULL ikut dimuat supaya pilihan "batasi ke kantor" terisi */
+  Promise.all([gas('apiListUsers')(TOKEN), gas('apiListLayanan')(TOKEN).catch(function(){return CACHE.layanan||[];})])
+    .then(function(res){ CACHE.users=res[0]; CACHE.layanan=res[1]||[]; renderUsers(res[0]); }).catch(handleErr);
+}
 function renderUsers(rows){var add=canDo('users','create')?'<button class="btn btn-primary" onclick="formUser()">+ Tambah User</button>':'';
   var h='<div class="page-head"><div><h1>Manajemen User</h1><div class="desc">Kelola akun & hak akses (permission) pengguna</div></div>'+add+'</div>';
-  h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Status</th><th>Hak Akses</th><th></th></tr></thead><tbody>';
+  h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Kantor</th><th>Status</th><th>Hak Akses</th><th></th></tr></thead><tbody>';
   rows.forEach(function(u){var act=String(u.aktif)==='true'||u.aktif===true;var pc=u.role==='superadmin'?'Semua akses':countPerm(u.permissions)+' izin';
-    h+='<tr><td><b>'+esc(u.nama)+'</b></td><td>'+esc(u.username)+'</td><td>'+(u.role==='superadmin'?'<span class="badge purple">Superadmin</span>':'<span class="badge blue">'+esc(u.role||'staff')+'</span>')+'</td><td><span class="badge '+(act?'green':'amber')+'">'+(act?'Aktif':'Nonaktif')+'</span></td><td class="muted">'+pc+'</td><td><div class="actions-cell">'+(canDo('users','edit')?'<button class="icon-btn" onclick="formUser(\''+u.id+'\')">✎</button>':'')+(canDo('users','delete')?'<button class="icon-btn" onclick="delUser(\''+u.id+'\')">🗑</button>':'')+'</div></td></tr>';});
+    h+='<tr><td><b>'+esc(u.nama)+'</b></td><td>'+esc(u.username)+'</td><td>'+(u.role==='superadmin'?'<span class="badge purple">Superadmin</span>':'<span class="badge blue">'+esc(u.role||'staff')+'</span>')+'</td><td>'+(u.layanan?'<span class="badge amber">'+esc(u.layanan)+'</span>':'<span class="muted">semua</span>')+'</td><td><span class="badge '+(act?'green':'amber')+'">'+(act?'Aktif':'Nonaktif')+'</span></td><td class="muted">'+pc+'</td><td><div class="actions-cell">'+(canDo('users','edit')?'<button class="icon-btn" onclick="formUser(\''+u.id+'\')">✎</button>':'')+(canDo('users','delete')?'<button class="icon-btn" onclick="delUser(\''+u.id+'\')">🗑</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el('content').innerHTML=h;}
 function countPerm(p){var n=0;p=p||{};Object.keys(p).forEach(function(m){Object.keys(p[m]||{}).forEach(function(a){if(p[m][a])n++;});});return n;}
 function permGrid(p){p=p||{};var h='<div style="overflow:auto"><table class="perm-table"><thead><tr><th>Modul</th>'+PERM_META.actions.map(function(a){return '<th>'+a+'</th>';}).join('')+'</tr></thead><tbody>';PERM_META.modules.forEach(function(m){h+='<tr><td>'+m+'</td>'+PERM_META.actions.map(function(a){var ck=(p[m]&&p[m][a])?'checked':'';return '<td><input type="checkbox" style="width:auto" data-mod="'+m+'" data-act="'+a+'" '+ck+'></td>';}).join('')+'</tr>';});h+='</tbody></table></div>';return h;}
 function formUser(id){var u=id?CACHE.users.find(function(x){return x.id===id;}):{role:'staff',aktif:true,permissions:{}};
-  var b='<div class="row"><div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div><div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div></div><div class="row"><div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div><div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div></div><div class="field"><label>Status Akun</label>'+selOpt('u_aktif',['true','false'],String(u.aktif===true||String(u.aktif)==='true'))+'</div><div class="divider"></div><label style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;display:block">HAK AKSES (Permission) — diabaikan jika role Superadmin</label>'+permGrid(u.permissions);
+  var b='<div class="row"><div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div><div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div></div><div class="row"><div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div><div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div></div><div class="row"><div class="field"><label>Status Akun</label>'+selOpt('u_aktif',['true','false'],String(u.aktif===true||String(u.aktif)==='true'))+'</div><div class="field"><label>Batasi ke kantor layanan</label><select id="u_layanan">'+_opsiLayananUser(u.layanan||'')+'</select><div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun ini hanya melihat saldo kantor tersebut. Superadmin selalu melihat semua.</div></div></div><div class="divider"></div><label style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;display:block">HAK AKSES (Permission) — diabaikan jika role Superadmin</label>'+permGrid(u.permissions);
   openModal(id?'Edit User':'Tambah User',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveUser(\''+(id||'')+'\')">Simpan</button>');}
-function saveUser(id){var perm={};document.querySelectorAll('.perm-table input[type=checkbox]').forEach(function(c){var m=c.dataset.mod,a=c.dataset.act;perm[m]=perm[m]||{};perm[m][a]=c.checked;});var d={nama:el('u_nama').value,username:el('u_username').value.trim(),role:el('u_role').value,aktif:el('u_aktif').value,permissions:perm};var pw=el('u_password').value;if(pw)d.password=pw;if(id)d.id=id;if(!d.nama||!d.username){toast('Nama & username wajib',true);return;}if(!id&&!pw){toast('Password wajib untuk user baru',true);return;}gas('apiSaveUser')(TOKEN,d).then(function(){closeModal();toast('User tersimpan');viewUsers();}).catch(handleErr);}
+function saveUser(id){var perm={};document.querySelectorAll('.perm-table input[type=checkbox]').forEach(function(c){var m=c.dataset.mod,a=c.dataset.act;perm[m]=perm[m]||{};perm[m][a]=c.checked;});var d={nama:el('u_nama').value,username:el('u_username').value.trim(),role:el('u_role').value,aktif:el('u_aktif').value,layanan:(el('u_layanan')?el('u_layanan').value:''),permissions:perm};var pw=el('u_password').value;if(pw)d.password=pw;if(id)d.id=id;if(!d.nama||!d.username){toast('Nama & username wajib',true);return;}if(!id&&!pw){toast('Password wajib untuk user baru',true);return;}gas('apiSaveUser')(TOKEN,d).then(function(){closeModal();toast('User tersimpan');viewUsers();}).catch(handleErr);}
 function delUser(id){uiConfirm('Hapus user ini?').then(function(__ok){if(!__ok)return;gas('apiDeleteUser')(TOKEN,id).then(function(){toast('User dihapus');viewUsers();}).catch(handleErr);});}
 
 /* ============ SETTINGS ============ */
@@ -1657,7 +1663,7 @@ function viewSettings(){gas('apiGetSettings')(TOKEN).then(function(s){SETTINGS=s
 var SET_TAB='lembaga';
 function renderSettings(s){
   var h='<div class="page-head"><div><h2>Pengaturan</h2><div class="desc">Identitas lembaga, rekening, unit layanan & tampilan</div></div></div>';
-  var tabSet=['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','fundraising|Fundraising','saldoawal|Saldo Awal','tampilan|Tampilan'];
+  var tabSet=['lembaga|Identitas Lembaga','rekening|No. Rekening','layanan|KLL / ULL','fundraising|Fundraising','hakamil|Hak Amil','saldoawal|Saldo Awal','tampilan|Tampilan'];
   if(canDo('settings','edit')) tabSet.push('perawatan|Perawatan Data');
   h+='<div class="lap-tabs">'+tabSet.map(function(t){var p=t.split('|');return '<button class="lap-tab'+(SET_TAB===p[0]?' on':'')+'" data-tab="'+p[0]+'" onclick="setTab(\''+p[0]+'\')">'+p[1]+'</button>';}).join('')+'</div><div id="setBody"></div>';
   el('content').innerHTML=h;renderSetTab(s);
@@ -1674,6 +1680,7 @@ function renderSetTab(s){var host=el('setBody');if(!host)return;
   if(SET_TAB==='rekening'){host.innerHTML='<div id="setRekBody"></div>';window.REK_HOST='setRekBody';window.LAY_HOST='';viewRekening();}
   else if(SET_TAB==='layanan'){host.innerHTML='<div id="setLayBody"></div>';window.LAY_HOST='setLayBody';window.REK_HOST='';viewLayanan();}
   else if(SET_TAB==='fundraising'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML='<div id="setFrBody"></div>';viewFundraising();}
+  else if(SET_TAB==='hakamil'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML='<div class="card set-panel"><h3>Hak Amil dari Setoran KLL/ULL</h3><p class="muted" style="font-size:12.5px;line-height:1.55;margin:6px 0 12px">Setiap setoran kantor layanan dipotong hak amil sesuai persentase di bawah ini; sisanya menjadi <b>saldo KLL</b>. Setoran dengan sub jenis atau pilar yang dikecualikan tidak dipotong sama sekali.</p><div id="haBody"><div class="muted" style="font-size:12.5px">Memuat...</div></div></div>';viewHakAmil();}
   else if(SET_TAB==='saldoawal'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=saldoAwalHTML();viewSaldoAwal();}
   else if(SET_TAB==='perawatan'){window.REK_HOST='';window.LAY_HOST='';host.innerHTML=perawatanHTML();rentangPasang('hr_rt',{dari:hrAwalBulan(),sampai:today(),onTerap:function(){hrReset();}});cadOtoMuat();}
   else {
@@ -2616,64 +2623,167 @@ function saldoWidget(sp, lengkap){
 }
 
 /* ============ MENU SALDO KAS & BANK ============
-   Posisi saldo per tanggal: ringkasan per dana, lalu tiap rekening/kas yang
-   bersaldo bisa dibuka menampilkan buku mutasinya dengan saldo berjalan. */
+   Posisi saldo per tanggal: ringkasan per dana, rekening dikelompokkan per
+   bank (klik nama bank -> daftar rekeningnya), tiap rekening bisa dibuka lagi
+   menampilkan buku mutasinya dengan saldo berjalan. Saldo yang dipegang
+   KLL/ULL (uang muka belum LPJ) ditampilkan terpisah di bawahnya. */
 var SALDO_TGL = '';
-var SALDO_BUKA = {};          /* kode akun -> true bila bukunya sedang terbuka */
+var SALDO_BUKA = {};          /* kode akun -> true bila buku mutasinya terbuka */
+var SALDO_GRUP = {};          /* nama bank -> true bila daftar rekeningnya terbuka */
+
+/* Kata "Bank" di depan nama tidak menambah informasi — dibuang saat ditampilkan. */
+function _tanpaBank(nama){
+  var s = String(nama == null ? '' : nama).replace(/\s+/g, ' ').trim();
+  var t = s.replace(/^bank\s+/i, '').trim();
+  return t || s;
+}
+/* Nama bank tanpa nomor rekening, dipakai sebagai judul kelompok. */
+function _grupBank(a){
+  if (a.jenis === 'kas') return 'Kas Tunai';
+  var n = _tanpaBank(String(a.label || '').split(' - ')[0]);
+  var l = n.toLowerCase();
+  if (l.indexOf('bpd') >= 0) return 'BPD DIY Syariah';
+  if (l.indexOf('bca') >= 0) return 'BCA';
+  if (l.indexOf('bsi') >= 0 || l.indexOf('syariah mandiri') >= 0) return 'BSI';
+  if (l.indexOf('bdw') >= 0) return 'BDW';
+  if (l.indexOf('muam') >= 0) return 'Muamalat';
+  if (l.indexOf('bukopin') >= 0) return 'Bukopin';
+  if (l.indexOf('kum3') >= 0) return 'Kum3';
+  if (l.indexOf('mandiri') >= 0) return 'Mandiri';
+  if (l.indexOf('bni') >= 0) return 'BNI';
+  if (l.indexOf('bri') >= 0) return 'BRI';
+  if (l.indexOf('jateng') >= 0) return 'Jateng';
+  var p = n.split(' ');
+  return p.length > 2 ? p.slice(0, 2).join(' ') : n;
+}
+/* Nama rekening di dalam kelompoknya: nama banknya tidak diulang. */
+function _namaDalamGrup(a, grup){
+  var full = _tanpaBank(a.label || '');
+  var pisah = full.split(' - ');
+  var nama = pisah[0], nomor = pisah.slice(1).join(' - ');
+  var sisa = nama.replace(new RegExp('^' + grup.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
+  if (a.jenis === 'kas') return esc(full);
+  if (!nomor) return esc(sisa || full);
+  return (sisa ? esc(sisa) + ' <span class="muted" style="font-weight:600">&middot;</span> ' : '') + esc(nomor);
+}
+
 function viewSaldo(){
   if(!SALDO_TGL) SALDO_TGL = today();
   var c = el('content');
-  c.innerHTML = '<div class="page-head"><div><h2>Saldo Kas &amp; Bank</h2><div class="desc">Posisi uang yang benar-benar ada di tiap rekening dan kas, dihitung dari saldo awal tahun + seluruh pergerakan</div></div>'
-    + '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">'
-    + '<div class="field" style="margin:0"><label>Posisi per tanggal</label><input type="date" id="saldoTgl" value="'+esc(SALDO_TGL)+'" max="'+today()+'" onchange="SALDO_TGL=this.value;SALDO_BUKA={};viewSaldo();"></div>'
+  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo Kas &amp; Bank</h2><div class="desc">Posisi uang yang benar-benar ada di tiap rekening dan kas, dihitung dari saldo awal tahun + seluruh pergerakan</div></div>'
+    + '<div class="saldo-head-alat">'
+    + '<div class="field" style="margin:0;min-width:150px"><label>Posisi per tanggal</label><input type="date" id="saldoTgl" value="'+esc(SALDO_TGL)+'" max="'+today()+'" onchange="SALDO_TGL=this.value;SALDO_BUKA={};viewSaldo();"></div>'
     + (canDo('settings','edit') ? '<button class="btn btn-ghost" onclick="go(\'settings\');setTimeout(function(){setTab(\'saldoawal\');},300);">Saldo awal</button>' : '')
     + '</div></div><div id="saldoBody"><div class="muted" style="padding:20px 0">Memuat...</div></div>';
   gas('apiSaldo')(TOKEN, SALDO_TGL).then(function(sp){ window.SALDO_DATA = sp; renderSaldo(sp); }).catch(handleErr);
 }
+
 function renderSaldo(sp){
   var h = '';
   if(!sp.adaSaldoAwal) h += '<div class="imp-note imp-warn" style="margin-bottom:12px">'+esc(sp.catatan)+'</div>';
-  h += '<div class="kpis-v2" style="margin-bottom:14px">'
+  h += '<div class="kpis-v2 saldo-kpi" style="margin-bottom:14px">'
     + '<div class="kpi-v2" style="--kpi-accent:#059669"><div class="kpi-v2-top"><div class="kpi-v2-label">Kas &amp; Bank</div><div class="kpi-v2-icon" style="background:#059669">'+SVG_ICONS.wallet+'</div></div><div class="kpi-v2-value">'+_rpW(sp.totalKasBank)+'</div><div class="kpi-v2-bottom"></div></div>'
-    + '<div class="kpi-v2" style="--kpi-accent:#f59e0b"><div class="kpi-v2-top"><div class="kpi-v2-label">Uang muka belum LPJ</div><div class="kpi-v2-icon" style="background:#f59e0b">'+SVG_ICONS.arrowUp+'</div></div><div class="kpi-v2-value">'+_rpW(sp.totalUmp)+'</div><div class="kpi-v2-bottom"></div></div>'
+    + '<div class="kpi-v2" style="--kpi-accent:#f59e0b"><div class="kpi-v2-top"><div class="kpi-v2-label">Dipegang KLL &amp; ULL</div><div class="kpi-v2-icon" style="background:#f59e0b">'+SVG_ICONS.arrowUp+'</div></div><div class="kpi-v2-value">'+_rpW(sp.totalUmp)+'</div><div class="kpi-v2-bottom"></div></div>'
     + '<div class="kpi-v2" style="--kpi-accent:#3b82f6"><div class="kpi-v2-top"><div class="kpi-v2-label">Saldo dana</div><div class="kpi-v2-icon" style="background:#3b82f6">'+SVG_ICONS.arrowDown+'</div></div><div class="kpi-v2-value">'+_rpW(sp.totalDana)+'</div><div class="kpi-v2-bottom"></div></div>'
     + '</div>';
 
-  /* per dana */
+  /* ---- per dana ---- */
   var urut = ['Zakat','Infak','Amil','DSKL','Lainnya'].filter(function(k){ return sp.perDana[k]; });
-  h += '<div class="card" style="margin-bottom:14px"><div class="pub-card-t" style="margin-bottom:10px"><span class="dot" style="background:#3b82f6"></span>Per dana &middot; posisi '+esc(fdate(sp.tanggal))+'</div>'
-    + '<div style="overflow-x:auto"><table class="lap-table" style="min-width:520px"><thead><tr><th>Dana</th><th class="num">Saldo awal</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Kas &amp; Bank</th><th class="num">Uang muka</th><th class="num">Saldo dana</th></tr></thead><tbody>';
+  var adaAwal = urut.some(function(k){ return Math.abs(sp.perDana[k].awal) > 0.5; });
+  var jum = function(f){ return urut.reduce(function(a,k){ return a + (Number(sp.perDana[k][f])||0); }, 0); };
+  h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:10px"><span class="dot" style="background:#3b82f6"></span>Per dana <span class="ket">posisi '+esc(fdate(sp.tanggal))+'</span></div>'
+    + '<div class="tabel-geser"><table class="lap-table saldo-tabel"><thead><tr><th>Dana</th>'
+    + (adaAwal ? '<th class="num">Saldo awal</th>' : '')
+    + '<th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Kas &amp; Bank</th><th class="num">KLL/ULL</th><th class="num">Saldo dana</th></tr></thead><tbody>';
   urut.forEach(function(k){ var d = sp.perDana[k];
-    h += '<tr><td><b>'+esc(d.dana)+'</b></td><td class="num">'+rp(d.awal)+'</td><td class="num" style="color:var(--green)">'+rp(d.masuk)+'</td><td class="num" style="color:var(--red)">'+rp(d.keluar)+'</td><td class="num strong">'+_rpW(d.saldoKas)+'</td><td class="num">'+_rpW(d.ump||0)+'</td><td class="num strong">'+_rpW(d.saldoDana)+'</td></tr>'; });
-  h += '</tbody><tfoot><tr><td>Total</td><td class="num">'+rp(urut.reduce(function(a,k){return a+sp.perDana[k].awal;},0))+'</td><td class="num">'+rp(urut.reduce(function(a,k){return a+sp.perDana[k].masuk;},0))+'</td><td class="num">'+rp(urut.reduce(function(a,k){return a+sp.perDana[k].keluar;},0))+'</td><td class="num strong">'+_rpW(sp.totalKasBank)+'</td><td class="num">'+_rpW(sp.totalUmp)+'</td><td class="num strong">'+_rpW(sp.totalDana)+'</td></tr></tfoot></table></div>'
-    + (sp.totalUmp < 0 ? '<div class="muted" style="font-size:11.5px;margin-top:8px">Uang muka minus berarti LPJ tahun ini melebihi uang muka yang keluar tahun ini — isi uang muka awal tahun di Pengaturan &rarr; Saldo Awal.</div>' : '')
+    h += '<tr><td><b>'+esc(d.dana)+'</b></td>'
+      + (adaAwal ? '<td class="num">'+rp(d.awal)+'</td>' : '')
+      + '<td class="num" style="color:var(--green)">'+rp(d.masuk)+'</td><td class="num" style="color:var(--red)">'+rp(d.keluar)+'</td>'
+      + '<td class="num strong">'+_rpW(d.saldoKas)+'</td><td class="num">'+_rpW(d.ump||0)+'</td><td class="num strong">'+_rpW(d.saldoDana)+'</td></tr>'; });
+  h += '</tbody><tfoot><tr><td>Total</td>'
+    + (adaAwal ? '<td class="num">'+rp(jum('awal'))+'</td>' : '')
+    + '<td class="num">'+rp(jum('masuk'))+'</td><td class="num">'+rp(jum('keluar'))+'</td>'
+    + '<td class="num strong">'+_rpW(sp.totalKasBank)+'</td><td class="num">'+_rpW(sp.totalUmp)+'</td><td class="num strong">'+_rpW(sp.totalDana)+'</td></tr></tfoot></table></div>'
+    + (sp.totalUmp < 0 ? '<div class="muted" style="font-size:11.5px;margin-top:8px">Angka KLL/ULL minus berarti LPJ tahun ini melebihi uang muka yang keluar tahun ini — isi uang muka awal tahun di Pengaturan &rarr; Saldo Awal.</div>' : '')
     + '</div>';
 
-  /* per rekening & kas yang bersaldo / bergerak */
-  var akun = (sp.perAkun||[]).filter(function(a){ return Math.abs(a.saldo) > 0.5 || a.masuk > 0 || a.keluar > 0; })
-    .sort(function(a,b){ return b.saldo - a.saldo; });
-  h += '<div class="card"><div class="pub-card-t" style="margin-bottom:4px"><span class="dot" style="background:#059669"></span>Per rekening &amp; kas <span class="ket">'+akun.length+' akun bersaldo &middot; klik untuk melihat rincian transaksinya</span></div>'
-    + '<div class="muted" style="font-size:12px;margin-bottom:10px">Rekening tanpa saldo dan tanpa pergerakan tahun ini tidak ditampilkan.</div>';
-  if(!akun.length) h += '<div class="muted" style="padding:14px 0">Belum ada rekening bersaldo.</div>';
+  /* ---- per bank, rekeningnya muncul saat nama bank diklik ---- */
+  var akun = (sp.perAkun||[]).filter(function(a){ return Math.abs(a.saldo) > 0.5 || a.masuk > 0 || a.keluar > 0; });
+  var grup = {}, urutGrup = [];
   akun.forEach(function(a){
-    var buka = !!SALDO_BUKA[a.kode], id = 'sb_'+a.kode.replace(/[^A-Za-z0-9]/g,'_');
-    h += '<div class="cad-baris" style="cursor:pointer;margin-bottom:6px'+(buka?';border-color:var(--accent)':'')+'" onclick="saldoBuka(\''+esc(a.kode)+'\')">'
-      + '<div class="cad-baris-n"><b>'+esc(a.label)+'</b>'+(a.tidakTerdaftar?' <span class="badge amber">tidak terdaftar</span>':'')+'<div class="muted" style="font-size:11px">'+esc(a.dana||'-')+' &middot; awal '+rp(a.awal)+' &middot; masuk <span style="color:var(--green)">'+rp(a.masuk)+'</span> &middot; keluar <span style="color:var(--red)">'+rp(a.keluar)+'</span></div></div>'
-      + '<div style="display:flex;align-items:center;gap:10px"><div style="font-family:var(--head);font-weight:700;white-space:nowrap;font-size:14px">'+_rpW(a.saldo)+'</div><span class="pub-lay-c" style="'+(buka?'transform:rotate(180deg)':'')+'">&#9660;</span></div></div>';
-    if(buka) h += '<div id="'+id+'" class="saldo-buku"><div class="muted" style="font-size:12.5px;padding:10px">Memuat rincian...</div></div>';
+    var g = _grupBank(a);
+    if(!grup[g]){ grup[g] = { nama:g, akun:[], saldo:0, masuk:0, keluar:0, kas:(a.jenis==='kas') }; urutGrup.push(g); }
+    grup[g].akun.push(a); grup[g].saldo += a.saldo; grup[g].masuk += a.masuk; grup[g].keluar += a.keluar;
+  });
+  urutGrup.sort(function(x,y){ return grup[y].saldo - grup[x].saldo; });
+  h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:4px"><span class="dot" style="background:#059669"></span>Per bank &amp; kas <span class="ket">'+urutGrup.length+' bank/kas &middot; '+akun.length+' rekening bersaldo</span></div>'
+    + '<div class="muted" style="font-size:12px;margin-bottom:10px">Klik nama bank untuk melihat rekeningnya, lalu klik rekening untuk melihat rincian transaksinya. Rekening tanpa saldo dan tanpa pergerakan tidak ditampilkan.</div>';
+  if(!urutGrup.length) h += '<div class="muted" style="padding:14px 0">Belum ada rekening bersaldo.</div>';
+  urutGrup.forEach(function(g){
+    var G = grup[g], buka = !!SALDO_GRUP[g];
+    h += '<div class="saldo-grup'+(buka?' buka':'')+'">'
+      + '<div class="cad-baris saldo-grup-h" onclick="saldoGrup(\''+esc(g).replace(/'/g,"\\'")+'\')">'
+        + '<div class="cad-baris-n"><b>'+esc(G.nama)+'</b>'
+          + '<div class="muted" style="font-size:11px">'+G.akun.length+' '+(G.kas?'kas':'rekening')+' &middot; masuk <span style="color:var(--green)">'+rp(G.masuk)+'</span> &middot; keluar <span style="color:var(--red)">'+rp(G.keluar)+'</span></div></div>'
+        + '<div class="saldo-nilai"><div class="saldo-angka">'+_rpW(G.saldo)+'</div><span class="pub-lay-c"'+(buka?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div>'
+      + '</div>';
+    if(buka){
+      h += '<div class="saldo-anak">';
+      G.akun.slice().sort(function(a,b){ return b.saldo - a.saldo; }).forEach(function(a){
+        var bukaA = !!SALDO_BUKA[a.kode], id = 'sb_'+a.kode.replace(/[^A-Za-z0-9]/g,'_');
+        h += '<div class="cad-baris saldo-akun'+(bukaA?' buka':'')+'" onclick="saldoBuka(\''+esc(a.kode)+'\')">'
+          + '<div class="cad-baris-n"><b>'+_namaDalamGrup(a, G.nama)+'</b>'+(a.tidakTerdaftar?' <span class="badge amber">belum terdaftar</span>':'')
+            + '<div class="muted" style="font-size:11px">'+esc(a.dana||'-')+(Math.abs(a.awal)>0.5?' &middot; awal '+rp(a.awal):'')+' &middot; masuk <span style="color:var(--green)">'+rp(a.masuk)+'</span> &middot; keluar <span style="color:var(--red)">'+rp(a.keluar)+'</span></div></div>'
+          + '<div class="saldo-nilai"><div class="saldo-angka">'+_rpW(a.saldo)+'</div><span class="pub-lay-c"'+(bukaA?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div></div>';
+        if(bukaA) h += '<div id="'+id+'" class="saldo-buku"><div class="muted" style="font-size:12.5px;padding:10px">Memuat rincian...</div></div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
   });
   h += '</div>';
 
-  /* uang muka per layanan */
+  /* ---- saldo yang dipegang KLL & ULL (uang muka belum LPJ) ---- */
   var pl = (sp.ump && sp.ump.perLayanan) || [];
-  if(pl.length){
-    h += '<div class="card" style="margin-top:14px"><div class="pub-card-t" style="margin-bottom:10px"><span class="dot" style="background:#f59e0b"></span>Uang muka program per kantor / unit layanan &middot; '+esc(sp.tahun)+'</div>'
-      + '<div style="overflow-x:auto"><table class="lap-table" style="min-width:520px"><thead><tr><th>Layanan</th><th>Dana</th><th class="num">Keluar</th><th class="num">LPJ</th><th class="num">Kembali</th><th class="num">Belum LPJ</th></tr></thead><tbody>';
-    pl.forEach(function(x){ h += '<tr><td>'+esc(x.layanan)+'</td><td>'+esc(x.dana)+'</td><td class="num">'+rp(x.keluar)+'</td><td class="num">'+rp(x.lpj)+'</td><td class="num">'+rp(x.kembali)+'</td><td class="num strong">'+_rpW(x.sisa)+'</td></tr>'; });
-    h += '</tbody></table></div><div class="muted" style="font-size:11.5px;margin-top:6px">"Belum LPJ" minus pada satu layanan berarti LPJ-nya mencakup uang muka dari tahun lalu.</div></div>';
-  }
+  window.SALDO_LAYANAN = pl;
+  h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:4px"><span class="dot" style="background:#f59e0b"></span>Saldo di KLL &amp; ULL <span class="ket">'+pl.length+' kantor/unit layanan</span></div>'
+    + '<div class="muted" style="font-size:12px;margin-bottom:10px">Uang muka program yang sudah diterima kantor layanan tetapi belum di-LPJ-kan — uangnya ada di KLL/ULL, bukan di rekening lembaga. Klik satu kantor untuk membuka rincian lengkapnya.</div>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
+      + '<div class="field" style="margin:0;flex:1 1 240px;max-width:340px"><input id="saldoLayCari" placeholder="Cari nama KLL / ULL..." value="'+esc(SALDO_LAY_CARI)+'" oninput="saldoLayCari(this.value)"></div>'
+      + '<button class="btn btn-ghost" onclick="go(\'kll\')">Buka menu Saldo KLL &amp; ULL</button></div>'
+    + '<div id="saldoLayTabel"></div></div>';
+
   el('saldoBody').innerHTML = h;
+  saldoLayGambar();
   Object.keys(SALDO_BUKA).forEach(function(k){ if(SALDO_BUKA[k]) saldoMuatBuku(k); });
+}
+
+/* Tabel saldo KLL/ULL di halaman Saldo: bisa dicari, tiap baris membuka
+   menu Saldo KLL & ULL pada kantor tersebut. */
+var SALDO_LAY_CARI = '';
+function saldoLayCari(v){ SALDO_LAY_CARI = v; saldoLayGambar(); }
+function saldoLayGambar(){
+  var host = el('saldoLayTabel'); if(!host) return;
+  var pl = window.SALDO_LAYANAN || [];
+  var q = String(SALDO_LAY_CARI||'').toLowerCase().replace(/\s+/g,' ').trim();
+  var pls = pl.slice().sort(function(a,b){ return b.sisa - a.sisa; });
+  var tampil = q ? pls.filter(function(x){ return String(x.layanan||'').toLowerCase().indexOf(q) >= 0; }) : pls;
+  if(!pls.length){ host.innerHTML = '<div class="muted" style="padding:14px 0">Belum ada uang muka pada tahun ini.</div>'; return; }
+  if(!tampil.length){ host.innerHTML = '<div class="muted" style="padding:14px 0">Tidak ada kantor yang cocok dengan "'+esc(SALDO_LAY_CARI)+'".</div>'; return; }
+  var h = (q ? '<div class="muted" style="font-size:12px;margin-bottom:8px">'+tampil.length+' dari '+pls.length+' kantor</div>' : '')
+    + '<div class="tabel-geser"><table class="lap-table saldo-tabel"><thead><tr><th>Kantor / unit layanan</th><th>Dana</th><th class="num">Uang muka</th><th class="num">Sudah LPJ</th><th class="num">Dikembalikan</th><th class="num">Saldo dipegang</th></tr></thead><tbody>';
+  tampil.forEach(function(x){
+    h += '<tr class="lay-klik" onclick="go(\'kll\');setTimeout(function(){viewKll('+JSON.stringify(String(x.layanan)).replace(/"/g,'&quot;')+');},250)">'
+      + '<td><b>'+esc(x.layanan)+'</b></td><td>'+esc(x.dana)+'</td><td class="num">'+rp(x.keluar)+'</td><td class="num">'+rp(x.lpj)+'</td><td class="num">'+rp(x.kembali)+'</td><td class="num strong">'+_rpW(x.sisa)+'</td></tr>';
+  });
+  h += '</tbody><tfoot><tr><td colspan="2">Total'+(q?' (yang tampil)':'')+'</td><td class="num">'+rp(tampil.reduce(function(a,x){return a+x.keluar;},0))+'</td><td class="num">'+rp(tampil.reduce(function(a,x){return a+x.lpj;},0))+'</td><td class="num">'+rp(tampil.reduce(function(a,x){return a+x.kembali;},0))+'</td><td class="num strong">'+_rpW(tampil.reduce(function(a,x){return a+x.sisa;},0))+'</td></tr></tfoot></table></div>'
+    + '<div class="muted" style="font-size:11.5px;margin-top:6px">"Saldo dipegang" minus berarti LPJ-nya mencakup uang muka dari tahun sebelumnya.</div>';
+  host.innerHTML = h;
+}
+
+function saldoGrup(nama){
+  SALDO_GRUP[nama] = !SALDO_GRUP[nama];
+  renderSaldo(window.SALDO_DATA);
 }
 function saldoBuka(kode){
   SALDO_BUKA[kode] = !SALDO_BUKA[kode];
@@ -2683,22 +2793,204 @@ function saldoMuatBuku(kode){
   var id = 'sb_'+kode.replace(/[^A-Za-z0-9]/g,'_');
   gas('apiMutasiAkun')(TOKEN, kode, '', SALDO_TGL).then(function(b){
     var host = el(id); if(!host) return;
-    var h = '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 12px 6px;font-size:12.5px">'
-      + '<div><b>'+esc(b.akun)+'</b> <span class="muted">&middot; '+esc(fdate(b.dari))+' s/d '+esc(fdate(b.sampai))+' &middot; '+b.jumlah+' transaksi</span></div>'
-      + '<div>Saldo awal tahun <b>'+rp(b.awalTahun)+'</b> &middot; masuk <span style="color:var(--green)">'+rp(b.masuk)+'</span> &middot; keluar <span style="color:var(--red)">'+rp(b.keluar)+'</span> &middot; akhir <b>'+_rpW(b.saldoAkhir)+'</b></div></div>';
+    var h = '<div class="saldo-buku-h">'
+      + '<div><b>'+esc(_tanpaBank(b.akun))+'</b> <span class="muted">&middot; '+esc(fdate(b.dari))+' s/d '+esc(fdate(b.sampai))+' &middot; '+b.jumlah+' transaksi</span></div>'
+      + '<div class="muted">Saldo awal tahun <b>'+rp(b.awalTahun)+'</b> &middot; masuk <span style="color:var(--green)">'+rp(b.masuk)+'</span> &middot; keluar <span style="color:var(--red)">'+rp(b.keluar)+'</span> &middot; akhir <b>'+_rpW(b.saldoAkhir)+'</b></div></div>';
     if(!b.baris.length) h += '<div class="muted" style="padding:6px 12px 12px;font-size:12.5px">Tidak ada pergerakan pada rentang ini.</div>';
     else {
-      h += '<div style="overflow-x:auto;padding:0 6px 8px"><table class="lap-table" style="min-width:640px"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Saldo</th></tr></thead><tbody>';
+      h += '<div class="tabel-geser" style="padding:0 6px 8px"><table class="lap-table saldo-tabel"><thead><tr><th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Saldo</th></tr></thead><tbody>';
       h += '<tr><td colspan="5" class="muted">Saldo awal tahun</td><td class="num">'+_rpW(b.awalTahun)+'</td></tr>';
       b.baris.forEach(function(r){
-        var warna = /Penerimaan|masuk|kembali/.test(r.jenis) ? 'green' : 'blue';
-        h += '<tr><td style="white-space:nowrap">'+esc(fdate(r.tanggal))+'</td><td><span class="badge '+(/Penerimaan/.test(r.jenis)?'green':/Penyaluran/.test(r.jenis)?'amber':/Uang muka/.test(r.jenis)?'purple':'blue')+'">'+esc(r.jenis)+'</span></td><td style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(r.keterangan)+'">'+esc(r.keterangan)+(r.ref?' <span class="muted">('+esc(r.ref)+')</span>':'')+'</td>'
+        h += '<tr><td style="white-space:nowrap">'+esc(fdate(r.tanggal))+'</td><td><span class="badge '+(/Penerimaan/.test(r.jenis)?'green':/Penyaluran/.test(r.jenis)?'amber':/Uang muka/.test(r.jenis)?'purple':'blue')+'">'+esc(r.jenis)+'</span></td><td class="saldo-ket" title="'+esc(r.keterangan)+'">'+esc(r.keterangan)+(r.ref?' <span class="muted">('+esc(r.ref)+')</span>':'')+'</td>'
           + '<td class="num" style="color:var(--green)">'+(r.masuk?rp(r.masuk):'')+'</td><td class="num" style="color:var(--red)">'+(r.keluar?rp(r.keluar):'')+'</td><td class="num strong">'+_rpW(r.saldo)+'</td></tr>';
       });
       h += '</tbody></table></div>';
     }
     host.innerHTML = h;
   }).catch(function(e){ var host = el(id); if(host) host.innerHTML = '<div class="imp-note imp-warn" style="margin:8px">'+esc(e.message)+'</div>'; });
+}
+
+/* ============ PENGATURAN HAK AMIL ============ */
+var HA_DATA = null;
+function _opsiLayananUser(terpilih){
+  var daftar = (CACHE.layanan || []).map(function(l){ return (l.tipe||'KLL')+' '+l.nama; });
+  if(terpilih && daftar.indexOf(terpilih) < 0) daftar.push(terpilih);
+  daftar.sort();
+  return '<option value="">— semua kantor (admin daerah) —</option>'
+    + daftar.map(function(n){ return '<option value="'+esc(n)+'"'+(n===terpilih?' selected':'')+'>'+esc(n)+'</option>'; }).join('');
+}
+function viewHakAmil(){
+  gas('apiHakAmil')(TOKEN).then(function(d){ HA_DATA=d; renderHakAmil(d); })
+    .catch(function(e){ var h=el('haBody'); if(h) h.innerHTML='<div class="imp-note imp-warn">'+esc(e.message)+'</div>'; });
+}
+function renderHakAmil(d){
+  var host=el('haBody'); if(!host) return;
+  var dana = ['Zakat','Infak','Sedekah','DSKL','Amil'];
+  Object.keys(d.persen||{}).forEach(function(k){ if(dana.indexOf(k)<0) dana.push(k); });
+  var h = '<table class="lap-table" style="max-width:420px"><thead><tr><th>Jenis dana</th><th class="num">Hak amil</th></tr></thead><tbody>';
+  dana.forEach(function(k){
+    h += '<tr><td><b>'+esc(k)+'</b></td><td class="num"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">'
+      + '<input id="ha_'+esc(k)+'" data-dana="'+esc(k)+'" class="ha-persen" inputmode="decimal" style="width:80px;text-align:right" value="'+esc(String(d.persen[k]!==undefined?d.persen[k]:0))+'"><span class="muted">%</span></div></td></tr>';
+  });
+  h += '</tbody></table>';
+  h += '<div class="divider"></div><label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:6px">Setoran yang TIDAK dipotong hak amil</label>'
+    + '<p class="muted" style="font-size:12px;margin:0 0 8px">Tulis nama sub jenis atau pilarnya, satu per baris. Contoh: <i>Kemanusiaan</i> agar infak terikat kemanusiaan disalurkan utuh.</p>'
+    + '<textarea id="ha_kecuali" rows="4" style="width:100%;max-width:420px">'+esc((d.kecuali||[]).join('\n'))+'</textarea>'
+    + '<div style="margin-top:12px"><button class="btn btn-primary" onclick="haSimpan()">Simpan</button></div>';
+  host.innerHTML = h;
+}
+function haSimpan(){
+  var persen={}, salah='';
+  document.querySelectorAll('#haBody .ha-persen').forEach(function(i){
+    var v=Number(String(i.value).replace(',','.'));
+    if(!isFinite(v)||v<0||v>100){ salah=i.dataset.dana; return; }
+    persen[i.dataset.dana]=v;
+  });
+  if(salah){ toast('Persentase '+salah+' harus antara 0 dan 100',true); return; }
+  var kec=String(el('ha_kecuali').value||'').split(/\n+/).map(function(x){return x.trim();}).filter(function(x){return x;});
+  gas('apiSaveHakAmil')(TOKEN,{persen:persen,kecuali:kec}).then(function(){ toast('Pengaturan hak amil tersimpan'); viewHakAmil(); }).catch(handleErr);
+}
+
+/* ============ MENU SALDO KLL & ULL ============
+   Alur uang tiap kantor layanan: setoran - hak amil = saldo KLL;
+   saldo KLL - uang muka (+ yang dikembalikan) = sisa yang masih di daerah;
+   uang muka - LPJ - dikembalikan = yang belum di-LPJ-kan (ada di KLL). */
+var KLL_TGL = '';
+var KLL_CARI = '';
+var KLL_BUKA = '';            /* nama kantor yang rinciannya sedang dibuka */
+var KLL_DATA = null;
+
+function viewKll(fokus){
+  if(!KLL_TGL) KLL_TGL = today();
+  if(fokus) KLL_BUKA = fokus;
+  var c = el('content');
+  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo KLL &amp; ULL</h2><div class="desc">Uang tiap kantor layanan: yang disetor, hak amil, yang masih tersimpan di daerah, dan yang belum di-LPJ-kan</div></div>'
+    + '<div class="saldo-head-alat">'
+    + '<div class="field" style="margin:0;min-width:150px"><label>Posisi per tanggal</label><input type="date" id="kllTgl" value="'+esc(KLL_TGL)+'" max="'+today()+'" onchange="KLL_TGL=this.value;viewKll();"></div>'
+    + (canDo('settings','edit') ? '<button class="btn btn-ghost" onclick="go(\'settings\');setTimeout(function(){setTab(\'hakamil\');},300);">Atur hak amil</button>' : '')
+    + '</div></div><div id="kllBody"><div class="muted" style="padding:20px 0">Memuat...</div></div>';
+  gas('apiSaldoLayanan')(TOKEN, KLL_TGL).then(function(d){ KLL_DATA = d; renderKll(); }).catch(handleErr);
+}
+
+function kllCari(v){ KLL_CARI = v; renderKll(true); }
+
+function renderKll(hanyaTabel){
+  var d = KLL_DATA; if(!d) return;
+  var q = _norm2(KLL_CARI);
+  var semua = (d.daftar || []).filter(function(x){ return x.tipe !== 'Daerah'; });
+  var daerah = (d.daftar || []).filter(function(x){ return x.tipe === 'Daerah'; });
+  var baris = q ? semua.filter(function(x){ return _norm2(x.layanan).indexOf(q) >= 0; }) : semua;
+
+  var h = '';
+  if(!hanyaTabel){
+    var pj = Object.keys(d.persen || {}).map(function(k){ return esc(k)+' '+(d.persen[k])+'%'; }).join(' · ');
+    h += '<div class="kpis-v2 saldo-kpi" style="margin-bottom:14px">'
+      + _kartuKll('Setoran KLL & ULL','#3b82f6',SVG_ICONS.arrowDown, d.total.himpun)
+      + _kartuKll('Hak amil','#8b5cf6',SVG_ICONS.arrowUp, d.total.hakAmil)
+      + _kartuKll('Masih di daerah','#059669',SVG_ICONS.wallet, d.total.sisaSaldo)
+      + _kartuKll('Belum LPJ','#f59e0b',SVG_ICONS.arrowUp, d.total.belumLPJ)
+      + '</div>';
+    h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:6px"><span class="dot" style="background:#3b82f6"></span>'
+      + (d.dibatasi ? 'Kantor: '+esc(d.dibatasi) : 'Semua kantor layanan')
+      + ' <span class="ket">'+d.jumlahLayanan+' kantor &middot; posisi '+esc(fdate(d.tanggal))+'</span></div>'
+      + '<div class="muted" style="font-size:12px;margin-bottom:10px">Hak amil: '+(pj||'belum diatur')
+      + (d.kecuali && d.kecuali.length ? ' &middot; dikecualikan: '+d.kecuali.map(esc).join(', ') : '')
+      + '. Klik nama kantor untuk melihat rincian setoran, uang muka, dan LPJ-nya.</div>'
+      + '<div class="field" style="margin:0 0 10px;max-width:340px"><input id="kllCari" placeholder="Cari nama KLL / ULL..." value="'+esc(KLL_CARI)+'" oninput="kllCari(this.value)"></div>'
+      + '<div id="kllTabel"></div></div>';
+    if(daerah.length){
+      var dd = daerah[0];
+      h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:6px"><span class="dot" style="background:#94a3b8"></span>Penghimpunan Daerah <span class="ket">tanpa penanda KLL/ULL</span></div>'
+        + '<div class="muted" style="font-size:12.5px">Setoran '+rp(dd.himpun)+' &middot; hak amil '+rp(dd.hakAmil)+' &middot; sisa '+_rpW(dd.sisaSaldo)+'</div></div>';
+    }
+    el('kllBody').innerHTML = h;
+  }
+  el('kllTabel').innerHTML = _tabelKll(baris, semua.length);
+  if(KLL_BUKA) kllMuatRinci(KLL_BUKA);
+}
+function _kartuKll(label, warna, ikon, nilai){
+  return '<div class="kpi-v2" style="--kpi-accent:'+warna+'"><div class="kpi-v2-top"><div class="kpi-v2-label">'+label+'</div>'
+    + '<div class="kpi-v2-icon" style="background:'+warna+'">'+ikon+'</div></div>'
+    + '<div class="kpi-v2-value">'+_rpW(nilai)+'</div><div class="kpi-v2-bottom"></div></div>';
+}
+function _norm2(x){ return String(x==null?'':x).toLowerCase().replace(/\s+/g,' ').trim(); }
+function _idKll(n){ return 'kll_'+String(n).replace(/[^A-Za-z0-9]/g,'_'); }
+
+function _tabelKll(baris, totalSemua){
+  if(!baris.length) return '<div class="muted" style="padding:14px 0">'+(KLL_CARI?'Tidak ada kantor yang cocok dengan "'+esc(KLL_CARI)+'".':'Belum ada data kantor layanan.')+'</div>';
+  var h = (KLL_CARI ? '<div class="muted" style="font-size:12px;margin-bottom:8px">'+baris.length+' dari '+totalSemua+' kantor</div>' : '');
+  baris.forEach(function(x){
+    var buka = _norm2(KLL_BUKA) === _norm2(x.layanan);
+    h += '<div class="saldo-grup'+(buka?' buka':'')+'">'
+      + '<div class="cad-baris saldo-grup-h" onclick="kllBuka(\''+esc(x.layanan).replace(/'/g,"\\'")+'\')">'
+        + '<div class="cad-baris-n"><b>'+esc(x.layanan)+'</b>'
+          + '<div class="muted" style="font-size:11px">setor '+rp(x.himpun)+' &middot; amil '+rp(x.hakAmil)
+          + ' &middot; uang muka '+rp(x.umpKeluar)+' &middot; belum LPJ <b>'+_rpW(x.belumLPJ)+'</b></div></div>'
+        + '<div class="saldo-nilai"><div style="text-align:right"><div class="saldo-angka">'+_rpW(x.sisaSaldo)+'</div>'
+          + '<div class="muted" style="font-size:10.5px">masih di daerah</div></div>'
+          + '<span class="pub-lay-c"'+(buka?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div>'
+      + '</div>';
+    if(buka) h += '<div id="'+_idKll(x.layanan)+'" class="saldo-buku"><div class="muted" style="font-size:12.5px;padding:10px">Memuat rincian...</div></div>';
+    h += '</div>';
+  });
+  return h;
+}
+
+function kllBuka(nama){
+  KLL_BUKA = (_norm2(KLL_BUKA) === _norm2(nama)) ? '' : nama;
+  renderKll(true);
+}
+
+function kllMuatRinci(nama){
+  var host = el(_idKll(nama)); if(!host) return;
+  gas('apiDetailSaldoLayanan')(TOKEN, nama, KLL_TGL).then(function(d){
+    var host2 = el(_idKll(nama)); if(!host2) return;
+    var r = d.ringkas;
+    var h = '<div class="kll-alur">'
+      + _alur('Setoran', r.himpun, 'yang dihimpun & disetor')
+      + _alurOp('&minus;') + _alur('Hak amil', r.hakAmil, (r.bebasAmil? rp(r.bebasAmil)+' bebas amil' : 'dipotong dari setoran'))
+      + _alurOp('=') + _alur('Saldo KLL', r.saldoKLL, 'hak kantor ini', true)
+      + _alurOp('&minus;') + _alur('Uang muka', r.umpKeluar - r.umpKembali, 'sudah diambil'+(r.umpKembali?' (kembali '+rp(r.umpKembali)+')':''))
+      + _alurOp('=') + _alur('Masih di daerah', r.sisaSaldo, 'tersimpan di kas/bank', true)
+      + '</div>'
+      + '<div class="muted" style="padding:0 12px 10px;font-size:12px">Dari uang muka '+rp(r.umpKeluar)+', sudah di-LPJ-kan '+rp(r.lpj)
+      + (r.umpKembali?', dikembalikan '+rp(r.umpKembali):'')+' &rarr; <b>belum LPJ '+_rpW(r.belumLPJ)+'</b>.</div>';
+
+    h += _tabRinci('Setoran ('+d.setoran.length+')', d.setoran.length ?
+      _tab(['Tanggal','Jenis','Donatur','Jumlah','Hak amil','Bersih'],
+        d.setoran.map(function(x){ return ['<span style="white-space:nowrap">'+esc(fdate(x.tanggal))+'</span>',
+          esc(x.jenis)+(x.pilar?' <span class="muted">'+esc(x.pilar)+'</span>':'')+(x.bebasAmil?' <span class="badge green">bebas amil</span>':''),
+          '<span class="saldo-ket">'+esc(x.donatur)+'</span>', rp(x.jumlah), rp(x.hakAmil), rp(x.bersih)]; }),
+        ['','','', rp(d.setoran.reduce(function(a,x){return a+x.jumlah;},0)), rp(d.setoran.reduce(function(a,x){return a+x.hakAmil;},0)), rp(d.setoran.reduce(function(a,x){return a+x.bersih;},0))]) : '');
+    h += _tabRinci('Uang muka ('+d.uangMuka.length+')', d.uangMuka.length ?
+      _tab(['Tanggal','Jenis','Dana','Keterangan','Jumlah'],
+        d.uangMuka.map(function(x){ return ['<span style="white-space:nowrap">'+esc(fdate(x.tanggal))+'</span>',
+          '<span class="badge '+(x.jenis==='Dikembalikan'?'green':'purple')+'">'+esc(x.jenis)+'</span>', esc(x.dana),
+          '<span class="saldo-ket">'+esc(x.keterangan)+'</span>', rp(x.jumlah)]; })) : '');
+    h += _tabRinci('LPJ / penyaluran ('+d.lpj.length+')', d.lpj.length ?
+      _tab(['Tanggal','Program','Dana','Keterangan','Jumlah'],
+        d.lpj.map(function(x){ return ['<span style="white-space:nowrap">'+esc(fdate(x.tanggal))+'</span>', esc(x.program), esc(x.dana),
+          '<span class="saldo-ket">'+esc(x.keterangan)+'</span>', rp(x.jumlah)]; }),
+        ['','','','', rp(d.lpj.reduce(function(a,x){return a+x.jumlah;},0))]) : '');
+    host2.innerHTML = h;
+  }).catch(function(e){ var h2 = el(_idKll(nama)); if(h2) h2.innerHTML = '<div class="imp-note imp-warn" style="margin:8px">'+esc(e.message)+'</div>'; });
+}
+function _alur(judul, nilai, ket, tebal){
+  return '<div class="kll-alur-k'+(tebal?' kuat':'')+'"><div class="kll-alur-l">'+judul+'</div><div class="kll-alur-v">'+_rpW(nilai)+'</div><div class="kll-alur-k2">'+ket+'</div></div>';
+}
+function _alurOp(op){ return '<div class="kll-alur-op">'+op+'</div>'; }
+function _tabRinci(judul, isi){
+  if(!isi) return '<div class="kll-rinci-j">'+judul+' <span class="muted">— belum ada</span></div>';
+  return '<div class="kll-rinci-j">'+judul+'</div>'+isi;
+}
+function _tab(kol, baris, kaki){
+  var num = function(i){ return i >= kol.length - (kol[kol.length-1]==='Bersih'?3:1) ? ' class="num"' : ''; };
+  var h = '<div class="tabel-geser" style="padding:0 6px 10px"><table class="lap-table saldo-tabel"><thead><tr>';
+  kol.forEach(function(k,i){ h += '<th'+(/jumlah|amil|bersih/i.test(k)?' class="num"':'')+'>'+k+'</th>'; });
+  h += '</tr></thead><tbody>';
+  baris.forEach(function(r){ h += '<tr>'+r.map(function(c,i){ return '<td'+(/^Rp/.test(String(c))?' class="num"':'')+'>'+c+'</td>'; }).join('')+'</tr>'; });
+  h += '</tbody>'+(kaki?'<tfoot><tr>'+kaki.map(function(c){ return '<td'+(/^Rp/.test(String(c))?' class="num strong"':'')+'>'+(c||'')+'</td>'; }).join('')+'</tr></tfoot>':'')+'</table></div>';
+  return h;
 }
 
 /* ============ SALDO AWAL (Pengaturan) ============ */
