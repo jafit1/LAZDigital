@@ -56,7 +56,8 @@ const Logger={ log(){} };
 var SHEETS = {
   USERS:'Users', PENGHIMPUNAN:'Penghimpunan', PENTASYARUFAN:'Pentasyarufan',
   SETTINGS:'Settings', SESSIONS:'Sessions', LOG:'AuditLog',
-  REKENING:'Rekening', LAYANAN:'Layanan', MUTASI:'Mutasi', DONATUR:'Donatur'
+  REKENING:'Rekening', LAYANAN:'Layanan', MUTASI:'Mutasi', DONATUR:'Donatur',
+  SALDOAWAL:'SaldoAwal', UANGMUKA:'UangMuka', TRANSFER:'Transfer'
 };
 var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log'];
 var ACTIONS = ['view','create','edit','delete'];
@@ -96,6 +97,10 @@ function setup(){
   ensureSheet(ss,SHEETS.LAYANAN,['id','tipe','kode','nama','wilayah','penanggungJawab','telepon','aktif','dibuat']);
   ensureSheet(ss,SHEETS.MUTASI,['id','tanggal','deskripsi','tipe','nominal','dibuat']);
   ensureSheet(ss,SHEETS.DONATUR,['id','nama','kategori','telepon','alamat','email','dibuat']);
+  /* Saldo & pergerakan kas — dasar penghitungan saldo berjalan per akun. */
+  ensureSheet(ss,SHEETS.SALDOAWAL,['id','tahun','jenis','akun','rekeningId','kasNama','dana','nominal','keterangan','dibuat','oleh']);
+  ensureSheet(ss,SHEETS.UANGMUKA,['id','tanggal','jenis','dana','layanan','akun','rekeningId','kasNama','nominal','keterangan','section','petugas','dibuat']);
+  ensureSheet(ss,SHEETS.TRANSFER,['id','tanggal','jenis','dariAkun','dariRekeningId','dariKas','keAkun','keRekeningId','keKas','nominal','keterangan','section','petugas','dibuat']);
   ensureSheet(ss,SHEETS.SETTINGS,['key','value']);
   ensureSheet(ss,SHEETS.SESSIONS,['token','userId','expired']);
   ensureSheet(ss,SHEETS.LOG,['waktu','userId','username','aksi','modul','entitasId','ringkas','detail','ip','ua']);
@@ -747,7 +752,7 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     if (String(r.aktif) !== 'false') {
       var label = r.namaBank + ' - ' + r.nomor;
       var grp = getBankGroupName(r.namaBank);
-      byRekening[r.id] = { id: r.id, nama: label, nomor: r.nomor, bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0 };
+      byRekening[r.id] = { id: r.id, nama: label, nomor: r.nomor, bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, trx: 0 };
     }
   });
   
@@ -758,7 +763,7 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     var isCash = !(method.indexOf('transfer') >= 0 || method.indexOf('bank') >= 0 || method.indexOf('debit') >= 0 || method.indexOf('wallet') >= 0 || method.indexOf('qris') >= 0);
 
     if (!isCash && r.rekeningId && byRekening[r.rekeningId]) {
-      byRekening[r.rekeningId].penerimaan += n;
+      byRekening[r.rekeningId].penerimaan += n; byRekening[r.rekeningId].trx = (byRekening[r.rekeningId].trx || 0) + 1;
       byRekening[r.rekeningId].saldo += n;
     } else if (!isCash) {
       // Transaksi non-tunai tanpa rekeningId yang cocok tetap WAJIB masuk hitungan.
@@ -767,13 +772,13 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
       var grp = getBankGroupName(label);
       var matchedId = _cariRekMirip(byRekening, label);
       if (matchedId) {
-        byRekening[matchedId].penerimaan += n;
+        byRekening[matchedId].penerimaan += n; byRekening[matchedId].trx = (byRekening[matchedId].trx || 0) + 1;
         byRekening[matchedId].saldo += n;
       } else {
         if (!byRekening[label]) {
-          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, lepas: true };
+          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, trx: 0, lepas: true };
         }
-        byRekening[label].penerimaan += n;
+        byRekening[label].penerimaan += n; byRekening[label].trx = (byRekening[label].trx || 0) + 1;
         byRekening[label].saldo += n;
       }
     }
@@ -782,25 +787,28 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
 
   // 3. Aggregate Pentasyarufan (Expenditures) - Only bank/transfer transactions
   T.forEach(function(r) {
+    /* LPJ uang muka = pertanggungjawaban, uangnya sudah keluar saat uang muka
+       diberikan; bukan pergerakan rekening, jadi tidak masuk daftar rekening. */
+    if (/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
     var n = Number(r.jumlah) || 0;
     var method = String(r.metode || '').toLowerCase();
     var isCash = !(method.indexOf('transfer') >= 0 || method.indexOf('bank') >= 0 || method.indexOf('debit') >= 0 || method.indexOf('wallet') >= 0 || method.indexOf('qris') >= 0);
 
     if (!isCash && r.rekeningId && byRekening[r.rekeningId]) {
-      byRekening[r.rekeningId].pentasyarufan += n;
+      byRekening[r.rekeningId].pentasyarufan += n; byRekening[r.rekeningId].trx = (byRekening[r.rekeningId].trx || 0) + 1;
       byRekening[r.rekeningId].saldo -= n;
     } else if (!isCash) {
       var label = _labelRekLepas(r);
       var grp = getBankGroupName(label);
       var matchedId = _cariRekMirip(byRekening, label);
       if (matchedId) {
-        byRekening[matchedId].pentasyarufan += n;
+        byRekening[matchedId].pentasyarufan += n; byRekening[matchedId].trx = (byRekening[matchedId].trx || 0) + 1;
         byRekening[matchedId].saldo -= n;
       } else {
         if (!byRekening[label]) {
-          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, lepas: true };
+          byRekening[label] = { id: label, nama: label, nomor: '', bankGroup: grp, penerimaan: 0, pentasyarufan: 0, saldo: 0, trx: 0, lepas: true };
         }
-        byRekening[label].pentasyarufan += n;
+        byRekening[label].pentasyarufan += n; byRekening[label].trx = (byRekening[label].trx || 0) + 1;
         byRekening[label].saldo -= n;
       }
     }
@@ -819,10 +827,22 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     byRekening = filteredRek;
   }
   
+  /* Saldo berjalan sampai AKHIR periode yang dipilih (bukan selisih arus
+     periode itu saja): saldo awal tahun + semua pergerakan sejak 1 Januari. */
+  var _sampaiSaldo = '';
+  if (rSampai) _sampaiSaldo = rSampai;
+  else if (filterHari && typeof filterHari === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(filterHari)) _sampaiSaldo = filterHari;
+  else if (filterPrefix && /^\d{4}-\d{2}$/.test(filterPrefix)) _sampaiSaldo = _akhirBulan(filterPrefix);
+  else _sampaiSaldo = _hariIni();
+  if (_sampaiSaldo > _hariIni()) _sampaiSaldo = _hariIni();
+  var saldoPosisi = hitungSaldo(_sampaiSaldo);
+
   return {
     totalHimpun: tH,
     totalTasyaruf: tT,
-    saldo: tH - tT,
+    saldo: saldoPosisi.totalKasBank,
+    arusBersih: tH - tT,
+    saldoPosisi: saldoPosisi,
     jumlahDonatur: uniq(H, 'namaDonatur'),
     jumlahMustahik: uniq(T, 'namaPenerima'),
     transaksiHimpun: H.length,
@@ -926,6 +946,289 @@ function apiPublicDashboard(t, bulan){
   d.periodeDipilih = pilih;
   return d;
 }
+
+/* ============================================================
+   SALDO BERJALAN — per akun (rekening bank & kas), per dana, uang muka
+   ------------------------------------------------------------
+   Saldo per akun  = saldo awal tahun + masuk - keluar (sampai tanggal T)
+     masuk : penghimpunan ke akun itu, transfer masuk, pengembalian UMP
+     keluar: penyaluran dari akun itu (kecuali LPJ — LPJ bukan uang keluar,
+             uangnya sudah keluar saat UMP diberikan), transfer keluar, UMP keluar
+   Saldo per dana  = jumlah akun-akun milik dana itu + uang muka belum LPJ
+   Uang muka (UMP) = awal tahun + keluar - LPJ - kembali
+   Identitas yang selalu berlaku: saldo dana = saldo kas & bank + UMP.
+   ============================================================ */
+var KAS_DANA = ['Zakat','Infak','Amil'];
+function _danaKas(jenisDana){
+  var j = String(jenisDana || '').toLowerCase();
+  if (j === 'zakat') return 'Zakat';
+  if (j === 'amil')  return 'Amil';
+  return 'Infak';                       /* infak, sedekah, wakaf, kurban, fidyah, dskl */
+}
+function _danaRekening(fundGroup){
+  var f = String(fundGroup || '').toLowerCase();
+  if (f === 'zakat') return 'Zakat';
+  if (f === 'amil')  return 'Amil';
+  if (f === 'dskl')  return 'DSKL';
+  return 'Infak';                       /* infak, sedekah, wakaf, kurban, umum */
+}
+/* Semua akun kas: rekening bank terdaftar + tiga kas tunai. */
+function daftarAkunKas(){
+  var out = [];
+  (readAll(SHEETS.REKENING) || []).forEach(function(r){
+    if (String(r.aktif) === 'false') return;
+    out.push({ kode:'rek:' + r.id, jenis:'rekening', rekeningId:r.id, kasNama:'', dana:_danaRekening(r.fundGroup),
+      label:(r.namaBank || '') + ' - ' + (r.nomor || ''), nomor:String(r.nomor || '') });
+  });
+  KAS_DANA.forEach(function(d){ out.push({ kode:'kas:' + d, jenis:'kas', rekeningId:'', kasNama:'Kas ' + d, dana:d, label:'Kas ' + d, nomor:'' }); });
+  return out;
+}
+/* Kenali label akun dari jurnal ("BPD DIY Syariah - 803211000510", "Kas Infak"). */
+function akunDariLabel(label, listRek){
+  var t = String(label || '').trim();
+  /* "Kas Zakat/Infak/Amil" dan turunannya ("Kas Kemanusiaan" = kas infak
+     terikat kemanusiaan) sama-sama kas dana; dananya ditentukan dari namanya. */
+  var mk = t.match(/^kas\s+(.+)$/i);
+  if (mk) { var d = _danaKas(mk[1]); return { rekeningId:'', kasNama:'Kas ' + d, dana:d, label:'Kas ' + d, dikenal:true }; }
+  var m = t.match(/(\d{6,})\s*$/);
+  var num = m ? m[1].replace(/^0+/, '') : '';
+  var hit = null;
+  (listRek || []).forEach(function(x){
+    if (hit) return;
+    var dbNo = String(x.nomor || '').replace(/\D/g,'').replace(/^0+/,'');
+    if (num && dbNo && dbNo === num) hit = x;
+  });
+  if (!hit && t) (listRek || []).forEach(function(x){
+    if (hit) return;
+    var nm = String(x.namaBank || '').toLowerCase();
+    if (nm && t.toLowerCase().indexOf(nm) === 0 && !/\d{6,}/.test(t)) hit = x;
+  });
+  if (hit) return { rekeningId:hit.id, kasNama:'', dana:_danaRekening(hit.fundGroup), label:(hit.namaBank||'') + ' - ' + (hit.nomor||''), dikenal:true };
+  /* Persediaan barang, piutang, dan aktiva bukan rekening yang perlu didaftarkan:
+     dikenali sebagai akun bukan-uang supaya tidak dilaporkan sebagai akun asing. */
+  if (_akunNonKas(t)) return { rekeningId:'', kasNama:'', dana:'', label:t, dikenal:true, nonKas:true };
+  return { rekeningId:'', kasNama:'', dana:'', label:t, dikenal:false };
+}
+function _kodeAkun(rekeningId, kasNama){ if (rekeningId) return 'rek:' + rekeningId; if (kasNama) return 'kas:' + _danaKas(String(kasNama).replace(/^kas\s+/i,'')); return ''; }
+function _akhirBulan(ym){ var p = String(ym).split('-'); var d = new Date(Number(p[0]), Number(p[1]), 0); return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2); }
+function _hariIni(){ var d = new Date(Date.now() + 7*3600*1000); return d.toISOString().slice(0,10); }
+
+function hitungSaldo(sampai){
+  sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
+  var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
+  var dalam = function(t){ t = String(t || '').slice(0,10); return t >= awalTahun && t <= sampai; };
+
+  var akun = {};
+  daftarAkunKas().forEach(function(a){ akun[a.kode] = { kode:a.kode, jenis:a.jenis, label:a.label, dana:a.dana, rekeningId:a.rekeningId, kasNama:a.kasNama, awal:0, masuk:0, keluar:0, saldo:0 }; });
+  /* akun yang muncul di data tapi tidak terdaftar (rekening nonaktif / tak dikenal) */
+  function slot(kode, label, dana){
+    if (!kode) kode = 'lain:' + (label || '?');
+    if (!akun[kode]) akun[kode] = { kode:kode, jenis:'lain', label:label || kode, dana:dana || '', rekeningId:'', kasNama:'', awal:0, masuk:0, keluar:0, saldo:0, tidakTerdaftar:true };
+    return akun[kode];
+  }
+
+  var ump = {}; KAS_DANA.forEach(function(d){ ump[d] = { awal:0, keluar:0, lpj:0, kembali:0, sisa:0 }; });
+  var umpLay = {};
+  var adaSaldoAwal = false;
+
+  /* saldo awal tahun */
+  (readAll(SHEETS.SALDOAWAL) || []).forEach(function(r){
+    if (String(r.tahun) !== tahun) return;
+    var n = Number(r.nominal) || 0;
+    adaSaldoAwal = true;
+    if (r.jenis === 'ump') { var d = _danaKas(r.dana); ump[d].awal += n; return; }
+    var a = slot(_kodeAkun(r.rekeningId, r.kasNama) || ('lain:' + r.akun), r.akun, r.dana);
+    a.awal += n;
+  });
+
+  /* penghimpunan -> masuk ke rekening / kas dana */
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    /* donasi barang (masuk ke persediaan) bukan uang masuk */
+    if (!r.rekeningId && _akunNonKas(r.bank)) return;
+    var n = Number(r.jumlah) || 0;
+    var kode = r.rekeningId ? ('rek:' + r.rekeningId) : ('kas:' + _danaKas(r.jenisDana));
+    slot(kode, r.bank || ('Kas ' + _danaKas(r.jenisDana)), _danaKas(r.jenisDana)).masuk += n;
+  });
+  /* pentasyarufan -> keluar dari rekening / kas dana; LPJ bukan uang keluar */
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    var n = Number(r.jumlah) || 0;
+    var dana = _danaKas(r.sumberDana);
+    if (/^UMP\s+LPJ/i.test(String(r.section || ''))) {
+      ump[dana].lpj += n;
+      var lay = String(r.namaPenerima || '').trim() || 'Lainnya';
+      umpLay[lay] = umpLay[lay] || { layanan:lay, dana:dana, keluar:0, lpj:0, kembali:0 };
+      umpLay[lay].lpj += n;
+      return;
+    }
+    /* penyaluran berupa barang mengurangi persediaan, bukan kas */
+    if (!r.rekeningId && _akunNonKas(r.bank)) return;
+    var kode = r.rekeningId ? ('rek:' + r.rekeningId) : ('kas:' + dana);
+    slot(kode, r.bank || ('Kas ' + dana), dana).keluar += n;
+  });
+  /* uang muka */
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    var n = Number(r.nominal) || 0, d = _danaKas(r.dana);
+    if (!r.rekeningId && _akunNonKas(r.akun || r.kasNama)) return;
+    var kode = _kodeAkun(r.rekeningId, r.kasNama);
+    var a = slot(kode, r.akun, d);
+    var lay = String(r.layanan || '').trim() || 'Lainnya';
+    umpLay[lay] = umpLay[lay] || { layanan:lay, dana:d, keluar:0, lpj:0, kembali:0 };
+    if (r.jenis === 'kembali') { a.masuk += n; ump[d].kembali += n; umpLay[lay].kembali += n; }
+    else { a.keluar += n; ump[d].keluar += n; umpLay[lay].keluar += n; }
+  });
+  /* transfer antar akun */
+  var transferTotal = 0;
+  (readAll(SHEETS.TRANSFER) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    var n = Number(r.nominal) || 0; transferTotal += n;
+    /* satu sisi boleh berupa akun bukan uang (persediaan/piutang): uang masuk
+       ke rekening tanpa ada rekening lain yang berkurang. */
+    if (!(!r.dariRekeningId && _akunNonKas(r.dariAkun || r.dariKas))) slot(_kodeAkun(r.dariRekeningId, r.dariKas), r.dariAkun, '').keluar += n;
+    if (!(!r.keRekeningId && _akunNonKas(r.keAkun || r.keKas))) slot(_kodeAkun(r.keRekeningId, r.keKas), r.keAkun, '').masuk += n;
+  });
+
+  var perAkun = Object.keys(akun).map(function(k){ var a = akun[k]; a.saldo = a.awal + a.masuk - a.keluar; return a; })
+    .sort(function(x,y){ return (x.jenis === 'kas') - (y.jenis === 'kas') || (x.dana > y.dana ? 1 : -1) || (x.label > y.label ? 1 : -1); });
+
+  var perDana = {};
+  perAkun.forEach(function(a){
+    var d = a.dana || 'Lainnya';
+    perDana[d] = perDana[d] || { dana:d, awal:0, masuk:0, keluar:0, saldoKas:0, ump:0, saldoDana:0 };
+    perDana[d].awal += a.awal; perDana[d].masuk += a.masuk; perDana[d].keluar += a.keluar; perDana[d].saldoKas += a.saldo;
+  });
+  var totalKas = 0, totalUmp = 0;
+  KAS_DANA.forEach(function(d){
+    ump[d].sisa = ump[d].awal + ump[d].keluar - ump[d].lpj - ump[d].kembali;
+    perDana[d] = perDana[d] || { dana:d, awal:0, masuk:0, keluar:0, saldoKas:0, ump:0, saldoDana:0 };
+    perDana[d].ump = ump[d].sisa;
+  });
+  Object.keys(perDana).forEach(function(d){ perDana[d].saldoDana = perDana[d].saldoKas + (perDana[d].ump || 0); totalKas += perDana[d].saldoKas; totalUmp += (perDana[d].ump || 0); });
+
+  var umpPerLayanan = Object.keys(umpLay).map(function(k){ var x = umpLay[k]; x.sisa = x.keluar - x.lpj - x.kembali; return x; })
+    .filter(function(x){ return x.keluar || x.lpj || x.kembali; })
+    .sort(function(a,b){ return b.sisa - a.sisa; });
+
+  return {
+    tanggal: sampai, tahun: tahun, adaSaldoAwal: adaSaldoAwal,
+    perAkun: perAkun, perDana: perDana,
+    totalKasBank: totalKas, totalUmp: totalUmp, totalDana: totalKas + totalUmp,
+    ump: { perDana: ump, perLayanan: umpPerLayanan, totalTransfer: transferTotal },
+    catatan: adaSaldoAwal ? '' : 'Saldo awal tahun ' + tahun + ' belum diisi (Pengaturan > Saldo Awal); angka ini baru menghitung pergerakan sejak 1 Januari.'
+  };
+}
+
+/* Buku mutasi satu akun (rekening / kas): semua pergerakan dalam rentang,
+   urut tanggal, dengan saldo berjalan. Saldo awal periode = saldo awal tahun
+   + pergerakan sebelum tanggal `dari`. */
+function bukuAkun(kode, dari, sampai){
+  sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
+  var tahun = sampai.slice(0,4);
+  dari = (dari && /^\d{4}-\d{2}-\d{2}$/.test(String(dari))) ? String(dari) : (tahun + '-01-01');
+  if (dari.slice(0,4) !== tahun) dari = tahun + '-01-01';
+  var akunInfo = null;
+  daftarAkunKas().forEach(function(a){ if (a.kode === kode) akunInfo = a; });
+  var isRek = kode.indexOf('rek:') === 0, isKas = kode.indexOf('kas:') === 0;
+  var rekeningId = isRek ? kode.slice(4) : '', kasDana = isKas ? kode.slice(4) : '';
+  /* Penentuan akun harus sama persis dengan hitungSaldo():
+     rekening -> rek:<id>; kas -> dari nama kas ("Kas Zakat") bila ada,
+     kalau tidak dari jenis dana; jenisDana null = tanpa cadangan (transfer). */
+  var cocok = function(rId, kNama, jenisDana){
+    if (isRek) return String(rId || '') === rekeningId;
+    if (isKas) {
+      if (rId) return false;
+      if (_akunNonKas(kNama)) return false;
+      var k = kNama ? _kodeAkun('', kNama) : (jenisDana === null ? '' : 'kas:' + _danaKas(jenisDana));
+      return k === kode;
+    }
+    return false;
+  };
+  var gerak = [];
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (String(r.tanggal||'').slice(0,4) !== tahun) return;
+    if (!r.rekeningId && _akunNonKas(r.bank)) return;      /* donasi barang, bukan uang */
+    if (!cocok(r.rekeningId, '', r.jenisDana)) return;
+    gerak.push({ tanggal:String(r.tanggal).slice(0,10), urut:r.dibuat||'', jenis:'Penerimaan', keterangan:(r.namaDonatur||'') + (r.jenisDana ? ' · ' + r.jenisDana + (r.subJenis ? ' / ' + r.subJenis : '') : ''), ref:r.noKwitansi||'', masuk:Number(r.jumlah)||0, keluar:0 });
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (String(r.tanggal||'').slice(0,4) !== tahun) return;
+    if (/^UMP\s+LPJ/i.test(String(r.section||''))) return;
+    if (!r.rekeningId && _akunNonKas(r.bank)) return;      /* penyaluran barang */
+    if (!cocok(r.rekeningId, '', r.sumberDana)) return;
+    gerak.push({ tanggal:String(r.tanggal).slice(0,10), urut:r.dibuat||'', jenis:'Penyaluran', keterangan:(r.namaPenerima||'') + (r.program ? ' · ' + r.program : ''), ref:r.noBukti||'', masuk:0, keluar:Number(r.jumlah)||0 });
+  });
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (String(r.tanggal||'').slice(0,4) !== tahun) return;
+    if (!r.rekeningId && _akunNonKas(r.akun || r.kasNama)) return;
+    if (!cocok(r.rekeningId, r.kasNama, r.dana)) return;
+    var n = Number(r.nominal)||0;
+    gerak.push({ tanggal:String(r.tanggal).slice(0,10), urut:r.dibuat||'', jenis: r.jenis === 'kembali' ? 'Uang muka kembali' : 'Uang muka keluar', keterangan:(r.layanan||'') + (r.keterangan ? ' · ' + r.keterangan : ''), ref:'', masuk: r.jenis === 'kembali' ? n : 0, keluar: r.jenis === 'kembali' ? 0 : n });
+  });
+  (readAll(SHEETS.TRANSFER) || []).forEach(function(r){
+    if (String(r.tanggal||'').slice(0,4) !== tahun) return;
+    var n = Number(r.nominal)||0;
+    var lbl = r.jenis === 'setor' ? 'Setor tunai' : r.jenis === 'tarik' ? 'Tarik tunai' : 'Mutasi';
+    if (cocok(r.dariRekeningId, r.dariKas, null)) gerak.push({ tanggal:String(r.tanggal).slice(0,10), urut:r.dibuat||'', jenis:lbl + ' keluar', keterangan:'ke ' + (r.keAkun||'') + (r.keterangan ? ' · ' + r.keterangan : ''), ref:'', masuk:0, keluar:n });
+    if (cocok(r.keRekeningId, r.keKas, null)) gerak.push({ tanggal:String(r.tanggal).slice(0,10), urut:r.dibuat||'', jenis:lbl + ' masuk', keterangan:'dari ' + (r.dariAkun||'') + (r.keterangan ? ' · ' + r.keterangan : ''), ref:'', masuk:n, keluar:0 });
+  });
+  gerak.sort(function(a,b){ return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : (a.urut < b.urut ? -1 : 1); });
+
+  var awalTahun = 0;
+  (readAll(SHEETS.SALDOAWAL) || []).forEach(function(r){ if (String(r.tahun) === tahun && r.jenis !== 'ump' && _kodeAkun(r.rekeningId, r.kasNama) === kode) awalTahun += Number(r.nominal)||0; });
+  var saldo = awalTahun, awalPeriode = awalTahun, baris = [], masuk = 0, keluar = 0;
+  gerak.forEach(function(g){
+    if (g.tanggal > sampai) return;
+    saldo += g.masuk - g.keluar;
+    if (g.tanggal < dari) { awalPeriode = saldo; return; }
+    masuk += g.masuk; keluar += g.keluar;
+    baris.push({ tanggal:g.tanggal, jenis:g.jenis, keterangan:g.keterangan, ref:g.ref, masuk:g.masuk, keluar:g.keluar, saldo:saldo });
+  });
+  return { kode:kode, akun: akunInfo ? akunInfo.label : kode, dana: akunInfo ? akunInfo.dana : '', dari:dari, sampai:sampai,
+    awalTahun:awalTahun, awalPeriode:awalPeriode, masuk:masuk, keluar:keluar, saldoAkhir:saldo, baris:baris, jumlah:baris.length };
+}
+function apiMutasiAkun(t, kode, dari, sampai){ _requirePerm(t, 'dashboard', 'view'); if (!kode) throw new Error('Akun belum dipilih.'); return bukuAkun(String(kode), dari, sampai); }
+
+function apiSaldo(t, sampai){ _requirePerm(t, 'dashboard', 'view'); return hitungSaldo(sampai); }
+
+/* ---- saldo awal per tahun ---- */
+function apiListSaldoAwal(t, tahun){
+  _requirePerm(t, 'settings', 'view');
+  tahun = String(tahun || new Date().getFullYear());
+  var ada = {};
+  (readAll(SHEETS.SALDOAWAL) || []).forEach(function(r){ if (String(r.tahun) === tahun) ada[r.jenis === 'ump' ? ('ump:' + _danaKas(r.dana)) : _kodeAkun(r.rekeningId, r.kasNama)] = r; });
+  var baris = daftarAkunKas().map(function(a){ var r = ada[a.kode]; return { kode:a.kode, jenis:a.jenis, label:a.label, dana:a.dana, rekeningId:a.rekeningId, kasNama:a.kasNama, nominal: r ? Number(r.nominal) || 0 : 0, keterangan: r ? (r.keterangan || '') : '' }; });
+  var umpAwal = KAS_DANA.map(function(d){ var r = ada['ump:' + d]; return { kode:'ump:' + d, jenis:'ump', label:'Uang muka ' + d + ' belum di-LPJ', dana:d, nominal: r ? Number(r.nominal) || 0 : 0, keterangan: r ? (r.keterangan || '') : '' }; });
+  var tahunAda = {}; (readAll(SHEETS.SALDOAWAL) || []).forEach(function(r){ tahunAda[r.tahun] = 1; });
+  return { tahun: tahun, akun: baris, ump: umpAwal, tahunTersedia: Object.keys(tahunAda).sort() };
+}
+function apiSaveSaldoAwal(t, tahun, baris){
+  var u = _requirePerm(t, 'settings', 'edit');
+  tahun = String(tahun || '');
+  if (!/^\d{4}$/.test(tahun)) throw new Error('Tahun tidak sah.');
+  if (!Array.isArray(baris)) throw new Error('Data saldo awal tidak sah.');
+  /* ganti seluruh baris tahun itu */
+  (readAll(SHEETS.SALDOAWAL) || []).forEach(function(r){ if (String(r.tahun) === tahun) deleteRowById(SHEETS.SALDOAWAL, r.id); });
+  var akunMap = {}; daftarAkunKas().forEach(function(a){ akunMap[a.kode] = a; });
+  var total = 0, n = 0;
+  baris.forEach(function(b){
+    var nominal = Number(b.nominal) || 0;
+    if (!nominal) return;
+    if (b.jenis === 'ump') {
+      insertRow(SHEETS.SALDOAWAL, { id:makeId(), tahun:tahun, jenis:'ump', akun:'UMP ' + _danaKas(b.dana), rekeningId:'', kasNama:'', dana:_danaKas(b.dana), nominal:nominal, keterangan:String(b.keterangan || ''), dibuat:new Date().toISOString(), oleh:u.username });
+    } else {
+      var a = akunMap[b.kode]; if (!a) return;
+      insertRow(SHEETS.SALDOAWAL, { id:makeId(), tahun:tahun, jenis:a.jenis, akun:a.label, rekeningId:a.rekeningId, kasNama:a.kasNama, dana:a.dana, nominal:nominal, keterangan:String(b.keterangan || ''), dibuat:new Date().toISOString(), oleh:u.username });
+      total += nominal;
+    }
+    n++;
+  });
+  audit(u.id, u.username, 'saldo_awal', 'tahun ' + tahun, { modul:'settings', ringkas: n + ' akun, total kas & bank Rp ' + total.toLocaleString('id-ID') });
+  return { ok:true, tahun:tahun, jumlah:n, totalKasBank:total };
+}
+function apiListUangMuka(t){ _requirePerm(t, 'laporan', 'view'); return (readAll(SHEETS.UANGMUKA) || []).sort(function(a,b){ return String(b.tanggal).localeCompare(String(a.tanggal)); }); }
+function apiListTransfer(t){ _requirePerm(t, 'laporan', 'view'); return (readAll(SHEETS.TRANSFER) || []).sort(function(a,b){ return String(b.tanggal).localeCompare(String(a.tanggal)); }); }
 
 /* ===== REKAP KLL / ULL =====
    Satu sumber kebenaran untuk menentukan sebuah transaksi milik Kantor Layanan
@@ -1668,16 +1971,28 @@ function cleanFundraisingName(name) {
   return s;
 }
 
+/* Nama petugas fundraising TIDAK ditulis di jurnal — yang tertulis di uraian
+   adalah nama donatur. Karena itu nama petugas hanya diakui bila:
+     a. ditandai tegas   : "... via Sherli", "oleh Renata", "Fr: Ariya"
+     b. seluruh nama donaturnya memang persis nama petugas itu
+   Pencocokan potongan kata dilarang: "Sariyati" bukan petugas "Ariya",
+   "Hafidz Ariyadi" bukan "Ariya". Daftarnya diambil dari Pengaturan >
+   Fundraising, bukan daftar tetap di kode. */
 function extractFundraisingFromText(text) {
   if (!text) return '';
-  var clean = String(text).toLowerCase();
-  var options = ['lazismu daerah bantul', 'sherli', 'renata', 'ariya', 'nur yulianto', 'muzakki'];
-  var originalOptions = ['Lazismu Daerah Bantul', 'Sherli', 'Renata', 'Ariya', 'Nur Yulianto', 'Muzakki'];
-  for (var i = 0; i < options.length; i++) {
-    var opt = options[i];
-    if (clean.indexOf(opt) >= 0) {
-      return originalOptions[i];
-    }
+  var s = String(text).trim();
+  var norm = jpNorm(s);
+  var donor = jpNorm(s
+    .replace(/^\s*(infa[kq]|zakat|sedekah|wakaf|kurban|qurban|fidyah|amil|dskl)\b/i, '')
+    .replace(/^[^a-zA-Z0-9]*(umum|terikat|mal|fitrah|profesi|penghasilan|perdagangan|pertanian|uang)\b/i, ''));
+  var daftar = [];
+  try { daftar = _bacaFundraising(); } catch (e) { daftar = FUNDRAISING_DEFAULT.slice(); }
+  for (var i = 0; i < daftar.length; i++) {
+    var nm = String(daftar[i] || '').trim();
+    var n = jpNorm(nm);
+    if (!n) continue;
+    if (new RegExp('\\b(?:via|oleh|fr|petugas|fundraiser)\\s+' + n + '\\b').test(norm)) return nm;
+    if (donor === n) return nm;
   }
   return '';
 }
@@ -2097,6 +2412,19 @@ function detectPilarFromText(text) {
    rekening Infak Umum 1011959004 dan 0469988000 ikut terbaca Zakat.
    ================================================================ */
 function jpBersih(x){ return String(x==null?'':x).replace(/\s+/g,' ').trim(); }
+/* Nama pilar di akun kredit ditulis berbeda-beda antar bulan
+   ("Infak Terikat - Sosial" Jan-Mar, "- Sosial Dakwah" sejak Mar). Disamakan
+   supaya laporan tidak memecah satu pilar menjadi dua baris. Nama kategori
+   di luar empat pilar (Qurban, Fidyah, DAM, dsb.) dibiarkan apa adanya. */
+function jpPilarBaku(x){
+  var s = jpBersih(x), l = jpNorm(s);
+  if (!l) return s;
+  if (l === 'sosial' || l === 'dakwah' || l === 'sosial dakwah' || l === 'dakwah sosial') return 'Sosial Dakwah';
+  if (l === 'kemanusiaan' || l === 'bencana' || l === 'sosial kemanusiaan') return 'Kemanusiaan';
+  if (l === 'pendidikan') return 'Pendidikan';
+  if (l === 'kesehatan') return 'Kesehatan';
+  return s;
+}
 function jpNorm(x){ return String(x==null?'':x).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
 /* Sisa kata setelah istilah jenis dana dibuang — dipakai untuk menguji apakah
    catatan bebas benar-benar membawa keterangan baru atau hanya mengulang. */
@@ -2117,6 +2445,75 @@ function jpSubZakat(sisa){
 }
 
 /* Akun kredit -> jenis dana, sub jenis, dan pilar. */
+/* Akun neraca yang BUKAN uang: persediaan barang, piutang, aktiva tetap, dan
+   akumulasi/beban penyusutan. Barang masuk & barang tersalur tetap dicatat
+   sebagai penghimpunan/penyaluran (memang donasi), tetapi tidak boleh menambah
+   atau mengurangi saldo kas & bank. */
+/* Daftar nama akun bank/kas yang muncul di jurnal tetapi belum terdaftar di
+   Pengaturan > No. Rekening. Uangnya tetap dicatat, tetapi tidak bisa
+   ditempelkan ke rekening manapun sehingga saldonya bisa salah tempat —
+   karena itu ditampilkan sebagai peringatan sebelum impor. */
+/* Label yang memang berbentuk rekening bank: mengandung nomor rekening.
+   Kas dana, akun UMP, persediaan, dan akun beban bukan rekening. */
+function _tampakRekening(label){
+  var t = String(label || '').trim();
+  if (!t || /^kas\b/i.test(t) || /^ump\b/i.test(t) || _akunNonKas(t)) return false;
+  return /\d{6,}/.test(t);
+}
+function _kumpulAkunAsing(hasil, listRek){
+  var set = {}, out = [];
+  var tambah = function(label){
+    var t = String(label || '').trim();
+    if (!t || !_tampakRekening(t)) return;
+    if (akunDariLabel(t, listRek).dikenal) return;   /* sudah terdaftar */
+    var k = t.toLowerCase();
+    if (!set[k]) { set[k] = 1; out.push(t); }
+  };
+  (hasil.himpunRows || []).concat(hasil.salurRows || []).forEach(function(r){ if (!r.rekeningId) tambah(r.bank); });
+  (hasil.umpRows || []).forEach(function(r){ tambah(r.akun); });
+  (hasil.transferRows || []).forEach(function(r){ tambah(r.dariAkun); tambah(r.keAkun); });
+  return out;
+}
+
+function _akunNonKas(label){
+  var s = String(label || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!s) return false;
+  return /^persediaan\b/.test(s) || /^piutang\b/.test(s) || /^utang\b/.test(s)
+      || /^(akumulasi|beban)\s+penyusutan\b/.test(s)
+      || /^(aktiva|aset)\b/.test(s) || /^inventaris\b/.test(s);
+}
+
+/* Judul seksi ditulis berbeda-beda antar bulan (dan kadang salah ketik).
+   Semua varian disamakan ke satu nama baku supaya klasifikasinya tidak
+   bergantung pada ejaan penulis jurnal. */
+function jpSeksiBaku(sec){
+  var s = String(sec == null ? '' : sec).toUpperCase().replace(/\s+/g, ' ').trim();
+  if (!s) return s;
+  s = s.replace(/\bOPESIONAL\b/g, 'OPERASIONAL').replace(/\bPENYALIRAN\b/g, 'PENYALURAN');
+  var m;
+  if ((m = s.match(/^UMP\s+LPJ\s+(ZAKAT|INFAK|AMIL)\b/))) return 'UMP LPJ ' + m[1];
+  if ((m = s.match(/^PENYALURAN\s+UMP\s+(ZAKAT|INFAK|AMIL)\b/))) return 'UMP LPJ ' + m[1];
+  if ((m = s.match(/^UMP\s+(ZAKAT|INFAK|AMIL)\b/))) return 'UMP ' + m[1];
+  if (/^PENGEMBALIAN\s+(UMP|UANG\s+MUKA)\b/.test(s)) return 'PENGEMBALIAN UMP';
+  if (/^SETOR\s+TUNAI\b/.test(s)) return 'SETOR TUNAI';
+  if (/^TARIK\s+TUNAI\b/.test(s)) return 'TARIK TUNAI';
+  if (/^MUTASI\s+(DANA|BANK|KAS|ANTAR)\b/.test(s)) return 'MUTASI DANA';
+  /* uang masuk yang bukan donasi: hasil penjualan barang & pelunasan piutang */
+  if (/^PENJUALAN\b/.test(s) || /^PELUNASAN\s+PIUTANG\b/.test(s)) return 'MUTASI DANA';
+  if (/^PENYUSUTAN\b/.test(s)) return 'PENYUSUTAN';
+  if (/^BIAYA\s+ADMINISTRASI\b/.test(s)) return 'BIAYA ADMINISTRASI BANK';
+  if (/^BAGI\s+HASIL\b/.test(s)) return 'BAGI HASIL BANK';
+  if (/^OPERASIONAL\s+AMIL\s+VIA\s+KAS\b/.test(s)) return 'OPERASIONAL AMIL VIA KAS';
+  if (/^OPERASIONAL\s+AMIL\b/.test(s)) return 'OPERASIONAL AMIL VIA BANK';
+  if (/^PENGELUARAN\s+OPERASIONAL\s+VIA\s+KAS\b/.test(s)) return 'PENGELUARAN OPERASIONAL VIA KAS';
+  if (/^PENGELUARAN\s+OPERASIONAL\b/.test(s)) return 'PENGELUARAN OPERASIONAL VIA BANK';
+  if (/^PENYALURAN\s+ZAKAT\b/.test(s)) return 'PENYALURAN ZAKAT';
+  if (/^PENYALURAN\s+(INFAK|INFAQ|SEDEKAH)\s+TERIKAT\b/.test(s)) return 'PENYALURAN INFAK TERIKAT';
+  if (/^PENYALURAN\s+(INFAK|INFAQ|SEDEKAH)\b/.test(s)) return 'PENYALURAN INFAK UMUM';
+  if (/^PENYALURAN\s+PERSEDIAAN\b/.test(s)) return 'PENYALURAN PERSEDIAAN';
+  return s;
+}
+
 function jpDanaDariAkun(akunKredit){
   var s = jpBersih(akunKredit).replace(/^penerimaan\s+/i,'');
   var low = s.toLowerCase();
@@ -2126,7 +2523,7 @@ function jpDanaDariAkun(akunKredit){
   if (mT){
     out.jenisDana = /sedekah/i.test(mT[1]) ? 'Sedekah' : 'Infak';
     out.subJenis  = out.jenisDana + ' Terikat';
-    out.pilar     = jpBersih(mT[2]);
+    out.pilar     = jpPilarBaku(mT[2]);
     return out;
   }
   var mU = s.match(/^(infa[kq]|sedekah)\s+umum\b/i);
@@ -2143,7 +2540,7 @@ function jpDanaDariAkun(akunKredit){
   if (/^amil\b/i.test(s)){
     out.jenisDana = 'Amil';
     out.subJenis  = 'Amil';
-    out.pilar     = jpBersih(s.replace(/^amil\s*(?:[-–—:]\s*)?/i,''));
+    out.pilar     = jpPilarBaku(s.replace(/^amil\s*(?:[-–—:]\s*)?/i,''));
     return out;
   }
   if (/^wakaf\b/i.test(s)){
@@ -2166,7 +2563,7 @@ function jpDanaDariAkun(akunKredit){
     if (mBT){
       out.jenisDana = /sedekah/i.test(mBT[1]) ? 'Sedekah' : 'Infak';
       out.terikat   = true;
-      out.pilar     = jpBersih(mBT[2]);
+      out.pilar     = jpPilarBaku(mBT[2]);
     }
     else if (/^zakat\b/i.test(asal))    out.jenisDana = 'Zakat';
     else if (/^amil\b/i.test(asal))     out.jenisDana = 'Amil';
@@ -2250,7 +2647,8 @@ function jpSeksiHimpun(sec){
   if (!s) return false;
   if (s.indexOf('BAGI HASIL') === 0) return true;
   if (s.indexOf('PENERIMAAN') === 0) return true;
-  if (s === 'PENGEMBALIAN UMP') return true;
+  /* PENGEMBALIAN UMP bukan penerimaan: itu sisa uang muka yang kembali —
+     dicatat sebagai pergerakan uang muka, bukan penghimpunan. */
   /* SETOR TUNAI sengaja TIDAK dihitung penghimpunan: itu perpindahan uang
      kas (yang sudah tercatat di Jurnal Kas) ke rekening bank, bukan
      penerimaan baru dari donatur — kalau dihitung akan dobel. */
@@ -2283,6 +2681,8 @@ function _kumpulAnomaliTgl(himpun, salur){
 function transformJurnalToImportData(rawRows, listRek, listLayanan) {
   var himpunRows = [];
   var salurRows = [];
+  var umpRows = [];        /* uang muka program: keluar / kembali */
+  var transferRows = [];   /* setor tunai, tarik tunai, mutasi antar rekening */
   var currentSection = '';
 
   /* Seksi perpindahan uang internal & UANG MUKA — bukan penerimaan donatur
@@ -2294,10 +2694,19 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
          BUKAN penyaluran. Penyaluran nyata dicatat lewat LPJ (UMP LPJ ...),
          yang mengelompokkan per program sebenarnya. Kalau UMP advance dihitung
          juga, akan dobel dengan LPJ. */
-  var skipSections = [
-    'SETOR TUNAI', 'MUTASI DANA', 'MUTASI BANK', 'TARIK TUNAI',
-    'UMP ZAKAT', 'UMP INFAK', 'UMP AMIL'
-  ];
+  /* PENYUSUTAN hanya jurnal beban vs akumulasi penyusutan — tidak ada uang
+     yang berpindah dan bukan penyaluran, jadi tidak diimpor. */
+  var skipSections = ['PENYUSUTAN'];
+
+  /* Seksi PERGERAKAN KAS — bukan penerimaan donatur, bukan penyaluran, tapi
+     tetap menggerakkan uang sehingga wajib tercatat agar saldo per rekening
+     benar. Arah uang selalu: dari akun KREDIT ke akun DEBET.
+       UMP ZAKAT/INFAK/AMIL : uang muka keluar dari rekening/kas ke KLL/ULL
+       PENGEMBALIAN UMP     : uang muka kembali ke rekening/kas
+       SETOR TUNAI          : kas -> bank      TARIK TUNAI : bank -> kas
+       MUTASI DANA / BANK   : rekening -> rekening (mis. hak amil) */
+  function _seksiUmpKeluar(sec){ return /^UMP\s+(ZAKAT|INFAK|AMIL)$/i.test(sec); }
+  function _seksiTransfer(sec){ return /^(SETOR TUNAI|TARIK TUNAI|MUTASI DANA|MUTASI BANK|MUTASI KAS)$/i.test(sec); }
 
   /* Sebagian berkas jurnal — misalnya rekap bagi hasil bulanan — hanya berisi
      pasangan debet/kredit tanpa judul seksi sama sekali. Berkas seperti itu
@@ -2316,12 +2725,50 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
     // Check if it's a section header
     var secHeader = getSectionHeader(r);
     if (secHeader) {
-      currentSection = secHeader;
+      currentSection = jpSeksiBaku(secHeader);
       continue;
     }
 
     if (skipSections.indexOf(currentSection) >= 0) continue;
     if (!currentSection && adaSeksi) continue;
+
+    /* ---- pergerakan kas: UMP & transfer ---- */
+    if (_seksiUmpKeluar(currentSection) || /^PENGEMBALIAN UMP$/i.test(currentSection) || _seksiTransfer(currentSection)) {
+      if (!(r.length >= 3 && isValidDateStringOrObject(r[0]))) continue;
+      var pDebet = parseAmount(r[2]), pKredit = parseAmount(r[3]);
+      if (!(pDebet > 0 && pKredit === 0)) continue;          /* hanya baris debet; kredit = pasangannya */
+      var pNext = rawRows[i+1];
+      if (!pNext || !isValidDateStringOrObject(pNext[0]) || !(parseAmount(pNext[3]) > 0)) continue;
+      var pTgl = parseImportDate(r[0]);
+      var akunDebet = String(r[1] || '').trim(), akunKredit = String(pNext[1] || '').trim();
+      var pUraian = String(r[4] || pNext[4] || '').trim();
+      var aD = akunDariLabel(akunDebet, listRek), aK = akunDariLabel(akunKredit, listRek);
+
+      if (_seksiUmpKeluar(currentSection)) {
+        /* debet = akun UMP (aset), kredit = rekening/kas yang mengeluarkan uang */
+        var dUmp = /ZAKAT/i.test(currentSection) ? 'Zakat' : /AMIL/i.test(currentSection) ? 'Amil' : 'Infak';
+        var layU = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian) : null;
+        var layNama = layU ? (layU.tipe + ' ' + layU.nama) : (extractLayananFromText(pUraian, listLayanan) ? _layLabel(extractLayananFromText(pUraian, listLayanan)) : '');
+        umpRows.push({ tanggal:pTgl, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
+          akun:aK.label, rekeningId:aK.rekeningId, kasNama:aK.kasNama, nominal:pDebet,
+          keterangan:pUraian, section:currentSection, akunDikenal:aK.dikenal });
+      } else if (/^PENGEMBALIAN UMP$/i.test(currentSection)) {
+        /* debet = rekening/kas yang menerima uang kembali, kredit = akun UMP */
+        var dK = /zakat/i.test(akunKredit) ? 'Zakat' : /amil/i.test(akunKredit) ? 'Amil' : 'Infak';
+        var layK = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian) : null;
+        umpRows.push({ tanggal:pTgl, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
+          akun:aD.label, rekeningId:aD.rekeningId, kasNama:aD.kasNama, nominal:pDebet,
+          keterangan:pUraian, section:currentSection, akunDikenal:aD.dikenal });
+      } else {
+        var jT = /SETOR/i.test(currentSection) ? 'setor' : /TARIK/i.test(currentSection) ? 'tarik' : 'mutasi';
+        transferRows.push({ tanggal:pTgl, jenis:jT,
+          dariAkun:aK.label, dariRekeningId:aK.rekeningId, dariKas:aK.kasNama,
+          keAkun:aD.label, keRekeningId:aD.rekeningId, keKas:aD.kasNama,
+          nominal:pDebet, keterangan:pUraian, section:currentSection,
+          akunDikenal: aK.dikenal && aD.dikenal });
+      }
+      continue;
+    }
 
     // It's a data row, must have date in col 0
     if (r.length >= 3 && isValidDateStringOrObject(r[0])) {
@@ -2376,7 +2823,13 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             return dbNo === rekNoClean;
           });
         }
-        if (!matchedRek) {
+        /* Pencocokan lewat NAMA bank hanya boleh dipakai bila labelnya memang
+           tidak menyebut nomor rekening. Kalau nomornya ada tetapi tidak ada di
+           daftar (mis. "BCA Syariah Zakat - 0469900880" sementara yang
+           terdaftar 0469988000), rekeningnya memang belum terdaftar — jangan
+           dipaksakan ke rekening lain yang kebetulan senama, karena uangnya
+           akan masuk ke rekening yang salah. */
+        if (!matchedRek && !/\d{6,}/.test(lookupName)) {
           var accLower = lookupName.toLowerCase();
           matchedRek = listRek.find(function(x) {
             var dbName = String(x.namaBank || '').toLowerCase();
@@ -2573,6 +3026,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           currentSection === 'PENYALURAN ZAKAT' ||
           currentSection === 'PENYALURAN INFAK TERIKAT' ||
           currentSection === 'PENYALURAN INFAK UMUM' ||
+          currentSection === 'PENYALURAN PERSEDIAAN' ||
           currentSection === 'UMP ZAKAT' ||
           currentSection === 'UMP INFAK' ||
           currentSection === 'UMP AMIL' ||
@@ -2604,6 +3058,11 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             sumberDana = 'Amil';
             ashnaf = 'Amil';
             namaPenerima = 'Lazismu Daerah Bantul';
+          } else if (currentSection === 'PENYALURAN PERSEDIAAN') {
+            /* penyaluran barang: dananya mengikuti akun penyalurannya
+               ("Penyaluran Zakat - Fakir Miskin" -> Zakat) */
+            sumberDana = /zakat/i.test(accName) ? 'Zakat' : /amil/i.test(accName) ? 'Amil' : 'Infak';
+            if (sumberDana === 'Zakat') ashnaf = 'Fakir Miskin';
           } else if (currentSection === 'PENYALURAN ZAKAT' || currentSection === 'UMP ZAKAT' || currentSection === 'UMP LPJ ZAKAT') {
             sumberDana = 'Zakat';
             /* ashnaf dibaca dari nama akun "Penyaluran Zakat - Fakir Miskin". */
@@ -2665,7 +3124,9 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
   
   return {
     himpunRows: himpunRows,
-    salurRows: salurRows
+    salurRows: salurRows,
+    umpRows: umpRows,
+    transferRows: transferRows
   };
 }
 
@@ -2719,10 +3180,15 @@ async function apiParseImportUrl(t, url, type) {
     
     var XLSX = require('xlsx');
     var workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
-    var sheetName = workbook.SheetNames[0];
-    var sheet = workbook.Sheets[sheetName];
-    
-    var rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    /* Workbook setahun biasanya satu sheet per bulan: semua sheet yang tampak
+       seperti jurnal digabung berurutan. Sheet lain (rekap, catatan) dilewati.
+       Bila tak satu pun dikenali, kembali ke sheet pertama seperti dulu. */
+    var rawRows = [], sheetTerbaca = [];
+    workbook.SheetNames.forEach(function(nm){
+      var rows = XLSX.utils.sheet_to_json(workbook.Sheets[nm], { header: 1, defval: '' });
+      if (checkIsJurnalPenerimaan(rows)) { rawRows = rawRows.concat(rows); sheetTerbaca.push(nm); }
+    });
+    if (!sheetTerbaca.length) { rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' }); sheetTerbaca = [workbook.SheetNames[0]]; }
     var isJurnal = checkIsJurnalPenerimaan(rawRows);
     
     if (isJurnal) {
@@ -2759,7 +3225,13 @@ async function apiParseImportUrl(t, url, type) {
         salurInvalid: salurInvalid,
         bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
         anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid),
-        totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length
+        sheetTerbaca: (typeof sheetTerbaca !== 'undefined') ? sheetTerbaca : [],
+        umpValid: resultJurnal.umpRows || [],
+        transferValid: resultJurnal.transferRows || [],
+        akunAsing: _kumpulAkunAsing(resultJurnal, listRek),
+        akunTakDikenal: (resultJurnal.umpRows || []).concat(resultJurnal.transferRows || []).filter(function(x){ return x.akunDikenal === false; }).length
+          + (resultJurnal.himpunRows || []).concat(resultJurnal.salurRows || []).filter(function(x){ return !x.rekeningId && _tampakRekening(x.bank); }).length,
+        totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length + (resultJurnal.umpRows || []).length + (resultJurnal.transferRows || []).length
       };
     } else {
       // Check for headerless format
@@ -3221,7 +3693,12 @@ async function apiParseImportText(t, text, type) {
         salurInvalid: salurInvalid,
         bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
         anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid),
-        totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length
+        umpValid: resultJurnal.umpRows || [],
+        transferValid: resultJurnal.transferRows || [],
+        akunAsing: _kumpulAkunAsing(resultJurnal, listRek),
+        akunTakDikenal: (resultJurnal.umpRows || []).concat(resultJurnal.transferRows || []).filter(function(x){ return x.akunDikenal === false; }).length
+          + (resultJurnal.himpunRows || []).concat(resultJurnal.salurRows || []).filter(function(x){ return !x.rekeningId && _tampakRekening(x.bank); }).length,
+        totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length + (resultJurnal.umpRows || []).length + (resultJurnal.transferRows || []).length
       };
     }
     
@@ -3313,10 +3790,31 @@ async function apiParseImportText(t, text, type) {
 
 async function apiSaveImportedData(t, rows, type) {
   var u = authUser(t);
-  _requirePerm(t, type === 'himpun' ? 'penghimpunan' : 'pentasyarufan', 'create');
-  
   if (!Array.isArray(rows) || !rows.length) throw new Error('Tidak ada data untuk diimpor.');
-  
+
+  /* Pergerakan kas (uang muka & transfer) disimpan ke tabelnya sendiri —
+     tidak menyentuh penghimpunan/pentasyarufan, hanya saldo per akun. */
+  if (type === 'ump' || type === 'transfer') {
+    _requirePerm(t, 'pentasyarufan', 'create');
+    var sheetK = type === 'ump' ? SHEETS.UANGMUKA : SHEETS.TRANSFER;
+    /* Anti-dobel: baris dengan tanggal, jenis, nominal, akun & keterangan yang
+       sama persis dianggap sudah pernah diimpor. */
+    var sidik = function(r){ return [r.tanggal, r.jenis, Math.round(Number(r.nominal)||0), r.akun || (r.dariAkun + '>' + r.keAkun), String(r.keterangan||'').trim().toLowerCase()].join('|'); };
+    var ada = {}; (readAll(sheetK) || []).forEach(function(r){ ada[sidik(r)] = 1; });
+    var nK = 0, nDobel = 0;
+    rows.forEach(function(row){
+      var b = {}; Object.keys(row).forEach(function(k){ if (k !== 'akunDikenal' && k !== 'isDuplicate') b[k] = row[k]; });
+      var sd = sidik(b);
+      if (ada[sd]) { nDobel++; return; }
+      ada[sd] = 1;
+      b.id = makeId(); b.petugas = u.nama; b.dibuat = new Date().toISOString();
+      insertRow(sheetK, b); nK++;
+    });
+    audit(u.id, u.username, 'import_' + type, nK + ' data berhasil diimpor' + (nDobel ? ', ' + nDobel + ' dilewati (sudah ada)' : ''));
+    return { ok:true, count:nK, dilewati:nDobel };
+  }
+
+  _requirePerm(t, type === 'himpun' ? 'penghimpunan' : 'pentasyarufan', 'create');
   var isHimpun = type === 'himpun';
   var sheetName = isHimpun ? SHEETS.PENGHIMPUNAN : SHEETS.PENTASYARUFAN;
   
@@ -4210,7 +4708,13 @@ async function apiHapusRentang(t, d){
   }
   out.terhapusHimpun = buang(SHEETS.PENGHIMPUNAN);
   out.terhapusSalur  = buang(SHEETS.PENTASYARUFAN);
-  out.terhapus = out.terhapusHimpun + out.terhapusSalur;
+  /* Pergerakan kas (uang muka & transfer) ikut dibersihkan bersama
+     pentasyarufan, supaya impor ulang periode yang sama tidak menggandakan
+     saldo per rekening. */
+  if (ambil[SHEETS.PENTASYARUFAN]) { ambil[SHEETS.UANGMUKA] = true; ambil[SHEETS.TRANSFER] = true; }
+  out.terhapusUmp      = buang(SHEETS.UANGMUKA);
+  out.terhapusTransfer = buang(SHEETS.TRANSFER);
+  out.terhapus = out.terhapusHimpun + out.terhapusSalur + out.terhapusUmp + out.terhapusTransfer;
 
   audit(u.id, u.username, 'hapus_rentang', dari + ' s/d ' + sampai,
     { modul:'settings',
@@ -4905,6 +5409,12 @@ REGISTRY['apiSavePentasyarufan']=apiSavePentasyarufan;
 REGISTRY['apiDeletePentasyarufan']=apiDeletePentasyarufan;
 REGISTRY['apiGetBuktiPentasyarufan']=apiGetBuktiPentasyarufan;
 REGISTRY['apiListRekening']=apiListRekening;
+REGISTRY['apiSaldo']=apiSaldo;
+REGISTRY['apiMutasiAkun']=apiMutasiAkun;
+REGISTRY['apiListSaldoAwal']=apiListSaldoAwal;
+REGISTRY['apiSaveSaldoAwal']=apiSaveSaldoAwal;
+REGISTRY['apiListUangMuka']=apiListUangMuka;
+REGISTRY['apiListTransfer']=apiListTransfer;
 REGISTRY['apiSaveRekening']=apiSaveRekening;
 REGISTRY['apiDeleteRekening']=apiDeleteRekening;
 REGISTRY['apiListLayanan']=apiListLayanan;

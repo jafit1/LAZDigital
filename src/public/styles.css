@@ -3471,3 +3471,7 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 .cad-baris:hover{border-color:var(--border)}
 .cad-baris-n{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:520px){.cad-baris{flex-wrap:wrap}.cad-baris-n{flex:1 1 100%}}
+
+/* ---------- 47. MENU SALDO KAS & BANK ---------- */
+.saldo-buku{margin:-2px 0 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface);animation:pubBuka .2s ease}
+@keyframes pubBuka{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
