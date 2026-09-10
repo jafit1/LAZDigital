@@ -34,8 +34,17 @@ async function buatFixture(){
   /* kantor bersaldo minus: LPJ melebihi uang mukanya */
   await ump('KLL Sedayu',1000000,'2026-06-01');
   await lpj('KLL Sedayu',3000000,'2026-06-05');           // belum LPJ jadi minus
-  /* penghimpunan tingkat daerah */
-  await setor('Lazismu Daerah Bantul',30000000,'2026-01-08');
+  /* Penghimpunan tingkat daerah: beberapa bulan dan beberapa pilar, supaya
+     saringan bulan & pilar benar-benar punya sesuatu untuk disaring. */
+  const setorP=(nama,jumlah,tgl,sub,pilar)=>call('apiSaveImportedData',[T,[{tanggal:tgl,namaDonatur:nama,
+    jenisDana:'Infak',subJenis:sub,pilar:pilar||'',jumlah:jumlah,metode:'Transfer Bank',
+    keterangan:'Setoran '+nama,fundraising:'Kantor'}],'himpun']);
+  await setorP('Lazismu Daerah Bantul',30000000,'2026-01-08','Infak Umum','');
+  await setorP('Hamba Allah A',10000000,'2026-01-15','Infak Terikat','Kemanusiaan');
+  await setorP('Hamba Allah B',6000000,'2026-02-10','Infak Terikat','Pendidikan');
+  await setorP('Hamba Allah C',4000000,'2026-02-20','Infak Terikat','Kemanusiaan');
+  await setorP('Toko Berkah',2000000,'2026-03-11','Infak Terikat','Kesehatan');
+  await setorP('Warga Sekitar',1000000,'2026-03-25','Infak Umum','');
 
   /* pengguna staf: satu tanpa izin saldo daerah, satu dengan izin */
   await call('apiSaveUser',[T,{username:'staf1',nama:'Staf Tanpa Izin',role:'staff',aktif:true,layanan:'',
@@ -146,8 +155,60 @@ async function buatFixture(){
  }));
  cek('daerah tidak ikut dihitung sebagai kantor layanan', await p.evaluate(()=>!document.querySelector('.kll-baris .kll-nama b').textContent.match(/Penghimpunan Daerah/)));
  await p.evaluate(()=>document.querySelector('.kll-daerah .saldo-grup-h').click());
- await p.waitForTimeout(2000);
- cek('rincian daerah bisa dibuka', await p.evaluate(()=>{const e=document.querySelector('.kll-daerah .saldo-buku');return !!e && /Setoran/.test(e.innerText);}));
+ await p.waitForSelector('.daerah-kpi',{timeout:15000}); await p.waitForTimeout(500);
+ cek('rincian daerah bisa dibuka', await p.evaluate(()=>{const e=document.querySelector('#daerahIsi');return !!e && /setoran/i.test(e.innerText);}));
+
+ console.log('\n=== F2. RINGKASAN & SARINGAN DAERAH ===');
+ const ang=()=>p.evaluate(()=>[...document.querySelectorAll('.daerah-k-v')].map(x=>Number(x.textContent.replace(/[^\d]/g,''))));
+ let a3=await ang();
+ /* setoran daerah = 30jt + 10jt + 6jt + 4jt + 2jt + 1jt = 53jt; amil 12,5% = 6.625.000 */
+ cek('setoran daerah 53.000.000', a3[0]===53000000, a3);
+ cek('hak amil 6.625.000', a3[1]===6625000, a3);
+ cek('dana siap salur 46.375.000', a3[2]===46375000, a3);
+ cek('tidak ada alur uang muka / belum LPJ di bagian daerah',
+   await p.evaluate(()=>!/uang muka|belum LPJ/i.test(document.getElementById('daerahIsi').innerText)));
+
+ const pil=()=>p.evaluate(()=>[...document.querySelectorAll('.daerah-p-n')].map(x=>x.textContent.replace(/jenis/,'').trim()));
+ cek('porsi per pilar tergambar', (await pil()).length>=4, await pil());
+ cek('pilar Kemanusiaan ada', (await pil()).some(x=>/Kemanusiaan/.test(x)), await pil());
+
+ await p.evaluate(()=>daerahSaring('bulan','2026-02')); await p.waitForTimeout(1200);
+ a3=await ang();
+ cek('saring Februari: setoran 10.000.000', a3[0]===10000000, a3);
+ cek('saring Februari: dana siap salur 8.750.000', a3[2]===8750000, a3);
+ cek('posisi kumulatif s/d akhir bulan ikut disebut',
+   await p.evaluate(()=>/Posisi s\/d akhir Februari/i.test(document.getElementById('daerahIsi').innerText)));
+ cek('kumulatif Februari = 50.000.000',
+   await p.evaluate(async()=>{const r=await gas('apiRincianDaerah')(TOKEN,KLL_TGL,'2026-02','','',200);return Math.round(r.kumulatif.setoran)===50000000;}));
+
+ await p.evaluate(()=>daerahSaring('bulan','')); await p.waitForTimeout(1200);
+ await p.evaluate(()=>daerahSaring('pilar','Kemanusiaan')); await p.waitForTimeout(1200);
+ a3=await ang();
+ cek('saring pilar Kemanusiaan: setoran 14.000.000', a3[0]===14000000, a3);
+ cek('pilar terpilih ditandai', await p.evaluate(()=>document.querySelectorAll('.daerah-p.on').length)===1);
+ await p.evaluate(()=>daerahSaring('pilar','Kemanusiaan')); await p.waitForTimeout(1200);
+ cek('klik lagi melepas saringan pilar', (await ang())[0]===53000000, await ang());
+
+ console.log('\n=== F3. RINCIAN & PENCARIAN KECIL ===');
+ cek('rincian tersembunyi sampai diminta', await p.evaluate(()=>!document.querySelector('#daerahIsi table')));
+ await p.evaluate(()=>daerahRinci()); await p.waitForTimeout(600);
+ cek('rincian tergambar setelah diklik', await p.evaluate(()=>!!document.querySelector('#daerahIsi table')));
+ cek('jumlah baris sesuai', await p.evaluate(()=>document.querySelectorAll('#daerahIsi tbody tr').length)===6,
+   await p.evaluate(()=>document.querySelectorAll('#daerahIsi tbody tr').length));
+ cek('kotak pencarian ada dan kecil',
+   await p.evaluate(()=>{const c=document.getElementById('daerahCari');return !!c && c.getBoundingClientRect().width<=260;}));
+ await p.evaluate(()=>daerahCari('toko')); await p.waitForTimeout(1500);
+ cek('pencarian menyaring baris', await p.evaluate(()=>document.querySelectorAll('#daerahIsi tbody tr').length)===1,
+   await p.evaluate(()=>document.querySelectorAll('#daerahIsi tbody tr').length));
+ cek('total hasil pencarian disebutkan',
+   await p.evaluate(()=>/Hasil pencarian/i.test(document.getElementById('daerahIsi').innerText)));
+ cek('fokus kotak pencarian tidak lepas saat mengetik',
+   await p.evaluate(()=>document.activeElement && document.activeElement.id==='daerahCari'));
+ await p.evaluate(()=>daerahCari('')); await p.waitForTimeout(1500);
+ cek('mengosongkan pencarian mengembalikan semua baris',
+   await p.evaluate(()=>document.querySelectorAll('#daerahIsi tbody tr').length)===6);
+ await p.evaluate(()=>daerahRinci()); await p.waitForTimeout(400);
+ cek('rincian bisa disembunyikan lagi', await p.evaluate(()=>!document.querySelector('#daerahIsi table')));
 
  console.log('\n=== G. IZIN PENGGUNA ===');
  await masuk('staf1','Staf1#2026');
@@ -159,6 +220,10 @@ async function buatFixture(){
  }));
  cek('staf tanpa izin: membuka rincian daerah ditolak', await p.evaluate(async()=>{
    try{ await gas('apiDetailSaldoLayanan')(TOKEN,'Penghimpunan Daerah',KLL_TGL); return false; }
+   catch(e){ return /IZIN/.test(e.message||String(e)); }
+ }));
+ cek('staf tanpa izin: API rincian daerah ditolak', await p.evaluate(async()=>{
+   try{ await gas('apiRincianDaerah')(TOKEN,KLL_TGL,'','','',50); return false; }
    catch(e){ return /IZIN/.test(e.message||String(e)); }
  }));
  cek('staf tanpa izin tetap melihat kantor layanan', (await namaBaris()).length===5);

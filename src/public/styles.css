@@ -3101,6 +3101,53 @@ html[data-theme="dark"] .kpi-v2:first-child .kpi-v2-value .rp-neg{background:#fe
 .kll-daerah .cad-baris{cursor:pointer}
 .kll-daerah{border-color:color-mix(in srgb,var(--accent) 35%,var(--border)) !important}
 
+/* ---------- PENGHIMPUNAN DAERAH ---------- */
+.daerah-isi{border-top:1px solid var(--border);padding:12px}
+.daerah-alat{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.daerah-alat .kll-urut{min-width:230px}
+
+.daerah-kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.daerah-k{border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--surface)}
+.daerah-k.kuat{border-color:var(--accent);background:var(--accent-soft)}
+.daerah-k.amil{border-color:color-mix(in srgb,#8b5cf6 40%,transparent)}
+.daerah-k-l{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.daerah-k-v{font-family:var(--head);font-size:19px;font-weight:800;color:var(--text);margin-top:3px;line-height:1.2}
+.daerah-k-k{font-size:11px;color:var(--muted);margin-top:2px}
+.daerah-kum{
+  font-size:11.5px;color:var(--text2);background:var(--surface3);
+  border:1px solid var(--border);border-radius:10px;padding:7px 11px;margin-top:10px;line-height:1.5;
+}
+.daerah-j{font-family:var(--head);font-size:12.5px;font-weight:700;color:var(--text);margin:14px 0 8px}
+
+/* porsi tiap pilar: bisa diklik untuk menyaring */
+.daerah-pilar{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.daerah-p{
+  text-align:left;border:1px solid var(--border);border-radius:11px;padding:9px 11px;
+  background:var(--surface);cursor:pointer;display:block;width:100%;
+  transition:border-color .15s,background .15s;
+}
+.daerah-p:hover{border-color:var(--accent)}
+.daerah-p.on{border-color:var(--accent);background:var(--accent-soft)}
+.daerah-p-n{display:block;font-size:12px;font-weight:700;color:var(--text);overflow-wrap:anywhere}
+.daerah-p-n i{font-style:normal;font-size:9.5px;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:0 4px;margin-left:4px}
+.daerah-p-v{display:block;font-family:var(--head);font-size:15px;font-weight:800;color:var(--text);margin-top:2px;font-variant-numeric:tabular-nums}
+.daerah-p-b{display:block;height:4px;border-radius:4px;background:var(--border);margin:6px 0 4px;overflow:hidden}
+.daerah-p-b i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.daerah-p-k{display:block;font-size:10.5px;color:var(--muted)}
+
+.daerah-rinci-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 8px}
+.daerah-cari{
+  margin-left:auto;max-width:230px;font-size:12px;padding:6px 10px;border-radius:9px;
+  border:1px solid var(--border);background:var(--surface);color:var(--text);
+}
+.daerah-cari:focus{outline:none;border-color:var(--accent)}
+
+@media(max-width:760px){
+  .daerah-kpi{grid-template-columns:1fr}
+  .daerah-cari{margin-left:0;max-width:100%;width:100%}
+  .daerah-alat .kll-urut{min-width:0;width:100%}
+}
+
 /* Di layar sempit kisi diruntuhkan jadi daftar berlabel — angkanya tetap
    lengkap, tetapi tiap angka membawa namanya sendiri. */
 @media(max-width:900px){

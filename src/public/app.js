@@ -3022,29 +3022,157 @@ function renderKll(hanyaTabel){
   /* Bagian daerah digambar terpisah supaya bisa ikut terbuka/tertutup tanpa
      menggambar ulang seluruh halaman — sebelumnya mengklik kartunya tidak
      memunculkan apa-apa karena hanya tabel kantor yang digambar ulang. */
-  if(el('kllDaerah')) el('kllDaerah').innerHTML = _kartuDaerah(d);
+  if(el('kllDaerah')){
+    el('kllDaerah').innerHTML = _kartuDaerah(d);
+    if(DAERAH_BUKA) daerahMuat();
+  }
   el('kllTabel').innerHTML = _tabelKll(baris, semua.length);
   if(KLL_BUKA) kllMuatRinci(KLL_BUKA);
 }
 
-/* Kartu "Penghimpunan Daerah". Hanya digambar bila server memang mengirim
-   angkanya — tanpa izin, datanya tidak pernah sampai ke peramban. */
+/* ============ PENGHIMPUNAN DAERAH ============
+   "Daerah" = seluruh dana yang di dalamnya tidak ada KLL maupun ULL. Berbeda
+   dengan kantor layanan, daerah menyalurkan langsung tanpa uang muka — jadi
+   alur "uang muka → LPJ" tidak berlaku di sini dan dulu justru menampilkan
+   "belum LPJ" minus yang membingungkan. Yang ditampilkan sekarang: berapa
+   terhimpun, berapa hak amilnya, dan dana siap salurnya dipecah per pilar. */
+var DAERAH_BUKA = false;
+var DAERAH_BULAN = '';
+var DAERAH_PILAR = '';
+var DAERAH_CARI = '';
+var DAERAH_DATA = null;
+var DAERAH_RINCI = false;
+var _daerahTimer = null;
+
 function _kartuDaerah(d){
   if(!(d && d.bolehDaerah && d.daerah)) return '';
-  var dd = d.daerah, buka = _norm2(KLL_BUKA) === _norm2(dd.layanan);
-  return '<div class="card sk-card kll-daerah'+(buka?' buka':'')+'">'
-    + '<div class="cad-baris saldo-grup-h" onclick="kllBuka(\''+esc(dd.layanan).replace(/'/g,"\\'")+'\')">'
+  var dd = d.daerah;
+  return '<div class="card sk-card kll-daerah'+(DAERAH_BUKA?' buka':'')+'">'
+    + '<div class="cad-baris saldo-grup-h" onclick="daerahBuka()">'
       + '<div class="cad-baris-n"><b>Penghimpunan Daerah</b> <span class="badge">khusus</span>'
-        + '<div class="muted" style="font-size:11px">dihimpun langsung oleh daerah, tanpa penanda KLL/ULL &middot; '
-        + 'setor '+rp(dd.himpun)+' &middot; amil '+rp(dd.hakAmil)
-        + (dd.umpKeluar ? ' &middot; uang muka '+rp(dd.umpKeluar) : '')+'</div></div>'
-      + '<div class="saldo-nilai"><div style="text-align:right"><div class="saldo-angka">'+_rpW(dd.sisaSaldo)+'</div>'
-        + '<div class="muted" style="font-size:10.5px">masih di daerah</div></div>'
-        + '<span class="pub-lay-c"'+(buka?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div>'
+        + '<div class="muted" style="font-size:11px">seluruh dana yang tidak berpenanda KLL/ULL &middot; '
+        + 'setor '+rp(dd.himpun)+' &middot; hak amil '+rp(dd.hakAmil)+'</div></div>'
+      + '<div class="saldo-nilai"><div style="text-align:right"><div class="saldo-angka">'+_rpW(dd.saldoKLL)+'</div>'
+        + '<div class="muted" style="font-size:10.5px">dana siap salur</div></div>'
+        + '<span class="pub-lay-c"'+(DAERAH_BUKA?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div>'
     + '</div>'
-    + (buka ? '<div id="'+_idKll(dd.layanan)+'" class="saldo-buku"><div class="muted" style="font-size:12.5px;padding:10px">Memuat rincian...</div></div>' : '')
+    + (DAERAH_BUKA ? '<div id="daerahIsi" class="daerah-isi"><div class="muted" style="font-size:12.5px;padding:12px">Memuat rincian...</div></div>' : '')
     + '</div>';
 }
+
+function daerahBuka(){
+  DAERAH_BUKA = !DAERAH_BUKA;
+  if(el('kllDaerah')) el('kllDaerah').innerHTML = _kartuDaerah(KLL_DATA);
+  if(DAERAH_BUKA) daerahMuat();
+}
+function daerahSaring(jenis, nilai){
+  if(jenis === 'bulan') DAERAH_BULAN = nilai;
+  else if(jenis === 'pilar') DAERAH_PILAR = (DAERAH_PILAR === nilai ? '' : nilai);
+  daerahMuat();
+}
+function daerahReset(){ DAERAH_BULAN=''; DAERAH_PILAR=''; DAERAH_CARI=''; daerahMuat(); }
+function daerahRinci(){ DAERAH_RINCI = !DAERAH_RINCI; daerahGambar(); if(DAERAH_RINCI){ var c=el('daerahCari'); if(c) c.focus(); } }
+/* Pencarian dijalankan di server: baris rincian yang dikirim dibatasi, jadi
+   mencari di sisi peramban saja akan melewatkan baris yang tidak terkirim. */
+function daerahCari(v){
+  DAERAH_CARI = v;
+  clearTimeout(_daerahTimer);
+  _daerahTimer = setTimeout(function(){ daerahMuat(true); }, 350);
+}
+
+function daerahMuat(jagaFokus){
+  var host = el('daerahIsi'); if(!host) return;
+  if(!DAERAH_DATA) host.innerHTML = '<div class="muted" style="font-size:12.5px;padding:12px">Memuat rincian...</div>';
+  gas('apiRincianDaerah')(TOKEN, KLL_TGL, DAERAH_BULAN, DAERAH_PILAR, DAERAH_CARI, 200).then(function(r){
+    DAERAH_DATA = r;
+    daerahGambar(jagaFokus);
+  }).catch(function(e){
+    var h = el('daerahIsi'); if(h) h.innerHTML = '<div class="imp-note imp-warn" style="margin:10px">'+esc(e.message||e)+'</div>';
+  });
+}
+
+function daerahGambar(jagaFokus){
+  var host = el('daerahIsi'), r = DAERAH_DATA; if(!host || !r) return;
+  var namaBulan = function(b){ var x=b.split('-'); return BULAN[Number(x[1])]+' '+x[0]; };
+  var adaSaring = DAERAH_BULAN || DAERAH_PILAR || DAERAH_CARI;
+
+  var h = '<div class="daerah-alat">'
+    + '<div class="kll-saring"><span class="kll-saring-l">Bulan</span>'
+    + '<select class="kll-urut" onchange="daerahSaring(\'bulan\',this.value)">'
+    + '<option value=""'+(DAERAH_BULAN?'':' selected')+'>Semua bulan '+r.tahun+'</option>'
+    + (r.perBulan||[]).map(function(b){
+        return '<option value="'+esc(b.bulan)+'"'+(DAERAH_BULAN===b.bulan?' selected':'')+'>'+esc(namaBulan(b.bulan))+' — '+rp(b.saldo)+'</option>';
+      }).join('')
+    + '</select></div>'
+    + (adaSaring ? '<button class="kll-hapus" onclick="daerahReset()">hapus saringan</button>' : '')
+    + '</div>';
+
+  /* Tiga angka pokok. Saat satu bulan dipilih, angka bulan itu yang jadi
+     pokok dan posisi kumulatifnya tetap disebut di bawahnya — dua pertanyaan
+     yang berbeda ("bulan itu dapat berapa" dan "waktu itu ada berapa") sering
+     tertukar kalau hanya satu yang ditampilkan. */
+  var rk = r.ringkas;
+  h += '<div class="daerah-kpi">'
+    + _kotakDaerah('Setoran', rk.setoran, (DAERAH_BULAN?namaBulan(DAERAH_BULAN):'sejak awal '+r.tahun)+' · '+rk.n+' transaksi')
+    + _kotakDaerah('Hak amil', rk.hakAmil, 'dipotong dari setoran', 'amil')
+    + _kotakDaerah('Dana siap salur', rk.saldo, 'setelah hak amil', 'kuat')
+    + '</div>';
+  if(DAERAH_BULAN){
+    h += '<div class="daerah-kum">Posisi s/d akhir '+esc(namaBulan(DAERAH_BULAN))+': setoran <b>'+rp(r.kumulatif.setoran)
+      + '</b> &middot; hak amil <b>'+rp(r.kumulatif.hakAmil)+'</b> &middot; dana siap salur <b>'+rp(r.kumulatif.saldo)+'</b></div>';
+  }
+
+  /* Porsi tiap pilar. Diklik = ikut menyaring, jadi tabel dan angka pokok di
+     atas langsung mengikuti pilar yang dipilih. */
+  var pp = r.perPilar || [];
+  if(pp.length){
+    var maks = Math.max.apply(null, pp.map(function(x){ return Math.abs(x.saldo)||0; })) || 1;
+    h += '<div class="daerah-j">Porsi dana siap salur per pilar'+(DAERAH_BULAN?' — '+esc(namaBulan(DAERAH_BULAN)):'')+'</div>'
+      + '<div class="daerah-pilar">';
+    pp.forEach(function(x){
+      var on = _norm2(DAERAH_PILAR) === _norm2(x.pilar);
+      h += '<button type="button" class="daerah-p'+(on?' on':'')+'" onclick="daerahSaring(\'pilar\','+JSON.stringify(x.pilar).replace(/"/g,'&quot;')+')">'
+        + '<span class="daerah-p-n">'+esc(x.pilar)+(x.tipe==='jenis'?' <i>jenis</i>':'')+'</span>'
+        + '<span class="daerah-p-v">'+rp(x.saldo)+'</span>'
+        + '<span class="daerah-p-b"><i style="width:'+Math.max(3,Math.round(Math.abs(x.saldo)/maks*100))+'%"></i></span>'
+        + '<span class="daerah-p-k">'+x.n+' trx &middot; amil '+rp(x.hakAmil)+'</span>'
+        + '</button>';
+    });
+    h += '</div>';
+  }
+
+  /* Rincian baris disembunyikan sampai diminta — 2.800 baris tidak perlu
+     tergambar hanya untuk melihat ringkasannya. */
+  h += '<div class="daerah-rinci-h">'
+    + '<button type="button" class="btn btn-sm btn-ghost" onclick="daerahRinci()">'+(DAERAH_RINCI?'Sembunyikan rincian':'Tampilkan rincian')+'</button>'
+    + '<span class="muted" style="font-size:11.5px">'+r.totalBaris+' transaksi'+(DAERAH_PILAR?' pada '+esc(DAERAH_PILAR):'')+'</span>'
+    + (DAERAH_RINCI ? '<input id="daerahCari" class="daerah-cari" placeholder="Cari donatur / keterangan..." value="'+esc(DAERAH_CARI)+'" oninput="daerahCari(this.value)">' : '')
+    + '</div>';
+
+  if(DAERAH_RINCI){
+    if(!r.baris.length){
+      h += '<div class="muted" style="padding:12px;font-size:12.5px">'+(DAERAH_CARI?'Tidak ada transaksi yang cocok dengan "'+esc(DAERAH_CARI)+'".':'Belum ada transaksi.')+'</div>';
+    } else {
+      if(DAERAH_CARI && r.totalCari) h += '<div class="daerah-kum">Hasil pencarian: <b>'+r.totalCari.n+'</b> transaksi &middot; setoran <b>'+rp(r.totalCari.setoran)+'</b> &middot; dana siap salur <b>'+rp(r.totalCari.saldo)+'</b></div>';
+      h += _tab(['Tanggal','Jenis','Donatur','Jumlah','Hak amil','Bersih'],
+        r.baris.map(function(x){ return ['<span style="white-space:nowrap">'+esc(fdate(x.tanggal))+'</span>',
+          esc(x.jenis)+(x.pilar?' <span class="muted">'+esc(x.pilar)+'</span>':''),
+          '<span class="saldo-ket">'+esc(x.donatur)+'</span>', rp(x.jumlah), rp(x.hakAmil), rp(x.bersih)]; }));
+      if(r.dipotong) h += '<div class="muted" style="font-size:11.5px;padding:0 12px 10px">Menampilkan '+r.baris.length+' dari '+r.totalBaris+' transaksi. Persempit dengan saringan bulan/pilar atau ketik di kotak pencarian — pencarian menyisir seluruh transaksi, bukan hanya yang tampil.</div>';
+    }
+  }
+
+  host.innerHTML = h;
+  if(jagaFokus && DAERAH_RINCI){
+    var c = el('daerahCari');
+    if(c){ c.focus(); c.setSelectionRange(c.value.length, c.value.length); }
+  }
+}
+function _kotakDaerah(label, nilai, ket, gaya){
+  return '<div class="daerah-k'+(gaya?' '+gaya:'')+'"><div class="daerah-k-l">'+label+'</div>'
+    + '<div class="daerah-k-v">'+_rpW(nilai)+'</div><div class="daerah-k-k">'+ket+'</div></div>';
+}
+
 function _kartuKll(label, warna, ikon, nilai){
   return '<div class="kpi-v2" style="--kpi-accent:'+warna+'"><div class="kpi-v2-top"><div class="kpi-v2-label">'+label+'</div>'
     + '<div class="kpi-v2-icon" style="background:'+warna+'">'+ikon+'</div></div>'

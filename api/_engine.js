@@ -1418,6 +1418,129 @@ function apiDetailSaldoLayanan(t, nama, sampai){
     setoran:setoran, uangMuka:uangMuka, lpj:lpj };
 }
 
+/* ================================================================
+   RINCIAN PENGHIMPUNAN DAERAH
+   ================================================================
+   "Daerah" adalah seluruh dana yang di dalamnya TIDAK ada KLL maupun ULL —
+   dihimpun langsung oleh daerah. Semua yang berpenanda kantor layanan,
+   termasuk hak amil yang dipotong darinya, bukan bagian dari angka ini.
+
+   Yang ditampilkan bukan alur uang muka seperti pada kantor layanan (daerah
+   menyalurkan langsung, tidak lewat uang muka), melainkan: berapa yang
+   terhimpun, berapa hak amilnya, dan sisanya — dana siap salur — dipecah
+   per pilar. Bisa disaring per bulan dan per pilar; pencarian dilakukan di
+   server supaya tetap menemukan baris yang tidak ikut terkirim ke peramban.
+
+   Parameter:
+     sampai  tanggal batas (posisi saldo)
+     bulan   'YYYY-MM' untuk satu bulan saja; kosong = sejak awal tahun
+     pilar   nama pilar/jenis untuk menyaring; kosong = semua
+     cari    kata kunci nama donatur / keterangan / program
+     batas   jumlah baris rincian yang dikirim (sisanya cukup dihitung)
+*/
+function apiRincianDaerah(t, sampai, bulan, pilar, cari, batas){
+  var u = _requirePerm(t, 'dashboard', 'view');
+  if (!can(u, 'saldodaerah', 'view')) throw new Error('IZIN: tidak punya akses melihat Saldo Penghimpunan Daerah.');
+  if (_layananSaya(u)) throw new Error('IZIN: pengurus kantor layanan tidak melihat angka daerah.');
+
+  sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
+  bulan = /^\d{4}-\d{2}$/.test(String(bulan || '')) ? String(bulan) : '';
+  pilar = String(pilar || '').trim();
+  cari  = _norm(cari || '');
+  batas = Math.max(20, Math.min(500, Number(batas) || 200));
+
+  var tahun = sampai.slice(0, 4), awalTahun = tahun + '-01-01';
+  var cfg = _bacaHakAmil();
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+
+  /* Satu baris daerah = penghimpunan yang nama layanannya jatuh ke "Penghimpunan
+     Daerah". Perhitungan hak amilnya persis sama dengan di rekap KLL supaya
+     kedua halaman tidak pernah berbeda serupiah pun. */
+  var amilBaris = function(r){
+    if (_bebasHakAmil(r, cfg.kecuali)) return 0;
+    var d = String(r.jenisDana || 'Infak').trim();
+    var p = cfg.persen[d]; if (p === undefined) p = cfg.persen.Infak || 0;
+    return Math.round((Number(r.jumlah) || 0) * p / 100);
+  };
+  /* Label kelompok: pilar bila ada (itu yang diminta), kalau tidak pakai
+     jenis penerimaannya supaya tidak ada uang yang jatuh ke "lain-lain". */
+  var kelompok = function(r){
+    var pl = String(r.pilar || '').trim();
+    if (pl) return { nama: pl, tipe: 'pilar' };
+    return { nama: String(r.subJenis || r.jenisDana || 'Lain-lain').trim(), tipe: 'jenis' };
+  };
+
+  var semua = [];
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    var tgl = String(r.tanggal || '').slice(0, 10);
+    if (tgl < awalTahun || tgl > sampai) return;
+    if (_norm(resolveLayananName(r, layList, layMap)) !== _norm(LAYANAN_DAERAH)) return;
+    var g = kelompok(r);
+    var a = amilBaris(r);
+    semua.push({
+      tanggal: tgl, bulan: tgl.slice(0, 7),
+      jenis: String(r.subJenis || r.jenisDana || ''), pilar: String(r.pilar || ''),
+      grup: g.nama, grupTipe: g.tipe,
+      donatur: String(r.namaDonatur || ''), metode: String(r.metode || ''),
+      keterangan: String(r.keterangan || r.program || ''),
+      jumlah: Number(r.jumlah) || 0, hakAmil: a, bersih: (Number(r.jumlah) || 0) - a
+    });
+  });
+  semua.sort(function(a, b){ return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0; });
+
+  var jum = function(arr){
+    var o = { setoran: 0, hakAmil: 0, saldo: 0, n: 0 };
+    arr.forEach(function(x){ o.setoran += x.jumlah; o.hakAmil += x.hakAmil; o.saldo += x.bersih; o.n++; });
+    return o;
+  };
+
+  /* Daftar bulan & pilar dibangun dari SELURUH data tahun ini, bukan dari
+     hasil saringan — kalau tidak, memilih satu bulan akan menghapus pilihan
+     bulan lainnya dari daftarnya sendiri. */
+  var perBulan = {}, urutBulan = [];
+  var perPilar = {}, urutPilar = [];
+  semua.forEach(function(x){
+    if (!perBulan[x.bulan]) { perBulan[x.bulan] = []; urutBulan.push(x.bulan); }
+    perBulan[x.bulan].push(x);
+    if (!perPilar[x.grup]) { perPilar[x.grup] = { rows: [], tipe: x.grupTipe }; urutPilar.push(x.grup); }
+    perPilar[x.grup].rows.push(x);
+  });
+
+  var pilihan = semua.filter(function(x){
+    if (bulan && x.bulan !== bulan) return false;
+    if (pilar && _norm(x.grup) !== _norm(pilar)) return false;
+    return true;
+  });
+  var hasilCari = !cari ? pilihan : pilihan.filter(function(x){
+    return _norm(x.donatur).indexOf(cari) >= 0 || _norm(x.keterangan).indexOf(cari) >= 0
+        || _norm(x.jenis).indexOf(cari) >= 0 || _norm(x.grup).indexOf(cari) >= 0;
+  });
+
+  /* Kumulatif = posisi saldo sampai akhir bulan yang dipilih (kalau tidak ada
+     bulan dipilih, sampai tanggal laporan). Berdampingan dengan angka bulan
+     berjalan supaya "waktu itu ada berapa" dan "bulan itu dapat berapa"
+     bisa dijawab sekaligus tanpa salah baca. */
+  var batasKumulatif = bulan ? (bulan + '-31') : sampai;
+  var kum = jum(semua.filter(function(x){ return x.tanggal <= batasKumulatif && (!pilar || _norm(x.grup) === _norm(pilar)); }));
+
+  return {
+    tanggal: sampai, tahun: tahun, bulan: bulan, pilar: pilar, cari: cari || '',
+    persen: cfg.persen, kecuali: cfg.kecuali,
+    ringkas: jum(pilihan),
+    kumulatif: kum,
+    tahunPenuh: jum(semua),
+    perBulan: urutBulan.sort().map(function(b){ var o = jum(perBulan[b]); o.bulan = b; return o; }),
+    perPilar: urutPilar.map(function(k){ var o = jum(perPilar[k].rows); o.pilar = k; o.tipe = perPilar[k].tipe; return o; })
+                       .sort(function(a, b){ return b.saldo - a.saldo; }),
+    /* rincian yang benar-benar dikirim dibatasi; jumlah sebenarnya tetap dilaporkan */
+    baris: hasilCari.slice(0, batas),
+    totalBaris: hasilCari.length,
+    dipotong: Math.max(0, hasilCari.length - batas),
+    totalCari: cari ? jum(hasilCari) : null
+  };
+}
+
 /* Buku mutasi satu akun (rekening / kas): semua pergerakan dalam rentang,
    urut tanggal, dengan saldo berjalan. Saldo awal periode = saldo awal tahun
    + pergerakan sebelum tanggal `dari`. */
@@ -6187,6 +6310,7 @@ REGISTRY['apiPeriksaLayanan']=apiPeriksaLayanan;
 REGISTRY['apiGabungLayanan']=apiGabungLayanan;
 REGISTRY['apiPeriksaDobel']=apiPeriksaDobel;
 REGISTRY['apiResetTransaksi']=apiResetTransaksi;
+REGISTRY['apiRincianDaerah']=apiRincianDaerah;
 REGISTRY['apiCadanganDB']=apiCadanganDB;
 REGISTRY['apiCekIzin']=apiCekIzin;
 REGISTRY['apiStatusCadangan']=apiStatusCadangan;
