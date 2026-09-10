@@ -59,8 +59,37 @@ var SHEETS = {
   REKENING:'Rekening', LAYANAN:'Layanan', MUTASI:'Mutasi', DONATUR:'Donatur',
   SALDOAWAL:'SaldoAwal', UANGMUKA:'UangMuka', TRANSFER:'Transfer'
 };
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log'];
+/* 'saldodaerah' adalah izin tersendiri: angka Penghimpunan Daerah (dana yang
+   dihimpun langsung oleh daerah, bukan lewat kantor layanan) sering tidak
+   pantas dilihat semua orang, sementara saldo KLL/ULL boleh. Dipisahkan
+   sebagai modul supaya diaturnya lewat mekanisme izin yang sama dengan
+   fitur lain, bukan lewat saklar tersembunyi. */
+var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah'];
 var ACTIONS = ['view','create','edit','delete'];
+/* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
+   menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
+var MODUL_LABEL = {
+  dashboard:'Dashboard & Saldo', penghimpunan:'Penghimpunan', pentasyarufan:'Pentasyarufan',
+  laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
+  users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
+  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah'
+};
+var MODUL_KET = {
+  dashboard:'Dashboard, menu Saldo Kas & Bank, dan Saldo KLL & ULL',
+  penghimpunan:'Mencatat, mengubah, dan menghapus penerimaan',
+  pentasyarufan:'Mencatat, mengubah, dan menghapus penyaluran',
+  laporan:'Laporan, rekap pilar, jurnal, dan closing bulanan',
+  rekening:'Daftar rekening bank dan kas',
+  layanan:'Daftar kantor layanan KLL/ULL',
+  users:'Menambah pengguna dan mengatur izinnya',
+  settings:'Pengaturan lembaga, hak amil, cadangan, dan perawatan data',
+  donatur:'Basis data donatur',
+  log:'Riwayat siapa mengubah apa',
+  saldodaerah:'Melihat angka Penghimpunan Daerah di menu Saldo KLL & ULL. Hanya "view" yang dipakai.'
+};
+/* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
+   modul yang tidak punya aksi hapus hanya membingungkan. */
+var MODUL_AKSI = { saldodaerah:['view'], log:['view'] };
 
 /* Daftar nama fundraising/sumber. Disimpan di Settings (kunci fundraisingList)
    supaya bisa ditambah sendiri lewat menu Pengaturan, bukan terkunci di kode. */
@@ -276,7 +305,7 @@ function audit(id,un,ak,d,opt){
 /* ===== SESI ===== */
 function apiMe(t){ return sanitizeUser(authUser(t)); }
 function apiBootstrap(t){ var u=authUser(t); return {user:sanitizeUser(u),settings:getAllSettings(),webAppUrl:getWebAppUrl()}; }
-function apiGetPermissionMeta(t){ authUser(t); return {modules:MODULES,actions:ACTIONS}; }
+function apiGetPermissionMeta(t){ authUser(t); return {modules:MODULES, actions:ACTIONS, label:MODUL_LABEL, ket:MODUL_KET, aksi:MODUL_AKSI}; }
 
 /* ===== PENGHIMPUNAN ===== */
 function generateNoKwitansi(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var n=0; readAll(SHEETS.PENGHIMPUNAN).forEach(function(r){if(String(r.noKwitansi).indexOf('KW/'+ym)===0)n++;}); return 'KW/'+ym+'/'+('0000'+(n+1)).slice(-4); }
@@ -1184,11 +1213,17 @@ function _bebasHakAmil(r, kecuali){
   return false;
 }
 
-/* Nama KLL/ULL pada baris uang muka & LPJ. */
-function _layananUmp(nama){
+/* Nama KLL/ULL pada baris uang muka & LPJ.
+   Dulu nama ini dipakai apa adanya, tanpa dicocokkan ke master Layanan sama
+   sekali — sehingga satu LPJ yang salah ketik ("KLL Banguntapaan Utara")
+   membentuk kantor bayangan dengan setoran nol dan "belum LPJ" minus,
+   sementara kantor aslinya kelebihan hitungan sebesar angka yang sama. */
+function _layananUmp(nama, layList){
   var s = String(nama || '').trim();
   if (!s) return LAYANAN_DAERAH;
-  return s;
+  if (/lazismu daerah|daerah bantul|penghimpunan daerah/i.test(s)) return LAYANAN_DAERAH;
+  var dekat = _padanLayanan(s, layList || readAll(SHEETS.LAYANAN) || []);
+  return dekat ? dekat.label : s;
 }
 
 function hitungSaldoLayanan(sampai){
@@ -1204,10 +1239,17 @@ function hitungSaldoLayanan(sampai){
     var k = _norm(nama);
     if (!rekap[k]) {
       var tipe = /^ull\b/i.test(nama) ? 'ULL' : /^kll\b/i.test(nama) ? 'KLL' : 'Daerah';
-      rekap[k] = { layanan: String(nama), tipe: tipe, himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0,
+      rekap[k] = { layanan: String(nama), tipe: tipe, ejaan: {}, himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0,
         saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0, nHimpun:0, nUmp:0, nLpj:0 };
       urut.push(k);
     }
+    /* Ejaan yang ditampilkan adalah yang paling sering dipakai di data, bukan
+       yang kebetulan terbaca lebih dulu — kalau tidak, menu Saldo KLL dan
+       panel Periksa Nama Kantor bisa menyebut kantor yang sama dengan dua
+       tulisan berbeda, dan itu terbaca seperti dua kantor. */
+    var e = String(nama);
+    rekap[k].ejaan[e] = (rekap[k].ejaan[e] || 0) + 1;
+    if (rekap[k].ejaan[e] > (rekap[k].ejaan[rekap[k].layanan] || 0)) rekap[k].layanan = e;
     return rekap[k];
   }
 
@@ -1227,7 +1269,7 @@ function hitungSaldoLayanan(sampai){
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
     if (!dalam(r.tanggal)) return;
     var n = Number(r.nominal) || 0;
-    var s = slot(_layananUmp(r.layanan));
+    var s = slot(_layananUmp(r.layanan, layList));
     if (r.jenis === 'kembali') s.umpKembali += n; else { s.umpKeluar += n; s.nUmp++; }
   });
 
@@ -1235,23 +1277,57 @@ function hitungSaldoLayanan(sampai){
     if (!dalam(r.tanggal)) return;
     if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
     var n = Number(r.jumlah) || 0;
-    var s = slot(_layananUmp(r.namaPenerima));
+    var s = slot(_layananUmp(r.namaPenerima, layList));
     s.lpj += n; s.nLpj++;
   });
 
-  var daftar = urut.map(function(k){
+  /* Kantor yang belum terdaftar di menu Layanan tidak punya nama acuan, jadi
+     salah ketiknya tidak bisa disandarkan ke mana pun. Untuk itu baris rekap
+     yang ejaannya HANYA berbeda pada huruf kembar disatukan di sini —
+     "Banguntapaan Utara" dan "Banguntapan Utara" meratakan menjadi kunci yang
+     sama persis. Aturannya sengaja seketat itu: bukan kemiripan, melainkan
+     bentuk yang identik setelah huruf berulang diratakan, supaya dua kantor
+     yang memang berbeda tidak pernah tergabung. Ejaan yang dipakai adalah
+     yang datanya paling banyak. */
+  var gabung = {}, urutG = [];
+  urut.forEach(function(k){
     var s = rekap[k];
+    var kg = _ratakanHuruf(s.layanan);
+    if (!gabung[kg]) { gabung[kg] = s; urutG.push(kg); return; }
+    var t = gabung[kg];
+    Object.keys(s.ejaan || {}).forEach(function(e){ t.ejaan[e] = (t.ejaan[e] || 0) + s.ejaan[e]; });
+    var juara = t.layanan;
+    Object.keys(t.ejaan).forEach(function(e){ if (t.ejaan[e] > t.ejaan[juara]) juara = e; });
+    t.layanan = juara;
+    ['himpun','kenaAmil','bebasAmil','hakAmil','umpKeluar','umpKembali','lpj','nHimpun','nUmp','nLpj']
+      .forEach(function(f){ t[f] += s[f]; });
+  });
+
+  /* Kalau kantornya terdaftar di menu Layanan, nama resmi itulah yang dipakai —
+     ejaan di jurnal boleh berantakan, tampilan tidak boleh. */
+  var resmiRata = {};
+  layList.forEach(function(l){ if (l && l.nama) resmiRata[_ratakanHuruf(_layLabel(l))] = _layLabel(l); });
+  urutG.forEach(function(k){ if (resmiRata[k]) gabung[k].layanan = resmiRata[k]; delete gabung[k].ejaan; });
+
+  var daftar = urutG.map(function(k){
+    var s = gabung[k];
     s.saldoKLL  = s.himpun - s.hakAmil;
     s.sisaSaldo = s.saldoKLL - s.umpKeluar + s.umpKembali;
     s.belumLPJ  = s.umpKeluar - s.lpj - s.umpKembali;
     return s;
   }).sort(function(a,b){ return b.sisaSaldo - a.sisaSaldo; });
 
-  var total = { himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
-  daftar.forEach(function(s){ Object.keys(total).forEach(function(f){ total[f] += s[f]; }); });
+  var kosong = function(){ return { himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 }; };
+  var total = kosong(), totalKll = kosong();
+  daftar.forEach(function(s){
+    Object.keys(total).forEach(function(f){ total[f] += s[f]; });
+    if (s.tipe !== 'Daerah') Object.keys(totalKll).forEach(function(f){ totalKll[f] += s[f]; });
+  });
+  var barisDaerah = daftar.filter(function(s){ return s.tipe === 'Daerah'; })[0] || null;
 
   return { tanggal: sampai, tahun: tahun, persen: cfg.persen, kecuali: cfg.kecuali,
-    daftar: daftar, total: total, jumlahLayanan: daftar.filter(function(s){ return s.tipe !== 'Daerah'; }).length };
+    daftar: daftar, total: total, totalKll: totalKll, daerah: barisDaerah,
+    jumlahLayanan: daftar.filter(function(s){ return s.tipe !== 'Daerah'; }).length };
 }
 
 /* Pengurus KLL hanya boleh melihat kantornya sendiri. Kosong = boleh semua. */
@@ -1265,6 +1341,17 @@ function _bolehLihatLayanan(u, nama){
 function apiSaldoLayanan(t, sampai){
   var u = _requirePerm(t, 'dashboard', 'view');
   var hasil = hitungSaldoLayanan(sampai);
+
+  /* Penghimpunan Daerah disaring DI SERVER, bukan sekadar disembunyikan di
+     tampilan — kalau hanya disembunyikan, angkanya tetap terkirim ke peramban
+     dan siapa pun bisa membacanya. */
+  hasil.bolehDaerah = can(u, 'saldodaerah', 'view');
+  if (!hasil.bolehDaerah) {
+    hasil.daftar = hasil.daftar.filter(function(s){ return s.tipe !== 'Daerah'; });
+    hasil.daerah = null;
+    hasil.total = hasil.totalKll;
+  }
+
   var milik = _layananSaya(u);
   if (milik) {
     hasil.daftar = hasil.daftar.filter(function(s){ return _norm(s.layanan) === _norm(milik); });
@@ -1272,6 +1359,9 @@ function apiSaldoLayanan(t, sampai){
     hasil.daftar.forEach(function(s){ Object.keys(total).forEach(function(f){ total[f] += s[f]; }); });
     hasil.total = total;
     hasil.jumlahLayanan = hasil.daftar.length;
+    hasil.totalKll = total;
+    hasil.daerah = null;
+    hasil.bolehDaerah = false;   /* pengurus satu kantor tidak melihat angka daerah */
     hasil.dibatasi = milik;
   }
   return hasil;
@@ -1282,6 +1372,9 @@ function apiDetailSaldoLayanan(t, nama, sampai){
   var u = _requirePerm(t, 'dashboard', 'view');
   nama = String(nama || '').trim();
   if (!nama) throw new Error('Kantor layanan belum dipilih.');
+  if (_norm(nama) === _norm(LAYANAN_DAERAH) && !can(u, 'saldodaerah', 'view')) {
+    throw new Error('IZIN: tidak punya akses melihat Saldo Penghimpunan Daerah.');
+  }
   if (!_bolehLihatLayanan(u, nama)) throw new Error('IZIN: hanya boleh melihat ' + _layananSaya(u) + '.');
   sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
   var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
@@ -1289,7 +1382,11 @@ function apiDetailSaldoLayanan(t, nama, sampai){
   var cfg = _bacaHakAmil();
   var layList = readAll(SHEETS.LAYANAN) || [];
   var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
-  var sama = function(x){ return _norm(x) === _norm(nama); };
+  /* Cocok kalau namanya sama, ATAU sama setelah huruf kembar diratakan —
+     sejalan dengan penggabungan di rekap, supaya kartu rincian memuat
+     baris yang sama persis dengan angka di ringkasannya. */
+  var namaRata = _ratakanHuruf(nama);
+  var sama = function(x){ return _norm(x) === _norm(nama) || _ratakanHuruf(x) === namaRata; };
 
   var setoran = [], uangMuka = [], lpj = [];
   (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
@@ -1303,12 +1400,12 @@ function apiDetailSaldoLayanan(t, nama, sampai){
       bebasAmil:bebas, persen: bebas ? 0 : p, hakAmil: bebas ? 0 : Math.round(n * p / 100), bersih: bebas ? n : n - Math.round(n * p / 100) });
   });
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
-    if (!dalam(r.tanggal) || !sama(_layananUmp(r.layanan))) return;
+    if (!dalam(r.tanggal) || !sama(_layananUmp(r.layanan, layList))) return;
     uangMuka.push({ tanggal:String(r.tanggal).slice(0,10), jenis:r.jenis === 'kembali' ? 'Dikembalikan' : 'Uang muka keluar',
       dana:r.dana || '', akun:r.akun || '', keterangan:r.keterangan || '', jumlah:Number(r.nominal) || 0 });
   });
   (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
-    if (!dalam(r.tanggal) || !/^UMP\s+LPJ/i.test(String(r.section || '')) || !sama(_layananUmp(r.namaPenerima))) return;
+    if (!dalam(r.tanggal) || !/^UMP\s+LPJ/i.test(String(r.section || '')) || !sama(_layananUmp(r.namaPenerima, layList))) return;
     lpj.push({ tanggal:String(r.tanggal).slice(0,10), program:r.program || '', ashnaf:r.ashnaf || '',
       dana:r.sumberDana || '', keterangan:r.keterangan || '', jumlah:Number(r.jumlah) || 0 });
   });
@@ -1468,7 +1565,13 @@ var _LAY_STOP = ['pekan','bulan','tanggal','tgl','infak','infaq','zakat','sedeka
      "KLL Imogiri kegiatan sosial" — bukan bagian dari nama kantornya */
   'uang','muka','program','progaram','ump','lpj','pengembalian','sisa','kegiatan',
   'pentasharufan','pentasyarufan','penyaluran','bantuan','honor','fee','biaya',
-  'pembayaran','pembelian','operasional','support','subsidi'];
+  'pembayaran','pembelian','operasional','support','subsidi',
+  /* nama program/kampanye yang sering ditempel di belakang nama kantor:
+     "KLL Bantul Kota NTT", "KLL Srandakan NTT" — kantornya sama, yang beda
+     hanya peruntukan donasinya, jadi tidak boleh jadi kantor tersendiri */
+  'ntt','palestina','aceh','sumatera','kekeringan','gempa','bencana',
+  'ramadhan','ramadan','idul','fitri','adha','mal','profesi','penghasilan',
+  'pertanian','perdagangan','emas','perak','simpanan','fitrah','dskl','amil'];
 
 /* Tangkap penanda "KLL <nama>" / "ULL <nama>" / "KL <nama>" dari teks asli
    (bukan versi lowercase) supaya kapitalisasi nama tetap seperti yang diketik. */
@@ -1493,6 +1596,104 @@ function _layFromPrefix(rawText){
     return w === w.toLowerCase() ? (w.charAt(0).toUpperCase() + w.slice(1)) : w;
   });
   return { tipe: tipe, nama: out.join(' ') };
+}
+
+/* ================================================================
+   PENCOCOKAN NAMA KANTOR LAYANAN YANG SALAH KETIK
+   ================================================================
+   Nama KLL/ULL di jurnal ditulis tangan, jadi salah ketik satu huruf
+   sudah cukup untuk melahirkan kantor bayangan: "KLL Banguntapaan
+   Utara" berdiri sendiri di samping "KLL Banguntapan Utara", dan
+   uang yang seharusnya menjadi hak satu kantor terbelah dua. Ini
+   bukan kesalahan kecil — angkanya dipakai untuk membagi dana.
+
+   Karena itu setiap nama dicocokkan ke master Layanan dengan tiga
+   lapis: sama persis, sama setelah huruf kembar diratakan
+   ("banguntapaan" -> "banguntapan"), lalu jarak edit kecil. Kalau
+   tidak ada yang cukup dekat, namanya tetap dipakai apa adanya
+   supaya tidak ada uang yang diam-diam pindah kantor. */
+
+/* "banguntapaan" -> "banguntapan": huruf yang berulang diratakan satu,
+   sekaligus membuang tanda baca. Salah ketik paling sering di sini. */
+function _ratakanHuruf(x){
+  return _norm(x).replace(/[^a-z0-9 ]/g, '').replace(/(.)\1+/g, '$1');
+}
+
+/* Jarak edit Levenshtein, dibatasi supaya tidak boros pada nama panjang. */
+function _jarakEdit(a, b){
+  a = String(a || ''); b = String(b || '');
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  if (Math.abs(a.length - b.length) > 3) return 99;
+  var prev = [], cur = [], i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a.charAt(i-1) === b.charAt(j-1) ? 0 : 1));
+    }
+    for (j = 0; j <= b.length; j++) prev[j] = cur[j];
+  }
+  return prev[b.length];
+}
+
+/* Berapa banyak salah ketik yang masih dianggap nama yang sama.
+   Nama pendek harus lebih ketat: "KLL Sedayu" dan "KLL Sedayu 2"
+   memang dua kantor berbeda, sedangkan pada nama panjang satu-dua
+   huruf meleset hampir pasti salah ketik. */
+function _batasSalahKetik(panjang){
+  if (panjang >= 14) return 2;
+  if (panjang >= 8) return 1;
+  return 0;
+}
+
+/* Cari padanan terdekat sebuah nama kantor di master Layanan.
+   Mengembalikan { lay, label, jarak, cara } atau null. */
+function _padanLayanan(nama, layList){
+  var mentah = String(nama || '').trim();
+  if (!mentah) return null;
+  layList = layList || [];
+  /* awalan KLL/ULL dibuang dulu supaya yang dibandingkan hanya nama kantornya */
+  var tipe = /^\s*ull\b/i.test(mentah) ? 'ULL' : /^\s*(kll|kl)\b/i.test(mentah) ? 'KLL' : '';
+  var inti = mentah.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '').trim();
+  var nInti = _norm(inti), rInti = _ratakanHuruf(inti);
+  if (!nInti) return null;
+
+  var terbaik = null;
+  layList.forEach(function(l){
+    if (!l || !l.nama) return;
+    var nLay = _norm(l.nama), rLay = _ratakanHuruf(l.nama);
+    if (!nLay) return;
+    /* tipe berbeda (KLL vs ULL) bukan kantor yang sama */
+    if (tipe && l.tipe && String(l.tipe).toUpperCase() !== tipe) return;
+    var jarak = null, cara = '';
+    if (nInti === nLay) { jarak = 0; cara = 'sama'; }
+    else if (rInti && rInti === rLay) { jarak = 0.5; cara = 'huruf kembar'; }
+    else {
+      var d = _jarakEdit(rInti, rLay);
+      if (d <= _batasSalahKetik(Math.max(rInti.length, rLay.length))) { jarak = d; cara = 'salah ketik ' + d + ' huruf'; }
+    }
+    if (jarak === null) return;
+    if (!terbaik || jarak < terbaik.jarak) terbaik = { lay: l, label: _layLabel(l), jarak: jarak, cara: cara };
+  });
+  return terbaik;
+}
+
+/* Nama kantor yang sudah dipakai di data, sebagai daftar master cadangan
+   ketika sebuah kantor belum didaftarkan di menu Layanan sama sekali. */
+function _layananTerpakai(){
+  var pakai = {};
+  var tambah = function(n){
+    var s = String(n || '').trim();
+    if (!s || !/^(KLL|ULL)\b/i.test(s)) return;
+    var k = _norm(s);
+    if (!pakai[k]) pakai[k] = { nama: s.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, ''), tipe: s.slice(0,3).toUpperCase(), n: 0 };
+    pakai[k].n++;
+  };
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){ tambah(r.layanan); });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){ if (/^UMP\s+LPJ/i.test(String(r.section || ''))) tambah(r.namaPenerima); });
+  return Object.keys(pakai).map(function(k){ return pakai[k]; });
 }
 
 function resolveLayananName(r, layList, layMap){
@@ -1528,6 +1729,11 @@ function resolveLayananName(r, layList, layMap){
       }
     });
     if (hit) return _layLabel(hit);
+    /* Belum ada yang cocok persis: mungkin hanya salah ketik. Kalau ada nama
+       terdaftar yang cukup dekat, pakai nama terdaftar itu — kalau tidak,
+       biarkan apa adanya supaya tidak ada uang yang pindah kantor diam-diam. */
+    var dekat = _padanLayanan(pre.tipe + ' ' + pre.nama, layList);
+    if (dekat) return dekat.label;
     /* Belum terdaftar di master Layanan pun tetap dihitung sebagai KLL/ULL —
        kalau dipaksa masuk "Penghimpunan Daerah", rekapnya justru salah. */
     return pre.tipe + ' ' + pre.nama;
@@ -1556,6 +1762,8 @@ function resolveLayananName(r, layList, layMap){
         }
       });
       if (hitT) return _layLabel(hitT);
+      var dekatT = _padanLayanan(tipeT + ' ' + namaT, layList);
+      if (dekatT) return dekatT.label;
       return tipeT + ' ' + namaT.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '');
     }
   }
@@ -4964,6 +5172,332 @@ async function apiBersihkanSetorTunai(t, terapkan){
   return out;
 }
 
+/* ================================================================
+   PERAWATAN 1 — NAMA KANTOR LAYANAN YANG BERCABANG
+   ================================================================
+   Mendaftar semua nama KLL/ULL yang benar-benar muncul di data, lalu
+   menandai mana yang tidak ada di master Layanan berikut tebakan
+   padanannya. Angka per kantor dipakai untuk membagi dana, jadi satu
+   salah ketik yang tidak ketahuan berarti satu kantor kehilangan
+   haknya dan satu kantor bayangan menyimpannya. */
+function apiPeriksaLayanan(t){
+  _requirePerm(t, 'settings', 'view');
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var resmi = {}; layList.forEach(function(l){ if (l && l.nama) resmi[_norm(_layLabel(l))] = _layLabel(l); });
+
+  /* kumpulkan nama beserta dari sumber mana saja ia muncul */
+  var pakai = {};
+  /* Dikelompokkan dengan kunci yang SAMA seperti rekap KLL (bentuk setelah
+     huruf kembar diratakan), supaya panel pemeriksaan dan angka di menu
+     Saldo KLL tidak pernah bercerita berbeda. Ejaan yang ditampilkan adalah
+     yang paling banyak dipakai di data. */
+  var catat = function(nama, sumber, nominal){
+    var s = String(nama || '').trim();
+    if (!s || s === LAYANAN_DAERAH) return;
+    var k = _ratakanHuruf(s);
+    if (!pakai[k]) pakai[k] = { nama: s, ejaan: {}, himpun:0, nHimpun:0, ump:0, nUmp:0, lpj:0, nLpj:0 };
+    pakai[k].ejaan[s] = (pakai[k].ejaan[s] || 0) + 1;
+    if (pakai[k].ejaan[s] > (pakai[k].ejaan[pakai[k].nama] || 0)) pakai[k].nama = s;
+    pakai[k][sumber] += Number(nominal) || 0;
+    pakai[k]['n' + sumber.charAt(0).toUpperCase() + sumber.slice(1)]++;
+  };
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+
+  /* Ejaan yang masih salah di dalam baris data tetapi sudah tertutup oleh
+     pencocokan mirip saat menampilkan. Rekapnya sudah benar, tetapi ejaannya
+     masih mengendap — dan akan muncul kembali kalau master Layanan berubah.
+     Jadi tetap dilaporkan supaya bisa dibereskan sekali untuk selamanya. */
+  var rapi = {};
+  var catatRapi = function(mentah, jadi){
+    var m = String(mentah || '').trim();
+    if (!m || !/^(KLL|ULL|KL)\b/i.test(m)) return;
+    if (_norm(m) === _norm(jadi)) return;
+    var k = _norm(m);
+    if (!rapi[k]) rapi[k] = { mentah: m, jadi: jadi, n: 0 };
+    rapi[k].n++;
+  };
+
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    var nm = resolveLayananName(r, layList, layMap);
+    catat(nm, 'himpun', r.jumlah); catatRapi(r.namaDonatur, nm);
+  });
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    var nm = _layananUmp(r.layanan, layList);
+    catat(nm, 'ump', r.nominal); catatRapi(r.layanan, nm);
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    var nm = _layananUmp(r.namaPenerima, layList);
+    catat(nm, 'lpj', r.jumlah); catatRapi(r.namaPenerima, nm);
+  });
+
+  /* master Layanan juga dikunci dengan bentuk yang sama */
+  var resmiRata = {}; Object.keys(resmi).forEach(function(k){ resmiRata[_ratakanHuruf(resmi[k])] = resmi[k]; });
+  var daftar = Object.keys(pakai).map(function(k){
+    var x = pakai[k];
+    x.terdaftar = !!resmiRata[k];
+    if (resmiRata[k]) x.nama = resmiRata[k];
+    delete x.ejaan;
+    x.usul = '';
+    x.alasan = '';
+    if (!x.terdaftar) {
+      var dekat = _padanLayanan(x.nama, layList);
+      if (dekat) { x.usul = dekat.label; x.alasan = dekat.cara; }
+      else {
+        /* tidak ada di master sama sekali: cari nama lain yang sudah dipakai
+           di data dan mirip, supaya dua ejaan liar pun bisa disatukan */
+        var lawan = null;
+        Object.keys(pakai).forEach(function(k2){
+          if (k2 === k) return;
+          var y = pakai[k2];
+          var d = _jarakEdit(_ratakanHuruf(x.nama), _ratakanHuruf(y.nama));
+          if (d > _batasSalahKetik(Math.max(_ratakanHuruf(x.nama).length, _ratakanHuruf(y.nama).length))) return;
+          /* yang datanya lebih banyak dianggap ejaan yang benar */
+          var berat = function(z){ return z.nHimpun + z.nUmp + z.nLpj; };
+          if (berat(y) > berat(x) && (!lawan || berat(y) > berat(lawan))) lawan = y;
+        });
+        if (lawan) { x.usul = lawan.nama; x.alasan = 'ejaan lain yang lebih banyak dipakai'; }
+      }
+    }
+    return x;
+  });
+
+  /* yang bermasalah ditaruh di atas */
+  daftar.sort(function(a, b){
+    if (a.terdaftar !== b.terdaftar) return a.terdaftar ? 1 : -1;
+    return (b.himpun + b.ump + b.lpj) - (a.himpun + a.ump + a.lpj);
+  });
+  var bermasalah = daftar.filter(function(x){ return !x.terdaftar; });
+  var dirapikan = Object.keys(rapi).map(function(k){ return rapi[k]; })
+    .sort(function(a, b){ return b.n - a.n; });
+
+  /* Pasangan nama yang MIRIP satu sama lain, sekalipun keduanya sudah
+     terdaftar. Pencocokan otomatis sengaja dibuat ketat supaya tidak pernah
+     menggabungkan dua kantor yang memang berbeda; sisanya justru harus
+     dilihat manusia. Yang paling menandakan salah ketik adalah timpangnya
+     jumlah baris: "KLL Pundong" 733 baris berdampingan dengan "KLL Pundonvg"
+     1 baris hampir pasti bukan dua kantor. */
+  var berat = function(z){ return z.nHimpun + z.nUmp + z.nLpj; };
+  var mirip = [];
+  for (var i = 0; i < daftar.length; i++) {
+    for (var j = i + 1; j < daftar.length; j++) {
+      var A = daftar[i], B = daftar[j];
+      if (!/^(KLL|ULL)\b/i.test(A.nama) || !/^(KLL|ULL)\b/i.test(B.nama)) continue;
+      /* KLL dan ULL adalah dua jenis kantor yang berbeda — jangan pernah
+         diusulkan bergabung hanya karena namanya mirip */
+      if (A.nama.slice(0, 3).toUpperCase() !== B.nama.slice(0, 3).toUpperCase()) continue;
+      /* bandingkan tanpa awalan, supaya panjang namanya yang dinilai */
+      var ra = _ratakanHuruf(String(A.nama).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, ''));
+      var rb2 = _ratakanHuruf(String(B.nama).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, ''));
+      if (Math.max(ra.length, rb2.length) < 6) continue;
+      var d = _jarakEdit(ra, rb2);
+      /* jarak 3 sudah terlalu longgar: "Piyungan" dan "Pajangan" hanya
+         berjarak 3 padahal dua kantor yang benar-benar berbeda */
+      if (d < 1 || d > 2) continue;
+      var besar = berat(A) >= berat(B) ? A : B;
+      var kecil = besar === A ? B : A;
+      mirip.push({
+        banyak: besar.nama, nBanyak: berat(besar),
+        sedikit: kecil.nama, nSedikit: berat(kecil),
+        jarak: d,
+        nominal: kecil.himpun + kecil.ump + kecil.lpj,
+        /* makin timpang, makin besar kemungkinan salah ketik */
+        yakin: berat(besar) >= berat(kecil) * 10 ? 'tinggi' : berat(besar) >= berat(kecil) * 3 ? 'sedang' : 'rendah'
+      });
+    }
+  }
+  mirip.sort(function(a, b){
+    var urutan = { tinggi: 0, sedang: 1, rendah: 2 };
+    if (urutan[a.yakin] !== urutan[b.yakin]) return urutan[a.yakin] - urutan[b.yakin];
+    return a.nSedikit - b.nSedikit;
+  });
+  return {
+    total: daftar.length,
+    terdaftar: daftar.length - bermasalah.length,
+    bermasalah: bermasalah.length,
+    adaUsul: bermasalah.filter(function(x){ return x.usul; }).length,
+    daftar: daftar,
+    dirapikan: dirapikan,
+    mirip: mirip
+  };
+}
+
+/* Gabungkan satu nama kantor ke nama lain: baris datanya ditulis ulang,
+   bukan sekadar disamakan saat menampilkan. Selalu bisa dipratinjau dulu. */
+function apiGabungLayanan(t, dari, ke, terapkan){
+  var u = _requirePerm(t, 'settings', 'edit');
+  dari = String(dari || '').trim(); ke = String(ke || '').trim();
+  if (!dari || !ke) throw new Error('Nama asal dan nama tujuan harus diisi.');
+  if (_norm(dari) === _norm(ke)) throw new Error('Nama asal dan tujuan sama.');
+
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+  var tujuanLay = layList.filter(function(l){ return _norm(_layLabel(l)) === _norm(ke); })[0] || null;
+  /* Cocokkan DUA-DUANYA: nama hasil olahan (yang tampil di rekap) dan nama
+     mentah yang tersimpan di baris. Kalau hanya yang tampil, ejaan salah yang
+     kebetulan sudah tertutup pencocokan mirip tetap mengendap di data dan
+     akan muncul lagi begitu master Layanan berubah. */
+  var samaDari = function(olah, mentah){
+    var d = _norm(dari);
+    if (_norm(olah) === d) return true;
+    var m = String(mentah || '').trim();
+    if (!m) return false;
+    if (_norm(m) === d) return true;
+    /* nama mentah sering berupa kalimat ("... Oleh Kll Banguntapaan Utara") */
+    var pre = _layFromPrefix(m);
+    return !!pre && _norm(pre.tipe + ' ' + pre.nama) === d;
+  };
+
+  var kena = { himpun: [], ump: [], lpj: [] };
+
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!samaDari(resolveLayananName(r, layList, layMap), r.namaDonatur)) return;
+    kena.himpun.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.namaDonatur || '', jumlah:Number(r.jumlah)||0 });
+  });
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!samaDari(_layananUmp(r.layanan, layList), r.layanan)) return;
+    kena.ump.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.layanan || '', jumlah:Number(r.nominal)||0 });
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    if (!samaDari(_layananUmp(r.namaPenerima, layList), r.namaPenerima)) return;
+    kena.lpj.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.namaPenerima || '', jumlah:Number(r.jumlah)||0 });
+  });
+
+  var jml = kena.himpun.length + kena.ump.length + kena.lpj.length;
+  var out = {
+    diterapkan: !!terapkan, dari: dari, ke: ke, jumlah: jml,
+    rincian: { himpun: kena.himpun.length, ump: kena.ump.length, lpj: kena.lpj.length },
+    nominal: {
+      himpun: kena.himpun.reduce(function(a,b){ return a + b.jumlah; }, 0),
+      ump: kena.ump.reduce(function(a,b){ return a + b.jumlah; }, 0),
+      lpj: kena.lpj.reduce(function(a,b){ return a + b.jumlah; }, 0)
+    },
+    contoh: kena.himpun.concat(kena.ump, kena.lpj).slice(0, 12)
+  };
+  if (!terapkan || !jml) return out;
+
+  /* Penghimpunan: kalau kantor tujuan ada di master, tautkan lewat id — itu
+     penanda paling kuat dan tidak bisa rusak lagi oleh salah ketik. */
+  kena.himpun.forEach(function(x){
+    var patch = {};
+    if (tujuanLay) patch.layananId = tujuanLay.id;
+    var r = findById(SHEETS.PENGHIMPUNAN, x.id);
+    if (r && /^(KLL|ULL|KL)\b/i.test(String(r.namaDonatur || ''))) patch.namaDonatur = ke;
+    if (Object.keys(patch).length) updateRowById(SHEETS.PENGHIMPUNAN, x.id, patch);
+  });
+  kena.ump.forEach(function(x){ updateRowById(SHEETS.UANGMUKA, x.id, { layanan: ke }); });
+  kena.lpj.forEach(function(x){ updateRowById(SHEETS.PENTASYARUFAN, x.id, { namaPenerima: ke }); });
+
+  audit(u.id, u.username, 'gabung_layanan', dari + ' -> ' + ke,
+    { modul:'settings', ringkas: jml + ' baris (' + out.rincian.himpun + ' setoran, ' + out.rincian.ump + ' uang muka, ' + out.rincian.lpj + ' LPJ)' });
+  out.terubah = jml;
+  return out;
+}
+
+/* ================================================================
+   PERAWATAN 2 — TRANSAKSI KEMBAR
+   ================================================================
+   Impor yang dijalankan dua kali, atau berkas yang memuat bulan yang
+   sama dua kali, meninggalkan baris kembar persis. Yang dicocokkan
+   adalah isi yang menentukan uangnya: tanggal, nominal, nama, akun,
+   dan keterangan. Baris pertama dipertahankan, salinannya dibuang. */
+function _sidikDobel(sheet, r){
+  var b = function(x){ return _norm(x); };
+  if (sheet === SHEETS.PENGHIMPUNAN) {
+    return [String(r.tanggal||'').slice(0,10), Math.round(Number(r.jumlah)||0), b(r.namaDonatur),
+            b(r.jenisDana) + '/' + b(r.subJenis) + '/' + b(r.pilar), b(r.rekeningId), b(r.keterangan)].join('|');
+  }
+  if (sheet === SHEETS.PENTASYARUFAN) {
+    return [String(r.tanggal||'').slice(0,10), Math.round(Number(r.jumlah)||0), b(r.namaPenerima),
+            b(r.program), b(r.sumberDana), b(r.section), b(r.rekeningId), b(r.keterangan)].join('|');
+  }
+  if (sheet === SHEETS.UANGMUKA) {
+    return [String(r.tanggal||'').slice(0,10), Math.round(Number(r.nominal)||0), b(r.jenis),
+            b(r.layanan), b(r.dana), b(r.akun), b(r.keterangan)].join('|');
+  }
+  return [String(r.tanggal||'').slice(0,10), Math.round(Number(r.nominal)||0), b(r.jenis),
+          b(r.dariAkun) + '>' + b(r.keAkun), b(r.keterangan)].join('|');
+}
+
+async function apiPeriksaDobel(t, terapkan){
+  var u = _requirePerm(t, 'settings', terapkan ? 'delete' : 'view');
+  var target = [
+    { sheet: SHEETS.PENGHIMPUNAN, label: 'Penghimpunan', nilai: 'jumlah', nama: 'namaDonatur' },
+    { sheet: SHEETS.PENTASYARUFAN, label: 'Pentasyarufan', nilai: 'jumlah', nama: 'namaPenerima' },
+    { sheet: SHEETS.UANGMUKA, label: 'Uang muka', nilai: 'nominal', nama: 'layanan' },
+    { sheet: SHEETS.TRANSFER, label: 'Transfer', nilai: 'nominal', nama: 'keterangan' }
+  ];
+  var hasil = [], contoh = [], totalBaris = 0, totalNominal = 0, bulan = {};
+
+  target.forEach(function(tg){
+    var rows = readAll(tg.sheet) || [];
+    var lihat = {}, buang = [];
+    rows.forEach(function(r){
+      var k = _sidikDobel(tg.sheet, r);
+      if (lihat[k]) buang.push(r); else lihat[k] = r;
+    });
+    var nom = buang.reduce(function(a, b){ return a + (Number(b[tg.nilai]) || 0); }, 0);
+    hasil.push({ tabel: tg.label, jumlah: buang.length, nominal: nom });
+    totalBaris += buang.length; totalNominal += nom;
+    buang.slice(0, 6).forEach(function(r){
+      contoh.push({ tabel: tg.label, tanggal: String(r.tanggal||'').slice(0,10),
+        nama: String(r[tg.nama] || '-'), jumlah: Number(r[tg.nilai]) || 0,
+        keterangan: String(r.keterangan || '').slice(0, 60) });
+    });
+    if (terapkan) buang.forEach(function(r){
+      var m = getMonthFromDate(r.tanggal); if (m) bulan[m] = true;
+      deleteRowById(tg.sheet, r.id);
+    });
+  });
+
+  var out = { diterapkan: !!terapkan, jumlah: totalBaris, nominal: totalNominal, perTabel: hasil, contoh: contoh };
+  if (terapkan && totalBaris) {
+    audit(u.id, u.username, 'hapus_dobel', totalBaris + ' baris kembar dihapus',
+      { modul:'settings', ringkas: hasil.filter(function(x){ return x.jumlah; }).map(function(x){ return x.tabel + ' ' + x.jumlah; }).join(', ') });
+    var keys = Object.keys(bulan);
+    for (var i = 0; i < keys.length; i++) await syncMonthlySpreadsheet(keys[i]);
+    out.terhapus = totalBaris;
+  }
+  return out;
+}
+
+/* ================================================================
+   PERAWATAN 3 — MULAI DARI NOL UNTUK DATA TRANSAKSI
+   ================================================================
+   Kadang menambal satu per satu lebih mahal daripada mengulang impor
+   dari berkas jurnal yang memang sudah rapi. Yang dihapus HANYA data
+   transaksi; pengguna, rekening, kantor layanan, pengaturan, hak amil
+   dan saldo awal tetap utuh supaya impor ulang langsung jatuh ke
+   tempat yang benar. Hanya superadmin, harus mengetik konfirmasi,
+   dan salinan keadaan sebelumnya dikembalikan bersama hasilnya. */
+function apiResetTransaksi(t, konfirmasi, ikutDonatur){
+  var u = authUser(t);
+  if (u.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh mengosongkan data transaksi.');
+  if (String(konfirmasi) !== 'KOSONGKAN') throw new Error('Ketik KOSONGKAN untuk mengonfirmasi.');
+
+  var sasaran = [SHEETS.PENGHIMPUNAN, SHEETS.PENTASYARUFAN, SHEETS.UANGMUKA, SHEETS.TRANSFER, SHEETS.MUTASI];
+  if (ikutDonatur) sasaran.push(SHEETS.DONATUR);
+
+  var sebelum = buatCadangan(u.username + ' (sebelum kosongkan)');
+  var dihapus = {};
+  sasaran.forEach(function(nm){
+    var rows = (DB.sheets && DB.sheets[nm]) || [];
+    dihapus[nm] = Math.max(0, rows.length - 1);
+    if (rows.length) DB.sheets[nm] = [rows[0].slice()];   /* baris judul dipertahankan */
+  });
+  /* berkas Excel bulanan hasil sinkronisasi ikut dibuang supaya tidak
+     menampilkan angka lama yang sudah tidak punya datanya */
+  Object.keys((DB && DB.props) || {}).forEach(function(k){
+    if (/^sheetBulan|^xlsxBulan|^_excel/.test(k)) delete DB.props[k];
+  });
+
+  var total = Object.keys(dihapus).reduce(function(a, k){ return a + dihapus[k]; }, 0);
+  audit(u.id, u.username, 'kosongkan_transaksi', total + ' baris transaksi dihapus',
+    { modul:'settings', ringkas: Object.keys(dihapus).map(function(k){ return k + ' ' + dihapus[k]; }).join(', ') });
+  return { ok:true, total: total, dihapus: dihapus, dipertahankan: [SHEETS.USERS, SHEETS.REKENING, SHEETS.LAYANAN, SHEETS.SETTINGS, SHEETS.SALDOAWAL].concat(ikutDonatur ? [] : [SHEETS.DONATUR]), cadangan: sebelum };
+}
+
 function apiPerbaikiDataLama(t, terapkan){
   var u = _requirePerm(t, 'settings', 'edit');
   var rows = readAll(SHEETS.PENGHIMPUNAN) || [];
@@ -5649,6 +6183,10 @@ REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
 REGISTRY['apiBersihkanSetorTunai']=apiBersihkanSetorTunai;
+REGISTRY['apiPeriksaLayanan']=apiPeriksaLayanan;
+REGISTRY['apiGabungLayanan']=apiGabungLayanan;
+REGISTRY['apiPeriksaDobel']=apiPeriksaDobel;
+REGISTRY['apiResetTransaksi']=apiResetTransaksi;
 REGISTRY['apiCadanganDB']=apiCadanganDB;
 REGISTRY['apiCekIzin']=apiCekIzin;
 REGISTRY['apiStatusCadangan']=apiStatusCadangan;

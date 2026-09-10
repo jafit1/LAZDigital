@@ -2858,53 +2858,294 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .salam-tag:hover{background:var(--accent);border-color:transparent;color:#fff}
 .salam-hint{font-size:11px;color:var(--muted);margin-left:2px}
 
-/* ---------- 33. IMPOR: UNGGAH FILE & CATATAN BUKU KAS ---------- */
-.imp-drop-t{font-family:var(--head);font-size:14px;font-weight:700;color:var(--text)}
-.imp-drop-d{font-size:11.5px;color:var(--muted);margin-top:4px}
-.imp-file-info{font-size:12.5px;margin-top:10px;min-height:18px}
+/* ================================================================
+   33–34. MODAL IMPOR — RUANG UNTUK DATANYA, BUKAN UNTUK KOTAK UNGGAH
+   Sebelumnya kotak "pilih berkas" setinggi ±120px dan tiga pilihan
+   bawaan bertumpuk tiga baris, sehingga pratinjau — satu-satunya
+   bagian yang benar-benar dibaca sebelum menyimpan — hanya kebagian
+   sisa layar dan cuma memperlihatkan satu setengah baris tabel.
+   Sekarang seluruh bagian pengantar dipadatkan ke satu blok setinggi
+   ±150px, dan sisanya milik pratinjau.
+   ================================================================ */
+.modal.import-modal{max-width:1080px !important;width:100%}
+.modal.import-modal .modal-body{
+  /* tinggi dipatok, bukan min/max — supaya kotaknya tidak bergeser
+     sedikit pun ketika isi tiap tab berbeda tingginya */
+  height:min(74vh,620px);
+  min-height:min(74vh,620px);
+  max-height:min(74vh,620px);
+  overflow:hidden;                 /* yang bergulir cukup pratinjaunya */
+  display:flex;flex-direction:column;gap:0;
+}
+.modal.import-modal .modal-foot{flex-wrap:wrap;gap:8px}
+
+/* ---- blok pengantar: tab, sumber data, pilihan bawaan ---- */
+.imp-atas{flex:0 0 auto;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.imp-tabs{margin-bottom:10px}
+.imp-src{min-height:0}            /* dulu 150px, memaksa ruang kosong */
+
+/* kotak pilih berkas: satu baris, bukan kotak besar */
+.imp-drop{
+  display:flex;align-items:center;gap:12px;
+  border:1.5px dashed var(--border);border-radius:12px;
+  padding:10px 12px;cursor:pointer;background:var(--surface3);
+  transition:border-color .15s,background .15s;
+}
+.imp-drop:hover{border-color:var(--accent);background:var(--accent-soft)}
+.imp-drop-ic{
+  flex:0 0 auto;display:grid;place-items:center;width:34px;height:34px;
+  border-radius:10px;background:var(--accent-soft);color:var(--accent-d);
+}
+.imp-drop-tx{flex:1;min-width:0;display:block;line-height:1.35}
+.imp-drop-tx b{font-family:var(--head);font-size:13.5px;color:var(--text);display:block}
+.imp-drop-d{
+  display:block;font-size:11.5px;color:var(--muted);margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.imp-drop-btn{
+  flex:0 0 auto;font-size:12px;font-weight:700;color:var(--accent-d);
+  border:1px solid var(--accent-soft2);border-radius:9px;padding:5px 11px;background:var(--surface);
+}
+.imp-drop:hover .imp-drop-btn{background:var(--accent);border-color:transparent;color:#fff}
+
+/* keping ringkasan berkas terpilih */
+.imp-file-info{font-size:12.5px;margin-top:8px;min-height:0}
+.imp-file-info:empty{display:none}
+.imp-chip{
+  display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--surface3);border:1px solid var(--border);border-radius:9px;
+  padding:5px 10px;font-size:12px;max-width:100%;
+}
+.imp-chip b{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:340px}
+.imp-chip-s{color:var(--muted);font-size:11.5px;white-space:nowrap}
+.imp-chip-s::before{content:"·";margin-right:8px;color:var(--border)}
+
+.modal.import-modal #import_text{
+  width:100%;box-sizing:border-box;resize:vertical;min-height:86px;max-height:160px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+  border-radius:10px;border:1px solid var(--border);padding:9px 10px;background:var(--bg);color:var(--text);
+}
+.imp-hint{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.45}
+
+/* tiga pilihan bawaan sejajar dalam satu baris */
+.imp-opsi{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;margin-top:10px;
+}
+.imp-opsi .field{margin:0;min-width:0}
+.imp-opsi .field label{font-size:11.5px;margin-bottom:4px}
+.imp-opsi select,.imp-opsi input{width:100%;box-sizing:border-box}
+
+/* ---- pratinjau: mengambil semua sisa tinggi ---- */
+.modal.import-modal #importPreview{
+  flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:2px;
+}
+.imp-kosong{
+  height:100%;min-height:120px;display:grid;place-items:center;text-align:center;
+  color:var(--muted);font-size:12.5px;border:1px dashed var(--border);border-radius:12px;padding:16px;
+}
+.imp-stat{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.imp-stat-i{
+  font-size:12px;color:var(--text2);background:var(--surface3);
+  border:1px solid var(--border);border-radius:8px;padding:4px 9px;
+}
+.imp-stat-i b{font-variant-numeric:tabular-nums}
+.imp-stat-i.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 30%,transparent)}
+.imp-stat-i.warn{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 30%,transparent)}
+.imp-stat-i.bad{color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent)}
+
+.imp-h4{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--head);font-size:13px;margin:14px 0 6px;
+}
+.imp-h4:first-child{margin-top:0}
+.imp-h4.ok{color:var(--green)}
+.imp-h4.warn{color:var(--amber)}
+.imp-h4 span{
+  font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);
+  background:var(--surface3);border:1px solid var(--border);border-radius:20px;padding:2px 8px;
+}
+
+/* tabel pratinjau: kepala tabel tetap terlihat saat digulir */
+.imp-tblwrap{
+  border:1px solid var(--border);border-radius:10px;overflow:auto;
+  margin-bottom:12px;background:var(--surface);
+}
+.imp-tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:11.5px}
+.imp-tbl th{
+  position:sticky;top:0;z-index:2;
+  background:var(--surface3);color:var(--text2);
+  font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;
+  text-align:left;padding:7px 9px;border-bottom:1px solid var(--border);white-space:nowrap;
+}
+.imp-tbl td{padding:6px 9px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.4}
+.imp-tbl tbody tr:last-child td{border-bottom:0}
+.imp-tbl tbody tr:hover{background:var(--surface3)}
+.imp-tbl td:first-child{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text2)}
+.imp-tbl .jnum,.imp-tbl td:nth-last-child(2){font-variant-numeric:tabular-nums}
 .imp-note{
   background:var(--accent-soft);border:1px solid var(--accent-soft2);
-  border-radius:12px;padding:10px 13px;font-size:12px;line-height:1.5;
+  border-radius:12px;padding:9px 12px;font-size:12px;line-height:1.5;
   color:var(--text2);margin-bottom:10px;
 }
 .imp-note b{color:var(--accent-d)}
 
+/* catatan yang bisa dilipat: judulnya satu baris, rinciannya menyusul */
+.imp-det{padding:7px 12px}
+.imp-det > summary{
+  cursor:pointer;list-style:none;font-size:12px;color:var(--text2);
+  display:flex;align-items:center;gap:6px;
+}
+.imp-det > summary::-webkit-details-marker{display:none}
+.imp-det > summary::after{
+  content:"";width:6px;height:6px;margin-left:auto;flex:0 0 auto;
+  border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
+  transform:rotate(45deg) translateY(-2px);opacity:.55;transition:transform .15s;
+}
+.imp-det[open] > summary::after{transform:rotate(-135deg) translateY(-2px)}
+.imp-det-b{margin-top:6px;font-size:11.5px;line-height:1.55}
+
 /* ================================================================
-   34. MODAL IMPOR — UKURAN TETAP
-   Sebelumnya tiap tab punya tinggi isi berbeda (unggah file pendek,
-   tempel teks tinggi, pratinjau lebih tinggi lagi), sehingga kotaknya
-   melompat-lompat tiap kali berpindah. Sekarang lebar dan tinggi area
-   isinya dikunci; yang bergulir cukup isinya saja.
-   ================================================================ */
-.modal.import-modal{max-width:860px !important;width:100%}
-.modal.import-modal .modal-body{
-  /* tinggi dipatok, bukan min/max — supaya benar-benar tidak bergeser
-     sedikit pun ketika isi tiap tab berbeda tingginya */
-  height:min(66vh,540px);
-  min-height:min(66vh,540px);
-  max-height:min(66vh,540px);
-  overflow-y:auto;
-  display:flex;flex-direction:column;
+   ANGKA MINUS — HARUS TETAP TERBACA DI LATAR APA PUN
+   ================================================================
+   Kartu KPI pertama berlatar gradien oranye. Angka minus dulu ditulis
+   merah tua langsung di atasnya, dan hasilnya nyaris tidak terbaca.
+   Di latar terang biasa merah sudah cukup; di atas gradien, angkanya
+   diberi keping putih supaya kontrasnya kembali penuh. */
+/* tabel izin per modul */
+.perm-bar{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5}
+.perm-semua{
+  border:1px solid var(--border);background:var(--surface);color:var(--accent-d);
+  font-size:11px;font-weight:700;padding:3px 9px;border-radius:8px;cursor:pointer;margin-left:6px;
 }
-/* tiap tab mendapat ruang minimum yang sama */
-.modal.import-modal #group_import_file,
-.modal.import-modal #group_import_text,
-.modal.import-modal #group_import_link{min-height:150px}
-.modal.import-modal #import_text{
-  width:100%;box-sizing:border-box;resize:vertical;min-height:120px;max-height:220px;
+.perm-semua:hover{background:var(--accent);border-color:transparent;color:#fff}
+.perm-table th{white-space:nowrap;font-size:11px}
+.perm-table td{vertical-align:top}
+.perm-m{min-width:210px}
+.perm-ket{font-size:10.5px;color:var(--muted);margin-top:2px;line-height:1.4;font-weight:400}
+.perm-x{text-align:center;color:var(--border)}
+.perm-b{text-align:right}
+
+.rp-neg{color:var(--red);font-variant-numeric:tabular-nums}
+.rp-pos{font-variant-numeric:tabular-nums}
+.kpi-v2:first-child .kpi-v2-value .rp-neg,
+.kll-daerah .saldo-angka .rp-neg{
+  display:inline-block;background:#fff;color:#b91c1c;
+  padding:2px 12px;border-radius:12px;line-height:1.25;
+  box-shadow:0 2px 8px -3px rgba(0,0,0,.28);
 }
-.modal.import-modal #importPreview{
-  flex:1;min-height:150px;margin-top:14px;
-  overflow-y:auto;
+html[data-theme="dark"] .kpi-v2:first-child .kpi-v2-value .rp-neg{background:#fee2e2;color:#991b1b}
+/* kartu KPI yang nilainya minus: garis tepi ikut memberi tanda */
+.kpi-v2:has(.rp-neg){border-color:color-mix(in srgb,var(--red) 45%,transparent)}
+.kpi-v2:first-child:has(.rp-neg){box-shadow:0 18px 36px -20px rgba(185,28,28,.75) !important}
+
+/* ================================================================
+   SALDO KLL & ULL — SARINGAN DAN BARIS BERKOLOM
+   ================================================================
+   Sebelumnya seluruh angka satu kantor ditulis berdesakan dalam satu
+   baris keterangan kecil, sehingga membandingkan antar kantor berarti
+   membaca kalimat satu per satu. Sekarang tiap angka punya kolomnya
+   sendiri dan sejajar ke bawah. */
+.kll-alat{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;
+  padding:10px 12px;margin-bottom:12px;
+  border:1px solid var(--border);border-radius:12px;background:var(--surface3);
 }
-.modal.import-modal .upload-box{padding:26px 18px}
-.modal.import-modal .modal-foot{flex-wrap:wrap;gap:8px}
+.kll-cari{flex:1 1 240px;min-width:200px}
+.kll-cari input{width:100%;box-sizing:border-box}
+.kll-saring{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kll-saring-l{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.kll-pil{
+  border:1px solid var(--border);background:var(--surface);color:var(--text2);
+  font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.kll-pil:hover{border-color:var(--accent);color:var(--accent-d)}
+.kll-pil.on{background:var(--accent);border-color:transparent;color:#fff}
+.kll-urut{font-size:12px;padding:5px 8px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--text)}
+
+.kll-jml{font-size:12px;color:var(--muted);margin-bottom:8px}
+.kll-jml b{color:var(--text)}
+.kll-hapus{
+  border:0;background:none;color:var(--accent-d);font-size:12px;font-weight:700;
+  cursor:pointer;text-decoration:underline;padding:0 0 0 6px;
+}
+
+/* satu kisi dipakai bersama oleh kepala kolom dan tiap barisnya */
+.kll-kepala,.kll-baris{
+  display:grid;
+  grid-template-columns:minmax(180px,2.2fr) repeat(5,minmax(96px,1fr)) 22px;
+  gap:10px;align-items:center;
+}
+.kll-kepala{
+  padding:0 12px 6px;font-size:10.5px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);
+}
+.kll-kepala span:not(:first-child){text-align:right}
+.kll-baris{
+  padding:11px 12px;border-bottom:1px solid var(--border);cursor:pointer;
+  transition:background .14s;
+}
+.kll-baris:hover{background:var(--surface3)}
+.kll-baris.buka{background:var(--accent-soft)}
+.kll-nama{min-width:0}
+.kll-nama b{font-size:13.5px;color:var(--text);overflow-wrap:anywhere}
+.kll-tipe{
+  font-size:9.5px;font-weight:700;letter-spacing:.05em;margin-left:6px;
+  border:1px solid var(--border);border-radius:6px;padding:1px 5px;color:var(--muted);
+}
+.kll-nama-k{font-size:10.5px;color:var(--muted);margin-top:2px}
+.kll-n{text-align:right;font-size:12.5px;color:var(--text2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.kll-n.kuat{font-weight:700;color:var(--text)}
+.kll-n.besar{font-family:var(--head);font-size:14px}
+.kll-daerah .cad-baris{cursor:pointer}
+.kll-daerah{border-color:color-mix(in srgb,var(--accent) 35%,var(--border)) !important}
+
+/* Di layar sempit kisi diruntuhkan jadi daftar berlabel — angkanya tetap
+   lengkap, tetapi tiap angka membawa namanya sendiri. */
 @media(max-width:900px){
-  .modal.import-modal{max-width:calc(100% - 20px) !important}
-  .modal.import-modal .modal-body{height:70vh;min-height:70vh;max-height:70vh}
+  .kll-kepala{display:none}
+  .kll-baris{grid-template-columns:1fr 1fr;gap:6px 12px;padding:12px}
+  .kll-nama{grid-column:1 / -1}
+  .kll-n{text-align:left;display:flex;justify-content:space-between;gap:8px;font-size:12px}
+  .kll-n::before{content:attr(data-l);color:var(--muted);font-weight:600;font-size:11px}
+  .kll-baris .pub-lay-c{grid-column:1 / -1;text-align:center;padding-top:2px}
+  .kll-alat{gap:8px 12px}
+  .kll-cari{flex:1 1 100%}
+}
+
+/* kotak ketik konfirmasi untuk tindakan yang tidak bisa dibatalkan */
+.cd-prompt{
+  width:100%;box-sizing:border-box;margin:2px 0 4px;
+  border:1.5px solid var(--border);border-radius:10px;padding:9px 11px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
+  letter-spacing:.06em;text-align:center;background:var(--bg);color:var(--text);
+}
+.cd-prompt:focus{outline:none;border-color:var(--accent)}
+.cd-actions .cd-ok:disabled{opacity:.45;cursor:not-allowed}
+
+/* modal impor mutasi bank memakai kerangka yang sama, hanya 2 pilihan bawaan */
+.imp-opsi-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.modal.mutasi-modal{max-width:900px !important}
+.modal.mutasi-modal #mutasiPreview{
+  flex:1 1 auto;min-height:0;overflow:auto;
+  border:1px solid var(--border);border-radius:10px;background:var(--surface);
+}
+.modal.mutasi-modal #mutasiPreview:has(.imp-kosong){border:0;background:transparent}
+.imp-stat-baris{font-weight:600;font-size:12.5px;margin-bottom:8px}
+.imp-stat-baris:empty{display:none}
+
+@media(max-width:1120px){
+  .modal.import-modal{max-width:calc(100% - 24px) !important}
+}
+@media(max-width:760px){
+  .modal.import-modal .modal-body{height:78vh;min-height:78vh;max-height:78vh}
+  .imp-opsi,.imp-opsi-2{grid-template-columns:1fr}
+  .imp-drop-d{display:none}          /* di HP, judulnya saja sudah cukup */
+  .imp-drop{padding:9px 10px}
 }
 @media(max-height:640px){
-  .modal.import-modal .modal-body{height:62vh;min-height:62vh;max-height:62vh}
+  .modal.import-modal .modal-body{height:74vh;min-height:74vh;max-height:74vh}
 }
 
 /* ================================================================

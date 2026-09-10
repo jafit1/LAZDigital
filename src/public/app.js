@@ -2,6 +2,9 @@
 var TOKEN = localStorage.getItem('laz_token') || '';
 var ME=null, SETTINGS={}, PERM_META={modules:[],actions:[]}, CACHE={};
 var BULAN=['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+/* Ikon unggah kecil untuk kotak pilih berkas — sengaja inline supaya tidak
+   ada permintaan berkas tambahan dan warnanya ikut tema lewat currentColor. */
+var IKON_UNGGAH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 9l5-5 5 5"/><path d="M12 4v12"/></svg>';
 var BOXES_SPINNER = '<div class="loader-wrap"><div class="loadingspinner"><div id="square1"></div><div id="square2"></div><div id="square3"></div><div id="square4"></div><div id="square5"></div></div></div>';
 
 function getSavedCreds(){ try{var s=localStorage.getItem('laz_creds');return s?JSON.parse(atob(s)):null;}catch(e){return null;} }
@@ -1651,7 +1654,47 @@ function renderUsers(rows){var add=canDo('users','create')?'<button class="btn b
     h+='<tr><td><b>'+esc(u.nama)+'</b></td><td>'+esc(u.username)+'</td><td>'+(u.role==='superadmin'?'<span class="badge purple">Superadmin</span>':'<span class="badge blue">'+esc(u.role||'staff')+'</span>')+'</td><td>'+(u.layanan?'<span class="badge amber">'+esc(u.layanan)+'</span>':'<span class="muted">semua</span>')+'</td><td><span class="badge '+(act?'green':'amber')+'">'+(act?'Aktif':'Nonaktif')+'</span></td><td class="muted">'+pc+'</td><td><div class="actions-cell">'+(canDo('users','edit')?'<button class="icon-btn" onclick="formUser(\''+u.id+'\')">✎</button>':'')+(canDo('users','delete')?'<button class="icon-btn" onclick="delUser(\''+u.id+'\')">🗑</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el('content').innerHTML=h;}
 function countPerm(p){var n=0;p=p||{};Object.keys(p).forEach(function(m){Object.keys(p[m]||{}).forEach(function(a){if(p[m][a])n++;});});return n;}
-function permGrid(p){p=p||{};var h='<div style="overflow:auto"><table class="perm-table"><thead><tr><th>Modul</th>'+PERM_META.actions.map(function(a){return '<th>'+a+'</th>';}).join('')+'</tr></thead><tbody>';PERM_META.modules.forEach(function(m){h+='<tr><td>'+m+'</td>'+PERM_META.actions.map(function(a){var ck=(p[m]&&p[m][a])?'checked':'';return '<td><input type="checkbox" style="width:auto" data-mod="'+m+'" data-act="'+a+'" '+ck+'></td>';}).join('')+'</tr>';});h+='</tbody></table></div>';return h;}
+/* Tabel izin per modul. Dulu menampilkan nama teknis apa adanya ("saldodaerah",
+   "pentasyarufan") dengan empat kotak centang untuk semua modul, termasuk yang
+   memang tidak punya aksi itu — mudah salah centang dan sulit dibaca orang non
+   teknis. Sekarang tiap baris memakai nama manusia beserta penjelasan singkat,
+   aksi yang tidak berlaku ditandai sebagai garis, dan ada tombol centang semua
+   per baris. */
+var AKSI_LABEL = { view:'Lihat', create:'Tambah', edit:'Ubah', delete:'Hapus' };
+function permGrid(p){
+  p = p || {};
+  var meta = PERM_META || {};
+  var aksi = meta.actions || [];
+  var h = '<div class="perm-bar">Centang apa yang boleh dilakukan pengguna ini. '
+    + 'Superadmin selalu boleh semuanya. '
+    + '<button type="button" class="perm-semua" onclick="permSemua(true)">Centang semua</button>'
+    + '<button type="button" class="perm-semua" onclick="permSemua(false)">Kosongkan</button></div>'
+    + '<div class="tabel-geser"><table class="perm-table"><thead><tr><th>Yang boleh diakses</th>'
+    + aksi.map(function(a){ return '<th>'+esc(AKSI_LABEL[a] || a)+'</th>'; }).join('')
+    + '<th></th></tr></thead><tbody>';
+  (meta.modules || []).forEach(function(m){
+    var boleh = (meta.aksi && meta.aksi[m]) ? meta.aksi[m] : aksi;
+    h += '<tr><td class="perm-m"><b>'+esc((meta.label && meta.label[m]) || m)+'</b>'
+      + ((meta.ket && meta.ket[m]) ? '<div class="perm-ket">'+esc(meta.ket[m])+'</div>' : '')
+      + '</td>';
+    aksi.forEach(function(a){
+      if (boleh.indexOf(a) < 0) { h += '<td class="perm-x">&ndash;</td>'; return; }
+      var ck = (p[m] && p[m][a]) ? ' checked' : '';
+      h += '<td><input type="checkbox" style="width:auto" data-mod="'+esc(m)+'" data-act="'+esc(a)+'"'+ck+'></td>';
+    });
+    h += '<td class="perm-b"><button type="button" class="perm-semua" onclick="permBaris(this,\''+esc(m)+'\')">semua</button></td></tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+function permSemua(nilai){
+  document.querySelectorAll('.perm-table input[type=checkbox]').forEach(function(c){ c.checked = !!nilai; });
+}
+function permBaris(btn, mod){
+  var kotak = [].slice.call(document.querySelectorAll('.perm-table input[data-mod="'+mod+'"]'));
+  var semua = kotak.every(function(c){ return c.checked; });
+  kotak.forEach(function(c){ c.checked = !semua; });
+}
 function formUser(id){var u=id?CACHE.users.find(function(x){return x.id===id;}):{role:'staff',aktif:true,permissions:{}};
   var b='<div class="row"><div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div><div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div></div><div class="row"><div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div><div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div></div><div class="row"><div class="field"><label>Status Akun</label>'+selOpt('u_aktif',['true','false'],String(u.aktif===true||String(u.aktif)==='true'))+'</div><div class="field"><label>Batasi ke kantor layanan</label><select id="u_layanan">'+_opsiLayananUser(u.layanan||'')+'</select><div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun ini hanya melihat saldo kantor tersebut. Superadmin selalu melihat semua.</div></div></div><div class="divider"></div><label style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;display:block">HAK AKSES (Permission) — diabaikan jika role Superadmin</label>'+permGrid(u.permissions);
   openModal(id?'Edit User':'Tambah User',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveUser(\''+(id||'')+'\')">Simpan</button>');}
@@ -1953,19 +1996,29 @@ function __barHide(){ __pending--; if(__pending<=0){ __pending=0; var b=__barEl(
 function confirmDialog(opts){ opts=opts||{}; return new Promise(function(resolve){
   var ov=document.createElement('div'); ov.className='cd-overlay';
   var dg=opts.danger?' danger':'';
-  ov.innerHTML='<div class="cd-card'+dg+'" role="dialog" aria-modal="true"><div class="cd-icon">'+(opts.icon||(opts.danger?'⚠️':'❓'))+'</div><div class="cd-title">'+(opts.title||'Konfirmasi')+'</div><div class="cd-msg">'+(opts.message||'')+'</div><div class="cd-actions"><button class="cd-cancel"></button><button class="cd-ok"></button></div></div>';
+  /* opts.prompt: tindakan yang tidak bisa dibatalkan meminta kata kunci
+     diketik lebih dulu, supaya tidak terjadi karena salah klik. */
+  var minta = opts.prompt ? String(opts.prompt) : '';
+  var isiPrompt = minta ? '<input class="cd-prompt" placeholder="Ketik ' + minta + '" autocomplete="off" spellcheck="false">' : '';
+  ov.innerHTML='<div class="cd-card'+dg+'" role="dialog" aria-modal="true"><div class="cd-icon">'+(opts.icon||(opts.danger?'⚠️':'❓'))+'</div><div class="cd-title">'+(opts.title||'Konfirmasi')+'</div><div class="cd-msg">'+(opts.message||'')+'</div>'+isiPrompt+'<div class="cd-actions"><button class="cd-cancel"></button><button class="cd-ok"></button></div></div>';
   document.body.appendChild(ov);
   var card=ov.querySelector('.cd-card');
+  var inp=ov.querySelector('.cd-prompt');
+  var siap=function(){ return !minta || (inp && inp.value.trim() === minta); };
+  if(inp){
+    ov.querySelector('.cd-ok').disabled=true;
+    inp.addEventListener('input',function(){ ov.querySelector('.cd-ok').disabled=!siap(); });
+  }
   ov.querySelector('.cd-cancel').textContent=opts.cancelText||'Batal';
   if(opts.cancelText==='') ov.querySelector('.cd-cancel').style.display='none';
   ov.querySelector('.cd-ok').textContent=opts.okText||'OK';
   function close(val){ card.classList.add('leaving'); ov.style.animation='cdFade .18s reverse forwards'; setTimeout(function(){ try{ov.remove();}catch(e){} resolve(val); },170); }
-  ov.querySelector('.cd-ok').onclick=function(){ close(true); };
+  ov.querySelector('.cd-ok').onclick=function(){ if(siap()) close(true); };
   ov.querySelector('.cd-cancel').onclick=function(){ close(false); };
   ov.addEventListener('mousedown',function(e){ if(e.target===ov) close(false); });
-  function onKey(e){ if(e.key==='Escape'){ document.removeEventListener('keydown',onKey); close(false);} else if(e.key==='Enter'){ document.removeEventListener('keydown',onKey); close(true);} }
+  function onKey(e){ if(e.key==='Escape'){ document.removeEventListener('keydown',onKey); close(false);} else if(e.key==='Enter'&&siap()){ document.removeEventListener('keydown',onKey); close(true);} }
   document.addEventListener('keydown',onKey);
-  setTimeout(function(){ try{ov.querySelector('.cd-ok').focus();}catch(e){} },60);
+  setTimeout(function(){ try{ (inp||ov.querySelector('.cd-ok')).focus(); }catch(e){} },60);
 }); }
 function uiConfirm(msg){ return confirmDialog({title:'Konfirmasi Hapus',message:msg,okText:'Hapus',cancelText:'Batal',danger:true}); }
 function uiAlert(msg,title){ return confirmDialog({title:title||'Berhasil',message:msg,okText:'OK',cancelText:'',danger:false,icon:'✅'}); }
@@ -2543,7 +2596,7 @@ function openLayananDetail(layName, mode) {
         '<td style="padding:8px;text-align:right;font-weight:600;color:' + col + '">' + rp(r.jumlah) + '</td>' +
         '</tr>';
     });
-    h += '</tbody></table></div>';
+    h += '</tbody></table>';
     el('modalBody').innerHTML = h;
   }).catch(function(e) {
     el('modalBody').innerHTML = '<div style="color:var(--red);text-align:center;padding:20px">' + esc(e.message || e) + '</div>';
@@ -2583,7 +2636,11 @@ function setDashActivityMode(m){window.DASH_ACTIVITY_MODE=m;renderDashboard(wind
 /* ============ POSISI SALDO (per dana, per akun, uang muka) ============
    Saldo per akun = saldo awal tahun + masuk - keluar sampai tanggal periode.
    Saldo dana = kas & bank + uang muka yang belum di-LPJ. */
-function _rpW(n){ n=Number(n)||0; return '<span style="color:'+(n<0?'var(--red)':'inherit')+'">'+(n<0?'&minus; ':'')+rp(Math.abs(n))+'</span>'; }
+/* Angka bertanda: nilai minus diberi KELAS, bukan warna langsung, supaya tiap
+   tempat bisa menyesuaikan latarnya. Di kartu KPI berlatar oranye, merah tua
+   di atas oranye praktis tidak terbaca — di sana kelas ini berubah menjadi
+   keping putih dengan tulisan merah. */
+function _rpW(n){ n=Number(n)||0; return n<0 ? '<span class="rp-neg">&minus; '+rp(Math.abs(n))+'</span>' : '<span class="rp-pos">'+rp(n)+'</span>'; }
 function saldoWidget(sp, lengkap){
   if(!sp) return '<div class="muted" style="padding:14px 0;text-align:center">Belum ada data.</div>';
   var h='';
@@ -2804,7 +2861,7 @@ function saldoMuatBuku(kode){
         h += '<tr><td style="white-space:nowrap">'+esc(fdate(r.tanggal))+'</td><td><span class="badge '+(/Penerimaan/.test(r.jenis)?'green':/Penyaluran/.test(r.jenis)?'amber':/Uang muka/.test(r.jenis)?'purple':'blue')+'">'+esc(r.jenis)+'</span></td><td class="saldo-ket" title="'+esc(r.keterangan)+'">'+esc(r.keterangan)+(r.ref?' <span class="muted">('+esc(r.ref)+')</span>':'')+'</td>'
           + '<td class="num" style="color:var(--green)">'+(r.masuk?rp(r.masuk):'')+'</td><td class="num" style="color:var(--red)">'+(r.keluar?rp(r.keluar):'')+'</td><td class="num strong">'+_rpW(r.saldo)+'</td></tr>';
       });
-      h += '</tbody></table></div>';
+      h += '</tbody></table>';
     }
     host.innerHTML = h;
   }).catch(function(e){ var host = el(id); if(host) host.innerHTML = '<div class="imp-note imp-warn" style="margin:8px">'+esc(e.message)+'</div>'; });
@@ -2872,41 +2929,121 @@ function viewKll(fokus){
   gas('apiSaldoLayanan')(TOKEN, KLL_TGL).then(function(d){ KLL_DATA = d; renderKll(); }).catch(handleErr);
 }
 
+/* Saringan daftar kantor. Dipisah dari pencarian teks supaya keduanya bisa
+   dipakai bersamaan: mis. ketik "sewon" sambil menyaring "belum LPJ". */
+var KLL_TIPE = 'semua';      /* semua | KLL | ULL */
+var KLL_STATUS = 'semua';    /* semua | bersaldo | belumlpj | nol */
+var KLL_URUT = 'sisa';       /* sisa | setoran | belumlpj | nama */
+
 function kllCari(v){ KLL_CARI = v; renderKll(true); }
+function kllSaring(jenis, nilai){
+  if(jenis === 'tipe') KLL_TIPE = nilai;
+  else if(jenis === 'status') KLL_STATUS = nilai;
+  else if(jenis === 'urut') KLL_URUT = nilai;
+  renderKll(true);
+}
+function kllReset(){ KLL_CARI=''; KLL_TIPE='semua'; KLL_STATUS='semua'; KLL_URUT='sisa'; renderKll(); }
+
+function _kllSaring(semua){
+  var q = _norm2(KLL_CARI);
+  var out = semua.filter(function(x){
+    if(q && _norm2(x.layanan).indexOf(q) < 0) return false;
+    if(KLL_TIPE !== 'semua' && x.tipe !== KLL_TIPE) return false;
+    if(KLL_STATUS === 'bersaldo' && !(x.sisaSaldo > 0)) return false;
+    if(KLL_STATUS === 'belumlpj' && !(x.belumLPJ > 0)) return false;
+    if(KLL_STATUS === 'nol' && (x.sisaSaldo !== 0 || x.belumLPJ !== 0)) return false;
+    return true;
+  });
+  var urut = {
+    sisa:     function(a,b){ return b.sisaSaldo - a.sisaSaldo; },
+    setoran:  function(a,b){ return b.himpun - a.himpun; },
+    belumlpj: function(a,b){ return b.belumLPJ - a.belumLPJ; },
+    nama:     function(a,b){ return _norm2(a.layanan) < _norm2(b.layanan) ? -1 : 1; }
+  };
+  return out.slice().sort(urut[KLL_URUT] || urut.sisa);
+}
+
+function _kllPil(jenis, nilai, label, aktif){
+  return '<button type="button" class="kll-pil'+(aktif?' on':'')+'" onclick="kllSaring(\''+jenis+'\',\''+nilai+'\')">'+label+'</button>';
+}
 
 function renderKll(hanyaTabel){
   var d = KLL_DATA; if(!d) return;
-  var q = _norm2(KLL_CARI);
   var semua = (d.daftar || []).filter(function(x){ return x.tipe !== 'Daerah'; });
-  var daerah = (d.daftar || []).filter(function(x){ return x.tipe === 'Daerah'; });
-  var baris = q ? semua.filter(function(x){ return _norm2(x.layanan).indexOf(q) >= 0; }) : semua;
+  var baris = _kllSaring(semua);
 
   var h = '';
   if(!hanyaTabel){
     var pj = Object.keys(d.persen || {}).map(function(k){ return esc(k)+' '+(d.persen[k])+'%'; }).join(' · ');
+    /* KPI memakai totalKll — hanya kantor layanan, tidak dicampur angka daerah,
+       supaya judul kartunya benar-benar sesuai isinya. */
+    var tk = d.totalKll || d.total;
     h += '<div class="kpis-v2 saldo-kpi" style="margin-bottom:14px">'
-      + _kartuKll('Setoran KLL & ULL','#3b82f6',SVG_ICONS.arrowDown, d.total.himpun)
-      + _kartuKll('Hak amil','#8b5cf6',SVG_ICONS.arrowUp, d.total.hakAmil)
-      + _kartuKll('Masih di daerah','#059669',SVG_ICONS.wallet, d.total.sisaSaldo)
-      + _kartuKll('Belum LPJ','#f59e0b',SVG_ICONS.arrowUp, d.total.belumLPJ)
+      + _kartuKll('Setoran KLL & ULL','#3b82f6',SVG_ICONS.arrowDown, tk.himpun)
+      + _kartuKll('Hak amil','#8b5cf6',SVG_ICONS.arrowUp, tk.hakAmil)
+      + _kartuKll('Masih di daerah','#059669',SVG_ICONS.wallet, tk.sisaSaldo)
+      + _kartuKll('Belum LPJ','#f59e0b',SVG_ICONS.arrowUp, tk.belumLPJ)
       + '</div>';
+
+    /* Angka daerah adalah izin tersendiri; kalau tidak berizin, tidak dikirim
+       server sama sekali sehingga bagian ini memang tidak ada. */
+    h += '<div id="kllDaerah"></div>';
+
     h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:6px"><span class="dot" style="background:#3b82f6"></span>'
-      + (d.dibatasi ? 'Kantor: '+esc(d.dibatasi) : 'Semua kantor layanan')
+      + (d.dibatasi ? 'Kantor: '+esc(d.dibatasi) : 'Kantor layanan')
       + ' <span class="ket">'+d.jumlahLayanan+' kantor &middot; posisi '+esc(fdate(d.tanggal))+'</span></div>'
-      + '<div class="muted" style="font-size:12px;margin-bottom:10px">Hak amil: '+(pj||'belum diatur')
+      + '<div class="muted" style="font-size:12px;margin-bottom:12px">Hak amil: '+(pj||'belum diatur')
       + (d.kecuali && d.kecuali.length ? ' &middot; dikecualikan: '+d.kecuali.map(esc).join(', ') : '')
       + '. Klik nama kantor untuk melihat rincian setoran, uang muka, dan LPJ-nya.</div>'
-      + '<div class="field" style="margin:0 0 10px;max-width:340px"><input id="kllCari" placeholder="Cari nama KLL / ULL..." value="'+esc(KLL_CARI)+'" oninput="kllCari(this.value)"></div>'
+      + '<div class="kll-alat">'
+      + '  <div class="kll-cari"><input id="kllCari" placeholder="Cari nama KLL / ULL..." value="'+esc(KLL_CARI)+'" oninput="kllCari(this.value)"></div>'
+      + '  <div class="kll-saring">'
+      + '    <span class="kll-saring-l">Jenis</span>'
+      + _kllPil('tipe','semua','Semua', KLL_TIPE==='semua') + _kllPil('tipe','KLL','KLL', KLL_TIPE==='KLL') + _kllPil('tipe','ULL','ULL', KLL_TIPE==='ULL')
+      + '  </div>'
+      + '  <div class="kll-saring">'
+      + '    <span class="kll-saring-l">Keadaan</span>'
+      + _kllPil('status','semua','Semua', KLL_STATUS==='semua')
+      + _kllPil('status','bersaldo','Masih ada saldo', KLL_STATUS==='bersaldo')
+      + _kllPil('status','belumlpj','Belum LPJ', KLL_STATUS==='belumlpj')
+      + _kllPil('status','nol','Sudah nol', KLL_STATUS==='nol')
+      + '  </div>'
+      + '  <div class="kll-saring">'
+      + '    <span class="kll-saring-l">Urut</span>'
+      + '    <select class="kll-urut" onchange="kllSaring(\'urut\',this.value)">'
+      +        ['sisa|Masih di daerah terbesar','setoran|Setoran terbesar','belumlpj|Belum LPJ terbesar','nama|Nama A–Z']
+             .map(function(o){ var v=o.split('|'); return '<option value="'+v[0]+'"'+(KLL_URUT===v[0]?' selected':'')+'>'+v[1]+'</option>'; }).join('')
+      + '    </select>'
+      + '  </div>'
+      + '</div>'
       + '<div id="kllTabel"></div></div>';
-    if(daerah.length){
-      var dd = daerah[0];
-      h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:6px"><span class="dot" style="background:#94a3b8"></span>Penghimpunan Daerah <span class="ket">tanpa penanda KLL/ULL</span></div>'
-        + '<div class="muted" style="font-size:12.5px">Setoran '+rp(dd.himpun)+' &middot; hak amil '+rp(dd.hakAmil)+' &middot; sisa '+_rpW(dd.sisaSaldo)+'</div></div>';
-    }
     el('kllBody').innerHTML = h;
   }
+  /* Bagian daerah digambar terpisah supaya bisa ikut terbuka/tertutup tanpa
+     menggambar ulang seluruh halaman — sebelumnya mengklik kartunya tidak
+     memunculkan apa-apa karena hanya tabel kantor yang digambar ulang. */
+  if(el('kllDaerah')) el('kllDaerah').innerHTML = _kartuDaerah(d);
   el('kllTabel').innerHTML = _tabelKll(baris, semua.length);
   if(KLL_BUKA) kllMuatRinci(KLL_BUKA);
+}
+
+/* Kartu "Penghimpunan Daerah". Hanya digambar bila server memang mengirim
+   angkanya — tanpa izin, datanya tidak pernah sampai ke peramban. */
+function _kartuDaerah(d){
+  if(!(d && d.bolehDaerah && d.daerah)) return '';
+  var dd = d.daerah, buka = _norm2(KLL_BUKA) === _norm2(dd.layanan);
+  return '<div class="card sk-card kll-daerah'+(buka?' buka':'')+'">'
+    + '<div class="cad-baris saldo-grup-h" onclick="kllBuka(\''+esc(dd.layanan).replace(/'/g,"\\'")+'\')">'
+      + '<div class="cad-baris-n"><b>Penghimpunan Daerah</b> <span class="badge">khusus</span>'
+        + '<div class="muted" style="font-size:11px">dihimpun langsung oleh daerah, tanpa penanda KLL/ULL &middot; '
+        + 'setor '+rp(dd.himpun)+' &middot; amil '+rp(dd.hakAmil)
+        + (dd.umpKeluar ? ' &middot; uang muka '+rp(dd.umpKeluar) : '')+'</div></div>'
+      + '<div class="saldo-nilai"><div style="text-align:right"><div class="saldo-angka">'+_rpW(dd.sisaSaldo)+'</div>'
+        + '<div class="muted" style="font-size:10.5px">masih di daerah</div></div>'
+        + '<span class="pub-lay-c"'+(buka?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div>'
+    + '</div>'
+    + (buka ? '<div id="'+_idKll(dd.layanan)+'" class="saldo-buku"><div class="muted" style="font-size:12.5px;padding:10px">Memuat rincian...</div></div>' : '')
+    + '</div>';
 }
 function _kartuKll(label, warna, ikon, nilai){
   return '<div class="kpi-v2" style="--kpi-accent:'+warna+'"><div class="kpi-v2-top"><div class="kpi-v2-label">'+label+'</div>'
@@ -2917,18 +3054,31 @@ function _norm2(x){ return String(x==null?'':x).toLowerCase().replace(/\s+/g,' '
 function _idKll(n){ return 'kll_'+String(n).replace(/[^A-Za-z0-9]/g,'_'); }
 
 function _tabelKll(baris, totalSemua){
-  if(!baris.length) return '<div class="muted" style="padding:14px 0">'+(KLL_CARI?'Tidak ada kantor yang cocok dengan "'+esc(KLL_CARI)+'".':'Belum ada data kantor layanan.')+'</div>';
-  var h = (KLL_CARI ? '<div class="muted" style="font-size:12px;margin-bottom:8px">'+baris.length+' dari '+totalSemua+' kantor</div>' : '');
+  var adaSaring = KLL_CARI || KLL_TIPE!=='semua' || KLL_STATUS!=='semua';
+  if(!baris.length){
+    return '<div class="empty" style="padding:24px"><div class="big">🔍</div>'
+      + (adaSaring ? 'Tidak ada kantor yang cocok dengan saringan ini.<div style="margin-top:10px"><button class="btn btn-sm btn-ghost" onclick="kllReset()">Hapus saringan</button></div>'
+                   : 'Belum ada data kantor layanan.') + '</div>';
+  }
+  var h = '<div class="kll-jml">Menampilkan <b>'+baris.length+'</b> dari '+totalSemua+' kantor'
+    + (adaSaring ? ' <button class="kll-hapus" onclick="kllReset()">hapus saringan</button>' : '') + '</div>';
+  /* Kepala kolom supaya angkanya sejajar dan mudah dibandingkan antar kantor —
+     sebelumnya semua angka berdesakan dalam satu baris keterangan kecil. */
+  h += '<div class="kll-kepala"><span>Kantor</span><span>Setoran</span><span>Hak amil</span>'
+    + '<span>Uang muka</span><span>Belum LPJ</span><span>Masih di daerah</span><span></span></div>';
   baris.forEach(function(x){
     var buka = _norm2(KLL_BUKA) === _norm2(x.layanan);
     h += '<div class="saldo-grup'+(buka?' buka':'')+'">'
-      + '<div class="cad-baris saldo-grup-h" onclick="kllBuka(\''+esc(x.layanan).replace(/'/g,"\\'")+'\')">'
-        + '<div class="cad-baris-n"><b>'+esc(x.layanan)+'</b>'
-          + '<div class="muted" style="font-size:11px">setor '+rp(x.himpun)+' &middot; amil '+rp(x.hakAmil)
-          + ' &middot; uang muka '+rp(x.umpKeluar)+' &middot; belum LPJ <b>'+_rpW(x.belumLPJ)+'</b></div></div>'
-        + '<div class="saldo-nilai"><div style="text-align:right"><div class="saldo-angka">'+_rpW(x.sisaSaldo)+'</div>'
-          + '<div class="muted" style="font-size:10.5px">masih di daerah</div></div>'
-          + '<span class="pub-lay-c"'+(buka?' style="transform:rotate(180deg)"':'')+'>&#9660;</span></div>'
+      + '<div class="kll-baris'+(buka?' buka':'')+'" onclick="kllBuka(\''+esc(x.layanan).replace(/'/g,"\\'")+'\')">'
+        + '<div class="kll-nama"><b>'+esc(x.layanan)+'</b>'
+          + '<span class="kll-tipe">'+esc(x.tipe)+'</span>'
+          + '<div class="kll-nama-k">'+x.nHimpun+' setoran'+(x.nUmp?' &middot; '+x.nUmp+' uang muka':'')+(x.nLpj?' &middot; '+x.nLpj+' LPJ':'')+'</div></div>'
+        + '<div class="kll-n" data-l="Setoran">'+rp(x.himpun)+'</div>'
+        + '<div class="kll-n" data-l="Hak amil">'+rp(x.hakAmil)+'</div>'
+        + '<div class="kll-n" data-l="Uang muka">'+rp(x.umpKeluar)+'</div>'
+        + '<div class="kll-n kuat" data-l="Belum LPJ">'+_rpW(x.belumLPJ)+'</div>'
+        + '<div class="kll-n kuat besar" data-l="Masih di daerah">'+_rpW(x.sisaSaldo)+'</div>'
+        + '<span class="pub-lay-c"'+(buka?' style="transform:rotate(180deg)"':'')+'>&#9660;</span>'
       + '</div>';
     if(buka) h += '<div id="'+_idKll(x.layanan)+'" class="saldo-buku"><div class="muted" style="font-size:12.5px;padding:10px">Memuat rincian...</div></div>';
     h += '</div>';
@@ -3289,7 +3439,7 @@ function renderDashboard(d){
   var kpis='<div class="kpis-v2">'+
     kpiCardV2('himpun','Total Penghimpunan',rp(d.totalHimpun),SVG_ICONS.arrowUp,'#ea6a1e',kpiSpark(d.series,'himpun'))+
     kpiCardV2('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),SVG_ICONS.arrowDown,'#3b82f6',kpiSpark(d.series,'tasyaruf'))+
-    kpiCardV2('saldo','Saldo Kas & Bank',rp(saldoKas),SVG_ICONS.wallet,'#059669','')+
+    kpiCardV2('saldo','Saldo Kas & Bank',_rpW(saldoKas),SVG_ICONS.wallet,'#059669','')+
     kpiCardV2('donatur','Donatur & Mustahik',totalPeople,SVG_ICONS.users,'#8b5cf6','')+
     '</div>';
 
@@ -3665,50 +3815,54 @@ function openImportModal(type) {
     });
   }
   
-  var b = '<div class="lap-tabs" style="margin-bottom:14px">' +
+  /* Tata letak: bagian sumber data (unggah/tempel/link) dan pilihan bawaan
+     dibuat sekecil mungkin — semuanya hanya pengantar. Ruang sisanya milik
+     pratinjau, karena di situlah pengguna benar-benar memeriksa datanya. */
+  var b = '<div class="imp-atas">' +
+    '<div class="lap-tabs imp-tabs">' +
     '<button class="lap-tab on" id="tab_import_file" onclick="setImportTab(\'file\')">Unggah File</button>' +
     '<button class="lap-tab" id="tab_import_text" onclick="setImportTab(\'text\')">Tempel Teks</button>' +
     '<button class="lap-tab" id="tab_import_link" onclick="setImportTab(\'link\')">Link Spreadsheet</button>' +
     '</div>' +
-    '<div id="group_import_file">' +
-    '<div class="upload-box" onclick="el(\'import_file\').click()" id="importDrop">' +
-    '<div class="imp-drop-t">Pilih file Excel atau CSV</div>' +
-    '<div class="imp-drop-d">Buku kas (Tanggal &middot; Uraian &middot; Debet &middot; Kredit &middot; Fundraising) atau jurnal penerimaan berpasangan debet&ndash;kredit &mdash; keduanya dikenali otomatis</div>' +
+    '<div id="group_import_file" class="imp-src">' +
+    '<div class="imp-drop" onclick="el(\'import_file\').click()" id="importDrop">' +
+    '<span class="imp-drop-ic" aria-hidden="true">' + IKON_UNGGAH + '</span>' +
+    '<span class="imp-drop-tx"><b>Pilih berkas Excel atau CSV</b>' +
+    '<span class="imp-drop-d">Buku kas maupun jurnal berpasangan debet&ndash;kredit, keduanya dikenali otomatis</span></span>' +
+    '<span class="imp-drop-btn">Telusuri</span>' +
     '</div>' +
     '<input type="file" id="import_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onImportFile(event)">' +
     '<div id="importFileInfo" class="imp-file-info"></div>' +
     '</div>' +
-    '<div id="group_import_link" class="hidden">' +
-    '<p class="muted" style="margin-bottom:12px;font-size:12.5px">Tempelkan tautan (link) Google Sheets yang dibagikan secara publik (anyone with the link can view) atau URL langsung file Excel (.xlsx).</p>' +
+    '<div id="group_import_link" class="imp-src hidden">' +
     '<div class="field"><label>Link Spreadsheet / Excel *</label>' +
-    '<input id="import_url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing"></div>' +
+    '<input id="import_url" placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing">' +
+    '<div class="imp-hint">Google Sheets yang dibagikan publik (anyone with the link can view), atau URL langsung berkas .xlsx.</div></div>' +
     '</div>' +
-    '<div id="group_import_text" class="hidden">' +
-    '<p class="muted" style="margin-bottom:12px;font-size:12.5px">Salin (Copy) sel baris dari Google Sheets atau Excel Anda, lalu tempel (Paste) di kotak di bawah ini.</p>' +
-    '<div class="field"><label>Tempel Data Tabel di sini *</label>' +
-    '<textarea id="import_text" rows="6" placeholder="Format baris tanpa header:\n10/7/2026\tSehono\t\t\t137.000\tAriya\n10/7/2026\tKLL Daerah\t\t\t50.000\tBudi\n\nAtau format dengan header:\nTanggal\tUraian\tAlamat\tNO HP\tDebet\tKredit\n2/6/2026\tPenjuaan Kulit Kambing DAM\t\t\t8.230.000\t" style="font-family:monospace;font-size:11.5px;width:100%;box-sizing:border-box;border-radius:10px;border:1px solid var(--border);padding:10px;background:var(--bg)"></textarea></div>' +
+    '<div id="group_import_text" class="imp-src hidden">' +
+    '<div class="field"><label>Tempel data tabel di sini *</label>' +
+    '<textarea id="import_text" rows="4" placeholder="Salin baris dari Google Sheets atau Excel, lalu tempel di sini.&#10;10/7/2026&#9;Sehono&#9;&#9;&#9;137.000&#9;Ariya"></textarea></div>' +
     '</div>' +
-    '<div class="row" style="margin-top:12px">' +
-    '<div class="field"><label>Default Metode Pembayaran</label>' +
+    '<div class="imp-opsi">' +
+    '<div class="field"><label>Metode pembayaran bawaan</label>' +
     '<select id="import_default_metode">' +
-    '<option value="">(Deteksi Otomatis)</option>' +
+    '<option value="">(Deteksi otomatis)</option>' +
     '<option value="Cash/Tunai">Cash/Tunai</option>' +
     '<option value="Transfer Bank">Transfer Bank</option>' +
     '<option value="QRIS">QRIS</option>' +
     '</select>' +
     '</div>' +
-    (type === 'himpun' ? 
-    '<div class="field"><label>Default Rekening Bank</label>' +
+    (type === 'himpun' ?
+    '<div class="field"><label>Rekening bank bawaan</label>' +
     '<select id="import_default_rekening">' +
     bankOptions +
     '</select>' +
     '</div>' : '') +
+    '<div class="field"><label>Nama fundraising bawaan <span class="muted">(opsional)</span></label>' +
+    '<input id="import_default_fundraising" placeholder="Dipakai bila kolomnya kosong"></div>' +
     '</div>' +
-    '<div class="row">' +
-    '<div class="field"><label>Default Nama Fundraising (Opsional)</label>' +
-    '<input id="import_default_fundraising" placeholder="Masukkan nama fundraising jika tidak didefinisikan di kolom"></div>' +
     '</div>' +
-    '<div id="importPreview"></div>';
+    '<div id="importPreview"><div class="imp-kosong">Pratinjau data akan muncul di sini setelah berkas ditarik &amp; dianalisis.</div></div>';
   
   var f = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>' +
     '<button class="btn btn-ghost" id="importTarikBtn" onclick="tarikImportData()">Tarik & Analisis Data</button>' +
@@ -3726,7 +3880,7 @@ function setImportTab(tab) {
     if (btn) btn.classList.toggle('on', t === tab);
     if (grp) grp.classList.toggle('hidden', t !== tab);
   });
-  el('importPreview').innerHTML = '';
+  el('importPreview').innerHTML = '<div class="imp-kosong">Pratinjau data akan muncul di sini setelah berkas ditarik &amp; dianalisis.</div>';
   el('importSimpanBtn').classList.add('hidden');
 }
 var IMPORT_TAB = 'file';
@@ -3780,8 +3934,14 @@ function onImportFile(e){
       }
       var baris = semua.map(function(r){ return r.join('\t'); });
       IMPORT_FILE_TSV = baris.join('\n');
-      info.innerHTML = '<b>' + esc(f.name) + '</b> <span class="muted">&middot; ' + baris.length + ' baris terbaca'
-        + (wb.SheetNames.length > 1 ? ' &middot; ' + sheetDibaca.length + ' dari ' + wb.SheetNames.length + ' sheet dibaca: ' + esc(sheetDibaca.join(', ')) : '') + '</span>';
+      /* Ringkasan berkas ditulis sebagai keping kecil satu baris supaya tidak
+         mendorong pratinjau ke bawah; daftar sheet cukup jadi tooltip. */
+      info.innerHTML = '<span class="imp-chip"><b>' + esc(f.name) + '</b>'
+        + '<span class="imp-chip-s">' + baris.length + ' baris</span>'
+        + (wb.SheetNames.length > 1
+            ? '<span class="imp-chip-s" title="' + esc(sheetDibaca.join(', ')) + '">' + sheetDibaca.length + '/' + wb.SheetNames.length + ' sheet</span>'
+            : '')
+        + '</span>';
       toast('File terbaca, klik "Tarik & Analisis Data"');
     } catch (err) {
       IMPORT_FILE_TSV = '';
@@ -3809,7 +3969,11 @@ function tarikImportData() {
     }
     promise = gas('apiParseImportText')(TOKEN, IMPORT_FILE_TSV, IMPORT_TEMP_TYPE);
   } else if (isText) {
-    var text = el('import_text').value.trim();
+    /* Buang baris kosong di ujung saja, JANGAN trim() biasa: baris judul seksi
+       jurnal ditulis dengan kolom tanggal kosong ("\tPENERIMAAN ZAKAT VIA BANK"),
+       sehingga trim() memakan tab pembuka baris pertama, kolomnya bergeser satu,
+       dan seluruh seksi pertama ikut hilang saat ditempel. */
+    var text = el('import_text').value.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/\s+$/, '');
     if (!text) {
       btn.disabled = false;
       btn.textContent = 'Tarik & Analisis Data';
@@ -3843,32 +4007,37 @@ function tarikImportData() {
         var totalValid = res.himpunValid.length + res.salurValid.length;
         var totalInvalid = res.himpunInvalid.length + res.salurInvalid.length;
         
-        var h = '<div class="imp-note">Terbaca sebagai <b>jurnal penerimaan</b>. '
-          + 'Jenis dana diambil dari <b>akun kredit</b> di baris pasangannya '
+        /* Penjelasan cara baca jurnal cukup satu baris; rinciannya dilipat
+           supaya tidak memakan ruang pratinjau setiap kali impor dibuka. */
+        var h = '<details class="imp-note imp-det"><summary>Terbaca sebagai <b>jurnal penerimaan</b>'
+          + ((res.bedaDana || 0) ? ' &middot; <b style="color:var(--red)">' + res.bedaDana + ' baris</b> beda jenis dana' : '')
+          + '</summary>'
+          + '<div class="imp-det-b">Jenis dana diambil dari <b>akun kredit</b> di baris pasangannya '
           + '(mis. &ldquo;Penerimaan Infak Terikat - Kemanusiaan&rdquo;), '
           + 'nama donatur diambil dari uraian setelah dibuang ekor jenis dananya. '
           + 'Transaksi KLL/ULL tercatat atas nama layanannya.'
-          + ((res.bedaDana || 0) ? ' <b style="color:var(--red)">' + res.bedaDana + ' baris</b> menulis jenis dana berbeda dengan akun kreditnya — ditandai di bawah.' : '')
-          + '</div>';
+          + ((res.bedaDana || 0) ? ' Baris yang menulis jenis dana berbeda dengan akun kreditnya ditandai di tabel bawah.' : '')
+          + '</div></details>';
 
         /* Peringatan anomali tanggal: baris yang tanggal debet & kreditnya beda. */
         var anom = res.anomaliTanggal || [];
         if (anom.length) {
-          h += '<div class="imp-note imp-warn"><b>⚠️ ' + anom.length + ' kemungkinan salah tanggal.</b> '
-            + 'Baris berikut punya tanggal debet dan kredit yang berbeda — periksa sebelum menyimpan:'
-            + '<ul style="margin:6px 0 0;padding-left:18px">'
+          h += '<details class="imp-note imp-warn imp-det" open><summary><b>⚠️ ' + anom.length + ' kemungkinan salah tanggal</b> &middot; tanggal debet dan kredit berbeda</summary>'
+            + '<ul class="imp-det-b" style="margin:6px 0 0;padding-left:18px">'
             + anom.slice(0, 8).map(function(a) {
                 return '<li style="margin:2px 0">' + esc(tglIndo(a.tglDebet)) + ' &ne; ' + esc(tglIndo(a.tglKredit))
                   + ' &middot; ' + esc(a.nama) + ' &middot; Rp ' + rpCetak(a.jumlah)
                   + (a.keterangan ? ' <span class="muted">(' + esc(a.keterangan.slice(0, 50)) + ')</span>' : '') + '</li>';
               }).join('')
             + (anom.length > 8 ? '<li>… dan ' + (anom.length - 8) + ' lagi</li>' : '')
-            + '</ul></div>';
+            + '</ul></details>';
         }
-        h += '<div style="margin-bottom:12px;font-weight:600;font-size:13.5px">' +
-          'Analisis Jurnal selesai: <span style="color:var(--green)">' + totalValid + ' Baris Valid</span> (Penghimpunan: ' + res.himpunValid.length + ', Pentasyarufan: ' + res.salurValid.length + '), ' +
-          '<span style="color:var(--red)">' + totalInvalid + ' Baris Tidak Valid</span> (diabaikan)' +
-          '</div>';
+        h += '<div class="imp-stat">'
+          + '<span class="imp-stat-i ok"><b>' + res.himpunValid.length + '</b> penghimpunan</span>'
+          + '<span class="imp-stat-i warn"><b>' + res.salurValid.length + '</b> pentasyarufan</span>'
+          + (totalInvalid ? '<span class="imp-stat-i bad"><b>' + totalInvalid + '</b> tidak valid, diabaikan</span>' : '')
+          + '<span class="imp-stat-i"><b>' + totalValid + '</b> baris akan disimpan</span>'
+          + '</div>';
         /* Pergerakan kas: bukan penerimaan/penyaluran, tapi menggerakkan saldo rekening. */
         var nUmp = (res.umpValid || []).length, nTrf = (res.transferValid || []).length;
         if (nUmp || nTrf) {
@@ -3893,11 +4062,11 @@ function tarikImportData() {
             + '</div>';
         }
           
-        h += '<h4 style="margin:12px 0 6px;color:var(--green);font-family:var(--head)">Penghimpunan (Penerimaan)</h4>';
+        h += '<h4 class="imp-h4 ok">Penghimpunan (Penerimaan) <span>' + res.himpunValid.length + ' baris</span></h4>';
         if (res.himpunValid.length === 0) {
           h += '<div class="muted" style="padding:8px;font-size:12px">Tidak ada data penghimpunan.</div>';
         } else {
-          h += '<table style="font-size:11.5px;width:100%;border-collapse:collapse;margin-bottom:14px" class="table-wrap"><thead><tr>' +
+          h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>' +
             '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Akun Kredit</th><th>Jumlah</th><th>Metode</th>' +
             '</tr></thead><tbody>';
           res.himpunValid.forEach(function(r, idx) {
@@ -3913,14 +4082,14 @@ function tarikImportData() {
               '<td>' + esc(r.metode) + '</td>' +
               '</tr>';
           });
-          h += '</tbody></table>';
+          h += '</tbody></table></div>';
         }
         
-        h += '<h4 style="margin:12px 0 6px;color:var(--amber);font-family:var(--head)">Pentasyarufan (Penyaluran / Operasional)</h4>';
+        h += '<h4 class="imp-h4 warn">Pentasyarufan (Penyaluran / Operasional) <span>' + res.salurValid.length + ' baris</span></h4>';
         if (res.salurValid.length === 0) {
           h += '<div class="muted" style="padding:8px;font-size:12px">Tidak ada data pentasyarufan.</div>';
         } else {
-          h += '<table style="font-size:11.5px;width:100%;border-collapse:collapse" class="table-wrap"><thead><tr>' +
+          h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>' +
             '<th>Tgl</th><th>Penerima</th><th>Program</th><th>Jumlah</th><th>Metode</th><th>FR</th>' +
             '</tr></thead><tbody>';
           res.salurValid.forEach(function(r, idx) {
@@ -3935,7 +4104,7 @@ function tarikImportData() {
               '<td class="muted">' + esc(cleanFR(r.fundraising)) + '</td>' +
               '</tr>';
           });
-          h += '</tbody></table>';
+          h += '</tbody></table></div>';
         }
         
         el('importSimpanBtn').classList.remove('hidden');
@@ -3943,25 +4112,25 @@ function tarikImportData() {
         el('importPreview').innerHTML = h;
       } else {
         IMPORT_TEMP_ROWS = res.valid;
-        var h = '<div style="margin-bottom:10px;font-weight:600;font-size:13.5px">' +
-          'Analisis selesai: <span style="color:var(--green)">' + res.valid.length + ' Baris Valid</span>, ' +
-          '<span style="color:var(--red)">' + res.invalid.length + ' Baris Tidak Valid</span> (diabaikan)' +
-          '</div>';
+        var h = '<div class="imp-stat">'
+          + '<span class="imp-stat-i ok"><b>' + res.valid.length + '</b> baris valid</span>'
+          + (res.invalid.length ? '<span class="imp-stat-i bad"><b>' + res.invalid.length + '</b> tidak valid, diabaikan</span>' : '')
+          + '</div>';
         /* Format buku kas: jelaskan baris apa saja yang sengaja tidak diimpor. */
         if (res.isBukuKas) {
-          h = '<div class="imp-note">Terbaca sebagai <b>buku kas</b>. '
+          h = '<details class="imp-note imp-det"><summary>Terbaca sebagai <b>buku kas</b></summary><div class="imp-det-b">'
             + 'Nominal diambil dari kolom <b>Debet</b>; '
             + '<b>' + (res.dilewatiSetor || 0) + '</b> baris setor tunai (nominal di kolom Kredit) dilewati'
             + ((res.dilewatiKosong || 0) ? ', ' + res.dilewatiKosong + ' baris tanpa nominal diabaikan' : '')
             + '. Fundraising hanya dipakai untuk transaksi tingkat daerah — transaksi KLL/ULL dicatat atas nama layanannya.'
-            + '</div>' + h;
+            + '</div></details>' + h;
         }
         
         if (res.valid.length === 0) {
           h += '<div class="muted" style="text-align:center;padding:12px;border:1px dashed var(--border);border-radius:10px">Tidak ada baris valid yang ditemukan. Periksa apakah nama kolom sesuai (Tanggal, Nama, Jumlah, dll.).</div>';
           el('importSimpanBtn').classList.add('hidden');
         } else {
-          h += '<table style="font-size:12px;width:100%;border-collapse:collapse" class="table-wrap"><thead><tr>' +
+          h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>' +
             '<th>Tgl</th>' +
             '<th>' + (IMPORT_TEMP_TYPE === 'himpun' ? 'Donatur' : 'Penerima') + '</th>' +
             '<th>Jenis / Pilar</th>' +
@@ -3982,7 +4151,7 @@ function tarikImportData() {
               '<td class="muted">' + esc(cleanFR(r.fundraising)) + '</td>' +
               '</tr>';
           });
-          h += '</tbody></table>';
+          h += '</tbody></table></div>';
           
           el('importSimpanBtn').classList.remove('hidden');
           el('importSimpanBtn').textContent = 'Simpan Data';
@@ -5184,28 +5353,32 @@ function openImportMutasiModal() {
     return '<option value="' + esc(val) + '">' + esc(val) + '</option>';
   }).join('');
 
-  var b = '<div class="card" style="margin-bottom:12px">' +
-    '  <h3 style="margin-bottom:6px">Pilih Berkas Mutasi Bank</h3>' +
-    '  <p class="muted" style="font-size:12.5px;margin-bottom:14px">Mendukung format berkas teks (.txt), CSV (.csv), PDF (.pdf), Word (.docx), Excel (.xlsx), atau Foto bukti/mutasi (.png, .jpg, .jpeg).</p>' +
-    '  <div class="field">' +
-    '    <input type="file" id="mutasi_file_input" accept=".txt,.csv,.pdf,.docx,.xlsx,.png,.jpg,.jpeg" onchange="processMutasiFile()" style="padding:10px">' +
-    '  </div>' +
-    '  <div class="row" style="display:flex;gap:10px;margin-top:10px">' +
-    '    <div class="field" style="flex:1;margin:0"><label style="font-size:11.5px;font-weight:600;margin-bottom:4px">Default Rekening</label>' +
-    '      <select id="import_default_rekening" style="padding:6px;font-size:12px;width:100%">' + rekOpts + '</select>' +
-    '    </div>' +
-    '    <div class="field" style="flex:1;margin:0"><label style="font-size:11.5px;font-weight:600;margin-bottom:4px">Default Fundraising</label>' +
-    '      <select id="import_default_fundraising" style="padding:6px;font-size:12px;width:100%">' + frOpts + '</select>' +
-    '    </div>' +
-    '  </div>' +
+  /* Bentuknya disamakan dengan modal impor jurnal: pengantar dipadatkan
+     jadi satu blok tipis, sisanya milik pratinjau baris mutasi. */
+  var b = '<div class="imp-atas">' +
+    '<div class="imp-drop" onclick="el(\'mutasi_file_input\').click()">' +
+    '<span class="imp-drop-ic" aria-hidden="true">' + IKON_UNGGAH + '</span>' +
+    '<span class="imp-drop-tx"><b>Pilih berkas mutasi bank</b>' +
+    '<span class="imp-drop-d">Teks, CSV, PDF, Word, Excel, atau foto buku tabungan (dibaca dengan OCR)</span></span>' +
+    '<span class="imp-drop-btn">Telusuri</span>' +
     '</div>' +
-    '<div id="mutasiParseStatus" style="font-weight:600;margin-bottom:8px"></div>' +
-    '<div id="mutasiPreview" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2)"></div>';
+    '<input type="file" id="mutasi_file_input" accept=".txt,.csv,.pdf,.docx,.xlsx,.png,.jpg,.jpeg" onchange="processMutasiFile()" style="display:none">' +
+    '<div class="imp-opsi imp-opsi-2">' +
+    '  <div class="field"><label>Rekening bawaan</label>' +
+    '    <select id="import_default_rekening">' + rekOpts + '</select></div>' +
+    '  <div class="field"><label>Fundraising bawaan</label>' +
+    '    <select id="import_default_fundraising">' + frOpts + '</select></div>' +
+    '</div>' +
+    '</div>' +
+    '<div id="mutasiParseStatus" class="imp-stat-baris"></div>' +
+    '<div id="mutasiPreview"><div class="imp-kosong">Baris mutasi akan muncul di sini setelah berkas dibaca.</div></div>';
 
   var f = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>' +
     '<button class="btn btn-primary hidden" id="mutasiSimpanBtn" onclick="saveMutasiImport()">💾 Simpan Mutasi</button>';
 
   openModal('Import Mutasi Bank (Multi-format)', b, f);
+  var mc = el('modalCard');
+  if (mc) mc.classList.add('import-modal', 'mutasi-modal');
 }
 
 function processMutasiFile() {
@@ -6376,7 +6549,7 @@ function logBersihkan(){
    PERAWATAN DATA — perbaikan sekali jalan
    ================================================================ */
 function perawatanHTML(){
-  return cadanganHTML() + cadanganOtomatisHTML() + hapusRentangHTML() + setorTunaiHTML()
+  return cadanganHTML() + cadanganOtomatisHTML() + namaKantorHTML() + dobelHTML() + hapusRentangHTML() + kosongkanHTML() + setorTunaiHTML()
     + '<div class="card set-panel">'
     + '<h3>Perbaikan Data Lama</h3>'
     + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
@@ -6394,6 +6567,263 @@ function perawatanHTML(){
     + '</div>'
     + '<div id="perbaikanHasil" style="margin-top:16px"></div>'
     + '</div>';
+}
+
+/* ===== NAMA KANTOR LAYANAN YANG BERCABANG =====
+   Nama KLL/ULL di jurnal ditulis tangan. Satu huruf meleset sudah cukup
+   untuk melahirkan kantor bayangan yang membawa sebagian dana kantor
+   aslinya, dan itu langsung salah karena angkanya dipakai membagi hak
+   kantor layanan. Panel ini menampilkannya dan menggabungkannya. */
+function namaKantorHTML(){
+  return '<div class="card set-panel">'
+    + '<h3>Periksa Nama Kantor Layanan</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Nama KLL/ULL di jurnal ditulis tangan, jadi salah ketik satu huruf sudah cukup untuk melahirkan '
+    + '<b>kantor bayangan</b> — mis. <i>KLL Banguntapaan Utara</i> berdiri sendiri di samping <i>KLL Banguntapan Utara</i>, '
+    + 'membawa sebagian LPJ atau setoran yang seharusnya menjadi milik kantor aslinya. '
+    + 'Alat ini mendaftar semua nama yang benar-benar muncul di data, menandai yang belum ada di menu Layanan, '
+    + 'dan menawarkan padanan terdekatnya. <b>Menggabungkan menulis ulang barisnya</b>, jadi ejaannya bersih untuk selamanya.'
+    + '</p>'
+    + '<button class="btn btn-primary" onclick="namaKantorPeriksa()">Periksa nama kantor</button>'
+    + '<div id="namaKantorHasil" style="margin-top:16px"></div>'
+    + '</div>';
+}
+function namaKantorPeriksa(){
+  var host = el('namaKantorHasil');
+  host.innerHTML = BOXES_SPINNER;
+  gas('apiPeriksaLayanan')(TOKEN).then(function(d){
+    window.__namaKantor = d;
+    host.innerHTML = namaKantorHasilHTML(d);
+  }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
+}
+function namaKantorHasilHTML(d){
+  var asing = (d.daftar || []).filter(function(x){ return !x.terdaftar; });
+  var rapi = d.dirapikan || [];
+  var mirip = d.mirip || [];
+  var h = '<div class="imp-stat">'
+    + '<span class="imp-stat-i"><b>' + d.total + '</b> nama kantor di data</span>'
+    + '<span class="imp-stat-i ok"><b>' + d.terdaftar + '</b> terdaftar di menu Layanan</span>'
+    + (asing.length ? '<span class="imp-stat-i bad"><b>' + asing.length + '</b> belum terdaftar</span>' : '')
+    + (mirip.length ? '<span class="imp-stat-i warn"><b>' + mirip.length + '</b> pasangan nama mirip</span>' : '')
+    + (rapi.length ? '<span class="imp-stat-i warn"><b>' + rapi.length + '</b> ejaan masih salah di dalam data</span>' : '')
+    + '</div>';
+
+  /* Pasangan nama yang mirip satu sama lain. Penggabungan otomatis sengaja
+     ketat supaya tidak pernah menyatukan dua kantor yang memang berbeda —
+     sisanya diputuskan manusia, dengan jumlah baris sebagai petunjuk. */
+  if (mirip.length) {
+    h += '<h4 class="imp-h4 warn">Nama yang mirip satu sama lain <span>' + mirip.length + ' pasangan</span></h4>'
+      + '<p class="muted" style="font-size:12px;margin:0 0 8px">Timpangnya jumlah baris adalah petunjuk terkuat: '
+      + 'satu baris berdampingan dengan ratusan baris hampir pasti salah ketik, bukan kantor kedua. '
+      + '<b>Periksa dulu sebelum menggabungkan</b> — kantor yang namanya memang bersaudara (mis. Sedayu dan Sedayu 2) juga bisa muncul di sini.</p>'
+      + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+      + '<th>Diduga salah ketik</th><th class="r">Baris</th><th class="r">Nilai</th>'
+      + '<th>Kemungkinan maksudnya</th><th class="r">Baris</th><th>Dugaan</th><th></th></tr></thead><tbody>';
+    mirip.forEach(function(x){
+      var warna = x.yakin === 'tinggi' ? 'bad' : x.yakin === 'sedang' ? 'warn' : '';
+      h += '<tr><td><b>' + esc(x.sedikit) + '</b></td>'
+        + '<td class="r jnum">' + x.nSedikit + '</td>'
+        + '<td class="r jnum">' + rpCetak(x.nominal) + '</td>'
+        + '<td>' + esc(x.banyak) + '</td>'
+        + '<td class="r jnum">' + x.nBanyak + '</td>'
+        + '<td><span class="imp-stat-i ' + warna + '">' + esc(x.yakin) + '</span></td>'
+        + '<td class="r"><button class="btn btn-sm btn-ghost" onclick="gabungKantor('
+        + JSON.stringify(x.sedikit).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.banyak).replace(/"/g, '&quot;') + ')">Gabungkan</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  if (!asing.length && !rapi.length && !mirip.length) {
+    return h + '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+      + 'Semua nama kantor sudah cocok dengan menu Layanan. Tidak ada kantor bayangan.</div>';
+  }
+
+  if (asing.length) {
+    h += '<h4 class="imp-h4 warn">Belum ada di menu Layanan <span>' + asing.length + ' nama</span></h4>'
+      + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+      + '<th>Nama di data</th><th class="r">Setoran</th><th class="r">Uang muka</th><th class="r">LPJ</th>'
+      + '<th>Kemungkinan maksudnya</th><th></th></tr></thead><tbody>';
+    asing.forEach(function(x){
+      h += '<tr><td><b>' + esc(x.nama) + '</b></td>'
+        + '<td class="r jnum">' + (x.nHimpun ? rpCetak(x.himpun) : '—') + '</td>'
+        + '<td class="r jnum">' + (x.nUmp ? rpCetak(x.ump) : '—') + '</td>'
+        + '<td class="r jnum">' + (x.nLpj ? rpCetak(x.lpj) : '—') + '</td>'
+        + '<td>' + (x.usul ? '<b>' + esc(x.usul) + '</b><div class="sub muted" style="font-size:11px">' + esc(x.alasan) + '</div>'
+                           : '<span class="muted">tidak ada yang mirip</span>') + '</td>'
+        + '<td class="r">' + (x.usul
+            ? '<button class="btn btn-sm btn-ghost" onclick="gabungKantor(' + JSON.stringify(x.nama).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.usul).replace(/"/g, '&quot;') + ')">Gabungkan</button>'
+            : '<span class="muted" style="font-size:11px">daftarkan di menu Layanan</span>') + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  if (rapi.length) {
+    h += '<h4 class="imp-h4">Ejaan yang sudah dirapikan otomatis <span>' + rapi.length + ' ejaan</span></h4>'
+      + '<p class="muted" style="font-size:12px;margin:0 0 8px">Rekapnya sudah benar karena namanya dicocokkan saat ditampilkan, '
+      + 'tetapi ejaan salahnya masih tersimpan di barisnya dan akan muncul lagi kalau menu Layanan berubah. '
+      + 'Menggabungkan akan membetulkannya di data.</p>'
+      + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+      + '<th>Tertulis di data</th><th>Dibaca sebagai</th><th class="r">Baris</th><th></th></tr></thead><tbody>';
+    rapi.forEach(function(x){
+      h += '<tr><td>' + esc(x.mentah) + '</td><td><b>' + esc(x.jadi) + '</b></td>'
+        + '<td class="r jnum">' + x.n + '</td>'
+        + '<td class="r"><button class="btn btn-sm btn-ghost" onclick="gabungKantor('
+        + JSON.stringify(x.mentah).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.jadi).replace(/"/g, '&quot;') + ')">Betulkan</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  return h;
+}
+function gabungKantor(dari, ke){
+  gas('apiGabungLayanan')(TOKEN, dari, ke, false).then(function(d){
+    if (!d.jumlah) { toast('Tidak ada baris yang cocok — mungkin sudah dibetulkan.', true); return namaKantorPeriksa(); }
+    var rinc = [];
+    if (d.rincian.himpun) rinc.push(d.rincian.himpun + ' setoran (Rp ' + rpCetak(d.nominal.himpun) + ')');
+    if (d.rincian.ump) rinc.push(d.rincian.ump + ' uang muka (Rp ' + rpCetak(d.nominal.ump) + ')');
+    if (d.rincian.lpj) rinc.push(d.rincian.lpj + ' LPJ (Rp ' + rpCetak(d.nominal.lpj) + ')');
+    return confirmDialog({
+      title: 'Gabungkan kantor layanan?',
+      message: '<b>' + esc(dari) + '</b> &rarr; <b>' + esc(ke) + '</b><br>'
+        + rinc.join(', ') + ' akan ditulis ulang atas nama kantor tujuan.<br><br>'
+        + 'Nominal, tanggal, dan program tidak diubah — hanya nama kantornya. Tercatat di Log Aktivitas.',
+      okText: 'Ya, gabungkan', cancelText: 'Batal', icon: '🔗'
+    }).then(function(setuju){
+      if (!setuju) return;
+      return gas('apiGabungLayanan')(TOKEN, dari, ke, true).then(function(r){
+        toast((r.terubah || 0) + ' baris digabungkan ke ' + ke);
+        CACHE.dash = null;
+        namaKantorPeriksa();
+      });
+    });
+  }).catch(handleErr);
+}
+
+/* ===== TRANSAKSI KEMBAR ===== */
+function dobelHTML(){
+  return '<div class="card set-panel">'
+    + '<h3>Periksa Transaksi Kembar</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Impor yang tidak sengaja dijalankan dua kali, atau berkas yang memuat bulan yang sama dua kali, '
+    + 'meninggalkan baris kembar persis — dan totalnya jadi dobel tanpa kelihatan. '
+    + 'Yang dicocokkan adalah isi yang menentukan uangnya: <b>tanggal, nominal, nama, akun, dan keterangan</b>. '
+    + 'Baris pertama dipertahankan, salinannya dibuang. Transaksi yang kebetulan bernilai sama tetapi beda tanggal '
+    + 'atau beda keterangan <b>tidak</b> ikut terhapus.'
+    + '</p>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary" onclick="dobelPeriksa()">Periksa dulu</button>'
+    + '<button class="btn btn-danger hidden" id="btnHapusDobel" onclick="dobelKonfirmasi()">Hapus salinan berlebih</button>'
+    + '</div>'
+    + '<div id="dobelHasil" style="margin-top:16px"></div>'
+    + '</div>';
+}
+function dobelPeriksa(){
+  var host = el('dobelHasil');
+  host.innerHTML = BOXES_SPINNER;
+  el('btnHapusDobel').classList.add('hidden');
+  gas('apiPeriksaDobel')(TOKEN, false).then(function(d){
+    window.__dobel = d;
+    host.innerHTML = dobelHasilHTML(d);
+    if (d.jumlah > 0) el('btnHapusDobel').classList.remove('hidden');
+  }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
+}
+function dobelHasilHTML(d){
+  if (!d.jumlah) {
+    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+      + 'Tidak ada transaksi kembar. Data Anda bersih.</div>';
+  }
+  var h = '<div class="imp-note imp-warn">Ditemukan <b>' + rpCetak(d.jumlah) + '</b> baris kembar senilai <b>Rp '
+    + rpCetak(d.nominal) + '</b>. Angka laporan Anda sekarang lebih besar sebanyak itu.</div>';
+  h += '<div class="imp-stat">' + (d.perTabel || []).filter(function(x){ return x.jumlah; }).map(function(x){
+    return '<span class="imp-stat-i bad"><b>' + x.jumlah + '</b> ' + esc(x.tabel) + ' &middot; Rp ' + rpCetak(x.nominal) + '</span>';
+  }).join('') + '</div>';
+  if (d.contoh && d.contoh.length){
+    h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+      + '<th>Tabel</th><th>Tanggal</th><th>Nama</th><th>Keterangan</th><th class="r">Jumlah</th></tr></thead><tbody>';
+    d.contoh.forEach(function(c){
+      h += '<tr><td>' + esc(c.tabel) + '</td><td>' + esc(tglIndo(c.tanggal)) + '</td><td>' + esc(c.nama)
+        + '</td><td class="muted">' + esc(c.keterangan) + '</td><td class="r jnum">' + rpCetak(c.jumlah) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  return h;
+}
+function dobelKonfirmasi(){
+  var d = window.__dobel;
+  if (!d || !d.jumlah) return;
+  confirmDialog({
+    title: 'Hapus salinan berlebih?',
+    message: '<b>' + rpCetak(d.jumlah) + ' baris</b> kembar (Rp ' + rpCetak(d.nominal) + ') akan dihapus. '
+      + 'Satu baris asli untuk tiap transaksi tetap disimpan. Tidak bisa dibatalkan — unduh cadangan dulu bila perlu.',
+    okText: 'Ya, hapus', cancelText: 'Batal', icon: '🧹', danger: true
+  }).then(function(setuju){
+    if (!setuju) return;
+    var host = el('dobelHasil');
+    host.innerHTML = BOXES_SPINNER;
+    gas('apiPeriksaDobel')(TOKEN, true).then(function(r){
+      el('btnHapusDobel').classList.add('hidden');
+      window.__dobel = null;
+      host.innerHTML = '<div class="imp-note">Selesai. <b>' + rpCetak(r.terhapus || 0) + '</b> baris kembar dihapus. '
+        + 'Tercatat di Log Aktivitas.</div>';
+      toast((r.terhapus || 0) + ' baris kembar dihapus');
+      CACHE.dash = null;
+    }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
+  });
+}
+
+/* ===== KOSONGKAN DATA TRANSAKSI ===== */
+function kosongkanHTML(){
+  if (!ME || ME.role !== 'superadmin') return '';
+  return '<div class="card set-panel">'
+    + '<h3>Kosongkan Data Transaksi</h3>'
+    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
+    + 'Kalau data sudah terlanjur bertumpuk dan menambalnya satu per satu lebih repot daripada mengulang, '
+    + 'seluruh <b>penghimpunan, pentasyarufan, uang muka, transfer, dan mutasi</b> bisa dikosongkan sekaligus, '
+    + 'lalu impor jurnal diulang dari berkas yang memang sudah rapi.<br>'
+    + 'Yang <b>tetap utuh</b>: pengguna, rekening, kantor layanan, fundraising, hak amil, saldo awal, dan seluruh pengaturan — '
+    + 'jadi impor ulang langsung jatuh ke tempat yang benar.<br>'
+    + '<b>Cadangan keadaan sebelumnya otomatis diunduh</b> sebelum data dikosongkan.'
+    + '</p>'
+    + '<label style="display:inline-flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:12px;cursor:pointer">'
+    + '<input type="checkbox" id="kosongDonatur" style="width:16px;height:16px"> Ikut mengosongkan daftar donatur '
+    + '<span class="muted">(bisa dibangun ulang dari tombol Sinkronkan di halaman Donatur)</span></label>'
+    + '<div><button class="btn btn-danger" onclick="kosongkanKonfirmasi()">Kosongkan data transaksi</button></div>'
+    + '<div id="kosongkanHasil" style="margin-top:16px"></div>'
+    + '</div>';
+}
+function kosongkanKonfirmasi(){
+  var ikutDonatur = !!(el('kosongDonatur') && el('kosongDonatur').checked);
+  confirmDialog({
+    title: 'Kosongkan seluruh data transaksi?',
+    message: 'Semua penghimpunan, pentasyarufan, uang muka, transfer, dan mutasi akan dihapus'
+      + (ikutDonatur ? ', termasuk daftar donatur' : '') + '.<br><br>'
+      + 'Rekening, kantor layanan, hak amil, saldo awal, pengguna, dan pengaturan <b>tidak</b> disentuh.<br>'
+      + 'Cadangan otomatis akan terunduh lebih dulu. Ketik <b>KOSONGKAN</b> untuk melanjutkan.',
+    okText: 'Lanjut', cancelText: 'Batal', icon: '⚠️', danger: true,
+    prompt: 'KOSONGKAN'
+  }).then(function(setuju){
+    if (!setuju) return;
+    var host = el('kosongkanHasil');
+    host.innerHTML = BOXES_SPINNER;
+    gas('apiResetTransaksi')(TOKEN, 'KOSONGKAN', ikutDonatur).then(function(d){
+      /* cadangan diunduh dulu, baru hasilnya ditampilkan */
+      try {
+        var blob = new Blob([JSON.stringify(d.cadangan)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'lazdigital-sebelum-kosongkan-' + today() + '.json';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+      } catch (e) {}
+      host.innerHTML = '<div class="imp-note"><b>' + rpCetak(d.total) + ' baris transaksi dihapus.</b> '
+        + 'Cadangan keadaan sebelumnya sudah terunduh ke perangkat Anda. '
+        + 'Sekarang impor ulang jurnal kas lalu jurnal bank.'
+        + '<div style="margin-top:6px">' + Object.keys(d.dihapus || {}).filter(function(k){ return d.dihapus[k]; })
+            .map(function(k){ return '<span class="badge">' + esc(k) + ' ' + rpCetak(d.dihapus[k]) + '</span>'; }).join(' ') + '</div>'
+        + '</div>';
+      toast('Data transaksi dikosongkan');
+      CACHE.dash = null;
+    }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
+  });
 }
 
 /* ===== BERSIHKAN SETOR TUNAI DARI PENGHIMPUNAN ===== */
