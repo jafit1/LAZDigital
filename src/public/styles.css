@@ -3012,6 +3012,51 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
    merah tua langsung di atasnya, dan hasilnya nyaris tidak terbaca.
    Di latar terang biasa merah sudah cukup; di atas gradien, angkanya
    diberi keping putih supaya kontrasnya kembali penuh. */
+/* ================================================================
+   IKON GARIS MENGGANTIKAN EMOJI
+   ================================================================
+   Emoji berwarna digambar oleh sistem operasi: bentuk, berat, dan
+   warnanya berbeda di Windows, Android, dan iOS, dan tidak pernah
+   sewarna tulisan di sebelahnya. Ikon garis di bawah ini mengikuti
+   warna teks (currentColor) dan ukurannya dikunci, jadi tombolnya
+   terlihat sama di semua perangkat. */
+.btn svg,.icon-btn svg,.kll-hapus svg{flex:0 0 auto;vertical-align:-2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.btn svg{width:14px;height:14px}
+.btn-sm svg,.btn-xs svg{width:13px;height:13px}
+.icon-btn svg{width:15px;height:15px}
+.empty .big svg{width:38px;height:38px;stroke-width:1.4}
+.empty .big{font-size:0;line-height:0;opacity:.35;margin-bottom:12px}
+.cd-icon svg{width:26px;height:26px}
+
+/* keterangan panel Pengaturan: satu kalimat tampak, sisanya dilipat */
+.set-ket{font-size:12.5px;line-height:1.5;color:var(--muted);margin:6px 0 14px}
+.set-det{margin:6px 0 14px}
+.set-det > summary{
+  cursor:pointer;list-style:none;font-size:12.5px;line-height:1.5;color:var(--muted);
+}
+.set-det > summary::-webkit-details-marker{display:none}
+.set-det > summary span{
+  color:var(--accent-d);font-weight:700;font-size:11.5px;white-space:nowrap;
+  border-bottom:1px dotted currentColor;margin-left:2px;
+}
+.set-det[open] > summary span{opacity:.6}
+.set-det[open] > summary span::after{content:" (tutup)";font-weight:600}
+.set-det-b{
+  font-size:12px;line-height:1.55;color:var(--text2);margin-top:8px;
+  padding-left:11px;border-left:2px solid var(--border);
+}
+
+/* keping status pembacaan berkas — pengganti awalan emoji */
+.stat-chip{
+  display:inline-block;font-size:12px;font-weight:600;line-height:1.45;
+  border:1px solid var(--border);border-radius:9px;padding:5px 11px;
+  background:var(--surface3);color:var(--text2);
+}
+.stat-chip.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 35%,transparent);background:color-mix(in srgb,var(--green) 8%,transparent)}
+.stat-chip.warn{color:var(--amber);border-color:color-mix(in srgb,var(--amber) 35%,transparent);background:color-mix(in srgb,var(--amber) 8%,transparent)}
+.stat-chip.bad{color:var(--red);border-color:color-mix(in srgb,var(--red) 35%,transparent);background:color-mix(in srgb,var(--red) 8%,transparent)}
+
 /* tabel izin per modul */
 .perm-bar{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5}
 .perm-semua{

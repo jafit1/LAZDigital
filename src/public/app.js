@@ -221,7 +221,7 @@ function closeSidebar(){var s=el('sidebar');if(s)s.classList.remove('open');var 
 var PROF_FOTO=null;
 function openProfile(){
   var foto=SETTINGS['uf_'+ME.id]||'';PROF_FOTO=null;
-  var b='<div style="text-align:center;margin-bottom:18px"><div class="avatar" id="pfPrev" style="width:88px;height:88px;font-size:32px;margin:0 auto 12px;'+(foto?'background-image:url('+foto+')':'')+'">'+(foto?'':(ME.nama||'?').charAt(0).toUpperCase())+'</div><label class="btn btn-sm" style="cursor:pointer">📷 Ganti Foto<input type="file" accept="image/*" style="display:none" onchange="onProfFoto(event)"></label></div>'+
+  var b='<div style="text-align:center;margin-bottom:18px"><div class="avatar" id="pfPrev" style="width:88px;height:88px;font-size:32px;margin:0 auto 12px;'+(foto?'background-image:url('+foto+')':'')+'">'+(foto?'':(ME.nama||'?').charAt(0).toUpperCase())+'</div><label class="btn btn-sm" style="cursor:pointer">'+SVG_ICONS.kamera+' Ganti Foto<input type="file" accept="image/*" style="display:none" onchange="onProfFoto(event)"></label></div>'+
   '<div class="field"><label>Nama Lengkap</label><input id="pf_nama" value="'+esc(ME.nama)+'"></div>'+
   '<div class="field"><label>Username</label><input value="'+esc(ME.username||'')+'" disabled></div>'+
   '<div class="divider"></div><div class="muted" style="font-size:12.5px;font-weight:600;margin-bottom:10px">Ubah Password (opsional)</div>'+
@@ -409,14 +409,14 @@ function viewPenghimpunan(){
    }).catch(handleErr);
 }
 function renderPenghimpunan(rows){
-  var h='<div class="page-head"><div><h2>Input Penghimpunan</h2><div class="desc">Catat penerimaan dana — data donatur tampil di bawah</div></div></div>';
+  var h='<div class="page-head"><div><h2>Input Penghimpunan</h2><div class="desc">Catat penerimaan dana</div></div></div>';
   if(canDo('penghimpunan','create'))h+='<div class="card form-card">'
     +'<div class="form-card-h"><h3>Form Penerimaan Dana</h3><span class="form-hint">Ctrl + Enter untuk menyimpan</span></div>'
     +'<div id="himpunFormHost"></div>'
-    +'<div class="form-actions"><button class="btn btn-ghost" onclick="formHimpun(\'\',\'himpunFormHost\')">↺ Reset</button>'
+    +'<div class="form-actions"><button class="btn btn-ghost" onclick="formHimpun(\'\',\'himpunFormHost\')">'+SVG_ICONS.putar+' Reset</button>'
     +'<button class="btn btn-primary" onclick="saveHimpun(\'\')">Simpan Penerimaan</button></div></div>';
-  var delBtn = canDo('penghimpunan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'himpun\')">🗑️ Hapus Rentang Tanggal</button>' : '';
-  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'himpun\')">📥 Import Data</button>'+delBtn+'</div>';
+  var delBtn = canDo('penghimpunan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'himpun\')">'+SVG_ICONS.sampah+' Hapus Rentang Tanggal</button>' : '';
+  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'himpun\')">'+SVG_ICONS.unggah+' Impor Data</button>'+delBtn+'</div>';
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Donatur / Kwitansi</label><input type="text" id="himpunTable_search" placeholder="Cari..." oninput="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
@@ -445,12 +445,12 @@ function renderPenghimpunan(rows){
   
   h+= filterHtml;
   h+='<div style="overflow:auto"><table id="himpunTable"><thead><tr><th>No. Kwitansi</th><th>Tanggal</th><th>Donatur</th><th>Jenis / Detail</th><th>Metode</th><th>Jumlah</th><th></th></tr></thead><tbody>';
-  if(!rows.length)h+='<tr><td colspan="7"><div class="empty"><div class="big">↓</div>Belum ada penghimpunan.</div></td></tr>';
+  if(!rows.length)h+='<tr><td colspan="7"><div class="empty"><div class="big">'+SVG_ICONS.bsrKosong+'</div>Belum ada penghimpunan.</div></td></tr>';
   rows.forEach(function(r){
     var det=(r.subJenis||r.jenisDana)+((String(r.subJenis).toLowerCase().indexOf('pilar')>=0&&r.pilar)?(' — '+r.pilar):'');
     var frCleaned = cleanFR(r.fundraising);
     var frText = '<div class="muted" style="font-size:11px;margin-top:2px">FR: ' + esc(frCleaned) + '</div>';
-    h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">🧾</button>'+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">✎</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">🗑</button>':'')+'</div></td></tr>';
+    h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
   });
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
   rtPasangFilter('himpunTable');
@@ -621,7 +621,7 @@ function saveHimpun(id){
   if(!d.fundraising){markFieldError('f_fundraising','Fundraising wajib dipilih');bad=true;}
   if(bad){toast('Lengkapi field yang ditandai',true);return;}
   if(id)d.id=id;
-  gas('apiSavePenghimpunan')(TOKEN,d).then(function(saved){closeModal();toast('Penghimpunan tersimpan');viewPenghimpunan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak kwitansi sekarang?',okText:'🖨️ Cetak Sekarang',cancelText:'Nanti Saja',icon:'🧾'}).then(function(__ok){if(__ok)cetakKwitansi(saved.id);});},300);}).catch(handleErr);
+  gas('apiSavePenghimpunan')(TOKEN,d).then(function(saved){closeModal();toast('Penghimpunan tersimpan');viewPenghimpunan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak kwitansi sekarang?',okText:'Cetak Sekarang',cancelText:'Nanti Saja',icon:SVG_ICONS.dlgBeres}).then(function(__ok){if(__ok)cetakKwitansi(saved.id);});},300);}).catch(handleErr);
 }
 function delHimpun(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)return;gas('apiDeletePenghimpunan')(TOKEN,id).then(function(){toast('Terhapus');viewPenghimpunan();}).catch(handleErr);});}
 
@@ -668,14 +668,14 @@ function viewPentasyarufan(){gas('apiListPentasyarufan')(TOKEN).then(function(ro
     CACHE.tasyaruf=sorted;renderPentasyarufan(sorted);
   }).catch(handleErr);}
 function renderPentasyarufan(rows){
-  var h='<div class="page-head"><div><h2>Input Pentasyarufan</h2><div class="desc">Catat penyaluran dana — data mustahik tampil di bawah</div></div></div>';
+  var h='<div class="page-head"><div><h2>Input Pentasyarufan</h2><div class="desc">Catat penyaluran dana</div></div></div>';
   if(canDo('pentasyarufan','create'))h+='<div class="card form-card">'
     +'<div class="form-card-h"><h3>Form Penyaluran Dana</h3><span class="form-hint">Ctrl + Enter untuk menyimpan</span></div>'
     +'<div id="tasyarufFormHost"></div>'
-    +'<div class="form-actions"><button class="btn btn-ghost" onclick="formTasyaruf(\'\',\'tasyarufFormHost\')">↺ Reset</button>'
+    +'<div class="form-actions"><button class="btn btn-ghost" onclick="formTasyaruf(\'\',\'tasyarufFormHost\')">'+SVG_ICONS.putar+' Reset</button>'
     +'<button class="btn btn-primary" onclick="saveTasyaruf(\'\')">Simpan Penyaluran</button></div></div>';
-  var delBtn = canDo('pentasyarufan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'tasyaruf\')">🗑️ Hapus Rentang Tanggal</button>' : '';
-  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'tasyaruf\')">📥 Import Data</button>'+delBtn+'</div>';
+  var delBtn = canDo('pentasyarufan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'tasyaruf\')">'+SVG_ICONS.sampah+' Hapus Rentang Tanggal</button>' : '';
+  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'tasyaruf\')">'+SVG_ICONS.unggah+' Impor Data</button>'+delBtn+'</div>';
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Penerima / Bukti</label><input type="text" id="tasyTable_search" placeholder="Cari..." oninput="applyFilters(\'tasyTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
@@ -706,11 +706,11 @@ function renderPentasyarufan(rows){
   
   h+= filterHtml;
   h+='<div style="overflow:auto"><table id="tasyTable"><thead><tr><th>No. Bukti</th><th>Tanggal</th><th>Penerima</th><th>Ashnaf</th><th>Program</th><th>Jumlah</th><th>Status</th><th></th></tr></thead><tbody>';
-  if(!rows.length)h+='<tr><td colspan="8"><div class="empty"><div class="big">↑</div>Belum ada pentasyarufan.</div></td></tr>';
+  if(!rows.length)h+='<tr><td colspan="8"><div class="empty"><div class="big">'+SVG_ICONS.bsrKosong+'</div>Belum ada pentasyarufan.</div></td></tr>';
   rows.forEach(function(r){
     var frCleaned = cleanFR(r.fundraising);
     var frText = '<div class="muted" style="font-size:11px;margin-top:2px">FR: ' + esc(frCleaned) + '</div>';
-    h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.ashnaf)+'" data-metode="'+esc(r.bentukBantuan)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noBukti)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaPenerima||'-')+'</b>'+frText+'</td><td><span class="badge purple">'+esc(r.ashnaf)+'</span></td><td>'+esc(r.program||'-')+'</td><td style="font-weight:700;color:var(--amber)">'+rp(r.jumlah)+'</td><td>'+statusBadge(r.statusSalur||'Tersalur')+'</td><td><div class="actions-cell"><button class="icon-btn" onclick="cetakBukti(\''+r.id+'\')">🧾</button>'+(canDo('pentasyarufan','edit')?'<button class="icon-btn" onclick="formTasyaruf(\''+r.id+'\')">✎</button>':'')+(canDo('pentasyarufan','delete')?'<button class="icon-btn" onclick="delTasyaruf(\''+r.id+'\')">🗑</button>':'')+'</div></td></tr>';
+    h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.ashnaf)+'" data-metode="'+esc(r.bentukBantuan)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noBukti)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaPenerima||'-')+'</b>'+frText+'</td><td><span class="badge purple">'+esc(r.ashnaf)+'</span></td><td>'+esc(r.program||'-')+'</td><td style="font-weight:700;color:var(--amber)">'+rp(r.jumlah)+'</td><td>'+statusBadge(r.statusSalur||'Tersalur')+'</td><td><div class="actions-cell"><button class="icon-btn" onclick="cetakBukti(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('pentasyarufan','edit')?'<button class="icon-btn" onclick="formTasyaruf(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('pentasyarufan','delete')?'<button class="icon-btn" onclick="delTasyaruf(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
   });
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
   rtPasangFilter('tasyTable');
@@ -773,13 +773,13 @@ function saveTasyaruf(id){var f=['tanggal','noBukti','ashnaf','sumberDana','prog
   if(!d.fundraising){markFieldError('f_fundraising','Fundraising wajib dipilih');bad=true;}
   if(bad){toast('Lengkapi field yang ditandai',true);return;}
   if(id)d.id=id;
-  gas('apiSavePentasyarufan')(TOKEN,d).then(function(saved){closeModal();toast('Tersimpan');viewPentasyarufan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak bukti penyaluran?',okText:'🖨️ Cetak Sekarang',cancelText:'Nanti Saja',icon:'🧾'}).then(function(__ok){if(__ok)cetakBukti(saved.id);});},300);}).catch(handleErr);}
+  gas('apiSavePentasyarufan')(TOKEN,d).then(function(saved){closeModal();toast('Tersimpan');viewPentasyarufan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak bukti penyaluran?',okText:'Cetak Sekarang',cancelText:'Nanti Saja',icon:SVG_ICONS.dlgBeres}).then(function(__ok){if(__ok)cetakBukti(saved.id);});},300);}).catch(handleErr);}
 function delTasyaruf(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)return;gas('apiDeletePentasyarufan')(TOKEN,id).then(function(){toast('Terhapus');viewPentasyarufan();}).catch(handleErr);});}
 function cetakBukti(id){gas('apiGetBuktiPentasyarufan')(TOKEN,id).then(function(res){printDoc(buildBuktiHTML(res.data,res.settings));}).catch(handleErr);}
 function buildBuktiHTML(d,s){return docShell('Bukti Penyaluran '+esc(d.noBukti),headerHTML(s,'BUKTI PENYALURAN DANA',d.noBukti)+'<table class="kv">'+rowKV('Telah disalurkan kepada',d.namaPenerima)+rowKV('NIK',d.nik||'-')+rowKV('Alamat',d.alamat||'-')+rowKV('Golongan (Ashnaf)',d.ashnaf)+rowKV('Program / Bentuk',(d.program||'-')+' — '+(d.bentukBantuan||'-'))+rowKV('Sumber Dana',d.sumberDana||'-')+rowKV('Terbilang','<i>'+terbilang(d.jumlah)+' rupiah</i>')+rowKV('Keterangan',d.keterangan||'-')+'</table><div class="amount-box">'+rp(d.jumlah)+'</div>'+signHTML(s,d.petugas,'Penerima','Petugas / Amil')+'<div class="note">Bukti ini sah sebagai tanda penyaluran dana sesuai amanah muzakki dan ketentuan syariah.</div>');}
 
 /* ============ DOC/PRINT ============ */
-function docShell(title,inner){return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title><style>@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");*{box-sizing:border-box}body{font-family:Inter,sans-serif;color:#16161d;margin:0;padding:34px;background:#fff}.doc{max-width:720px;margin:0 auto;border:1px solid #e3e3e8;border-radius:14px;padding:34px 40px}.dh{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16161d;padding-bottom:16px;margin-bottom:22px}.dh .lg{font-family:Space Grotesk;font-size:22px;font-weight:700}.dh .sm{font-size:12px;color:#6b6b76;margin-top:2px;max-width:330px}.dh .rt{text-align:right}.dh .rt .t{font-family:Space Grotesk;font-weight:700;font-size:15px;letter-spacing:1px}.dh .rt .no{font-size:13px;color:#444;margin-top:4px}table.kv{width:100%;border-collapse:collapse;margin-bottom:18px}table.kv td{padding:7px 0;font-size:14px;vertical-align:top}table.kv td:first-child{width:200px;color:#6b6b76}table.kv td:nth-child(2){width:14px;color:#6b6b76}.amount-box{display:inline-block;background:#f3f3f7;border:1px dashed #16161d;border-radius:10px;padding:10px 22px;font-family:Space Grotesk;font-weight:700;font-size:22px;margin-bottom:26px}.sign{display:flex;justify-content:space-between;margin-top:30px}.sign .col{text-align:center;width:45%;font-size:13px}.sign .sp{height:64px}.sign .nm{border-top:1px solid #16161d;padding-top:6px;font-weight:600}.note{margin-top:26px;font-size:11.5px;color:#6b6b76;border-top:1px solid #eee;padding-top:12px;font-style:italic}@media print{body{padding:0}.doc{border:none}.noprint{display:none}}.bar{text-align:center;margin-top:20px}.bar button{font-family:Inter;background:#16161d;color:#fff;border:none;padding:10px 22px;border-radius:999px;cursor:pointer;font-weight:600}</style></head><body><div class="doc">'+inner+'</div><div class="bar noprint"><button onclick="window.print()">🖨 Cetak / Simpan PDF</button></div></body></html>';}
+function docShell(title,inner){return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+title+'</title><style>@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");*{box-sizing:border-box}body{font-family:Inter,sans-serif;color:#16161d;margin:0;padding:34px;background:#fff}.doc{max-width:720px;margin:0 auto;border:1px solid #e3e3e8;border-radius:14px;padding:34px 40px}.dh{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16161d;padding-bottom:16px;margin-bottom:22px}.dh .lg{font-family:Space Grotesk;font-size:22px;font-weight:700}.dh .sm{font-size:12px;color:#6b6b76;margin-top:2px;max-width:330px}.dh .rt{text-align:right}.dh .rt .t{font-family:Space Grotesk;font-weight:700;font-size:15px;letter-spacing:1px}.dh .rt .no{font-size:13px;color:#444;margin-top:4px}table.kv{width:100%;border-collapse:collapse;margin-bottom:18px}table.kv td{padding:7px 0;font-size:14px;vertical-align:top}table.kv td:first-child{width:200px;color:#6b6b76}table.kv td:nth-child(2){width:14px;color:#6b6b76}.amount-box{display:inline-block;background:#f3f3f7;border:1px dashed #16161d;border-radius:10px;padding:10px 22px;font-family:Space Grotesk;font-weight:700;font-size:22px;margin-bottom:26px}.sign{display:flex;justify-content:space-between;margin-top:30px}.sign .col{text-align:center;width:45%;font-size:13px}.sign .sp{height:64px}.sign .nm{border-top:1px solid #16161d;padding-top:6px;font-weight:600}.note{margin-top:26px;font-size:11.5px;color:#6b6b76;border-top:1px solid #eee;padding-top:12px;font-style:italic}@media print{body{padding:0}.doc{border:none}.noprint{display:none}}.bar{text-align:center;margin-top:20px}.bar button{font-family:Inter;background:#16161d;color:#fff;border:none;padding:10px 22px;border-radius:999px;cursor:pointer;font-weight:600}</style></head><body><div class="doc">'+inner+'</div><div class="bar noprint"><button onclick="window.print()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button></div></body></html>';}
 function headerHTML(s,title,no){var logo=s.logoUrl?'<img src="'+esc(s.logoUrl)+'" style="height:48px;margin-bottom:8px">':'';return '<div class="dh"><div>'+logo+'<div class="lg">'+esc(s.namaLembaga||'Lembaga Amil Zakat')+'</div><div class="sm">'+esc(s.alamat||'')+(s.telepon?' • '+esc(s.telepon):'')+(s.email?' • '+esc(s.email):'')+'</div></div><div class="rt"><div class="t">'+title+'</div><div class="no">No: '+esc(no)+'<br>Tgl: '+fdate(new Date())+'</div></div></div>';}
 function rowKV(k,v){return '<tr><td>'+esc(k)+'</td><td>:</td><td><b>'+v+'</b></td></tr>';}
 function signHTML(s,petugas,lr,rr){return '';}
@@ -788,10 +788,10 @@ function printDoc(html){var w=window.open('','_blank');w.document.open();w.docum
 /* ============ REKENING ============ */
 function viewRekening(){gas('apiListRekening')(TOKEN).then(function(rows){CACHE.rekening=rows;renderRekening(rows);}).catch(handleErr);}
 function renderRekening(rows){var add=canDo('rekening','create')?'<button class="btn btn-primary" onclick="formRek()">+ Tambah Rekening</button>':'';
-  var h='<div class="page-head"><div><h1>No. Rekening</h1><div class="desc">Daftar rekening bank lembaga untuk penerimaan transfer</div></div>'+add+'</div>';
+  var h='<div class="page-head"><div><h1>No. Rekening</h1><div class="desc">Rekening bank lembaga</div></div>'+add+'</div>';
   h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Bank</th><th>No. Rekening</th><th>Atas Nama</th><th>Peruntukan</th><th>Status</th><th></th></tr></thead><tbody>';
   if(!rows.length)h+='<tr><td colspan="6"><div class="empty"><div class="big">▢</div>Belum ada rekening.</div></td></tr>';
-  rows.forEach(function(r){h+='<tr><td><b>'+esc(r.namaBank)+'</b></td><td>'+esc(r.nomor)+'</td><td>'+esc(r.atasNama)+'</td><td>'+esc(r.fundGroup||'Umum')+'</td><td><span class="badge '+(String(r.aktif)!=='false'?'green':'amber')+'">'+(String(r.aktif)!=='false'?'Aktif':'Nonaktif')+'</span></td><td><div class="actions-cell">'+(canDo('rekening','edit')?'<button class="icon-btn" onclick="formRek(\''+r.id+'\')">✎</button>':'')+(canDo('rekening','delete')?'<button class="icon-btn" onclick="delRek(\''+r.id+'\')">🗑</button>':'')+'</div></td></tr>';});
+  rows.forEach(function(r){h+='<tr><td><b>'+esc(r.namaBank)+'</b></td><td>'+esc(r.nomor)+'</td><td>'+esc(r.atasNama)+'</td><td>'+esc(r.fundGroup||'Umum')+'</td><td><span class="badge '+(String(r.aktif)!=='false'?'green':'amber')+'">'+(String(r.aktif)!=='false'?'Aktif':'Nonaktif')+'</span></td><td><div class="actions-cell">'+(canDo('rekening','edit')?'<button class="icon-btn" onclick="formRek(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('rekening','delete')?'<button class="icon-btn" onclick="delRek(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el(window.REK_HOST||'content').innerHTML=h;}
 function formRek(id){var r=id?CACHE.rekening.find(function(x){return x.id===id;}):{};
   var b='<div class="row"><div class="field"><label>Nama Bank *</label><input id="r_namaBank" value="'+esc(r.namaBank||'')+'" placeholder="cth: BSI / BCA / Mandiri"></div><div class="field"><label>No. Rekening *</label><input id="r_nomor" value="'+esc(r.nomor||'')+'"></div></div><div class="field"><label>Atas Nama *</label><input id="r_atasNama" value="'+esc(r.atasNama||'')+'"></div><div class="row"><div class="field"><label>Peruntukan Dana</label>'+selOpt('r_fundGroup',['Umum','Zakat','Infak','Sedekah','Wakaf','Amil','Kurban','DSKL'],r.fundGroup||'Umum')+'</div><div class="field"><label>Status</label>'+selOpt('r_aktif',['true','false'],String(r.aktif!==false&&String(r.aktif)!=='false'))+'</div></div>';
@@ -810,7 +810,7 @@ function renderFundraising(d){
   var rows = d.daftar || [], pakai = d.pemakaian || {};
   var add = canDo('settings','edit')
     ? '<button class="btn btn-primary" onclick="formFr()">+ Tambah Fundraising</button>' : '';
-  var h='<div class="page-head"><div><h1>Fundraising</h1><div class="desc">Daftar nama fundraiser / sumber yang muncul di formulir Penghimpunan</div></div>'+add+'</div>';
+  var h='<div class="page-head"><div><h1>Fundraising</h1><div class="desc">Nama sumber di formulir Penghimpunan</div></div>'+add+'</div>';
   h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Dipakai</th><th></th></tr></thead><tbody>';
   if(!rows.length) h+='<tr><td colspan="3"><div class="empty"><div class="big">▢</div>Belum ada nama fundraising.</div></td></tr>';
   rows.forEach(function(n){
@@ -818,8 +818,8 @@ function renderFundraising(d){
     h+='<tr><td><b>'+esc(n)+'</b></td>'
       + '<td>'+(c?('<span class="badge green">'+c+' transaksi</span>'):'<span class="muted">belum dipakai</span>')+'</td>'
       + '<td><div class="actions-cell">'
-      + (canDo('settings','edit')?'<button class="icon-btn" title="Ubah nama" onclick="formFr(\''+esc(n).replace(/'/g,"\\'")+'\')">✎</button>':'')
-      + (canDo('settings','delete')?'<button class="icon-btn" title="Hapus" onclick="delFr(\''+esc(n).replace(/'/g,"\\'")+'\')">🗑</button>':'')
+      + (canDo('settings','edit')?'<button class="icon-btn" title="Ubah nama" onclick="formFr(\''+esc(n).replace(/'/g,"\\'")+'\')">'+SVG_ICONS.pensil+'</button>':'')
+      + (canDo('settings','delete')?'<button class="icon-btn" title="Hapus" onclick="delFr(\''+esc(n).replace(/'/g,"\\'")+'\')">'+SVG_ICONS.sampah+'</button>':'')
       + '</div></td></tr>';
   });
   h+='</tbody></table></div></div>';
@@ -862,7 +862,7 @@ function renderLayanan(rows){var add=canDo('layanan','create')?'<button class="b
   var h='<div class="page-head"><div><h1>Kantor / Unit Layanan</h1><div class="desc">Daftar Kantor Layanan (KLL) & Unit Layanan (ULL)</div></div>'+add+'</div>';
   h+='<div class="table-wrap"><div class="toolbar"><input class="search" placeholder="Cari nama / kode / wilayah..." oninput="filterTable(this.value,\'layTable\')"></div><div style="overflow:auto"><table id="layTable"><thead><tr><th>Tipe</th><th>Kode</th><th>Nama</th><th>Wilayah</th><th>Penanggung Jawab</th><th>Status</th><th></th></tr></thead><tbody>';
   if(!rows.length)h+='<tr><td colspan="7"><div class="empty"><div class="big">⌖</div>Belum ada KLL/ULL.</div></td></tr>';
-  rows.forEach(function(r){h+='<tr><td><span class="badge '+(r.tipe==='KLL'?'blue':'purple')+'">'+esc(r.tipe)+'</span></td><td>'+esc(r.kode||'-')+'</td><td><b>'+esc(r.nama)+'</b></td><td>'+esc(r.wilayah||'-')+'</td><td>'+esc(r.penanggungJawab||'-')+'</td><td><span class="badge '+(String(r.aktif)!=='false'?'green':'amber')+'">'+(String(r.aktif)!=='false'?'Aktif':'Nonaktif')+'</span></td><td><div class="actions-cell">'+(canDo('layanan','edit')?'<button class="icon-btn" onclick="formLay(\''+r.id+'\')">✎</button>':'')+(canDo('layanan','delete')?'<button class="icon-btn" onclick="delLay(\''+r.id+'\')">🗑</button>':'')+'</div></td></tr>';});
+  rows.forEach(function(r){h+='<tr><td><span class="badge '+(r.tipe==='KLL'?'blue':'purple')+'">'+esc(r.tipe)+'</span></td><td>'+esc(r.kode||'-')+'</td><td><b>'+esc(r.nama)+'</b></td><td>'+esc(r.wilayah||'-')+'</td><td>'+esc(r.penanggungJawab||'-')+'</td><td><span class="badge '+(String(r.aktif)!=='false'?'green':'amber')+'">'+(String(r.aktif)!=='false'?'Aktif':'Nonaktif')+'</span></td><td><div class="actions-cell">'+(canDo('layanan','edit')?'<button class="icon-btn" onclick="formLay(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('layanan','delete')?'<button class="icon-btn" onclick="delLay(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el(window.LAY_HOST||'content').innerHTML=h;}
 function formLay(id){var r=id?CACHE.layanan.find(function(x){return x.id===id;}):{tipe:'KLL'};
   var b='<div class="row"><div class="field"><label>Tipe *</label>'+selOpt('l_tipe',['KLL','ULL'],r.tipe||'KLL')+'</div><div class="field"><label>Kode</label><input id="l_kode" value="'+esc(r.kode||'')+'" placeholder="cth: KLL-01"></div></div><div class="field"><label>Nama '+'*</label><input id="l_nama" value="'+esc(r.nama||'')+'" placeholder="cth: Pajangan / Masjid Aceh"></div><div class="row"><div class="field"><label>Wilayah</label><input id="l_wilayah" value="'+esc(r.wilayah||'')+'"></div><div class="field"><label>Penanggung Jawab</label><input id="l_penanggungJawab" value="'+esc(r.penanggungJawab||'')+'"></div></div><div class="row"><div class="field"><label>Telepon</label><input id="l_telepon" value="'+esc(r.telepon||'')+'"></div><div class="field"><label>Status</label>'+selOpt('l_aktif',['true','false'],String(r.aktif!==false&&String(r.aktif)!=='false'))+'</div></div><div class="muted" style="font-size:12px">KLL = Kantor Layanan • ULL = Unit Layanan. Data ini muncul sebagai pilihan donatur di form Penghimpunan.</div>';
@@ -1346,11 +1346,11 @@ function loadJurnalAndDownload(){
 function jn(n){ var v = Number(n); return isFinite(v) ? String(Math.round(v)) : ''; }
 
 function renderJurnalPreview(d){
-  if(!d.count){el('jurnalPreview').innerHTML='<div class="card empty"><div class="big">🧾</div>Tidak ada penerimaan pada '+esc(d.periode)+'.</div>';return;}
-  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" style="border:1px solid var(--border)" onclick="copyAllJurnal()">📋 Salin Semua</button><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">⬇ Unduh .xlsx</button></div></div>';
+  if(!d.count){el('jurnalPreview').innerHTML='<div class="card empty"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada penerimaan pada '+esc(d.periode)+'.</div>';return;}
+  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" style="border:1px solid var(--border)" onclick="copyAllJurnal()">'+SVG_ICONS.salin+' Salin Semua</button><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">'+SVG_ICONS.unduh+' Unduh .xlsx</button></div></div>';
   h+='<div style="overflow:auto"><table><thead><tr><th>Tanggal</th><th>Akun</th><th>Debit</th><th>Kredit</th><th>Keterangan</th></tr></thead><tbody>';
   d.sections.forEach(function(sec, idx){
-    h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">📋 Salin Kategori</button></div></td></tr>';
+    h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">'+SVG_ICONS.salin+' Salin Kategori</button></div></td></tr>';
     sec.lines.forEach(function(l){
       h+='<tr><td>'+esc(l.tanggal)+'</td><td>'+esc(l.akun)+'</td><td class="jnum">'+(l.debit!==''?jn(l.debit):'')+'</td><td class="jnum">'+(l.kredit!==''?jn(l.kredit):'')+'</td><td class="muted">'+esc(l.ket)+'</td></tr>';
     });
@@ -1617,8 +1617,8 @@ function renderBroadcastResult(d){
   var h = '<div class="card">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
       + '<h3>Teks Broadcast (bisa diedit)</h3>'
-      + '<div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="copyBC()">📋 Salin</button>'
-      + '<button class="btn btn-primary btn-sm" onclick="waBC()">📲 Kirim via WhatsApp</button></div>'
+      + '<div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="copyBC()">'+SVG_ICONS.salin+' Salin</button>'
+      + '<button class="btn btn-primary btn-sm" onclick="waBC()">'+SVG_ICONS.kirim+' Kirim via WhatsApp</button></div>'
     + '</div>';
 
   /* Pemeriksaan penjumlahan ditampilkan terbuka: rincian yang dikirim
@@ -1629,8 +1629,8 @@ function renderBroadcastResult(d){
     + '<div class="bc-cek-b"><span>Rincian penyaluran (langsung + uang muka)</span><b>' + rp(totSalur) + '</b></div>'
     + '<div class="bc-cek-b"><span>Total tercatat</span><b>' + rp(d.totalTasyaruf) + '</b></div>'
     + '<div class="bc-cek-k">' + (cocok
-        ? '✓ Penjumlahan cocok — rincian pada teks sama persis dengan total transaksi periode ini.'
-        : '⚠️ Ada selisih ' + rp(Math.abs((d.totalHimpun-totH)) + Math.abs((d.totalTasyaruf-totSalur)))
+        ? 'Penjumlahan cocok — rincian pada teks sama persis dengan total transaksi periode ini.'
+        : 'Ada selisih ' + rp(Math.abs((d.totalHimpun-totH)) + Math.abs((d.totalTasyaruf-totSalur)))
           + '. Selisihnya sudah dimunculkan sebagai baris tersendiri pada teks, bukan disembunyikan.')
     + '</div></div>';
 
@@ -1648,10 +1648,10 @@ function viewUsers(){
     .then(function(res){ CACHE.users=res[0]; CACHE.layanan=res[1]||[]; renderUsers(res[0]); }).catch(handleErr);
 }
 function renderUsers(rows){var add=canDo('users','create')?'<button class="btn btn-primary" onclick="formUser()">+ Tambah User</button>':'';
-  var h='<div class="page-head"><div><h1>Manajemen User</h1><div class="desc">Kelola akun & hak akses (permission) pengguna</div></div>'+add+'</div>';
+  var h='<div class="page-head"><div><h1>Manajemen User</h1><div class="desc">Akun dan hak aksesnya</div></div>'+add+'</div>';
   h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Kantor</th><th>Status</th><th>Hak Akses</th><th></th></tr></thead><tbody>';
   rows.forEach(function(u){var act=String(u.aktif)==='true'||u.aktif===true;var pc=u.role==='superadmin'?'Semua akses':countPerm(u.permissions)+' izin';
-    h+='<tr><td><b>'+esc(u.nama)+'</b></td><td>'+esc(u.username)+'</td><td>'+(u.role==='superadmin'?'<span class="badge purple">Superadmin</span>':'<span class="badge blue">'+esc(u.role||'staff')+'</span>')+'</td><td>'+(u.layanan?'<span class="badge amber">'+esc(u.layanan)+'</span>':'<span class="muted">semua</span>')+'</td><td><span class="badge '+(act?'green':'amber')+'">'+(act?'Aktif':'Nonaktif')+'</span></td><td class="muted">'+pc+'</td><td><div class="actions-cell">'+(canDo('users','edit')?'<button class="icon-btn" onclick="formUser(\''+u.id+'\')">✎</button>':'')+(canDo('users','delete')?'<button class="icon-btn" onclick="delUser(\''+u.id+'\')">🗑</button>':'')+'</div></td></tr>';});
+    h+='<tr><td><b>'+esc(u.nama)+'</b></td><td>'+esc(u.username)+'</td><td>'+(u.role==='superadmin'?'<span class="badge purple">Superadmin</span>':'<span class="badge blue">'+esc(u.role||'staff')+'</span>')+'</td><td>'+(u.layanan?'<span class="badge amber">'+esc(u.layanan)+'</span>':'<span class="muted">semua</span>')+'</td><td><span class="badge '+(act?'green':'amber')+'">'+(act?'Aktif':'Nonaktif')+'</span></td><td class="muted">'+pc+'</td><td><div class="actions-cell">'+(canDo('users','edit')?'<button class="icon-btn" onclick="formUser(\''+u.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('users','delete')?'<button class="icon-btn" onclick="delUser(\''+u.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el('content').innerHTML=h;}
 function countPerm(p){var n=0;p=p||{};Object.keys(p).forEach(function(m){Object.keys(p[m]||{}).forEach(function(a){if(p[m][a])n++;});});return n;}
 /* Tabel izin per modul. Dulu menampilkan nama teknis apa adanya ("saldodaerah",
@@ -2000,7 +2000,7 @@ function confirmDialog(opts){ opts=opts||{}; return new Promise(function(resolve
      diketik lebih dulu, supaya tidak terjadi karena salah klik. */
   var minta = opts.prompt ? String(opts.prompt) : '';
   var isiPrompt = minta ? '<input class="cd-prompt" placeholder="Ketik ' + minta + '" autocomplete="off" spellcheck="false">' : '';
-  ov.innerHTML='<div class="cd-card'+dg+'" role="dialog" aria-modal="true"><div class="cd-icon">'+(opts.icon||(opts.danger?'⚠️':'❓'))+'</div><div class="cd-title">'+(opts.title||'Konfirmasi')+'</div><div class="cd-msg">'+(opts.message||'')+'</div>'+isiPrompt+'<div class="cd-actions"><button class="cd-cancel"></button><button class="cd-ok"></button></div></div>';
+  ov.innerHTML='<div class="cd-card'+dg+'" role="dialog" aria-modal="true"><div class="cd-icon">'+(opts.icon||(opts.danger?SVG_ICONS.dlgAwas:SVG_ICONS.dlgTanya))+'</div><div class="cd-title">'+(opts.title||'Konfirmasi')+'</div><div class="cd-msg">'+(opts.message||'')+'</div>'+isiPrompt+'<div class="cd-actions"><button class="cd-cancel"></button><button class="cd-ok"></button></div></div>';
   document.body.appendChild(ov);
   var card=ov.querySelector('.cd-card');
   var inp=ov.querySelector('.cd-prompt');
@@ -2021,7 +2021,7 @@ function confirmDialog(opts){ opts=opts||{}; return new Promise(function(resolve
   setTimeout(function(){ try{ (inp||ov.querySelector('.cd-ok')).focus(); }catch(e){} },60);
 }); }
 function uiConfirm(msg){ return confirmDialog({title:'Konfirmasi Hapus',message:msg,okText:'Hapus',cancelText:'Batal',danger:true}); }
-function uiAlert(msg,title){ return confirmDialog({title:title||'Berhasil',message:msg,okText:'OK',cancelText:'',danger:false,icon:'✅'}); }
+function uiAlert(msg,title){ return confirmDialog({title:title||'Berhasil',message:msg,okText:'OK',cancelText:'',danger:false,icon:SVG_ICONS.dlgBeres}); }
 /* v8: versi lama memantau elemen #view yang tidak pernah ada di halaman ini,
    sehingga setTimeout-nya berulang tiap 150ms selamanya tanpa hasil. Sekarang
    memantau #content yang benar: begitu isinya diganti oleh salah satu fungsi
@@ -2105,6 +2105,24 @@ function initBgFx(){
 }
 
 /* ===== SVG ICON LIBRARY (Minimalist Vector Icons) ===== */
+/* Status pembacaan berkas mutasi: dulu diawali emoji (✅/⚠️/❌) yang tampil
+   berbeda di tiap sistem dan tidak sewarna tulisannya. Sekarang keping kecil
+   berwarna — makna yang sama, tetapi menyatu dengan tampilan lain. */
+/* Keterangan panel Pengaturan. Sembilan panel berisi paragraf 300-600 huruf
+   yang ditumpuk pada satu halaman membuat halamannya jadi dinding teks,
+   padahal penjelasan itu hanya dibaca sekali. Sekarang satu kalimat pendek
+   yang selalu tampak, sisanya dilipat. */
+function _ket(pendek, panjang){
+  if(!panjang) return '<p class="set-ket">'+pendek+'</p>';
+  return '<details class="set-det"><summary>'+pendek+' <span>selengkapnya</span></summary>'
+    + '<div class="set-det-b">'+panjang+'</div></details>';
+}
+
+function _statChip(kelas, teks){ return '<span class="stat-chip '+kelas+'">'+esc(teks)+'</span>'; }
+function _statGagal(t){ return _statChip('bad', t); }
+function _statAwas(t){ return _statChip('warn', t); }
+function _statBeres(t){ return _statChip('ok', t); }
+
 var SVG_ICONS = {
   plus: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
   link: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>',
@@ -2117,6 +2135,38 @@ var SVG_ICONS = {
   close: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
   grip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1.2" fill="currentColor"></circle><circle cx="9" cy="12" r="1.2" fill="currentColor"></circle><circle cx="9" cy="19" r="1.2" fill="currentColor"></circle><circle cx="15" cy="5" r="1.2" fill="currentColor"></circle><circle cx="15" cy="12" r="1.2" fill="currentColor"></circle><circle cx="15" cy="19" r="1.2" fill="currentColor"></circle></svg>',
   resize: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>'
+,
+  /* ---- Ikon garis tambahan (gaya sama: 24x24, currentColor, tanpa isian).
+     Emoji berwarna sebelumnya tampil berbeda-beda di tiap sistem operasi dan
+     tidak pernah sewarna dengan tulisannya; ikon garis ini mengikuti warna
+     dan ukuran teks di sekitarnya. ---- */
+  unggah: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 9 12 4 17 9"/><line x1="12" y1="4" x2="12" y2="16"/></svg>',
+  unduh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 11 12 16 17 11"/><line x1="12" y1="4" x2="12" y2="16"/></svg>',
+  pensil: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  sampah: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+  kwitansi: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3v18l2.5-1.5L9 21l2.5-1.5L14 21l2.5-1.5L19 21V3l-2.5 1.5L14 3l-2.5 1.5L9 3 6.5 4.5Z"/><line x1="8" y1="9" x2="15" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>',
+  cetak: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
+  mata: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  segarkan: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+  salin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  simpan: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
+  kirim: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  putar: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
+  kalender: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  kembali: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
+  kamera: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>',
+  /* ikon besar untuk keadaan kosong & dialog — memakai ukuran dari CSS induknya */
+  bsrKosong: '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4Z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg>',
+  bsrCari: '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  bsrDokumen: '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+  bsrTukar: '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+  bsrBeres: '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 16 9.5"/></svg>',
+  dlgTanya: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .9-1 1.6v.3"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>',
+  dlgAwas: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>',
+  dlgBeres: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 16 9.5"/></svg>',
+  dlgHapus: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+  dlgGabung: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3A5 5 0 0 0 13.5 3.5l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3A5 5 0 0 0 10.5 20.5l1.7-1.7"/></svg>',
+  dlgAlat: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5.3 5.3l-8 8a2.8 2.8 0 0 1-4-4Z"/><path d="m18 2 4 4-2.5 2.5"/></svg>'
 };
 
 /* ===== DASHBOARD v7 RENDER (Tremor / Stripe Style) ===== */
@@ -2727,7 +2777,7 @@ function _namaDalamGrup(a, grup){
 function viewSaldo(){
   if(!SALDO_TGL) SALDO_TGL = today();
   var c = el('content');
-  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo Kas &amp; Bank</h2><div class="desc">Posisi uang yang benar-benar ada di tiap rekening dan kas, dihitung dari saldo awal tahun + seluruh pergerakan</div></div>'
+  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo Kas &amp; Bank</h2><div class="desc">Posisi uang di tiap rekening dan kas</div></div>'
     + '<div class="saldo-head-alat">'
     + '<div class="field" style="margin:0;min-width:150px"><label>Posisi per tanggal</label><input type="date" id="saldoTgl" value="'+esc(SALDO_TGL)+'" max="'+today()+'" onchange="SALDO_TGL=this.value;SALDO_BUKA={};viewSaldo();"></div>'
     + (canDo('settings','edit') ? '<button class="btn btn-ghost" onclick="go(\'settings\');setTimeout(function(){setTab(\'saldoawal\');},300);">Saldo awal</button>' : '')
@@ -2921,7 +2971,7 @@ function viewKll(fokus){
   if(!KLL_TGL) KLL_TGL = today();
   if(fokus) KLL_BUKA = fokus;
   var c = el('content');
-  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo KLL &amp; ULL</h2><div class="desc">Uang tiap kantor layanan: yang disetor, hak amil, yang masih tersimpan di daerah, dan yang belum di-LPJ-kan</div></div>'
+  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo KLL &amp; ULL</h2><div class="desc">Setoran, hak amil, dan sisa uang tiap kantor layanan</div></div>'
     + '<div class="saldo-head-alat">'
     + '<div class="field" style="margin:0;min-width:150px"><label>Posisi per tanggal</label><input type="date" id="kllTgl" value="'+esc(KLL_TGL)+'" max="'+today()+'" onchange="KLL_TGL=this.value;viewKll();"></div>'
     + (canDo('settings','edit') ? '<button class="btn btn-ghost" onclick="go(\'settings\');setTimeout(function(){setTab(\'hakamil\');},300);">Atur hak amil</button>' : '')
@@ -3184,7 +3234,7 @@ function _idKll(n){ return 'kll_'+String(n).replace(/[^A-Za-z0-9]/g,'_'); }
 function _tabelKll(baris, totalSemua){
   var adaSaring = KLL_CARI || KLL_TIPE!=='semua' || KLL_STATUS!=='semua';
   if(!baris.length){
-    return '<div class="empty" style="padding:24px"><div class="big">🔍</div>'
+    return '<div class="empty" style="padding:24px"><div class="big">'+SVG_ICONS.bsrCari+'</div>'
       + (adaSaring ? 'Tidak ada kantor yang cocok dengan saringan ini.<div style="margin-top:10px"><button class="btn btn-sm btn-ghost" onclick="kllReset()">Hapus saringan</button></div>'
                    : 'Belum ada data kantor layanan.') + '</div>';
   }
@@ -3275,9 +3325,9 @@ function _tab(kol, baris, kaki){
 var SA_TAHUN = String(new Date().getFullYear());
 function saldoAwalHTML(){
   return '<div class="card set-panel"><h3>Saldo Awal Tahun</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.55;margin:6px 0 12px">Isi <b>saldo akhir 31 Desember tahun sebelumnya</b> untuk setiap rekening bank dan kas tunai. '
-    + 'Sejak itu sistem menghitung saldo berjalan sendiri dari penghimpunan, penyaluran, uang muka, dan transfer yang tercatat. '
-    + 'Kalau ada uang muka program yang saat itu belum dipertanggungjawabkan (LPJ), isi juga jumlahnya per dana supaya angka uang muka tidak minus.</p>'
+    + _ket('Isi saldo akhir 31 Desember tahun sebelumnya, sekali per tahun.',
+        'Sejak itu sistem menghitung saldo berjalan sendiri dari penghimpunan, penyaluran, uang muka, dan transfer yang tercatat. '
+    + 'Kalau ada uang muka program yang saat itu belum dipertanggungjawabkan (LPJ), isi juga jumlahnya per dana supaya angka uang muka tidak minus.')
     + '<div id="saBody"><div class="muted" style="font-size:12.5px">Memuat...</div></div></div>';
 }
 function viewSaldoAwal(tahun){
@@ -4150,7 +4200,7 @@ function tarikImportData() {
         /* Peringatan anomali tanggal: baris yang tanggal debet & kreditnya beda. */
         var anom = res.anomaliTanggal || [];
         if (anom.length) {
-          h += '<details class="imp-note imp-warn imp-det" open><summary><b>⚠️ ' + anom.length + ' kemungkinan salah tanggal</b> &middot; tanggal debet dan kredit berbeda</summary>'
+          h += '<details class="imp-note imp-warn imp-det" open><summary><b>' + anom.length + ' kemungkinan salah tanggal</b> &middot; tanggal debet dan kredit berbeda</summary>'
             + '<ul class="imp-det-b" style="margin:6px 0 0;padding-left:18px">'
             + anom.slice(0, 8).map(function(a) {
                 return '<li style="margin:2px 0">' + esc(tglIndo(a.tglDebet)) + ' &ne; ' + esc(tglIndo(a.tglKredit))
@@ -4198,9 +4248,9 @@ function tarikImportData() {
             '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Akun Kredit</th><th>Jumlah</th><th>Metode</th>' +
             '</tr></thead><tbody>';
           res.himpunValid.forEach(function(r, idx) {
-            var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="himpun" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> ⚠️ Transaksi Serupa Ada (Centang jika ingin tetap simpan)</label></div>' : '';
+            var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="himpun" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada — centang bila tetap ingin disimpan</label></div>' : '';
             var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
-            var bedaWarn = r.bedaDana ? '<div style="margin-top:3px;font-size:10.5px;color:var(--amber);font-weight:700">⚠️ Uraian menyebut jenis dana lain — mengikuti akun kredit</div>' : '';
+            var bedaWarn = r.bedaDana ? '<div style="margin-top:3px;font-size:10.5px;color:var(--amber);font-weight:700">Uraian menyebut jenis dana lain — mengikuti akun kredit</div>' : '';
             h += '<tr' + rowBg + '>' +
               '<td>' + esc(r.tanggal) + '</td>' +
               '<td><b>' + esc(r.namaDonatur) + '</b>' + dupWarn + bedaWarn + '</td>' +
@@ -4221,7 +4271,7 @@ function tarikImportData() {
             '<th>Tgl</th><th>Penerima</th><th>Program</th><th>Jumlah</th><th>Metode</th><th>FR</th>' +
             '</tr></thead><tbody>';
           res.salurValid.forEach(function(r, idx) {
-            var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="salur" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> ⚠️ Transaksi Serupa Ada (Centang jika ingin tetap simpan)</label></div>' : '';
+            var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="salur" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada — centang bila tetap ingin disimpan</label></div>' : '';
             var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
             h += '<tr' + rowBg + '>' +
               '<td>' + esc(r.tanggal) + '</td>' +
@@ -4269,7 +4319,7 @@ function tarikImportData() {
           res.valid.forEach(function(r, idx) {
             var name = IMPORT_TEMP_TYPE === 'himpun' ? r.namaDonatur : r.namaPenerima;
             var cat = IMPORT_TEMP_TYPE === 'himpun' ? (r.jenisDana + (r.pilar ? ' / ' + r.pilar : '')) : r.ashnaf;
-            var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="regular" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> ⚠️ Transaksi Serupa Ada (Centang jika ingin tetap simpan)</label></div>' : '';
+            var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="regular" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada — centang bila tetap ingin disimpan</label></div>' : '';
             var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
             h += '<tr' + rowBg + '>' +
               '<td>' + esc(r.tanggal) + '</td>' +
@@ -4419,7 +4469,7 @@ function simpanImportData() {
 
 function openDeleteByDateModal(type) {
   var title = type === 'himpun' ? 'Hapus Penghimpunan via Rentang Tanggal' : 'Hapus Pentasyarufan via Rentang Tanggal';
-  var b = '<p class="muted" style="margin-bottom:12px;color:var(--red);font-size:12.5px;line-height:1.5">⚠️ PERINGATAN: Tindakan ini akan menghapus semua data transaksi secara permanen pada rentang tanggal yang dipilih.</p>' +
+  var b = '<p class="muted" style="margin-bottom:12px;color:var(--red);font-size:12.5px;line-height:1.5"><b>Peringatan:</b> tindakan ini akan menghapus semua data transaksi secara permanen pada rentang tanggal yang dipilih.</p>' +
     '<div class="row">' +
     '<div class="field"><label>Tanggal Mulai *</label><input type="date" id="del_start_date"></div>' +
     '<div class="field"><label>Tanggal Selesai *</label><input type="date" id="del_end_date"></div>' +
@@ -4507,7 +4557,7 @@ function rentangHTML(id, dari, sampai, opsi){
   var teks = (dari && sampai) ? rtLabel(dari, sampai) : (opsi.kosong || 'Pilih rentang tanggal');
   return '<div class="'+kls+'" id="'+id+'_wrap">'
     + '<button type="button" class="rt-btn'+((dari&&sampai)?'':' rt-hampa')+'" id="'+id+'_btn" aria-haspopup="dialog">'
-    + '<span class="rt-ic" aria-hidden="true">📅</span>'
+    + '<span class="rt-ic" aria-hidden="true">'+SVG_ICONS.kalender+'</span>'
     + '<span class="rt-teks" id="'+id+'_teks">'+esc(teks)+'</span>'
     + '<span class="rt-car" aria-hidden="true">▾</span>'
     + '</button></div>';
@@ -5309,7 +5359,7 @@ function enhanceDatePickers(containerId) {
     btn.appendChild(btnText);
     
     var calendarIcon = document.createElement('span');
-    calendarIcon.innerHTML = '📅';
+    calendarIcon.innerHTML = SVG_ICONS.kalender;
     calendarIcon.style.fontSize = '13px';
     calendarIcon.style.opacity = '0.6';
     btn.appendChild(calendarIcon);
@@ -5395,9 +5445,9 @@ function renderMutasi(rows) {
   var h = '<div class="page-head">' +
     '  <div>' +
     '    <h2>Mutasi Rekening Bank</h2>' +
-    '    <div class="desc">Riwayat transaksi mutasi bank terimpor untuk audit anti-duplikasi</div>' +
+    '    <div class="desc">Riwayat mutasi bank yang pernah diimpor</div>' +
     '  </div>' +
-    '  <button class="btn btn-primary" onclick="openImportMutasiModal()">📥 Import File Mutasi</button>' +
+    '  <button class="btn btn-primary" onclick="openImportMutasiModal()">'+SVG_ICONS.unggah+' Impor Berkas Mutasi</button>' +
     '</div>';
 
   h += '<div class="stats" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))">' +
@@ -5424,7 +5474,7 @@ function renderMutasi(rows) {
     '      <tbody>';
 
   if (rows.length === 0) {
-    h += '<tr><td colspan="5"><div class="empty"><div class="big">⇄</div>Belum ada data mutasi terimpor. Silakan import berkas baru.</div></td></tr>';
+    h += '<tr><td colspan="5"><div class="empty"><div class="big">'+SVG_ICONS.bsrTukar+'</div>Belum ada data mutasi terimpor. Silakan import berkas baru.</div></td></tr>';
   } else {
     rows.forEach(function(r) {
       var badge = r.tipe === 'D' ? '<span class="badge red">DEBET (Keluar)</span>' : '<span class="badge green">KREDIT (Masuk)</span>';
@@ -5502,7 +5552,7 @@ function openImportMutasiModal() {
     '<div id="mutasiPreview"><div class="imp-kosong">Baris mutasi akan muncul di sini setelah berkas dibaca.</div></div>';
 
   var f = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>' +
-    '<button class="btn btn-primary hidden" id="mutasiSimpanBtn" onclick="saveMutasiImport()">💾 Simpan Mutasi</button>';
+    '<button class="btn btn-primary hidden" id="mutasiSimpanBtn" onclick="saveMutasiImport()">'+SVG_ICONS.simpan+' Simpan Mutasi</button>';
 
   openModal('Import Mutasi Bank (Multi-format)', b, f);
   var mc = el('modalCard');
@@ -5540,7 +5590,7 @@ function processMutasiFile() {
       window.mammoth.extractRawText({ arrayBuffer: arrayBuffer }).then(function(result) {
         handleMutasiTextParsed(result.value);
       }).catch(function(err) {
-        el('mutasiParseStatus').innerHTML = '❌ Gagal membaca dokumen Word: ' + err.message;
+        el('mutasiParseStatus').innerHTML = _statGagal('Gagal membaca dokumen Word: ' + err.message);
       });
     };
     reader.readAsArrayBuffer(file);
@@ -5565,7 +5615,7 @@ function processMutasiFile() {
           handleMutasiTextParsed(texts.join('\n'));
         });
       }).catch(function(err) {
-        el('mutasiParseStatus').innerHTML = '❌ Gagal membaca file PDF: ' + err.message;
+        el('mutasiParseStatus').innerHTML = _statGagal('Gagal membaca berkas PDF: ' + err.message);
       });
     };
     reader.readAsArrayBuffer(file);
@@ -5581,7 +5631,7 @@ function processMutasiFile() {
         var text = rows.map(function(r) { return r.join(' '); }).join('\n');
         handleMutasiTextParsed(text);
       } catch (err) {
-        el('mutasiParseStatus').innerHTML = '❌ Gagal membaca Excel: ' + err.message;
+        el('mutasiParseStatus').innerHTML = _statGagal('Gagal membaca Excel: ' + err.message);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -5598,12 +5648,12 @@ function processMutasiFile() {
       }).then(function(result) {
         handleMutasiTextParsed(result.data.text);
       }).catch(function(err) {
-        el('mutasiParseStatus').innerHTML = '❌ Gagal OCR Gambar: ' + err.message;
+        el('mutasiParseStatus').innerHTML = _statGagal('Gagal membaca gambar (OCR): ' + err.message);
       });
     };
     reader.readAsDataURL(file);
   } else {
-    el('mutasiParseStatus').innerHTML = '❌ Format berkas tidak didukung.';
+    el('mutasiParseStatus').innerHTML = _statGagal('Format berkas tidak didukung.');
   }
 }
 
@@ -5612,12 +5662,12 @@ function handleMutasiTextParsed(text) {
   window.MUTASI_PARSED_ROWS = extracted;
 
   if (extracted.length === 0) {
-    el('mutasiParseStatus').innerHTML = '⚠️ Berhasil diproses, tetapi tidak menemukan baris mutasi rekening yang cocok.';
+    el('mutasiParseStatus').innerHTML = _statAwas('Berkas terbaca, tetapi tidak ada baris mutasi rekening yang cocok.');
     el('mutasiPreview').innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)">Teks Terbaca:<pre style="text-align:left;font-size:11px;margin-top:10px;overflow:auto;max-height:100px">' + esc(text) + '</pre></div>';
     return;
   }
 
-  el('mutasiParseStatus').innerHTML = '✅ Berhasil mengekstrak ' + extracted.length + ' transaksi!';
+  el('mutasiParseStatus').innerHTML = _statBeres(extracted.length + ' transaksi terbaca.');
   el('mutasiSimpanBtn').classList.remove('hidden');
 
   var h = '<table style="font-size:12px;width:100%"><thead><tr><th>Tanggal</th><th>Deskripsi</th><th>Tipe</th><th>Nominal</th></tr></thead><tbody>';
@@ -5728,7 +5778,7 @@ function saveMutasiImport() {
   }
 
   el('mutasiSimpanBtn').disabled = true;
-  el('mutasiSimpanBtn').textContent = '💾 Menyimpan...';
+  el('mutasiSimpanBtn').textContent = 'Menyimpan...';
 
   gas('apiImportMutasiToRecords')(TOKEN, rows).then(function(res) {
     closeModal();
@@ -5736,7 +5786,7 @@ function saveMutasiImport() {
     if (typeof viewPenghimpunan === 'function') viewPenghimpunan();
   }).catch(function(err) {
     el('mutasiSimpanBtn').disabled = false;
-    el('mutasiSimpanBtn').textContent = '💾 Simpan Mutasi';
+    el('mutasiSimpanBtn').innerHTML = SVG_ICONS.simpan + ' Simpan Mutasi';
     handleErr(err);
   });
 }
@@ -5770,12 +5820,12 @@ function renderMutasiPreview(extracted, rawText) {
   window.MUTASI_PARSED_ROWS = extracted;
   
   if (extracted.length === 0) {
-    el('mutasiParseStatus').innerHTML = '⚠️ Berhasil diproses, tetapi tidak menemukan baris mutasi rekening yang cocok.';
+    el('mutasiParseStatus').innerHTML = _statAwas('Berkas terbaca, tetapi tidak ada baris mutasi rekening yang cocok.');
     el('mutasiPreview').innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)">Teks Terbaca:<pre style="text-align:left;font-size:11px;margin-top:10px;overflow:auto;max-height:100px">' + esc(rawText) + '</pre></div>';
     return;
   }
 
-  el('mutasiParseStatus').innerHTML = '✅ Berhasil mengekstrak ' + extracted.length + ' transaksi! (Silakan sesuaikan data)';
+  el('mutasiParseStatus').innerHTML = _statBeres(extracted.length + ' transaksi terbaca — periksa dan sesuaikan sebelum disimpan.');
   el('mutasiSimpanBtn').classList.remove('hidden');
 
   var h = '<table style="font-size:12px;width:100%">' +
@@ -5808,7 +5858,7 @@ function renderMutasiPreview(extracted, rawText) {
       }
     }
     
-    var autoMatchBadge = matchedDonatur ? '<div style="font-size:10.5px;color:#15803d;margin-top:2px;font-weight:600;display:flex;align-items:center;gap:4px">⚡ Auto-Match Donatur: <span>' + esc(matchedDonatur) + '</span></div>' : '';
+    var autoMatchBadge = matchedDonatur ? '<div style="font-size:10.5px;color:#15803d;margin-top:2px;font-weight:600;display:flex;align-items:center;gap:4px">Cocok otomatis: <span>' + esc(matchedDonatur) + '</span></div>' : '';
 
     h += '<tr class="mutasi-preview-row" data-idx="' + idx + '">' +
       '  <td style="text-align:center"><input type="checkbox" class="mutasi-row-check" checked></td>' +
@@ -6108,11 +6158,11 @@ function renderDonatur(rows) {
   var h = '<div class="page-head">' +
     '  <div>' +
     '    <h2>Database Donatur</h2>' +
-    '    <div class="desc">Donatur tercatat otomatis dari setiap penghimpunan. Kantor & unit layanan (KLL/ULL) tidak dihitung sebagai donatur.</div>' +
+    '    <div class="desc">Tercatat otomatis dari penghimpunan; KLL/ULL tidak dihitung donatur</div>' +
     '  </div>' +
     '  <div style="display:flex;gap:8px;flex-wrap:wrap">' +
-    (canDo('penghimpunan','edit') ? '  <button class="btn btn-ghost" onclick="sinkronDonaturPeriksa()">🔄 Sinkronkan dari Penghimpunan</button>' : '') +
-    '  <button class="btn btn-primary" onclick="openImportDonaturModal()">📥 Impor Donatur (Teks)</button>' +
+    (canDo('penghimpunan','edit') ? '  <button class="btn btn-ghost" onclick="sinkronDonaturPeriksa()">'+SVG_ICONS.segarkan+' Sinkronkan dari Penghimpunan</button>' : '') +
+    '  <button class="btn btn-primary" onclick="openImportDonaturModal()">'+SVG_ICONS.unggah+' Impor Donatur</button>' +
     '  </div>' +
     '</div>';
 
@@ -6167,8 +6217,8 @@ function renderDonatur(rows) {
       else if (r.status === 'Pasif') stBadgeClass = 'amber';
       else if (r.status === 'Dormant') stBadgeClass = 'red';
       
-      var vipBadge = r.isVip ? '<span class="badge amber" style="margin-left:4px">⭐ VIP</span>' : '';
-      var rutinBadge = r.isRutin ? '<span class="badge green" style="margin-left:4px">🔁 Rutin</span>' : '';
+      var vipBadge = r.isVip ? '<span class="badge amber" style="margin-left:4px">VIP</span>' : '';
+      var rutinBadge = r.isRutin ? '<span class="badge green" style="margin-left:4px">Rutin</span>' : '';
 
       h += '<tr class="donatur-row" data-kategori="' + esc(r.kategori) + '" data-layanan="' + esc((r.layanan || []).join('|').toLowerCase()) + '">' +
         '  <td style="font-weight:600" class="donatur-name-cell">' + esc(r.nama) + vipBadge + rutinBadge + '</td>' +
@@ -6178,7 +6228,7 @@ function renderDonatur(rows) {
         '  <td style="font-weight:700;color:var(--primary)">' + rp(r.totalDonasi || 0) + '</td>' +
         '  <td>' + (r.jumlahTransaksi || 0) + ' x</td>' +
         '  <td>' + (r.terakhirDonasi ? fdate(r.terakhirDonasi) : '-') + '</td>' +
-        '  <td style="text-align:center"><button class="btn btn-ghost btn-sm" onclick="openDonaturDetail(\'' + encodeURIComponent(r.nama) + '\')">👁️ Detail</button></td>' +
+        '  <td style="text-align:center"><button class="btn btn-ghost btn-sm" onclick="openDonaturDetail(\'' + encodeURIComponent(r.nama) + '\')">'+SVG_ICONS.mata+' Detail</button></td>' +
         '</tr>';
     });
   }
@@ -6385,7 +6435,7 @@ function openImportDonaturModal() {
     '</div>';
     
   var f = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>' +
-    '<button class="btn btn-primary" id="importDonaturSaveBtn" onclick="saveImportedDonaturText()">📥 Impor Data</button>';
+    '<button class="btn btn-primary" id="importDonaturSaveBtn" onclick="saveImportedDonaturText()">'+SVG_ICONS.unggah+' Impor Data</button>';
     
   openModal('Impor Database Donatur', b, f);
 }
@@ -6406,7 +6456,7 @@ function saveImportedDonaturText() {
     viewDonatur();
   }).catch(function(err) {
     el('importDonaturSaveBtn').disabled = false;
-    el('importDonaturSaveBtn').textContent = '📥 Impor Data';
+    el('importDonaturSaveBtn').innerHTML = SVG_ICONS.unggah + ' Impor Data';
     handleErr(err);
   });
 }
@@ -6579,7 +6629,7 @@ function renderLog(d){
   }).join('');
 
   var h = '<div class="page-head"><div><h2>Log Aktivitas</h2>'
-    + '<div class="desc">Siapa masuk, siapa membuka halaman apa, dan siapa yang menambah, mengubah, atau menghapus data</div></div>'
+    + '<div class="desc">Riwayat siapa mengubah apa</div></div>'
     + (canDo('log','delete') ? '<button class="btn btn-ghost" onclick="logBersihkan()">Bersihkan log</button>' : '')
     + '</div>';
 
@@ -6612,7 +6662,7 @@ function logTabel(d){
     + '</tr></thead><tbody>';
 
   if (!rows.length) {
-    h += '<tr><td colspan="5"><div class="empty"><div class="big">🗒️</div>Tidak ada catatan yang cocok dengan filter ini.</div></td></tr>';
+    h += '<tr><td colspan="5"><div class="empty"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada catatan yang cocok dengan filter ini.</div></td></tr>';
   } else {
     rows.forEach(function(r){
       var m = logLabel(r.aksi);
@@ -6663,7 +6713,7 @@ function logBersihkan(){
   confirmDialog({
     title:'Bersihkan Log Aktivitas',
     message:'Seluruh catatan aktivitas akan dihapus permanen dan tidak bisa dikembalikan.',
-    okText:'Ya, hapus semua', cancelText:'Batal', danger:true, icon:'🗑️'
+    okText:'Ya, hapus semua', cancelText:'Batal', danger:true, icon:SVG_ICONS.dlgHapus
   }).then(function(setuju){
     if (!setuju) return;
     gas('apiHapusAudit')(TOKEN).then(function(r){
@@ -6680,15 +6730,15 @@ function perawatanHTML(){
   return cadanganHTML() + cadanganOtomatisHTML() + namaKantorHTML() + dobelHTML() + hapusRentangHTML() + kosongkanHTML() + setorTunaiHTML()
     + '<div class="card set-panel">'
     + '<h3>Perbaikan Data Lama</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Aturan rekap dan pilar sudah diperbaiki, tetapi baris yang sudah terlanjur tersimpan masih membawa nilai lama. '
+    + _ket('Menyisir pilar yang keliru dan tautan KLL/ULL yang tidak berdasar pada data lama.',
+        'Aturan rekap dan pilar sudah diperbaiki, tetapi baris yang sudah terlanjur tersimpan masih membawa nilai lama. '
     + 'Alat ini menyisirnya tanpa perlu impor ulang. Dua hal yang disentuh:<br>'
     + '<b>1.</b> Pilar yang jelas keliru — mis. <i>Donasi NTT</i> yang masuk Sosial Dakwah, seharusnya Kemanusiaan. '
     + 'Peruntukan yang tidak dikenali dibiarkan apa adanya supaya pilar dari jurnal tidak ikut tertimpa.<br>'
     + '<b>2.</b> Tautan KLL/ULL yang tidak berdasar — mis. donatur <i>SMP N 2 Srandakan</i> yang tertaut ke KLL Srandakan '
     + 'padahal keterangannya tidak menyebut KLL sama sekali.<br>'
-    + 'Nominal, tanggal, dan nama donatur tidak pernah diubah.'
-    + '</p>'
+    + 'Nominal, tanggal, dan nama donatur tidak pernah diubah.')
+    
     + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
     + '<button class="btn btn-primary" onclick="perbaikanPeriksa()">Periksa dulu</button>'
     + '<button class="btn btn-ghost hidden" id="btnTerapkanPerbaikan" onclick="perbaikanTerapkan()">Terapkan perbaikan</button>'
@@ -6705,13 +6755,13 @@ function perawatanHTML(){
 function namaKantorHTML(){
   return '<div class="card set-panel">'
     + '<h3>Periksa Nama Kantor Layanan</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Nama KLL/ULL di jurnal ditulis tangan, jadi salah ketik satu huruf sudah cukup untuk melahirkan '
+    + _ket('Menemukan kantor bayangan akibat salah ketik nama KLL/ULL, lalu menggabungkannya.',
+        'Nama KLL/ULL di jurnal ditulis tangan, jadi salah ketik satu huruf sudah cukup untuk melahirkan '
     + '<b>kantor bayangan</b> — mis. <i>KLL Banguntapaan Utara</i> berdiri sendiri di samping <i>KLL Banguntapan Utara</i>, '
     + 'membawa sebagian LPJ atau setoran yang seharusnya menjadi milik kantor aslinya. '
     + 'Alat ini mendaftar semua nama yang benar-benar muncul di data, menandai yang belum ada di menu Layanan, '
-    + 'dan menawarkan padanan terdekatnya. <b>Menggabungkan menulis ulang barisnya</b>, jadi ejaannya bersih untuk selamanya.'
-    + '</p>'
+    + 'dan menawarkan padanan terdekatnya. <b>Menggabungkan menulis ulang barisnya</b>, jadi ejaannya bersih untuk selamanya.')
+    
     + '<button class="btn btn-primary" onclick="namaKantorPeriksa()">Periksa nama kantor</button>'
     + '<div id="namaKantorHasil" style="margin-top:16px"></div>'
     + '</div>';
@@ -6762,7 +6812,7 @@ function namaKantorHasilHTML(d){
   }
 
   if (!asing.length && !rapi.length && !mirip.length) {
-    return h + '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+    return h + '<div class="empty" style="padding:26px"><div class="big">'+SVG_ICONS.bsrBeres+'</div>'
       + 'Semua nama kantor sudah cocok dengan menu Layanan. Tidak ada kantor bayangan.</div>';
   }
 
@@ -6814,7 +6864,7 @@ function gabungKantor(dari, ke){
       message: '<b>' + esc(dari) + '</b> &rarr; <b>' + esc(ke) + '</b><br>'
         + rinc.join(', ') + ' akan ditulis ulang atas nama kantor tujuan.<br><br>'
         + 'Nominal, tanggal, dan program tidak diubah — hanya nama kantornya. Tercatat di Log Aktivitas.',
-      okText: 'Ya, gabungkan', cancelText: 'Batal', icon: '🔗'
+      okText: 'Ya, gabungkan', cancelText: 'Batal', icon: SVG_ICONS.dlgGabung
     }).then(function(setuju){
       if (!setuju) return;
       return gas('apiGabungLayanan')(TOKEN, dari, ke, true).then(function(r){
@@ -6830,13 +6880,13 @@ function gabungKantor(dari, ke){
 function dobelHTML(){
   return '<div class="card set-panel">'
     + '<h3>Periksa Transaksi Kembar</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Impor yang tidak sengaja dijalankan dua kali, atau berkas yang memuat bulan yang sama dua kali, '
+    + _ket('Menemukan baris identik akibat impor terjalan dua kali, lalu membuang salinannya.',
+        'Impor yang tidak sengaja dijalankan dua kali, atau berkas yang memuat bulan yang sama dua kali, '
     + 'meninggalkan baris kembar persis — dan totalnya jadi dobel tanpa kelihatan. '
     + 'Yang dicocokkan adalah isi yang menentukan uangnya: <b>tanggal, nominal, nama, akun, dan keterangan</b>. '
     + 'Baris pertama dipertahankan, salinannya dibuang. Transaksi yang kebetulan bernilai sama tetapi beda tanggal '
-    + 'atau beda keterangan <b>tidak</b> ikut terhapus.'
-    + '</p>'
+    + 'atau beda keterangan <b>tidak</b> ikut terhapus.')
+    
     + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
     + '<button class="btn btn-primary" onclick="dobelPeriksa()">Periksa dulu</button>'
     + '<button class="btn btn-danger hidden" id="btnHapusDobel" onclick="dobelKonfirmasi()">Hapus salinan berlebih</button>'
@@ -6856,7 +6906,7 @@ function dobelPeriksa(){
 }
 function dobelHasilHTML(d){
   if (!d.jumlah) {
-    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+    return '<div class="empty" style="padding:26px"><div class="big">'+SVG_ICONS.bsrBeres+'</div>'
       + 'Tidak ada transaksi kembar. Data Anda bersih.</div>';
   }
   var h = '<div class="imp-note imp-warn">Ditemukan <b>' + rpCetak(d.jumlah) + '</b> baris kembar senilai <b>Rp '
@@ -6882,7 +6932,7 @@ function dobelKonfirmasi(){
     title: 'Hapus salinan berlebih?',
     message: '<b>' + rpCetak(d.jumlah) + ' baris</b> kembar (Rp ' + rpCetak(d.nominal) + ') akan dihapus. '
       + 'Satu baris asli untuk tiap transaksi tetap disimpan. Tidak bisa dibatalkan — unduh cadangan dulu bila perlu.',
-    okText: 'Ya, hapus', cancelText: 'Batal', icon: '🧹', danger: true
+    okText: 'Ya, hapus', cancelText: 'Batal', icon: SVG_ICONS.dlgHapus, danger: true
   }).then(function(setuju){
     if (!setuju) return;
     var host = el('dobelHasil');
@@ -6903,14 +6953,14 @@ function kosongkanHTML(){
   if (!ME || ME.role !== 'superadmin') return '';
   return '<div class="card set-panel">'
     + '<h3>Kosongkan Data Transaksi</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Kalau data sudah terlanjur bertumpuk dan menambalnya satu per satu lebih repot daripada mengulang, '
+    + _ket('Menghapus seluruh transaksi untuk impor ulang dari nol; data induk tetap utuh.',
+        'Kalau data sudah terlanjur bertumpuk dan menambalnya satu per satu lebih repot daripada mengulang, '
     + 'seluruh <b>penghimpunan, pentasyarufan, uang muka, transfer, dan mutasi</b> bisa dikosongkan sekaligus, '
     + 'lalu impor jurnal diulang dari berkas yang memang sudah rapi.<br>'
     + 'Yang <b>tetap utuh</b>: pengguna, rekening, kantor layanan, fundraising, hak amil, saldo awal, dan seluruh pengaturan — '
     + 'jadi impor ulang langsung jatuh ke tempat yang benar.<br>'
-    + '<b>Cadangan keadaan sebelumnya otomatis diunduh</b> sebelum data dikosongkan.'
-    + '</p>'
+    + '<b>Cadangan keadaan sebelumnya otomatis diunduh</b> sebelum data dikosongkan.')
+    
     + '<label style="display:inline-flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:12px;cursor:pointer">'
     + '<input type="checkbox" id="kosongDonatur" style="width:16px;height:16px"> Ikut mengosongkan daftar donatur '
     + '<span class="muted">(bisa dibangun ulang dari tombol Sinkronkan di halaman Donatur)</span></label>'
@@ -6926,7 +6976,7 @@ function kosongkanKonfirmasi(){
       + (ikutDonatur ? ', termasuk daftar donatur' : '') + '.<br><br>'
       + 'Rekening, kantor layanan, hak amil, saldo awal, pengguna, dan pengaturan <b>tidak</b> disentuh.<br>'
       + 'Cadangan otomatis akan terunduh lebih dulu. Ketik <b>KOSONGKAN</b> untuk melanjutkan.',
-    okText: 'Lanjut', cancelText: 'Batal', icon: '⚠️', danger: true,
+    okText: 'Lanjut', cancelText: 'Batal', icon: SVG_ICONS.dlgAwas, danger: true,
     prompt: 'KOSONGKAN'
   }).then(function(setuju){
     if (!setuju) return;
@@ -6958,12 +7008,12 @@ function kosongkanKonfirmasi(){
 function setorTunaiHTML(){
   return '<div class="card set-panel">'
     + '<h3>Bersihkan "Setor Tunai" dari Penghimpunan</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Setor tunai adalah perpindahan uang kas ke rekening bank — <b>bukan penerimaan baru dari donatur</b>. '
+    + _ket('Membuang baris setor tunai yang terlanjur tercatat sebagai penerimaan.',
+        'Setor tunai adalah perpindahan uang kas ke rekening bank — <b>bukan penerimaan baru dari donatur</b>. '
     + 'Impor sekarang sudah otomatis melewatinya, tetapi data yang diimpor sebelum aturan ini mungkin masih '
     + 'terlanjur tercatat sebagai penghimpunan sehingga totalnya menggelembung. Alat ini menyisir dan menghapusnya. '
-    + '<b>Nominal & data lain tidak disentuh</b> — hanya baris setor tunai yang dibuang.'
-    + '</p>'
+    + '<b>Nominal & data lain tidak disentuh</b> — hanya baris setor tunai yang dibuang.')
+    
     + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
     + '<button class="btn btn-primary" onclick="setorTunaiPeriksa()">Periksa dulu</button>'
     + '<button class="btn btn-danger hidden" id="btnBersihSetor" onclick="setorTunaiKonfirmasi()">Hapus baris setor tunai</button>'
@@ -6983,7 +7033,7 @@ function setorTunaiPeriksa(){
 }
 function setorTunaiHasilHTML(d){
   if (!d.jumlah) {
-    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+    return '<div class="empty" style="padding:26px"><div class="big">'+SVG_ICONS.bsrBeres+'</div>'
       + 'Tidak ada baris setor tunai di penghimpunan. Data Anda sudah bersih.</div>';
   }
   var h = '<div class="imp-note imp-warn">Ditemukan <b>' + rpCetak(d.jumlah) + '</b> baris setor tunai senilai <b>Rp '
@@ -7007,7 +7057,7 @@ function setorTunaiKonfirmasi(){
     title: 'Hapus baris setor tunai?',
     message: '<b>' + rpCetak(d.jumlah) + ' baris</b> setor tunai (Rp ' + rpCetak(d.nominal) + ') akan dihapus dari penghimpunan. '
       + 'Ini memperbaiki total yang menggelembung. Tidak bisa dibatalkan — unduh cadangan dulu bila perlu.',
-    okText: 'Ya, hapus', cancelText: 'Batal', icon: '🧹', danger: true
+    okText: 'Ya, hapus', cancelText: 'Batal', icon: SVG_ICONS.dlgHapus, danger: true
   }).then(function(setuju){ if (setuju) setorTunaiJalankan(); });
 }
 function setorTunaiJalankan(){
@@ -7027,14 +7077,14 @@ function setorTunaiJalankan(){
 function cadanganHTML(){
   return '<div class="card set-panel">'
     + '<h3>Cadangan &amp; Ekspor Data</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Seluruh data tersimpan di satu basis data daring milik lembaga, bukan di komputer ini — '
+    + _ket('Unduh salinan seluruh data, atau pulihkan dari berkas cadangan.',
+        'Seluruh data tersimpan di satu basis data daring milik lembaga, bukan di komputer ini — '
     + 'jadi data tetap sama dibuka dari perangkat mana pun. Karena tersimpan di satu tempat, '
     + '<b>ambil cadangan sebelum menghapus apa pun</b>.<br>'
     + '<b>Cadangan (.json)</b> berisi seluruh isi basis data dan dipakai untuk memulihkan bila terjadi apa-apa. '
     + 'Sesi login dan kata sandi pengguna sengaja tidak disertakan demi keamanan berkasnya.<br>'
-    + '<b>Ekspor (.xlsx)</b> berisi penghimpunan dan pentasyarufan dalam bentuk tabel siap olah di Excel.'
-    + '</p>'
+    + '<b>Ekspor (.xlsx)</b> berisi penghimpunan dan pentasyarufan dalam bentuk tabel siap olah di Excel.')
+    
     + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
     + '<button class="btn btn-primary" onclick="unduhCadangan()">Unduh cadangan (.json)</button>'
     + '<button class="btn btn-ghost" onclick="unduhEksporExcel()">Ekspor Excel (.xlsx)</button>'
@@ -7057,10 +7107,10 @@ function cadanganApi(aksi, tambahan){
 function cadanganOtomatisHTML(){
   return '<div class="card set-panel">'
     + '<h3>Cadangan Otomatis &amp; Pemulihan</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 12px">'
-    + 'Setiap hari pukul 02.00 WIB sistem membuat cadangan sendiri: salinan cepat disimpan 14 hari '
+    + _ket('Cadangan berjalan sendiri tiap hari pukul 02.00 WIB.',
+        'Setiap hari pukul 02.00 WIB sistem membuat cadangan sendiri: salinan cepat disimpan 14 hari '
     + 'untuk pulih dalam hitungan detik, dan berkas .json diunggah ke Google Drive lembaga (30 terakhir) '
-    + 'sebagai cadangan lepas-pantai. Anda juga bisa mencadangkan kapan saja dari sini.</p>'
+    + 'sebagai cadangan lepas-pantai. Anda juga bisa mencadangkan kapan saja dari sini.')
     + '<div id="cadOtoIsi"><div class="muted" style="font-size:12.5px">Memuat status...</div></div>'
     + '</div>';
 }
@@ -7227,12 +7277,10 @@ function hrAwalBulan(){ var d=new Date(); return new Date(d.getFullYear(), d.get
 function hapusRentangHTML(){
   return '<div class="card set-panel hr-panel">'
     + '<h3>Hapus Data per Rentang Tanggal</h3>'
-    + '<p class="muted" style="font-size:12.5px;line-height:1.5;margin:6px 0 14px">'
-    + 'Menghapus penghimpunan dan/atau pentasyarufan pada rentang tanggal yang Anda tentukan. '
-    + 'Untuk menghapus satu bulan penuh, isi tanggal 1 sampai tanggal terakhir bulan itu; '
-    + 'untuk beberapa hari saja, isi tanggalnya langsung.<br>'
-    + '<b>Penghapusan bersifat permanen dan tidak bisa dibatalkan.</b> Unduh cadangan lebih dulu.'
-    + '</p>'
+    + _ket('Menghapus penghimpunan dan/atau pentasyarufan pada rentang tanggal tertentu. <b>Permanen.</b>',
+        'Untuk menghapus satu bulan penuh, isi tanggal 1 sampai tanggal terakhir bulan itu; '
+    + 'untuk beberapa hari saja, isi tanggalnya langsung. '
+    + 'Penghapusan tidak bisa dibatalkan — unduh cadangan lebih dulu.')
     + '<div class="fgrid">'
     + fld(6,'Rentang Tanggal', rentangHTML('hr_rt', hrAwalBulan(), today()))
     + fld(6,'Data yang dihapus',
@@ -7293,7 +7341,7 @@ function hrKonfirmasi(){
     title:'Hapus permanen?',
     message: rinci.join(' dan ') + ' pada rentang <b>'+tglIndo(d.dari)+'</b> sampai <b>'+tglIndo(d.sampai)+'</b> '
       + 'akan dihapus dan <b>tidak bisa dikembalikan</b>. Pastikan Anda sudah mengunduh cadangan.',
-    okText:'Ya, hapus permanen', cancelText:'Batal', icon:'🗑️', danger:true
+    okText:'Ya, hapus permanen', cancelText:'Batal', icon:SVG_ICONS.dlgHapus, danger:true
   }).then(function(setuju){ if (setuju) hrJalankan(); });
 }
 
@@ -7313,7 +7361,7 @@ function hrJalankan(){
 
 function hrHasilHTML(d){
   if (!d.totalBaris){
-    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+    return '<div class="empty" style="padding:26px"><div class="big">'+SVG_ICONS.bsrBeres+'</div>'
       + 'Tidak ada data pada rentang '+tglIndo(d.dari)+' – '+tglIndo(d.sampai)+'. Tidak ada yang dihapus.</div>';
   }
   var h = '<div class="imp-note imp-warn">Akan dihapus: <b>'+rpCetak(d.totalBaris)+'</b> baris senilai <b>Rp '
@@ -7368,7 +7416,7 @@ function perbaikanTerapkan(){
     title:'Terapkan Perbaikan?',
     message: (jml ? '<b>'+jml+' baris</b> akan disesuaikan seperti pada pratinjau. ' : '')
       + 'Nominal, tanggal, dan nama donatur tidak diubah.',
-    okText:'Terapkan sekarang', cancelText:'Batal', icon:'🛠️'
+    okText:'Terapkan sekarang', cancelText:'Batal', icon:SVG_ICONS.dlgAlat
   }).then(function(setuju){
     if (!setuju) return;
     perbaikanJalankan();
@@ -7388,7 +7436,7 @@ function perbaikanJalankan(){
 
 function perbaikanHTML(d){
   if (!d.totalBerubah) {
-    return '<div class="empty" style="padding:26px"><div class="big">✅</div>'
+    return '<div class="empty" style="padding:26px"><div class="big">'+SVG_ICONS.bsrBeres+'</div>'
       + 'Tidak ada yang perlu diperbaiki. '+d.totalDiperiksa+' baris sudah sesuai aturan.</div>';
   }
   var h = '<div class="imp-note">Ditemukan <b>'+d.totalBerubah+'</b> baris yang perlu disesuaikan dari '
@@ -7497,7 +7545,7 @@ function renderHarianPreview(d){
   var r = d.ringkas;
   var h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
     + '<div><h3>Laporan Harian</h3><div class="muted" style="font-size:13px">'+esc(tglIndo(d.tanggal))+'</div></div>'
-    + '<button class="btn btn-primary btn-sm" onclick="cetakHarian()">🖨 Cetak / Simpan PDF</button>'
+    + '<button class="btn btn-primary btn-sm" onclick="cetakHarian()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button>'
     + '</div>';
 
   h += '<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:16px">'
@@ -7507,7 +7555,7 @@ function renderHarianPreview(d){
     + '</div>';
 
   if (!d.himpun.length && !d.salur.length) {
-    h += '<div class="empty" style="padding:30px"><div class="big">📄</div>Tidak ada transaksi pada tanggal ini.</div></div>';
+    h += '<div class="empty" style="padding:30px"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada transaksi pada tanggal ini.</div></div>';
     el('lhPreview').innerHTML = h;
     return;
   }
@@ -7645,7 +7693,7 @@ function renderClosingPreview(d){
   var h = '<div class="card cl-card">'
     + '<div class="cl-head">'
     + '<div><h3 style="margin:0">Closing Bulanan</h3><div class="muted" style="font-size:13px">REKAP ' + esc((SETTINGS.namaLembaga || 'LAZISMU').toUpperCase()) + ' — ' + esc(d.periode) + '</div></div>'
-    + '<button class="btn btn-primary btn-sm" onclick="cetakClosing()">🖨 Cetak / Simpan PDF</button>'
+    + '<button class="btn btn-primary btn-sm" onclick="cetakClosing()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button>'
     + '</div>';
 
   h += '<div class="cl-sec-title">SE BANTUL <span class="muted">(daerah + seluruh KLL/ULL)</span></div>';
@@ -7909,7 +7957,7 @@ function buildHarianHTML(d){
     + '@media print{body{background:#fff}.lembar{margin:0;box-shadow:none;padding:0;max-width:none}.bar{display:none}}'
     + '</style></head><body>'
     + '<div class="lembar">'+isi+'</div>'
-    + '<div class="bar"><button onclick="window.print()">🖨 Cetak / Simpan PDF</button></div>'
+    + '<div class="bar"><button onclick="window.print()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button></div>'
     + '</body></html>';
 }
 
@@ -8027,7 +8075,7 @@ function a2Panel(){
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px">'
       + '<div><h3>Pratinjau Formulir A2</h3>'
       + '<div class="muted" style="font-size:13px">'+esc(tglIndo(A2_DATA?A2_DATA.tanggal:''))+'</div></div>'
-      + '<button class="btn btn-primary btn-sm" onclick="cetakA2()">🖨 Cetak Formulir A2</button>'
+      + '<button class="btn btn-primary btn-sm" onclick="cetakA2()">'+SVG_ICONS.cetak+' Cetak Formulir A2</button>'
     + '</div>';
 
   h += '<div class="a2-grid">';
@@ -8293,6 +8341,6 @@ function buildA2HTML(d, opt){
         + 'Alhamdulillah telah diterima dana Zakat, Infaq dan Shodaqoh dengan rincian:</div>'
       + '<div class="isi"><div class="sisi">' + kiri + '</div><div class="sisi kn">' + kanan + '</div></div>'
     + '</div>'
-    + '<div class="bar"><button onclick="window.print()">🖨 Cetak / Simpan PDF (A5 melintang)</button></div>'
+    + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (A5 melintang)</button></div>'
     + '</body></html>';
 }
