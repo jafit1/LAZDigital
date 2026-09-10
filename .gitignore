@@ -7,6 +7,8 @@ node_modules/
 # Rahasia — JANGAN pernah di-commit
 .env*
 !.env.example
+deploy-lazwa.bat
+wa-secrets.txt
 
 # ⚠️ DATABASE LOKAL — berisi data donatur, alamat, telepon, dan hash password.
 # Repo ini publik; file di bawah ini tidak boleh ikut ter-push.
@@ -22,3 +24,6 @@ src/_*
 download.js
 .DS_Store
 Thumbs.db
+
+.vercel
+.env*

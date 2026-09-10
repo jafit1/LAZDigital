@@ -64,7 +64,7 @@ var SHEETS = {
    pantas dilihat semua orang, sementara saldo KLL/ULL boleh. Dipisahkan
    sebagai modul supaya diaturnya lewat mekanisme izin yang sama dengan
    fitur lain, bukan lewat saklar tersembunyi. */
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah'];
+var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -72,7 +72,7 @@ var MODUL_LABEL = {
   dashboard:'Dashboard & Saldo', penghimpunan:'Penghimpunan', pentasyarufan:'Pentasyarufan',
   laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
-  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah'
+  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp'
 };
 var MODUL_KET = {
   dashboard:'Dashboard, menu Saldo Kas & Bank, dan Saldo KLL & ULL',
@@ -85,7 +85,8 @@ var MODUL_KET = {
   settings:'Pengaturan lembaga, hak amil, cadangan, dan perawatan data',
   donatur:'Basis data donatur',
   log:'Riwayat siapa mengubah apa',
-  saldodaerah:'Melihat angka Penghimpunan Daerah di menu Saldo KLL & ULL. Hanya "view" yang dipakai.'
+  saldodaerah:'Melihat angka Penghimpunan Daerah di menu Saldo KLL & ULL. Hanya "view" yang dipakai.',
+  broadcast:'Mengirim pesan WhatsApp massal ke buku kontak broadcast'
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
@@ -6337,4 +6338,5 @@ async function runRPC(db, fn, args, ctx){
 /* buatCadangan & catatStatusCadangan dipakai api/backup.js di luar sesi
    pengguna. Keduanya bekerja pada DB yang sedang dimuat lewat runRPC. */
 module.exports = { runRPC, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
-  catatStatusCadangan: function(db, st){ DB = db; catatStatusCadangan(st); return db; } };
+  catatStatusCadangan: function(db, st){ DB = db; catatStatusCadangan(st); return db; },
+  cekIzin: function(db, token, modul, aksi, ctx){ DB = db || {sheets:{},props:{}}; if(!DB.sheets)DB.sheets={}; if(!DB.props)DB.props={}; try{auditKonteks(ctx||{});}catch(e){} setup(); return sanitizeUser(_requirePerm(token, modul, aksi)); } };

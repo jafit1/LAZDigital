@@ -9,12 +9,19 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 30
+    },
+    "api/wa-dispatch.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/backup",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/wa-dispatch",
+      "schedule": "0 1 * * *"
     }
   ],
   "routes": [
