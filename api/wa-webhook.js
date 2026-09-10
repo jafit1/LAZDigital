@@ -13,7 +13,7 @@ const wa = require('./_wa.js');
 
 module.exports = async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  const cek = wa.verifikasiKunci(url.searchParams);
+  const cek = await wa.verifikasiKunci(url.searchParams);
 
   if (req.method === 'GET') {
     if (!cek.sah) { res.status(401).json({ __error: cek.alasan }); return; }

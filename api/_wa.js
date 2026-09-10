@@ -359,7 +359,9 @@ function periksaPesan(teks, opsi) {
  * SETELAN ANTI-SPAM (jam kirim & batas harian)
  * ================================================================== */
 const OFFSET_WIB = 7 * 60;
-function bawaanSetelan() { const k = cfg(); const c = k.antispam; return { jamKirimAktif: c.jamAktif, jamMulai: c.jamMulai, jamSelesai: c.jamSelesai, batasHarian: c.batasHarian, jedaMin: k.rate.jedaMin, jedaMax: k.rate.jedaMax }; }
+function bawaanSetelan() { const k = cfg(); const c = k.antispam; return { jamKirimAktif: c.jamAktif, jamMulai: c.jamMulai, jamSelesai: c.jamSelesai, batasHarian: c.batasHarian, jedaMin: k.rate.jedaMin, jedaMax: k.rate.jedaMax, fonnteToken: k.fonnte.token, kodeNegara: k.fonnte.countryCode, typing: k.fonnte.typing, webhookSecret: k.fonnte.webhookSecret }; }
+// Konfigurasi Fonnte efektif: nilai dari Setelan (dashboard) menimpa env.
+async function konfFonnte() { const c = cfg(); let s = {}; try { s = await getSetelan(); } catch (e) {} return { token: s.fonnteToken || c.fonnte.token, baseUrl: c.fonnte.baseUrl, countryCode: s.kodeNegara || c.fonnte.countryCode, typing: (s.typing !== undefined ? !!s.typing : c.fonnte.typing), webhookSecret: s.webhookSecret || c.fonnte.webhookSecret }; }
 async function getSetelan() { const t = (await getJson(K.setelan())) || {}; return Object.assign(bawaanSetelan(), t); }
 function bersihkanJam(v, fb) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim()); if (!m) return fb; return String(Math.min(23, +m[1])).padStart(2, '0') + ':' + String(Math.min(59, +m[2])).padStart(2, '0'); }
 async function simpanSetelan(patch) {
@@ -371,6 +373,11 @@ async function simpanSetelan(patch) {
     batasHarian: Number.isFinite(Number(patch.batasHarian)) ? Math.max(0, Math.floor(Number(patch.batasHarian))) : s.batasHarian,
     jedaMin: Number.isFinite(Number(patch.jedaMin)) ? Math.max(0, Math.min(600, Math.floor(Number(patch.jedaMin)))) : s.jedaMin,
     jedaMax: Number.isFinite(Number(patch.jedaMax)) ? Math.max(0, Math.min(600, Math.floor(Number(patch.jedaMax)))) : s.jedaMax,
+    // Koneksi Fonnte (kosong = pertahankan yang lama, tidak menghapus)
+    fonnteToken: (typeof patch.fonnteToken === 'string' && patch.fonnteToken.trim()) ? patch.fonnteToken.trim() : s.fonnteToken,
+    kodeNegara: (patch.kodeNegara != null && String(patch.kodeNegara).replace(/\D/g, '')) ? String(patch.kodeNegara).replace(/\D/g, '') : s.kodeNegara,
+    typing: patch.typing !== undefined ? !!patch.typing : s.typing,
+    webhookSecret: (typeof patch.webhookSecret === 'string' && patch.webhookSecret.trim()) ? patch.webhookSecret.trim() : s.webhookSecret,
   };
   if (baru.jedaMax < baru.jedaMin) baru.jedaMax = baru.jedaMin;
   await setJson(K.setelan(), baru); return baru;
@@ -407,17 +414,17 @@ async function periksaBatasHarian(s, ms) {
  * PENGIRIM — Fonnte & Meta
  * ================================================================== */
 async function kirimFonnte(opsi) {
-  const c = cfg();
+  const c = cfg(); const f = await konfFonnte();
   if (c.dryRun) return { ok: true, wamid: 'fonnte.DRYRUN-' + buatId(), mentah: { dryRun: true } };
-  if (!c.fonnte.token) return { ok: false, kelas: 'tahan', pesan: 'FONNTE_TOKEN belum diisi', jedaDetik: 0, mentah: null };
+  if (!f.token) return { ok: false, kelas: 'tahan', pesan: 'Token Fonnte belum diisi (atur di tab Setelan)', jedaDetik: 0, mentah: null };
   const teks = String(opsi.teks || '').trim();
   if (!teks && !opsi.lampiranUrl) return { ok: false, kelas: 'permanen', pesan: 'Isi pesan kosong', jedaDetik: 0, mentah: null };
-  const body = { target: String(opsi.to), message: teks, countryCode: c.fonnte.countryCode, typing: c.fonnte.typing, connectOnly: true, sequence: true };
+  const body = { target: String(opsi.to), message: teks, countryCode: f.countryCode, typing: f.typing, connectOnly: true, sequence: true };
   if (opsi.lampiranUrl) { body.url = opsi.lampiranUrl; if (opsi.lampiranNama) body.filename = opsi.lampiranNama; }
   let res, teksRes, json;
   try {
     const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 25000);
-    res = await fetch(c.fonnte.baseUrl + '/send', { method: 'POST', headers: { Authorization: c.fonnte.token, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ac.signal });
+    res = await fetch(f.baseUrl + '/send', { method: 'POST', headers: { Authorization: f.token, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ac.signal });
     clearTimeout(t); teksRes = await res.text(); try { json = JSON.parse(teksRes); } catch (e) {}
   } catch (e) {
     return { ok: false, kelas: 'sementara', pesan: 'Gangguan jaringan ke Fonnte: ' + (e.name === 'AbortError' ? 'waktu tunggu habis' : e.message), jedaDetik: 10, mentah: null };
@@ -437,8 +444,8 @@ function golongkanFonnte(status, json, teks) {
   return { kelas: 'permanen', kode: null, pesan: alasan, jedaDetik: 0 };
 }
 async function infoFonnte() {
-  const c = cfg(); if (!c.fonnte.token) throw new Error('FONNTE_TOKEN belum diisi');
-  const res = await fetch(c.fonnte.baseUrl + '/device', { method: 'POST', headers: { Authorization: c.fonnte.token, 'Content-Type': 'application/json' }, body: '{}' });
+  const f = await konfFonnte(); if (!f.token) throw new Error('Token Fonnte belum diisi (atur di tab Setelan)');
+  const res = await fetch(f.baseUrl + '/device', { method: 'POST', headers: { Authorization: f.token, 'Content-Type': 'application/json' }, body: '{}' });
   const json = await res.json().catch(() => null);
   if (!res.ok || (json && json.status === false)) throw new Error((json && json.reason) || ('HTTP ' + res.status));
   const d = (json && (json.data || json)) || {};
@@ -663,10 +670,10 @@ async function jalankanDispatcher(opsi) {
 /* ================================================================== *
  * WEBHOOK FONNTE
  * ================================================================== */
-function verifikasiKunci(searchParams) {
-  const c = cfg(); if (!c.fonnte.webhookSecret) return { sah: false, alasan: 'FONNTE_WEBHOOK_SECRET belum diisi' };
+async function verifikasiKunci(searchParams) {
+  const f = await konfFonnte(); if (!f.webhookSecret) return { sah: false, alasan: 'Kunci webhook belum diisi (atur di tab Setelan)' };
   const kunci = searchParams.get('kunci') || searchParams.get('key') || '';
-  return samaAman(kunci, c.fonnte.webhookSecret) ? { sah: true } : { sah: false, alasan: 'kunci tidak cocok' };
+  return samaAman(kunci, f.webhookSecret) ? { sah: true } : { sah: false, alasan: 'kunci tidak cocok' };
 }
 function petakanStatusFonnte() {
   const teks = Array.prototype.slice.call(arguments).filter(Boolean).join(' ').toLowerCase(); if (!teks) return null;
@@ -698,7 +705,7 @@ async function prosesWebhookFonnte(payload) {
   const dari = payload && (payload.sender || payload.from || payload.pengirim);
   const isi = payload && (payload.message !== undefined ? payload.message : (payload.text !== undefined ? payload.text : payload.pesan));
   if (dari && isi !== undefined) {
-    ring.masuk++; const teks = String(isi).trim().toLowerCase(); const h = normalisasiTelepon(dari, cfg().fonnte.countryCode);
+    ring.masuk++; const teks = String(isi).trim().toLowerCase(); const h = normalisasiTelepon(dari, (await konfFonnte()).countryCode);
     if (h.ok && KATA_BERHENTI.some((kata) => teks === kata || teks.indexOf(kata) === 0)) { await store.sadd(K.optout(), [h.telepon]); ring.optout++; }
   }
   for (const kid of kset) await segarkanSelesai(kid);
@@ -729,7 +736,7 @@ async function hapusOptout(list) { return list.length ? store.srem(K.optout(), l
 async function daftarOptout() { return (await store.smembers(K.optout())).sort(); }
 
 async function simpanKontak(o) {
-  const h = normalisasiTelepon(o.telepon, cfg().fonnte.countryCode); if (!h.ok) throw new Error('Nomor tidak sah: ' + h.alasan);
+  const h = normalisasiTelepon(o.telepon, (await konfFonnte()).countryCode); if (!h.ok) throw new Error('Nomor tidak sah: ' + h.alasan);
   const id = o.id || ('c_' + h.telepon); const now = Date.now(); const lama = await getJson(K.kontak(id));
   const row = { id, telepon: h.telepon, nama: o.nama || (lama && lama.nama) || null, label: o.label || (lama && lama.label) || [], kolom: o.kolom || (lama && lama.kolom) || {}, sumber: o.sumber || (lama && lama.sumber) || 'manual', dibuat: (lama && lama.dibuat) || now };
   await setJson(K.kontak(id), row); await store.zadd(K.indeksKontak(), [{ member: id, score: now }]); return row;

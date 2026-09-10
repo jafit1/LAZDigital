@@ -15,7 +15,7 @@ const wa = require('./_wa.js');
 
 /* Izin yang dibutuhkan tiap aksi terhadap modul 'broadcast'. */
 const IZIN = {
-  'perangkat': 'view', 'setelan-get': 'view',
+  'perangkat': 'view', 'setelan-get': 'view', 'koneksi-get': 'edit',
   'kontak-parse': 'view', 'kontak-list': 'view',
   'pesan-list': 'view',
   'kampanye-list': 'view', 'kampanye-get': 'view', 'kampanye-recipients': 'view',
@@ -71,10 +71,26 @@ async function jalankan(aksi, b, pengguna) {
       else if (typeof info.kuota === 'number' && info.kuota < 100) peringatan.push('Sisa kuota Fonnte tinggal ' + info.kuota + '.');
       return { info: info, pengirim: wa.cfg().pengirim, pakaiPesanBebas: wa.pakaiPesanBebas(), peringatan: peringatan };
     }
-    case 'setelan-get':
-      return { setelan: await wa.getSetelan(), terkirimHariIni: await wa.terkirimHariIni(), tanggal: wa.tanggalWIB(), pengirim: wa.cfg().pengirim, pakaiPesanBebas: wa.pakaiPesanBebas() };
-    case 'setelan-simpan':
-      return { setelan: await wa.simpanSetelan(b) };
+    case 'setelan-get': {
+      const s = await wa.getSetelan();
+      const aman = Object.assign({}, s);
+      aman.fonnteToken = s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '';
+      aman.punyaToken = !!s.fonnteToken;
+      aman.punyaWebhookSecret = !!s.webhookSecret;
+      delete aman.webhookSecret;
+      return { setelan: aman, terkirimHariIni: await wa.terkirimHariIni(), tanggal: wa.tanggalWIB(), pengirim: wa.cfg().pengirim, pakaiPesanBebas: wa.pakaiPesanBebas() };
+    }
+    case 'setelan-simpan': {
+      const s = await wa.simpanSetelan(b);
+      const aman = Object.assign({}, s);
+      aman.fonnteToken = s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '';
+      aman.punyaToken = !!s.fonnteToken; aman.punyaWebhookSecret = !!s.webhookSecret; delete aman.webhookSecret;
+      return { setelan: aman };
+    }
+    case 'koneksi-get': {
+      const s = await wa.getSetelan();
+      return { tokenMask: s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '', punyaToken: !!s.fonnteToken, kodeNegara: s.kodeNegara || '62', typing: !!s.typing, webhookSecret: s.webhookSecret || '', pengirim: wa.cfg().pengirim };
+    }
 
     case 'kontak-parse': {
       const matriks = wa.bacaDelimited(String(b.teks || ''));

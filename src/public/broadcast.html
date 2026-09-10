@@ -185,8 +185,30 @@
       </div>
     </div>
     <div class="card">
-      <h2>Pengirim</h2>
-      <pre id="infoPengirim" class="sender-pre" style="margin-top:12px">memuat…</pre>
+      <h2>Koneksi &amp; pengirim</h2>
+      <p class="muted" style="margin-top:2px">Atur di sini, tanpa perlu deploy ulang. Token diambil dari dashboard Fonnte → Device → Token.</p>
+      <div class="grid2" style="margin-top:14px">
+        <div class="field" style="margin:0"><label>Token Fonnte</label><input id="fonnteToken" type="password" autocomplete="off" placeholder="tempel token (kosong = tetap)"><div class="muted" id="tokenInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+        <div class="field" style="margin:0"><label>Kode negara</label><input id="kodeNegara" placeholder="62"></div>
+      </div>
+      <div class="opt-row" style="margin-top:6px">
+        <div><div class="ot">Efek mengetik</div><div class="od">Tampak "sedang mengetik" sebelum pesan masuk — lebih natural.</div></div>
+        <span class="switch"><input id="typing" type="checkbox"><span class="slider"></span></span>
+      </div>
+      <div class="field" style="margin:0"><label>Kunci webhook</label><input id="webhookSecret" type="password" autocomplete="off" placeholder="tempel kunci (kosong = tetap)"><div class="muted" id="secretInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+      <div style="margin-top:8px">
+        <span class="lbl-min">URL webhook — tempel ke Fonnte → Device → Webhook</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="webhookUrl" readonly class="kode" style="flex:1;min-width:240px;font-size:12px">
+          <button id="salinWebhook" class="btn" type="button">Salin</button>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button id="simpanKoneksi" class="btn btn-primary">Simpan koneksi</button>
+        <button id="tesKoneksi" class="btn" type="button">Test koneksi</button>
+        <span id="statusKoneksi" class="muted"></span>
+      </div>
+      <pre id="infoPengirim" class="sender-pre" style="margin-top:14px">memuat…</pre>
     </div>
   </section>
 </main>
@@ -375,8 +397,8 @@ $('#kirim').addEventListener('click',async function(){
   try{
     var kolom=S.kontak.headerParameter;
     var d=await wa('kampanye-buat',{nama:$('#namaKampanye').value||undefined, pesan:{pesanId:S.pesanId||undefined,teks:$('#isiPesan').value,lampiranUrl:$('#lampiranUrl').value||null}, kolom:kolom, baris:S.kontak.baris.map(function(b){ var nl={}; kolom.forEach(function(h,i){nl[h]=b.params[i]||'';}); return {telepon:b.telepon,kolom:nl}; }), langsung:true, langsungJalan:$('#langsung').checked});
-    toast('Kampanye dibuat: '+angka(d.jumlahAntre)+' antre'+(d.jumlahDilewati?', '+angka(d.jumlahDilewati)+' dilewati':'')+'.');
-    S.kampanyeAktif=d.kampanye.id; bukaTab('riwayat'); setTimeout(function(){ bukaDetail(d.kampanye.id); },200);
+    toast('Kampanye dibuat: '+angka(d.jumlahAntre)+' antre'+(d.jumlahDilewati?', '+angka(d.jumlahDilewati)+' dilewati':'')+'. Mulai mengirim…');
+    S.kampanyeAktif=d.kampanye.id; bukaTab('riwayat'); setTimeout(function(){ bukaDetail(d.kampanye.id); if($('#langsung').checked) pacuKirim({diam:true}); },250);
   }catch(e){ $('#statusKirim').textContent=e.message; toast(e.message); }
   finally{ $('#kirim').disabled=false; $('#kirim').textContent=label; }
 });
@@ -414,14 +436,37 @@ async function muatPenerima(){
     $('#tabelPenerima').innerHTML=d.baris.map(function(r){ var par=r.kolom?Object.keys(r.kolom).filter(function(n){return n!=='telepon';}).map(function(n){return n+': '+r.kolom[n];}).join(' · '):(r.params||[]).join(' | '); return '<tr><td class="kode">'+esc(r.telepon)+'</td><td>'+keping(r.status)+'</td><td class="muted">'+esc(par)+'</td><td>'+(r.coba||0)+'</td><td class="muted" style="color:'+(r.status==='gagal'?'var(--red)':'var(--muted)')+'">'+esc((r.kodeGalat?'['+r.kodeGalat+'] ':'')+(r.pesanGalat||''))+'</td><td class="muted">'+waktu(r.waktu&&(r.waktu.dibaca||r.waktu.diterima||r.waktu.dikirim||r.waktu.gagal))+'</td></tr>'; }).join('')||'<tr><td colspan="6" class="muted">Tidak ada.</td></tr>';
   }catch(e){ $('#tabelPenerima').innerHTML='<tr><td colspan="6" style="color:var(--red)">'+esc(e.message)+'</td></tr>'; }
 }
-$('#dorong').addEventListener('click',async function(e){
-  var b=e.target; b.disabled=true; var lbl=b.textContent; b.innerHTML='<span class="spin" style="border-color:rgba(0,0,0,.2);border-top-color:var(--accent)"></span>menjalankan…';
-  try{ var res=await fetch('/api/wa-dispatch?detik=20',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})}); var j=await res.json(); var d=j.result||{}; var h=d.hitungan||{};
-    if(d.dilewati){ modalInfo('Belum dijalankan', esc(d.alasan||'Dilewati.')); }
-    else modalInfo('Pengiriman selesai','terkirim <b>'+(h.terkirim||0)+'</b> · gagal <b>'+(h.gagal||0)+'</b> · ditunda <b>'+(h.ditunda||0)+'</b><br>sisa antrean: '+(d.antrean?d.antrean.siap:'?')+' siap, '+(d.antrean?d.antrean.tunda:'?')+' tunda');
-    muatKampanye(); if(S.kampanyeAktif) bukaDetail(S.kampanyeAktif);
-  }catch(err){ toast(err.message); } finally{ b.disabled=false; b.textContent=lbl; }
-});
+var sedangPacu=false;
+async function satuPutaran(){
+  var res=await fetch('/api/wa-dispatch?detik=25',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:TOKEN})});
+  if(res.status===401){ location.href='/'; throw new Error('Sesi berakhir'); }
+  var j=await res.json(); if(j.__error) throw new Error(j.__error); return j.result||{};
+}
+// Pengiriman dijalankan dari browser secara berantai sampai antrean habis
+// (andal di Vercel; tab harus tetap terbuka). Kalau ditutup, sisa lanjut lewat cron/Kirim sekarang.
+async function pacuKirim(opsi){
+  opsi=opsi||{}; if(sedangPacu) return; sedangPacu=true;
+  var t=$('#dorong'); var lbl=t?t.textContent:''; if(t){ t.disabled=true; t.innerHTML='<span class="spin" style="border-color:rgba(0,0,0,.2);border-top-color:var(--accent)"></span>mengirim…'; }
+  var kirim=0,gagal=0,putaran=0,pesan='';
+  try{
+    while(putaran<60){
+      putaran++;
+      var d=await satuPutaran(); var h=d.hitungan||{};
+      kirim+=h.terkirim||0; gagal+=h.gagal||0;
+      if($('[data-panel=riwayat]') && !$('[data-panel=riwayat]').hidden){ muatKampanye(); if(S.kampanyeAktif) bukaDetail(S.kampanyeAktif); }
+      if(d.dilewati){ pesan=d.alasan||'Dispatcher lain sedang berjalan.'; break; }
+      var sisa=d.antrean?(d.antrean.total||0):0;
+      var maju=((h.terkirim||0)+(h.gagal||0))>0;
+      if(sisa<=0){ pesan='Semua sudah diproses.'; break; }
+      if(!maju){ pesan='Sebagian ditunda ('+sisa+' menunggu jam kirim / jeda). Sisanya jalan otomatis nanti atau tekan "Kirim sekarang" lagi.'; break; }
+      await new Promise(function(r){ setTimeout(r,1200); });
+    }
+    if(!opsi.diam) modalInfo('Pengiriman', 'Terkirim <b>'+kirim+'</b> · gagal <b>'+gagal+'</b>.<br>'+esc(pesan));
+    else if(kirim||gagal) toast('Terkirim '+kirim+(gagal?' · gagal '+gagal:'')+'.');
+  }catch(err){ if(!opsi.diam) toast(err.message); }
+  finally{ sedangPacu=false; if(t){ t.disabled=false; t.textContent=lbl; } muatKampanye(); if(S.kampanyeAktif) bukaDetail(S.kampanyeAktif); }
+}
+$('#dorong').addEventListener('click',function(){ pacuKirim(); });
 
 /* ---------- tolak kirim ---------- */
 async function muatOptout(){
@@ -443,7 +488,32 @@ async function muatSetelan(){
     $('#statusSetelan').textContent='Hari ini terkirim '+angka(d.terkirimHariIni)+' pesan ('+d.tanggal+').';
   }catch(e){ $('#statusSetelan').textContent=e.message; }
   try{ var p=await wa('perangkat'); $('#infoPengirim').textContent=JSON.stringify(p.info,null,2); }catch(e){ $('#infoPengirim').textContent=e.message; }
+  muatKoneksi();
 }
+async function muatKoneksi(){
+  try{ var d=await wa('koneksi-get');
+    $('#tokenInfo').textContent = d.punyaToken ? ('Token terpasang: '+d.tokenMask) : 'Belum ada token — tempel di atas.';
+    $('#kodeNegara').value=d.kodeNegara||'62'; $('#typing').checked=!!d.typing;
+    var secret=d.webhookSecret||'';
+    $('#secretInfo').textContent = secret ? 'Kunci webhook terpasang.' : 'Belum ada kunci webhook.';
+    $('#webhookUrl').value = secret ? (location.origin+'/api/wa-webhook?kunci='+encodeURIComponent(secret)) : '(isi kunci webhook lalu Simpan koneksi)';
+  }catch(e){ $('#tokenInfo').textContent='Perlu izin edit untuk mengatur koneksi.'; }
+}
+$('#simpanKoneksi').addEventListener('click',async function(){
+  var patch={ kodeNegara:$('#kodeNegara').value||'62', typing:$('#typing').checked };
+  if($('#fonnteToken').value.trim()) patch.fonnteToken=$('#fonnteToken').value.trim();
+  if($('#webhookSecret').value.trim()) patch.webhookSecret=$('#webhookSecret').value.trim();
+  try{ await wa('setelan-simpan',patch); $('#fonnteToken').value=''; $('#webhookSecret').value=''; $('#statusKoneksi').textContent='Tersimpan ✓'; toast('Koneksi tersimpan.'); muatKoneksi(); }catch(e){ $('#statusKoneksi').textContent=e.message; toast(e.message); }
+});
+$('#tesKoneksi').addEventListener('click',async function(){
+  var b=this; b.disabled=true; var l=b.textContent; b.textContent='menguji…';
+  try{ var p=await wa('perangkat'); var i=p.info||{}; $('#infoPengirim').textContent=JSON.stringify(i,null,2);
+    if(i.tersambung===false) modalInfo('Perangkat terputus','Nomor '+esc(i.nomor||'-')+' tidak tersambung. Scan ulang QR di dashboard Fonnte.');
+    else modalInfo('Tersambung ✓','Nomor <b>'+esc(i.nomor||'-')+'</b>'+(typeof i.kuota==='number'?' · kuota '+angka(i.kuota):'')+(i.kedaluwarsa?' · aktif s.d. '+esc(i.kedaluwarsa):'')+'.');
+  }catch(e){ modalInfo('Gagal tes koneksi', esc(e.message)); }
+  finally{ b.disabled=false; b.textContent=l; }
+});
+$('#salinWebhook').addEventListener('click',function(){ var v=$('#webhookUrl').value; if(!v||v.charAt(0)==='('){ toast('Isi kunci webhook dulu, lalu Simpan.'); return; } if(navigator.clipboard){ navigator.clipboard.writeText(v).then(function(){ toast('URL webhook disalin.'); },function(){ toast('Salin manual ya.'); }); } else { $('#webhookUrl').select(); toast('Salin manual ya.'); } });
 $('#simpanSetelan').addEventListener('click',async function(){
   try{ await wa('setelan-simpan',{jamKirimAktif:$('#jamAktif').checked,jamMulai:$('#jamMulai').value,jamSelesai:$('#jamSelesai').value,batasHarian:Number($('#batasHarian').value)||0,jedaMin:Number($('#jedaMin').value)||0,jedaMax:Number($('#jedaMax').value)||0}); $('#statusSetelan').textContent='Tersimpan ✓'; toast('Setelan tersimpan.'); setTimeout(muatSetelan,800); }catch(e){ $('#statusSetelan').textContent=e.message; toast(e.message); }
 });
