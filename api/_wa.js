@@ -359,7 +359,7 @@ function periksaPesan(teks, opsi) {
  * SETELAN ANTI-SPAM (jam kirim & batas harian)
  * ================================================================== */
 const OFFSET_WIB = 7 * 60;
-function bawaanSetelan() { const c = cfg().antispam; return { jamKirimAktif: c.jamAktif, jamMulai: c.jamMulai, jamSelesai: c.jamSelesai, batasHarian: c.batasHarian }; }
+function bawaanSetelan() { const k = cfg(); const c = k.antispam; return { jamKirimAktif: c.jamAktif, jamMulai: c.jamMulai, jamSelesai: c.jamSelesai, batasHarian: c.batasHarian, jedaMin: k.rate.jedaMin, jedaMax: k.rate.jedaMax }; }
 async function getSetelan() { const t = (await getJson(K.setelan())) || {}; return Object.assign(bawaanSetelan(), t); }
 function bersihkanJam(v, fb) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim()); if (!m) return fb; return String(Math.min(23, +m[1])).padStart(2, '0') + ':' + String(Math.min(59, +m[2])).padStart(2, '0'); }
 async function simpanSetelan(patch) {
@@ -369,7 +369,10 @@ async function simpanSetelan(patch) {
     jamMulai: bersihkanJam(patch.jamMulai, s.jamMulai),
     jamSelesai: bersihkanJam(patch.jamSelesai, s.jamSelesai),
     batasHarian: Number.isFinite(Number(patch.batasHarian)) ? Math.max(0, Math.floor(Number(patch.batasHarian))) : s.batasHarian,
+    jedaMin: Number.isFinite(Number(patch.jedaMin)) ? Math.max(0, Math.min(600, Math.floor(Number(patch.jedaMin)))) : s.jedaMin,
+    jedaMax: Number.isFinite(Number(patch.jedaMax)) ? Math.max(0, Math.min(600, Math.floor(Number(patch.jedaMax)))) : s.jedaMax,
   };
+  if (baru.jedaMax < baru.jedaMin) baru.jedaMax = baru.jedaMin;
   await setJson(K.setelan(), baru); return baru;
 }
 function menitWIB(ms) { const w = new Date(ms + OFFSET_WIB * 60000); return w.getUTCHours() * 60 + w.getUTCMinutes(); }
@@ -603,11 +606,13 @@ async function prosesSatu(pekerjaan, log) {
   const bolehNomor = await store.set(K.jedaNomor(baris.telepon), '1', { nx: true, ttl: 6 });
   if (!bolehNomor) { await store.zadd(K.antreanTertunda(), [{ member: JSON.stringify(pekerjaan), score: Date.now() + 6000 }]); return 'ditunda'; }
 
-  // jeda acak antar pesan (anti-spam utama)
-  if (c.rate.jedaMin > 0) {
-    const detik = Math.max(1, Math.round(c.rate.jedaMin + Math.random() * Math.max(c.rate.jedaMax - c.rate.jedaMin, 0)));
+  // jeda acak antar pesan (anti-spam utama) — diatur dari dashboard (Setelan)
+  const jMin = Number.isFinite(setelan.jedaMin) ? setelan.jedaMin : c.rate.jedaMin;
+  const jMax = Number.isFinite(setelan.jedaMax) ? setelan.jedaMax : c.rate.jedaMax;
+  if (jMin > 0) {
+    const detik = Math.max(1, Math.round(jMin + Math.random() * Math.max(jMax - jMin, 0)));
     const dapat = await store.set(K.jedaGlobal(), String(Date.now()), { nx: true, ttl: detik });
-    if (!dapat) { await store.del(K.jedaNomor(baris.telepon)); await store.zadd(K.antreanTertunda(), [{ member: JSON.stringify(pekerjaan), score: Date.now() + Math.max(1000, (c.rate.jedaMin / 2) * 1000) }]); return 'ditunda'; }
+    if (!dapat) { await store.del(K.jedaNomor(baris.telepon)); await store.zadd(K.antreanTertunda(), [{ member: JSON.stringify(pekerjaan), score: Date.now() + Math.max(1000, (jMin / 2) * 1000) }]); return 'ditunda'; }
   }
 
   const hasil = await kirim(siapkanPengiriman(k, baris)); const coba = (pekerjaan.coba || 0) + 1;
@@ -638,7 +643,8 @@ async function jalankanDispatcher(opsi) {
   const dapat = await store.set(K.kunciDispatch(), nilaiKunci, { nx: true, ttl: Math.ceil(budgetMs / 1000) + 10 });
   if (!dapat) return { dilewati: true, alasan: 'Dispatcher lain sedang berjalan', hitungan: {} };
   const hitungan = { terkirim: 0, gagal: 0, ditunda: 0, dilewati: 0, ditahan: 0 }; const tersentuh = new Set();
-  const paralel = c.rate.jedaMin > 0 ? 1 : 3;
+  const setelanD = await getSetelan(); const jedaMinD = Number.isFinite(setelanD.jedaMin) ? setelanD.jedaMin : c.rate.jedaMin;
+  const paralel = jedaMinD > 0 ? 1 : 3;
   try {
     while (Date.now() < tenggat) {
       await promosikanTertunda(500);
@@ -647,7 +653,7 @@ async function jalankanDispatcher(opsi) {
       if (!jobs.length) { const u = await ukuranAntrean(); if (u.total === 0) break; await tidur(Math.min(1000, Math.max(tenggat - Date.now(), 0))); continue; }
       const hasil = await petaBerbatas(jobs, paralel, (p) => { tersentuh.add(p.kid); return prosesSatu(p, log); });
       hasil.forEach((h) => { hitungan[h] = (hitungan[h] || 0) + 1; });
-      if (paralel === 1 && hasil[0] === 'terkirim' && Date.now() < tenggat) await tidur(Math.min((c.rate.jedaMin * 1000) / 2, Math.max(tenggat - Date.now(), 0)));
+      if (paralel === 1 && hasil[0] === 'terkirim' && Date.now() < tenggat) await tidur(Math.min((jedaMinD * 1000) / 2, Math.max(tenggat - Date.now(), 0)));
     }
   } finally { const skg = await store.get(K.kunciDispatch()); if (skg === nilaiKunci) await store.del(K.kunciDispatch()); }
   for (const kid of tersentuh) await segarkanSelesai(kid);

@@ -159,9 +159,18 @@
   <!-- SETELAN -->
   <section data-panel="setelan" hidden>
     <div class="card">
-      <h2>Jam kirim &amp; batas harian</h2>
-      <p class="muted" style="margin-top:2px">Penjaga anti-spam. Pesan di luar jam ditunda ke jam mulai; lebih dari batas harian diantre ke besok.</p>
-      <div class="opt-row" style="margin-top:8px">
+      <h2>Anti-spam pengiriman</h2>
+      <p class="muted" style="margin-top:2px">Jeda acak antar pesan bikin pengiriman terlihat wajar. Pesan di luar jam ditunda ke jam mulai; lebih dari batas harian diantre ke besok.</p>
+      <div style="margin-top:14px">
+        <span class="lbl-min">Jeda antar pesan (detik)</span>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input id="jedaMin" type="number" min="0" max="600" step="1" style="width:110px" placeholder="min">
+          <span class="muted">sampai</span>
+          <input id="jedaMax" type="number" min="0" max="600" step="1" style="width:110px" placeholder="maks">
+          <span class="muted" style="font-size:12px">detik acak tiap kirim. 0 = tanpa jeda (tidak disarankan).</span>
+        </div>
+      </div>
+      <div class="opt-row" style="margin-top:16px">
         <div><div class="ot">Batasi jam kirim</div><div class="od">Hanya mengirim dalam rentang jam yang ditentukan.</div></div>
         <span class="switch"><input id="jamAktif" type="checkbox"><span class="slider"></span></span>
       </div>
@@ -430,12 +439,13 @@ $('#tambahOptout').addEventListener('click',async function(){
 async function muatSetelan(){
   try{ var d=await wa('setelan-get'); var s=d.setelan; S.setelan=Object.assign({},s,{pengirim:d.pengirim});
     $('#jamAktif').checked=!!s.jamKirimAktif; $('#jamMulai').value=s.jamMulai; $('#jamSelesai').value=s.jamSelesai; $('#batasHarian').value=s.batasHarian;
+    $('#jedaMin').value=s.jedaMin; $('#jedaMax').value=s.jedaMax;
     $('#statusSetelan').textContent='Hari ini terkirim '+angka(d.terkirimHariIni)+' pesan ('+d.tanggal+').';
   }catch(e){ $('#statusSetelan').textContent=e.message; }
   try{ var p=await wa('perangkat'); $('#infoPengirim').textContent=JSON.stringify(p.info,null,2); }catch(e){ $('#infoPengirim').textContent=e.message; }
 }
 $('#simpanSetelan').addEventListener('click',async function(){
-  try{ await wa('setelan-simpan',{jamKirimAktif:$('#jamAktif').checked,jamMulai:$('#jamMulai').value,jamSelesai:$('#jamSelesai').value,batasHarian:Number($('#batasHarian').value)||0}); $('#statusSetelan').textContent='Tersimpan ✓'; toast('Setelan tersimpan.'); setTimeout(muatSetelan,800); }catch(e){ $('#statusSetelan').textContent=e.message; toast(e.message); }
+  try{ await wa('setelan-simpan',{jamKirimAktif:$('#jamAktif').checked,jamMulai:$('#jamMulai').value,jamSelesai:$('#jamSelesai').value,batasHarian:Number($('#batasHarian').value)||0,jedaMin:Number($('#jedaMin').value)||0,jedaMax:Number($('#jedaMax').value)||0}); $('#statusSetelan').textContent='Tersimpan ✓'; toast('Setelan tersimpan.'); setTimeout(muatSetelan,800); }catch(e){ $('#statusSetelan').textContent=e.message; toast(e.message); }
 });
 
 /* ---------- mulai ---------- */
