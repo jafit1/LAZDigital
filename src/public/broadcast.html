@@ -97,6 +97,12 @@
   .badge.abu{background:var(--surface2);color:var(--text2)}
   .kode{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
   .sender-pre{white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin:0;color:var(--text2)}
+  .platform-tab{position:relative;padding-left:26px}
+  .platform-dot{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--surface2);border:1px solid var(--border)}
+  .platform-tab.aktif{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .platform-tab.aktif .platform-dot{background:#fff;border-color:#fff}
+  .platform-dot.hijau{background:#22c55e;border-color:#22c55e}
+  .platform-dot.merah{background:#ef4444;border-color:#ef4444}
   .spin{display:inline-block;width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;animation:putar .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes putar{to{transform:rotate(360deg)}}
   .cek-baris{display:flex;align-items:center;gap:6px;margin-top:3px}
@@ -268,6 +274,74 @@
     <!-- SETELAN -->
     <section data-panel="setelan" hidden>
       <div class="card">
+        <h2>Platform pengiriman</h2>
+        <p class="muted" style="margin-top:2px">Pilih gateway WhatsApp. Semua fitur (terkirim, diterima, dibaca) tersinkron otomatis.</p>
+        <div class="platform-tabs" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn platform-tab" data-platform="fonnte" id="tabFonnte">
+            <span class="platform-dot" id="dotFonnte"></span>Fonnte (Gateway)
+          </button>
+          <button class="btn platform-tab" data-platform="meta" id="tabMeta">
+            <span class="platform-dot" id="dotMeta"></span>WhatsApp Business API (Meta)
+          </button>
+        </div>
+        <div id="statusPlatform" class="muted" style="margin-top:8px;font-size:12px"></div>
+      </div>
+
+      <div class="card" id="cardFonnte">
+        <h2>Koneksi Fonnte</h2>
+        <p class="muted" style="margin-top:2px">Token dari dashboard Fonnte → Device → Token.</p>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field" style="margin:0"><label>Token Fonnte</label><input id="fonnteToken" type="password" autocomplete="off" placeholder="tempel token (kosong = tetap)"><div class="muted" id="tokenInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+          <div class="field" style="margin:0"><label>Kode negara</label><input id="kodeNegara" placeholder="62"></div>
+        </div>
+        <div class="opt-row" style="margin-top:6px">
+          <div><div class="ot">Efek mengetik</div><div class="od">Tampak "sedang mengetik" sebelum pesan masuk — lebih natural.</div></div>
+          <span class="switch"><input id="typing" type="checkbox"><span class="slider"></span></span>
+        </div>
+        <div class="field" style="margin:0"><label>Kunci webhook</label><input id="webhookSecret" type="password" autocomplete="off" placeholder="tempel kunci (kosong = tetap)"><div class="muted" id="secretInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+        <div style="margin-top:8px">
+          <span class="lbl-min">URL webhook — tempel ke Fonnte → Device → Webhook</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="webhookUrl" readonly class="kode" style="flex:1;min-width:240px;font-size:12px">
+            <button id="salinWebhook" class="btn" type="button">Salin</button>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button id="simpanKoneksi" class="btn btn-primary">Simpan koneksi</button>
+          <button id="tesKoneksi" class="btn" type="button">Test koneksi</button>
+          <span id="statusKoneksi" class="muted"></span>
+        </div>
+        <pre id="infoPengirim" class="sender-pre" style="margin-top:14px">memuat…</pre>
+      </div>
+
+      <div class="card" id="cardMeta" hidden>
+        <h2>Meta WhatsApp Business API</h2>
+        <p class="muted" style="margin-top:2px">Cloud API resmi Meta. Mendukung teks bebas + template message. Status (sent/delivered/read) via webhook otomatis.</p>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field" style="margin:0"><label>Access Token</label><input id="metaAccessToken" type="password" autocomplete="off" placeholder="tempel token (kosong = tetap)"><div class="muted" id="metaTokenInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+          <div class="field" style="margin:0"><label>Phone Number ID</label><input id="metaPhoneNumberId" placeholder="1234567890"></div>
+        </div>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field" style="margin:0"><label>WABA ID (opsional)</label><input id="metaWabaId" placeholder="1234567890"></div>
+          <div class="field" style="margin:0"><label>App ID (opsional)</label><input id="metaAppId" placeholder="1234567890"></div>
+        </div>
+        <div class="field" style="margin-top:14px;margin-bottom:0"><label>Webhook Verify Token</label><input id="metaWebhookVerifyToken" type="password" autocomplete="off" placeholder="buat token verifikasi webhook (kosong = tetap)"><div class="muted" id="metaVerifyInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+        <div style="margin-top:8px">
+          <span class="lbl-min">Webhook URL — tempel di Meta → App → Webhooks → Messages</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="metaWebhookUrl" readonly class="kode" style="flex:1;min-width:240px;font-size:12px">
+            <button id="salinMetaWebhook" class="btn" type="button">Salin</button>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button id="simpanMeta" class="btn btn-primary">Simpan koneksi</button>
+          <button id="tesMeta" class="btn" type="button">Test koneksi</button>
+          <span id="statusMeta" class="muted"></span>
+        </div>
+        <pre id="infoMeta" class="sender-pre" style="margin-top:14px">memuat…</pre>
+      </div>
+
+      <div class="card">
         <h2>Anti-spam pengiriman</h2>
         <p class="muted" style="margin-top:2px">Jeda acak antar pesan bikin pengiriman terlihat wajar. Pesan di luar jam ditunda ke jam mulai; lebih dari batas harian diantre ke besok.</p>
         <div style="margin-top:14px">
@@ -292,32 +366,6 @@
           <button id="simpanSetelan" class="btn btn-primary">Simpan setelan</button>
           <span id="statusSetelan" class="muted"></span>
         </div>
-      </div>
-      <div class="card">
-        <h2>Koneksi &amp; pengirim</h2>
-        <p class="muted" style="margin-top:2px">Atur di sini, tanpa perlu deploy ulang. Token diambil dari dashboard Fonnte → Device → Token.</p>
-        <div class="grid2" style="margin-top:14px">
-          <div class="field" style="margin:0"><label>Token Fonnte</label><input id="fonnteToken" type="password" autocomplete="off" placeholder="tempel token (kosong = tetap)"><div class="muted" id="tokenInfo" style="font-size:11.5px;margin-top:4px"></div></div>
-          <div class="field" style="margin:0"><label>Kode negara</label><input id="kodeNegara" placeholder="62"></div>
-        </div>
-        <div class="opt-row" style="margin-top:6px">
-          <div><div class="ot">Efek mengetik</div><div class="od">Tampak "sedang mengetik" sebelum pesan masuk — lebih natural.</div></div>
-          <span class="switch"><input id="typing" type="checkbox"><span class="slider"></span></span>
-        </div>
-        <div class="field" style="margin:0"><label>Kunci webhook</label><input id="webhookSecret" type="password" autocomplete="off" placeholder="tempel kunci (kosong = tetap)"><div class="muted" id="secretInfo" style="font-size:11.5px;margin-top:4px"></div></div>
-        <div style="margin-top:8px">
-          <span class="lbl-min">URL webhook — tempel ke Fonnte → Device → Webhook</span>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <input id="webhookUrl" readonly class="kode" style="flex:1;min-width:240px;font-size:12px">
-            <button id="salinWebhook" class="btn" type="button">Salin</button>
-          </div>
-        </div>
-        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button id="simpanKoneksi" class="btn btn-primary">Simpan koneksi</button>
-          <button id="tesKoneksi" class="btn" type="button">Test koneksi</button>
-          <span id="statusKoneksi" class="muted"></span>
-        </div>
-        <pre id="infoPengirim" class="sender-pre" style="margin-top:14px">memuat…</pre>
       </div>
     </section>
   </main>
@@ -567,7 +615,7 @@ async function hapusDaftar(id){
 /* ---------- kirim ---------- */
 $('#kirim').addEventListener('click',async function(){
   if(!S.kontak) return;
-  if(!await konfirm({judul:'Kirim broadcast',isi:'Kirim ke <b>'+angka(S.kontak.jumlahSah)+'</b> nomor lewat <b>'+esc(S.setelan?S.setelan.pengirim:'')+'</b>?',ya:'Kirim'})) return;
+  if(!await konfirm({judul:'Kirim broadcast',isi:'Kirim ke <b>'+angka(S.kontak.jumlahSah)+'</b> nomor lewat <b>'+esc(S.setelan?S.setelan.platform:'')+'</b>?',ya:'Kirim'})) return;
   var label=$('#kirim').textContent; $('#kirim').disabled=true; $('#kirim').innerHTML='<span class="spin"></span>Mengirim…'; $('#statusKirim').textContent='';
   try{
     var kolom=S.kontak.headerParameter;
@@ -658,14 +706,38 @@ $('#tambahOptout').addEventListener('click',async function(){
 });
 
 /* ---------- setelan ---------- */
+var platformAktif='fonnte';
+function tampilkanPlatform(p){
+  platformAktif=p;
+  $$('.platform-tab').forEach(function(b){b.classList.toggle('aktif',b.dataset.platform===p)});
+  $('#cardFonnte').hidden=(p!=='fonnte');
+  $('#cardMeta').hidden=(p!=='meta');
+}
+$$('.platform-tab').forEach(function(b){
+  b.addEventListener('click',async function(){
+    var p=b.dataset.platform; tampilkanPlatform(p);
+    try{ await wa('platform-set',{platform:p}); toast('Platform diubah ke '+(p==='meta'?'WhatsApp Business API':'Fonnte')+'.'); muatSetelan(); }catch(e){ toast(e.message); }
+  });
+});
+
 async function muatSetelan(){
-  try{ var d=await wa('setelan-get'); var s=d.setelan; S.setelan=Object.assign({},s,{pengirim:d.pengirim});
+  try{ var d=await wa('setelan-get'); var s=d.setelan; S.setelan=Object.assign({},s,{platform:d.platform});
+    tampilkanPlatform(d.platform||'fonnte');
     $('#jamAktif').checked=!!s.jamKirimAktif; $('#jamMulai').value=s.jamMulai; $('#jamSelesai').value=s.jamSelesai; $('#batasHarian').value=s.batasHarian;
     $('#jedaMin').value=s.jedaMin; $('#jedaMax').value=s.jedaMax;
     $('#statusSetelan').textContent='Hari ini terkirim '+angka(d.terkirimHariIni)+' pesan ('+d.tanggal+').';
+    // meta fields
+    $('#metaPhoneNumberId').value=s.metaPhoneNumberId||'';
+    $('#metaWabaId').value=s.metaWabaId||'';
+    $('#metaAppId').value=s.metaAppId||'';
+    $('#metaTokenInfo').textContent=s.punyaMetaToken?('Token terpasang: '+s.metaAccessToken):'Belum ada access token.';
+    $('#metaVerifyInfo').textContent=s.metaWebhookVerifyToken?'Verify token terpasang.':'Belum ada verify token.';
+    $('#statusPlatform').textContent='Platform aktif: '+(d.platform==='meta'?'WhatsApp Business API (Meta)':'Fonnte (Gateway)');
   }catch(e){ $('#statusSetelan').textContent=e.message; }
-  try{ var p=await wa('perangkat'); $('#infoPengirim').textContent=JSON.stringify(p.info,null,2); }catch(e){ $('#infoPengirim').textContent=e.message; }
-  muatKoneksi();
+  try{ var p=await wa('perangkat'); $('#infoPengirim').textContent=JSON.stringify(p.info,null,2);
+    var dot=$('#dotFonnte'); if(p.info&&p.info.jenis==='fonnte'){ dot.classList.toggle('hijau',p.info.tersambung!==false); dot.classList.toggle('merah',p.info.tersambung===false); }
+  }catch(e){ $('#infoPengirim').textContent=e.message; }
+  muatKoneksi(); muatMetaWebhook();
 }
 async function muatKoneksi(){
   try{ var d=await wa('koneksi-get');
@@ -676,21 +748,44 @@ async function muatKoneksi(){
     $('#webhookUrl').value = secret ? (location.origin+'/api/wa-webhook?kunci='+encodeURIComponent(secret)) : '(isi kunci webhook lalu Simpan koneksi)';
   }catch(e){ $('#tokenInfo').textContent='Perlu izin edit untuk mengatur koneksi.'; }
 }
+function muatMetaWebhook(){
+  $('#metaWebhookUrl').value=location.origin+'/api/wa-meta-webhook';
+}
 $('#simpanKoneksi').addEventListener('click',async function(){
   var patch={ kodeNegara:$('#kodeNegara').value||'62', typing:$('#typing').checked };
   if($('#fonnteToken').value.trim()) patch.fonnteToken=$('#fonnteToken').value.trim();
   if($('#webhookSecret').value.trim()) patch.webhookSecret=$('#webhookSecret').value.trim();
   try{ await wa('setelan-simpan',patch); $('#fonnteToken').value=''; $('#webhookSecret').value=''; $('#statusKoneksi').textContent='Tersimpan ✓'; toast('Koneksi tersimpan.'); muatKoneksi(); }catch(e){ $('#statusKoneksi').textContent=e.message; toast(e.message); }
 });
+$('#simpanMeta').addEventListener('click',async function(){
+  var patch={};
+  if($('#metaAccessToken').value.trim()) patch.metaAccessToken=$('#metaAccessToken').value.trim();
+  if($('#metaPhoneNumberId').value.trim()) patch.metaPhoneNumberId=$('#metaPhoneNumberId').value.trim();
+  if($('#metaWabaId').value.trim()) patch.metaWabaId=$('#metaWabaId').value.trim();
+  if($('#metaAppId').value.trim()) patch.metaAppId=$('#metaAppId').value.trim();
+  if($('#metaWebhookVerifyToken').value.trim()) patch.metaWebhookVerifyToken=$('#metaWebhookVerifyToken').value.trim();
+  try{ await wa('setelan-simpan',patch); $('#metaAccessToken').value=''; $('#metaWebhookVerifyToken').value=''; $('#statusMeta').textContent='Tersimpan ✓'; toast('Koneksi Meta tersimpan.'); muatSetelan(); }catch(e){ $('#statusMeta').textContent=e.message; toast(e.message); }
+});
 $('#tesKoneksi').addEventListener('click',async function(){
   var b=this; b.disabled=true; var l=b.textContent; b.textContent='menguji…';
   try{ var p=await wa('perangkat'); var i=p.info||{}; $('#infoPengirim').textContent=JSON.stringify(i,null,2);
     if(i.tersambung===false) modalInfo('Perangkat terputus','Nomor '+esc(i.nomor||'-')+' tidak tersambung. Scan ulang QR di dashboard Fonnte.');
     else modalInfo('Tersambung ✓','Nomor <b>'+esc(i.nomor||'-')+'</b>'+(typeof i.kuota==='number'?' · kuota '+angka(i.kuota):'')+(i.kedaluwarsa?' · aktif s.d. '+esc(i.kedaluwarsa):'')+'.');
-  }catch(e){ modalInfo('Gagal tes koneksi', esc(e.message)); }
+    $('#dotFonnte').classList.toggle('hijau',i.tersambung!==false); $('#dotFonnte').classList.toggle('merah',i.tersambung===false);
+  }catch(e){ modalInfo('Gagal tes koneksi', esc(e.message)); $('#dotFonnte').classList.add('merah'); $('#dotFonnte').classList.remove('hijau'); }
+  finally{ b.disabled=false; b.textContent=l; }
+});
+$('#tesMeta').addEventListener('click',async function(){
+  var b=this; b.disabled=true; var l=b.textContent; b.textContent='menguji…';
+  try{ var d=await wa('test-meta'); $('#infoMeta').textContent=JSON.stringify(d,null,2);
+    modalInfo('Meta tersambung ✓','Nomor <b>'+esc(d.nomor||'-')+'</b> · '+esc(d.nama||'-')+'<br>Kualitas: '+esc(d.kualitas||'-')+' · Tier: '+esc(d.tier||'-'));
+    $('#dotMeta').classList.add('hijau'); $('#dotMeta').classList.remove('merah');
+  }catch(e){ modalInfo('Gagal tes Meta', esc(e.message)); $('#infoMeta').textContent=e.message;
+    $('#dotMeta').classList.add('merah'); $('#dotMeta').classList.remove('hijau'); }
   finally{ b.disabled=false; b.textContent=l; }
 });
 $('#salinWebhook').addEventListener('click',function(){ var v=$('#webhookUrl').value; if(!v||v.charAt(0)==='('){ toast('Isi kunci webhook dulu, lalu Simpan.'); return; } if(navigator.clipboard){ navigator.clipboard.writeText(v).then(function(){ toast('URL webhook disalin.'); },function(){ toast('Salin manual ya.'); }); } else { $('#webhookUrl').select(); toast('Salin manual ya.'); } });
+$('#salinMetaWebhook').addEventListener('click',function(){ var v=$('#metaWebhookUrl').value; if(navigator.clipboard){ navigator.clipboard.writeText(v).then(function(){ toast('URL webhook Meta disalin.'); },function(){ toast('Salin manual ya.'); }); } else { $('#metaWebhookUrl').select(); toast('Salin manual ya.'); } });
 $('#simpanSetelan').addEventListener('click',async function(){
   try{ await wa('setelan-simpan',{jamKirimAktif:$('#jamAktif').checked,jamMulai:$('#jamMulai').value,jamSelesai:$('#jamSelesai').value,batasHarian:Number($('#batasHarian').value)||0,jedaMin:Number($('#jedaMin').value)||0,jedaMax:Number($('#jedaMax').value)||0}); $('#statusSetelan').textContent='Tersimpan ✓'; toast('Setelan tersimpan.'); setTimeout(muatSetelan,800); }catch(e){ $('#statusSetelan').textContent=e.message; toast(e.message); }
 });
@@ -700,9 +795,9 @@ async function mulai(){
   try{
     var p=await wa('perangkat'); S.pakaiPesanBebas=p.pakaiPesanBebas;
     var i=p.info, bag=[]; if(i.nomor)bag.push(i.nomor); if(i.tersambung===false)bag.push('TERPUTUS'); if(typeof i.kuota==='number')bag.push('kuota '+angka(i.kuota));
-    var lbl=$('#lblPerangkat'); lbl.textContent=bag.join(' · '); lbl.className='badge '+(i.tersambung===false?'red':'green');
+    var lbl=$('#lblPerangkat'); lbl.textContent=(i.jenis==='meta'?'Meta · ':'')+ bag.join(' · '); lbl.className='badge '+(i.tersambung===false?'red':'green');
     if((p.peringatan||[]).length){ $('#pita').hidden=false; $('#pita').innerHTML='<b>'+p.peringatan.map(esc).join(' · ')+'</b>'; }
-    var st=await wa('setelan-get'); S.setelan=Object.assign({},st.setelan,{pengirim:st.pengirim});
+    var st=await wa('setelan-get'); S.setelan=Object.assign({},st.setelan,{platform:st.platform});
   }catch(e){ if(String(e.message).indexOf('Sesi')<0){ $('#pita').hidden=false; $('#pita').textContent='Pengirim belum bisa dibaca: '+e.message; } }
   muatPustaka(); chipKolom(); tombolKirim();
   S.timer=setInterval(function(){ if(!$('#autoSegar')||!$('#autoSegar').checked)return; if($('[data-panel=riwayat]').hidden)return; muatKampanye(); if(S.kampanyeAktif) bukaDetail(S.kampanyeAktif); },6000);

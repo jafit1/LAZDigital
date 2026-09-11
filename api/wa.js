@@ -15,14 +15,14 @@ const wa = require('./_wa.js');
 
 /* Izin yang dibutuhkan tiap aksi terhadap modul 'broadcast'. */
 const IZIN = {
-  'perangkat': 'view', 'setelan-get': 'view', 'koneksi-get': 'edit',
+  'perangkat': 'view', 'setelan-get': 'view', 'koneksi-get': 'edit', 'platform-set': 'edit',
   'kontak-parse': 'view', 'kontak-list': 'view',
   'daftarkontak-list': 'view', 'daftarkontak-get': 'view',
   'pesan-list': 'view',
   'kampanye-list': 'view', 'kampanye-get': 'view', 'kampanye-recipients': 'view',
   'optout-list': 'view', 'log-webhook': 'view',
   'kampanye-buat': 'create', 'pesan-simpan': 'create', 'kontak-simpan': 'create', 'optout-tambah': 'create', 'daftarkontak-simpan': 'create',
-  'setelan-simpan': 'edit', 'kampanye-aksi': 'edit',
+  'setelan-simpan': 'edit', 'kampanye-aksi': 'edit', 'test-meta': 'edit',
   'pesan-hapus': 'delete', 'kontak-hapus': 'delete', 'optout-hapus': 'delete', 'daftarkontak-hapus': 'delete',
 };
 
@@ -66,31 +66,56 @@ async function jalankan(aksi, b, pengguna) {
   switch (aksi) {
     case 'perangkat': {
       const info = await wa.infoPengirim();
+      const platform = await wa.platformAktif();
       const peringatan = [];
-      if (info.tersambung === false) peringatan.push('Perangkat WhatsApp terputus — scan ulang QR di Fonnte.');
+      if (info.tersambung === false) {
+        if (platform === 'meta') peringatan.push('WhatsApp Business API belum tersambung — cek Access Token / Phone Number ID.');
+        else peringatan.push('Perangkat WhatsApp terputus — scan ulang QR di Fonnte.');
+      }
       if (typeof info.kuota === 'number' && info.kuota <= 0) peringatan.push('Kuota Fonnte habis.');
       else if (typeof info.kuota === 'number' && info.kuota < 100) peringatan.push('Sisa kuota Fonnte tinggal ' + info.kuota + '.');
-      return { info: info, pengirim: wa.cfg().pengirim, pakaiPesanBebas: wa.pakaiPesanBebas(), peringatan: peringatan };
+      return { info: info, platform: platform, pakaiPesanBebas: await wa.pakaiPesanBebas(), peringatan: peringatan };
     }
     case 'setelan-get': {
       const s = await wa.getSetelan();
       const aman = Object.assign({}, s);
       aman.fonnteToken = s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '';
+      aman.metaAccessToken = s.metaAccessToken ? ('••••' + String(s.metaAccessToken).slice(-4)) : '';
+      aman.metaWebhookVerifyToken = s.metaWebhookVerifyToken ? ('••••' + String(s.metaWebhookVerifyToken).slice(-4)) : '';
       aman.punyaToken = !!s.fonnteToken;
+      aman.punyaMetaToken = !!s.metaAccessToken;
       aman.punyaWebhookSecret = !!s.webhookSecret;
       delete aman.webhookSecret;
-      return { setelan: aman, terkirimHariIni: await wa.terkirimHariIni(), tanggal: wa.tanggalWIB(), pengirim: wa.cfg().pengirim, pakaiPesanBebas: wa.pakaiPesanBebas() };
+      return { setelan: aman, terkirimHariIni: await wa.terkirimHariIni(), tanggal: wa.tanggalWIB(), platform: await wa.platformAktif(), pakaiPesanBebas: await wa.pakaiPesanBebas() };
     }
     case 'setelan-simpan': {
       const s = await wa.simpanSetelan(b);
       const aman = Object.assign({}, s);
       aman.fonnteToken = s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '';
-      aman.punyaToken = !!s.fonnteToken; aman.punyaWebhookSecret = !!s.webhookSecret; delete aman.webhookSecret;
+      aman.metaAccessToken = s.metaAccessToken ? ('••••' + String(s.metaAccessToken).slice(-4)) : '';
+      aman.metaWebhookVerifyToken = s.metaWebhookVerifyToken ? ('••••' + String(s.metaWebhookVerifyToken).slice(-4)) : '';
+      aman.punyaToken = !!s.fonnteToken;
+      aman.punyaMetaToken = !!s.metaAccessToken;
+      aman.punyaWebhookSecret = !!s.webhookSecret;
+      delete aman.webhookSecret;
       return { setelan: aman };
     }
     case 'koneksi-get': {
       const s = await wa.getSetelan();
-      return { tokenMask: s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '', punyaToken: !!s.fonnteToken, kodeNegara: s.kodeNegara || '62', typing: !!s.typing, webhookSecret: s.webhookSecret || '', pengirim: wa.cfg().pengirim };
+      return { tokenMask: s.fonnteToken ? ('••••' + String(s.fonnteToken).slice(-4)) : '', punyaToken: !!s.fonnteToken, kodeNegara: s.kodeNegara || '62', typing: !!s.typing, webhookSecret: s.webhookSecret || '', platform: await wa.platformAktif() };
+    }
+    case 'platform-set': {
+      if (b.platform !== 'fonnte' && b.platform !== 'meta') throw new Error('Platform tidak valid');
+      await wa.simpanSetelan({ platform: b.platform });
+      return { platform: b.platform };
+    }
+    case 'test-meta': {
+      const m = await wa.konfMeta();
+      if (!m.token || !m.phoneNumberId) throw new Error('Access Token / Phone Number ID belum diisi');
+      const res = await fetch(m.graphBaseUrl + '/' + m.graphVersion + '/' + m.phoneNumberId + '?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier', { headers: { Authorization: 'Bearer ' + m.token } });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + res.status));
+      return { nomor: j.display_phone_number, nama: j.verified_name, kualitas: j.quality_rating, tier: j.messaging_limit_tier };
     }
 
     case 'kontak-parse': {
@@ -146,7 +171,7 @@ async function buatKampanye(b, pengguna) {
   if (!Array.isArray(b.baris) || !b.baris.length) throw new Error('Daftar penerima kosong.');
   if (b.baris.length > 50000) throw new Error('Maksimal 50.000 penerima per kampanye.');
 
-  const mode = b.mode || (wa.pakaiPesanBebas() ? 'pesan' : 'template');
+  const mode = b.mode || ((await wa.pakaiPesanBebas()) ? 'pesan' : 'template');
 
   if (mode === 'pesan') {
     let teks = String((b.pesan && b.pesan.teks) || '');
@@ -165,7 +190,7 @@ async function buatKampanye(b, pengguna) {
       penerima.push({ telepon: telp, nama: nilai.nama || x.nama || null, kolom: nilai });
     });
     if (!penerima.length) throw new Error('Tidak ada penerima yang sah.');
-    const hasil = await wa.buatKampanye({ nama: b.nama, mode: 'pesan', pengirim: wa.cfg().pengirim, pesan: { teks, lampiranUrl, lampiranNama, pesanId }, penerima, dibuatOleh: pengguna.username, langsungJalan: b.langsungJalan !== false });
+    const hasil = await wa.buatKampanye({ nama: b.nama, mode: 'pesan', pengirim: await wa.platformAktif(), pesan: { teks, lampiranUrl, lampiranNama, pesanId }, penerima, dibuatOleh: pengguna.username, langsungJalan: b.langsungJalan !== false });
     if (pesanId) await wa.catatPemakaian(pesanId);
     const contoh = penerima.slice(0, 3).map((p) => ({ telepon: p.telepon, teks: wa.isiPlaceholder(teks, Object.assign({}, p.kolom, { telepon: p.telepon })) }));
     return { kampanye: hasil.kampanye, jumlahAntre: hasil.jumlahAntre, jumlahDilewati: hasil.jumlahDilewati, peringatan: cek.peringatan, contohPesan: contoh };
@@ -184,6 +209,6 @@ async function buatKampanye(b, pengguna) {
     penerima.push({ telepon: telp, params: params });
   });
   if (!penerima.length) throw new Error('Tidak ada penerima yang sah.');
-  const hasil = await wa.buatKampanye({ nama: b.nama, mode: 'template', pengirim: wa.cfg().pengirim, template: { nama: b.template.nama, bahasa: b.template.bahasa, kategori: b.template.kategori, variabel }, penerima, dibuatOleh: pengguna.username, langsungJalan: b.langsungJalan !== false });
+  const hasil = await wa.buatKampanye({ nama: b.nama, mode: 'template', pengirim: await wa.platformAktif(), template: { nama: b.template.nama, bahasa: b.template.bahasa, kategori: b.template.kategori, variabel }, penerima, dibuatOleh: pengguna.username, langsungJalan: b.langsungJalan !== false });
   return { kampanye: hasil.kampanye, jumlahAntre: hasil.jumlahAntre, jumlahDilewati: hasil.jumlahDilewati };
 }

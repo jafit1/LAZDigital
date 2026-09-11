@@ -361,25 +361,44 @@ function periksaPesan(teks, opsi) {
  * SETELAN ANTI-SPAM (jam kirim & batas harian)
  * ================================================================== */
 const OFFSET_WIB = 7 * 60;
-function bawaanSetelan() { const k = cfg(); const c = k.antispam; return { jamKirimAktif: c.jamAktif, jamMulai: c.jamMulai, jamSelesai: c.jamSelesai, batasHarian: c.batasHarian, jedaMin: k.rate.jedaMin, jedaMax: k.rate.jedaMax, fonnteToken: k.fonnte.token, kodeNegara: k.fonnte.countryCode, typing: k.fonnte.typing, webhookSecret: k.fonnte.webhookSecret }; }
+function bawaanSetelan() {
+  const k = cfg(); const c = k.antispam;
+  return {
+    platform: k.pengirim,
+    jamKirimAktif: c.jamAktif, jamMulai: c.jamMulai, jamSelesai: c.jamSelesai, batasHarian: c.batasHarian,
+    jedaMin: k.rate.jedaMin, jedaMax: k.rate.jedaMax,
+    fonnteToken: k.fonnte.token, kodeNegara: k.fonnte.countryCode, typing: k.fonnte.typing, webhookSecret: k.fonnte.webhookSecret,
+    metaAccessToken: k.meta.token, metaPhoneNumberId: k.meta.phoneNumberId, metaWabaId: k.meta.wabaId,
+    metaWebhookVerifyToken: '', metaAppId: '',
+  };
+}
 // Konfigurasi Fonnte efektif: nilai dari Setelan (dashboard) menimpa env.
 async function konfFonnte() { const c = cfg(); let s = {}; try { s = await getSetelan(); } catch (e) {} return { token: s.fonnteToken || c.fonnte.token, baseUrl: c.fonnte.baseUrl, countryCode: s.kodeNegara || c.fonnte.countryCode, typing: (s.typing !== undefined ? !!s.typing : c.fonnte.typing), webhookSecret: s.webhookSecret || c.fonnte.webhookSecret }; }
+// Konfigurasi Meta efektif: nilai dari Setelan (dashboard) menimpa env.
+async function konfMeta() { const c = cfg(); let s = {}; try { s = await getSetelan(); } catch (e) {} return { token: s.metaAccessToken || c.meta.token, phoneNumberId: s.metaPhoneNumberId || c.meta.phoneNumberId, wabaId: s.metaWabaId || c.meta.wabaId, webhookVerifyToken: s.metaWebhookVerifyToken || '', appId: s.metaAppId || c.meta.appId || '', graphVersion: c.meta.graphVersion, graphBaseUrl: c.meta.graphBaseUrl }; }
+// Platform aktif: dari Setelan, fallback ke env PENGIRIM.
+async function platformAktif() { let s = {}; try { s = await getSetelan(); } catch (e) {} return s.platform || cfg().pengirim; }
 async function getSetelan() { const t = (await getJson(K.setelan())) || {}; return Object.assign(bawaanSetelan(), t); }
 function bersihkanJam(v, fb) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim()); if (!m) return fb; return String(Math.min(23, +m[1])).padStart(2, '0') + ':' + String(Math.min(59, +m[2])).padStart(2, '0'); }
 async function simpanSetelan(patch) {
   const s = await getSetelan();
   const baru = {
+    platform: (patch.platform === 'meta' || patch.platform === 'fonnte') ? patch.platform : s.platform,
     jamKirimAktif: patch.jamKirimAktif !== undefined ? !!patch.jamKirimAktif : s.jamKirimAktif,
     jamMulai: bersihkanJam(patch.jamMulai, s.jamMulai),
     jamSelesai: bersihkanJam(patch.jamSelesai, s.jamSelesai),
     batasHarian: Number.isFinite(Number(patch.batasHarian)) ? Math.max(0, Math.floor(Number(patch.batasHarian))) : s.batasHarian,
     jedaMin: Number.isFinite(Number(patch.jedaMin)) ? Math.max(0, Math.min(600, Math.floor(Number(patch.jedaMin)))) : s.jedaMin,
     jedaMax: Number.isFinite(Number(patch.jedaMax)) ? Math.max(0, Math.min(600, Math.floor(Number(patch.jedaMax)))) : s.jedaMax,
-    // Koneksi Fonnte (kosong = pertahankan yang lama, tidak menghapus)
     fonnteToken: (typeof patch.fonnteToken === 'string' && patch.fonnteToken.trim()) ? patch.fonnteToken.trim() : s.fonnteToken,
     kodeNegara: (patch.kodeNegara != null && String(patch.kodeNegara).replace(/\D/g, '')) ? String(patch.kodeNegara).replace(/\D/g, '') : s.kodeNegara,
     typing: patch.typing !== undefined ? !!patch.typing : s.typing,
     webhookSecret: (typeof patch.webhookSecret === 'string' && patch.webhookSecret.trim()) ? patch.webhookSecret.trim() : s.webhookSecret,
+    metaAccessToken: (typeof patch.metaAccessToken === 'string' && patch.metaAccessToken.trim()) ? patch.metaAccessToken.trim() : s.metaAccessToken,
+    metaPhoneNumberId: (typeof patch.metaPhoneNumberId === 'string' && patch.metaPhoneNumberId.trim()) ? patch.metaPhoneNumberId.trim() : s.metaPhoneNumberId,
+    metaWabaId: (typeof patch.metaWabaId === 'string' && patch.metaWabaId.trim()) ? patch.metaWabaId.trim() : s.metaWabaId,
+    metaWebhookVerifyToken: (typeof patch.metaWebhookVerifyToken === 'string' && patch.metaWebhookVerifyToken.trim()) ? patch.metaWebhookVerifyToken.trim() : s.metaWebhookVerifyToken,
+    metaAppId: (typeof patch.metaAppId === 'string' && patch.metaAppId.trim()) ? patch.metaAppId.trim() : s.metaAppId,
   };
   if (baru.jedaMax < baru.jedaMin) baru.jedaMax = baru.jedaMin;
   await setJson(K.setelan(), baru); return baru;
@@ -453,35 +472,63 @@ async function infoFonnte() {
   const d = (json && (json.data || json)) || {};
   return { jenis: 'fonnte', nomor: d.device || null, nama: d.name || null, paket: d.package || null, tersambung: String(d.device_status || '').toLowerCase().indexOf('connect') === 0, kuota: Number.isFinite(Number(d.quota)) ? Number(d.quota) : null, kedaluwarsa: d.expired || null, mentah: json };
 }
-/* Meta (template) — dipakai kalau PENGIRIM=meta */
+/* Meta — template atau teks bebas (kalau platform=meta). */
 async function kirimMeta(opsi) {
-  const c = cfg();
+  const c = cfg(); const m = await konfMeta();
   if (c.dryRun) return { ok: true, wamid: 'wamid.DRYRUN-' + buatId(), mentah: { dryRun: true } };
-  if (!opsi.namaTemplate) return { ok: false, kelas: 'permanen', pesan: 'PENGIRIM=meta hanya boleh kirim template disetujui; kampanye ini pakai teks bebas. Ganti PENGIRIM=fonnte.', jedaDetik: 0, mentah: null };
-  if (!c.meta.token || !c.meta.phoneNumberId) return { ok: false, kelas: 'tahan', pesan: 'WA_ACCESS_TOKEN / WA_PHONE_NUMBER_ID belum diisi', jedaDetik: 0, mentah: null };
-  const comps = [];
-  if (opsi.paramBody && opsi.paramBody.length) comps.push({ type: 'body', parameters: opsi.paramBody.map((v) => ({ type: 'text', text: String(v || '-').slice(0, 1024) })) });
-  const payload = { messaging_product: 'whatsapp', to: String(opsi.to), type: 'template', template: { name: opsi.namaTemplate, language: { code: opsi.bahasa || 'id' } } };
-  if (comps.length) payload.template.components = comps;
+  if (!m.token || !m.phoneNumberId) return { ok: false, kelas: 'tahan', pesan: 'Meta Access Token / Phone Number ID belum diisi (atur di Setelan)', jedaDetik: 0, mentah: null };
+  const url = m.graphBaseUrl + '/' + m.graphVersion + '/' + m.phoneNumberId + '/messages';
+  let payload;
+  if (opsi.namaTemplate) {
+    // mode template
+    const comps = [];
+    if (opsi.paramBody && opsi.paramBody.length) comps.push({ type: 'body', parameters: opsi.paramBody.map((v) => ({ type: 'text', text: String(v || '-').slice(0, 1024) })) });
+    payload = { messaging_product: 'whatsapp', to: String(opsi.to), type: 'template', template: { name: opsi.namaTemplate, language: { code: opsi.bahasa || 'id' } } };
+    if (comps.length) payload.template.components = comps;
+  } else {
+    // mode teks bebas
+    const teks = String(opsi.teks || '').trim();
+    if (!teks && !opsi.lampiranUrl) return { ok: false, kelas: 'permanen', pesan: 'Isi pesan kosong', jedaDetik: 0, mentah: null };
+    if (opsi.lampiranUrl) {
+      // kirim dokumen/gambar
+      const ext = String(opsi.lampiranUrl).split('.').pop().toLowerCase();
+      const mimeMap = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', mp4: 'video/mp4', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+      const mime = mimeMap[ext] || 'application/octet-stream';
+      const tipe = ['jpg','jpeg','png'].includes(ext) ? 'image' : (ext === 'mp4' ? 'video' : 'document');
+      payload = { messaging_product: 'whatsapp', to: String(opsi.to), type: tipe };
+      payload[tipe] = { link: opsi.lampiranUrl };
+      if (tipe === 'document' && opsi.lampiranNama) payload[tipe].filename = opsi.lampiranNama;
+      if (teks) payload[tipe].caption = teks;
+    } else {
+      payload = { messaging_product: 'whatsapp', to: String(opsi.to), type: 'text', text: { body: teks } };
+    }
+  }
   let res, json, teks;
   try {
-    res = await fetch(c.meta.graphBaseUrl + '/' + c.meta.graphVersion + '/' + c.meta.phoneNumberId + '/messages', { method: 'POST', headers: { Authorization: 'Bearer ' + c.meta.token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    res = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + m.token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     teks = await res.text(); try { json = JSON.parse(teks); } catch (e) {}
-  } catch (e) { return { ok: false, kelas: 'sementara', pesan: 'Gangguan jaringan: ' + e.message, jedaDetik: 5, mentah: null }; }
+  } catch (e) { return { ok: false, kelas: 'sementara', pesan: 'Gangguan jaringan ke Meta: ' + e.message, jedaDetik: 5, mentah: null }; }
   if (res.ok && json && json.messages && json.messages[0]) return { ok: true, wamid: json.messages[0].id, mentah: json };
   const err = (json && json.error) || {};
   const kelas = (res.status >= 500 || res.status === 429) ? 'sementara' : 'permanen';
   return { ok: false, kelas, kode: err.code || null, pesan: (err.error_data && err.error_data.details) || err.message || ('HTTP ' + res.status), jedaDetik: kelas === 'sementara' ? 30 : 0, mentah: json };
 }
-function pakaiPesanBebas() { return cfg().pengirim !== 'meta'; }
-async function kirim(opsi) { return cfg().pengirim === 'meta' ? kirimMeta(opsi) : kirimFonnte(opsi); }
+async function pakaiPesanBebas() { return (await platformAktif()) !== 'meta' || !!(await konfMeta()).token; }
+async function kirim(opsi) { return (await platformAktif()) === 'meta' ? kirimMeta(opsi) : kirimFonnte(opsi); }
 async function infoPengirim() {
-  if (cfg().pengirim === 'meta') {
-    const c = cfg(); const res = await fetch(c.meta.graphBaseUrl + '/' + c.meta.graphVersion + '/' + c.meta.phoneNumberId + '?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier', { headers: { Authorization: 'Bearer ' + c.meta.token } });
-    const j = await res.json().catch(() => ({})); if (!res.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + res.status));
-    return { jenis: 'meta', nomor: j.display_phone_number || null, nama: j.verified_name || null, paket: j.messaging_limit_tier || null, tersambung: true, kuota: null, kedaluwarsa: null, mentah: j };
-  }
+  if ((await platformAktif()) === 'meta') return infoMeta();
   return infoFonnte();
+}
+async function infoMeta() {
+  const m = await konfMeta();
+  if (!m.token || !m.phoneNumberId) return { jenis: 'meta', nomor: null, nama: null, paket: null, tersambung: false, kuota: null, kedaluwarsa: null, alasan: 'Access Token / Phone Number ID belum diisi', mentah: null };
+  try {
+    const res = await fetch(m.graphBaseUrl + '/' + m.graphVersion + '/' + m.phoneNumberId + '?fields=display_phone_number,verified_name,quality_rating,messaging_limit_tier', { headers: { Authorization: 'Bearer ' + m.token } });
+    const j = await res.json().catch(() => ({})); if (!res.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + res.status));
+    return { jenis: 'meta', nomor: j.display_phone_number || null, nama: j.verified_name || null, paket: j.messaging_limit_tier || null, tersambung: true, kualitas: j.quality_rating || null, kuota: null, kedaluwarsa: null, mentah: j };
+  } catch (e) {
+    return { jenis: 'meta', nomor: null, nama: null, paket: null, tersambung: false, kuota: null, kedaluwarsa: null, alasan: e.message, mentah: null };
+  }
 }
 
 /* ================================================================== *
@@ -719,6 +766,42 @@ async function catatLogWebhook(payload, catatan) {
 }
 
 /* ================================================================== *
+ * WEBHOOK META (WhatsApp Business API)
+ * ================================================================== */
+const PETA_STATUS_META = { sent: ST_PENERIMA.TERKIRIM, delivered: ST_PENERIMA.DITERIMA, read: ST_PENERIMA.DIBACA, failed: ST_PENERIMA.GAGAL };
+async function prosesWebhookMeta(payload) {
+  const ring = { status: 0, takDikenal: 0, kampanye: [] }; const kset = new Set();
+  if (!payload || !Array.isArray(payload.entry)) return ring;
+  for (const entry of payload.entry) {
+    if (!entry.changes || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (change.field !== 'messages') continue;
+      const value = change.value || {};
+      if (Array.isArray(value.statuses)) {
+        for (const st of value.statuses) {
+          const status = PETA_STATUS_META[st.status];
+          if (!status) { ring.takDikenal++; continue; }
+          const tgt = await cariWamid(st.id);
+          if (!tgt) { ring.takDikenal++; continue; }
+          const now = Date.now(); const tmb = { waktu: {} };
+          if (status === ST_PENERIMA.TERKIRIM) tmb.waktu.dikirim = now;
+          if (status === ST_PENERIMA.DITERIMA) tmb.waktu.diterima = now;
+          if (status === ST_PENERIMA.DIBACA) tmb.waktu.dibaca = now;
+          if (status === ST_PENERIMA.GAGAL) {
+            tmb.waktu.gagal = now;
+            if (st.errors && st.errors[0]) tmb.pesanGalat = potong('Meta error: ' + (st.errors[0].message || st.errors[0].code), 300);
+          }
+          await ubahStatusPenerima(tgt.kid, tgt.rid, status, tmb);
+          ring.status++; kset.add(tgt.kid);
+        }
+      }
+    }
+  }
+  for (const kid of kset) await segarkanSelesai(kid);
+  ring.kampanye = [...kset]; return ring;
+}
+
+/* ================================================================== *
  * PESAN (pustaka)
  * ================================================================== */
 async function simpanPesan(o) {
@@ -786,10 +869,11 @@ module.exports = {
   bacaDelimited, petakanKontak,
   ambilPlaceholder, isiPlaceholder, periksaPesan,
   getSetelan, simpanSetelan, periksaJamKirim, periksaBatasHarian, terkirimHariIni, catatKirimHarian, tanggalWIB,
+  platformAktif, konfFonnte, konfMeta, infoMeta, infoFonnte,
   kirim, infoPengirim, pakaiPesanBebas,
   buatKampanye, ambilKampanye, ambilStat, daftarKampanye, daftarPenerima, aksiKampanye, ubahStatusPenerima,
   jalankanDispatcher, ukuranAntrean, promosikanTertunda,
-  verifikasiKunci, prosesWebhookFonnte, catatLogWebhook,
+  verifikasiKunci, prosesWebhookFonnte, prosesWebhookMeta, catatLogWebhook,
   simpanPesan, daftarPesan, hapusPesan, catatPemakaian, ambilPesanById: (id) => getJson(K.pesan(id)),
   tambahOptout, hapusOptout, daftarOptout,
   simpanKontak, daftarKontak, hapusKontak,
