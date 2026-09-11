@@ -15,10 +15,21 @@
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;overflow:hidden}
   body{display:flex;flex-direction:column}
-  .bc-wrap{display:flex;flex:1;overflow:hidden}
-  .bc-sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
-  .bc-brand{padding:18px 20px;display:flex;align-items:center;gap:10px;font-family:var(--head);font-weight:800;font-size:15px;letter-spacing:-.02em;border-bottom:1px solid var(--border)}
-  .bc-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 6px 16px -6px rgba(var(--accent-rgb),.9);flex:none}
+  .bc-wrap{display:flex;flex:1;overflow:hidden;position:relative}
+
+  /* ——— sidebar auto-hide overlay ——— */
+  .bc-sidebar{
+    position:absolute;left:0;top:0;bottom:0;z-index:50;width:240px;
+    background:var(--surface);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;overflow:hidden;
+    transform:translateX(-100%);transition:transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s ease;
+  }
+  /* hover zone: invisible 18px strip at left edge triggers sidebar */
+  .bc-sidebar::before{content:'';position:absolute;left:100%;top:0;bottom:0;width:18px}
+  .bc-sidebar:hover,.bc-sidebar.pinned{transform:translateX(0);box-shadow:6px 0 20px rgba(0,0,0,.12)}
+  .bc-sidebar.pinned .bc-brand::after{content:'';position:absolute;right:12px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .bc-brand{padding:18px 20px;display:flex;align-items:center;gap:10px;font-family:var(--head);font-weight:800;font-size:15px;letter-spacing:-.02em;border-bottom:1px solid var(--border);cursor:pointer;position:relative}
+  .bc-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 6px 16px -6px rgba(var(--accent-rgb),.9);flex:none;cursor:pointer}
   .bc-logo svg{width:18px;height:18px}
   .bc-nav{flex:1;overflow-y:auto;padding:12px 0}
   .bc-nav button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 20px;background:none;border:none;font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--text2);cursor:pointer;text-align:left;transition:.15s}
@@ -29,8 +40,32 @@
   .bc-foot .dev{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .bc-back{color:var(--muted);text-decoration:none;font-weight:600;transition:color .15s}
   .bc-back:hover{color:var(--accent)}
-  .bc-main{flex:1;overflow-y:auto;padding:24px 28px}
+
+  /* ——— riwayat layout: head fixed, table scroll, detail scroll ——— */
+  section[data-panel=riwayat]{display:flex;flex-direction:column;gap:12px}
+  .riwayat-head{flex:none}
+  .riwayat-scroll{flex:1;min-height:0;overflow-y:auto;max-height:180px}
+  .card-riwayat-detail{flex:1;min-height:0;overflow-y:auto}
+
+  /* ——— tombol menu (hamburger) ——— */
+  .bc-menubtn{
+    position:fixed;top:14px;left:14px;z-index:40;
+    width:36px;height:36px;border-radius:9px;
+    background:var(--surface);border:1px solid var(--border);
+    display:grid;place-items:center;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);transition:.2s;
+  }
+  .bc-menubtn:hover{background:var(--accent-soft);border-color:var(--accent-soft2)}
+  .bc-menubtn svg{width:18px;height:18px;color:var(--text2)}
+
+  /* ——— main full-width, no scroll ——— */
+  .bc-main{flex:1;overflow:hidden;padding:20px 24px 24px 24px;display:flex;flex-direction:column}
+  .bc-main>pita{flex:none}
+  section[data-panel]{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
   section[data-panel]:not([hidden]){animation:fadeUp .32s ease both}
+  section[data-panel]>[hidden]{display:none}
+  section[data-panel]>.card{flex:none}
+  section[data-panel]>.riwayat-scroll,section[data-panel]>.card-riwayat-detail{flex:1;min-height:0;overflow-y:auto}
   @media(max-width:768px){
     .bc-sidebar{width:64px}
     .bc-brand{padding:14px;justify-content:center}
@@ -85,6 +120,9 @@
 </style>
 </head>
 <body>
+<button class="bc-menubtn" id="menubtn" type="button" aria-label="Menu">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
 <div class="bc-wrap">
   <aside class="bc-sidebar">
     <div class="bc-brand">
@@ -187,7 +225,7 @@
 
     <!-- RIWAYAT -->
     <section data-panel="riwayat" hidden>
-      <div class="card">
+      <div class="card riwayat-head">
         <div class="row-head"><h2>Riwayat</h2>
           <div style="display:flex;gap:10px;align-items:center">
             <button id="dorong" class="btn">Kirim sekarang</button>
@@ -195,9 +233,11 @@
           </div>
         </div>
         <div id="ringkasAntrean" class="muted" style="margin-top:6px"></div>
-        <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Kampanye</th><th>Isi</th><th>Status</th><th>Kemajuan</th><th>Dibuat</th><th></th></tr></thead><tbody id="tabelKampanye"></tbody></table></div>
       </div>
-      <div id="detail" class="card" hidden></div>
+      <div class="riwayat-scroll">
+        <div class="table-wrap"><table><thead><tr><th>Kampanye</th><th>Isi</th><th>Status</th><th>Kemajuan</th><th>Dibuat</th><th></th></tr></thead><tbody id="tabelKampanye"></tbody></table></div>
+      </div>
+      <div id="detail" class="card card-riwayat-detail" hidden></div>
     </section>
 
     <!-- DAFTAR KONTAK -->
@@ -368,6 +408,19 @@ async function wa(aksi, data){
 }
 
 /* ---------- tab ---------- */
+/* sidebar: pin on logo click, unpin on click outside */
+(function(){
+  var sb=$('.bc-sidebar'), logo=$('.bc-logo'), brand=$('.bc-brand'), menu=$('#menubtn');
+  function togglePin(e){ e.stopPropagation(); sb.classList.toggle('pinned'); }
+  logo.addEventListener('click',togglePin);
+  menu.addEventListener('click',function(e){ e.stopPropagation(); sb.classList.toggle('pinned'); });
+  document.addEventListener('click',function(e){
+    if(sb.classList.contains('pinned') && !sb.contains(e.target) && e.target!==menu && !menu.contains(e.target)){
+      sb.classList.remove('pinned');
+    }
+  });
+})();
+
 function bukaTab(nama){
   $$('.bc-nav button').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===nama); });
   $$('[data-panel]').forEach(function(p){ p.hidden = p.dataset.panel!==nama; });
@@ -541,11 +594,15 @@ async function bukaDetail(id){
   S.kampanyeAktif=id; var box=$('#detail'); box.hidden=false;
   try{ var d=await wa('kampanye-get',{id:id}); var kp=d.kampanye,s=d.stat;
     var tiles=[['Total',s.total],['Antre',s.antre],['Terkirim',s.terkirim],['Diterima',s.diterima],['Dibaca',s.dibaca],['Gagal',s.gagal],['Dilewati',s.dilewati]];
-    box.innerHTML='<div class="row-head"><div><h2>'+esc(kp.nama)+'</h2><div class="muted" style="margin-top:5px">'+keping(kp.status)+' · '+(kp.mode==='pesan'?'pesan bebas lewat <b>'+esc(kp.pengirim||'fonnte')+'</b>':'template <code>'+esc((kp.template&&kp.template.nama)||'-')+'</code>')+' · '+waktu(kp.dibuatPada)+'</div>'+(kp.catatanTahan?'<div style="color:var(--amber);margin-top:5px">Ditahan: '+esc(kp.catatanTahan)+'</div>':'')+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'
+    box.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'
+      +'<div style="flex:none">'
+      +'<div class="row-head"><div><h2>'+esc(kp.nama)+'</h2><div class="muted" style="margin-top:5px">'+keping(kp.status)+' · '+(kp.mode==='pesan'?'pesan bebas lewat <b>'+esc(kp.pengirim||'fonnte')+'</b>':'template <code>'+esc((kp.template&&kp.template.nama)||'-')+'</code>')+' · '+waktu(kp.dibuatPada)+'</div>'+(kp.catatanTahan?'<div style="color:var(--amber);margin-top:5px">Ditahan: '+esc(kp.catatanTahan)+'</div>':'')+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'
       +'<button class="btn btn-sm" data-aksi="tahan">Tahan</button><button class="btn btn-sm" data-aksi="lanjutkan">Lanjutkan</button><button class="btn btn-sm" data-aksi="ulangi-gagal">Ulangi gagal</button><button class="btn btn-danger btn-sm" data-aksi="batalkan">Batalkan</button></div></div>'
       +'<div class="bc-tiles" style="margin-top:14px">'+tiles.map(function(t){return '<div class="bc-tile"><div class="l">'+t[0]+'</div><div class="n">'+angka(t[1])+'</div></div>';}).join('')+'</div>'
       +'<div style="margin-top:14px;display:flex;align-items:center;gap:10px"><span class="muted" style="font-size:12px">Saring:</span><select id="saringStatus"><option value="">semua status</option>'+['antre','terkirim','diterima','dibaca','gagal','dilewati','dibatalkan'].map(function(x){return '<option value="'+x+'">'+x+'</option>';}).join('')+'</select></div>'
-      +'<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Nomor</th><th>Status</th><th>Parameter</th><th>Coba</th><th>Galat</th><th>Waktu</th></tr></thead><tbody id="tabelPenerima"></tbody></table></div>';
+      +'</div>'
+      +'<div style="flex:1;min-height:0;overflow-y:auto;margin-top:10px"><div class="table-wrap"><table><thead><tr><th>Nomor</th><th>Status</th><th>Parameter</th><th>Coba</th><th>Galat</th><th>Waktu</th></tr></thead><tbody id="tabelPenerima"></tbody></table></div></div>'
+      +'</div>';
     box.querySelectorAll('[data-aksi]').forEach(function(b){ b.addEventListener('click',async function(){ if(b.dataset.aksi==='batalkan'&&!await konfirm({judul:'Batalkan kampanye',isi:'Hentikan pengiriman kampanye ini?',ya:'Batalkan',bahaya:true}))return; try{ await wa('kampanye-aksi',{id:id,tindakan:b.dataset.aksi}); bukaDetail(id); muatKampanye(); }catch(e){ toast(e.message); } }); });
     enhanceSelect($('#saringStatus'));
     $('#saringStatus').addEventListener('change',muatPenerima);
