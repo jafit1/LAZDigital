@@ -247,6 +247,8 @@ const K = {
   setelan: () => `${P()}:setelan`,
   kirimHarian: (tgl) => `${P()}:kirim-harian:${tgl}`,
   logWebhook: () => `${P()}:log:webhook`,
+  daftarKontak: (id) => `${P()}:daftar-kontak:${id}`,
+  indeksDaftarKontak: () => `${P()}:daftar-kontak:indeks`,
 };
 
 async function getJson(k) { const v = await store.get(k); if (v == null || v === '') return null; if (typeof v === 'object') return v; try { return JSON.parse(v); } catch (e) { return null; } }
@@ -744,6 +746,39 @@ async function simpanKontak(o) {
 async function daftarKontak(limit) { const ids = await store.zrange(K.indeksKontak(), 0, (limit || 500) - 1, { rev: true }); if (!ids.length) return []; return (await mgetJson(ids.map((id) => K.kontak(id)))).filter(Boolean); }
 async function hapusKontak(id) { await store.del(K.kontak(id)); await store.zrem(K.indeksKontak(), id); return true; }
 
+/* ================================================================== *
+ * DAFTAR KONTAK (grup/kelompok kontak bernama)
+ * ================================================================== */
+async function simpanDaftarKontak(o) {
+  const id = o.id || buatId('dk_');
+  const now = Date.now();
+  const lama = o.id ? await getJson(K.daftarKontak(o.id)) : null;
+  const baris = Array.isArray(o.baris) ? o.baris : [];
+  const row = {
+    id,
+    nama: String(o.nama || '').trim() || 'Tanpa nama',
+    deskripsi: o.deskripsi || null,
+    header: o.header || [],
+    headerParameter: o.headerParameter || [],
+    jumlah: baris.length,
+    baris: baris,
+    dibuat: (lama && lama.dibuat) || now,
+    diperbarui: now,
+    dipakai: (lama && lama.dipakai) || 0,
+  };
+  await setJson(K.daftarKontak(id), row);
+  await store.zadd(K.indeksDaftarKontak(), [{ member: id, score: now }]);
+  return row;
+}
+async function daftarDaftarKontak(limit) {
+  const ids = await store.zrange(K.indeksDaftarKontak(), 0, (limit || 100) - 1, { rev: true });
+  if (!ids.length) return [];
+  return (await mgetJson(ids.map((id) => K.daftarKontak(id)))).filter(Boolean);
+}
+async function ambilDaftarKontak(id) { return getJson(K.daftarKontak(id)); }
+async function hapusDaftarKontak(id) { await store.del(K.daftarKontak(id)); await store.zrem(K.indeksDaftarKontak(), id); return true; }
+async function catatPemakaianDaftar(id) { const r = await getJson(K.daftarKontak(id)); if (!r) return; r.dipakai = (r.dipakai || 0) + 1; await setJson(K.daftarKontak(id), r); }
+
 module.exports = {
   cfg, store, K, PAKAI_REDIS,
   getJson, setJson, mgetJson,
@@ -758,5 +793,6 @@ module.exports = {
   simpanPesan, daftarPesan, hapusPesan, catatPemakaian, ambilPesanById: (id) => getJson(K.pesan(id)),
   tambahOptout, hapusOptout, daftarOptout,
   simpanKontak, daftarKontak, hapusKontak,
+  simpanDaftarKontak, daftarDaftarKontak, ambilDaftarKontak, hapusDaftarKontak, catatPemakaianDaftar,
   ST_PENERIMA, ST_KAMPANYE,
 };

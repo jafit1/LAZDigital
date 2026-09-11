@@ -17,12 +17,13 @@ const wa = require('./_wa.js');
 const IZIN = {
   'perangkat': 'view', 'setelan-get': 'view', 'koneksi-get': 'edit',
   'kontak-parse': 'view', 'kontak-list': 'view',
+  'daftarkontak-list': 'view', 'daftarkontak-get': 'view',
   'pesan-list': 'view',
   'kampanye-list': 'view', 'kampanye-get': 'view', 'kampanye-recipients': 'view',
   'optout-list': 'view', 'log-webhook': 'view',
-  'kampanye-buat': 'create', 'pesan-simpan': 'create', 'kontak-simpan': 'create', 'optout-tambah': 'create',
+  'kampanye-buat': 'create', 'pesan-simpan': 'create', 'kontak-simpan': 'create', 'optout-tambah': 'create', 'daftarkontak-simpan': 'create',
   'setelan-simpan': 'edit', 'kampanye-aksi': 'edit',
-  'pesan-hapus': 'delete', 'kontak-hapus': 'delete', 'optout-hapus': 'delete',
+  'pesan-hapus': 'delete', 'kontak-hapus': 'delete', 'optout-hapus': 'delete', 'daftarkontak-hapus': 'delete',
 };
 
 function balas(res, obj, status) {
@@ -114,7 +115,7 @@ async function jalankan(aksi, b, pengguna) {
     case 'kampanye-get': return { kampanye: await wa.ambilKampanye(b.id), stat: await wa.ambilStat(b.id) };
     case 'kampanye-recipients': return await wa.daftarPenerima(b.id, { status: b.status || null, limit: b.limit || 200, offset: b.offset || 0 });
     case 'kampanye-aksi': { const k = await wa.aksiKampanye(b.id, b.tindakan); return { kampanye: k, stat: await wa.ambilStat(b.id) }; }
-    case 'kampanye-buat': return await buatKampanye(b, pengguna);
+    case 'kampanye-buat': { const hasil = await buatKampanye(b, pengguna); if (b.daftarKontakId) await wa.catatPemakaianDaftar(b.daftarKontakId); return hasil; }
 
     case 'optout-list': { const nomor = await wa.daftarOptout(); return { jumlah: nomor.length, nomor: nomor }; }
     case 'optout-tambah': { const { ok, gagal } = normalkan(b.nomor); return { ditambah: await wa.tambahOptout(ok), gagal: gagal }; }
@@ -123,6 +124,11 @@ async function jalankan(aksi, b, pengguna) {
     case 'kontak-list': return { kontak: await wa.daftarKontak(b.limit || 500) };
     case 'kontak-simpan': return { kontak: await wa.simpanKontak(b) };
     case 'kontak-hapus': await wa.hapusKontak(b.id); return { dihapus: b.id };
+
+    case 'daftarkontak-list': return { daftar: await wa.daftarDaftarKontak(b.limit || 100) };
+    case 'daftarkontak-get': return { daftar: await wa.ambilDaftarKontak(b.id) };
+    case 'daftarkontak-simpan': return { daftar: await wa.simpanDaftarKontak(b) };
+    case 'daftarkontak-hapus': await wa.hapusDaftarKontak(b.id); return { dihapus: b.id };
 
     case 'log-webhook': return { antrean: await wa.ukuranAntrean() };
 
