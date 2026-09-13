@@ -222,6 +222,15 @@ async function hitDispatch(query, body, headers) {
   const vj = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
   const durasi = (vj.functions && vj.functions['api/wa-dispatch.js'] && vj.functions['api/wa-dispatch.js'].maxDuration) || 0;
   cek('wa-dispatch punya maxDuration sendiri', durasi >= 60, durasi);
+  /* Vercel mengklaim tiap berkas dengan pola PERTAMA yang cocok. Kalau
+     "api/**\/*.js" ditaruh lebih dulu, ia menyerap semuanya dan pola khusus
+     "api/wa-dispatch.js" tidak kebagian berkas — build gagal dengan
+     "doesn't match any Serverless Functions inside the api directory". */
+  const polaFungsi = Object.keys(vj.functions || {});
+  cek('pola khusus wa-dispatch ditaruh sebelum pola umum',
+    polaFungsi.indexOf('api/wa-dispatch.js') >= 0 &&
+    polaFungsi.indexOf('api/wa-dispatch.js') < polaFungsi.findIndex((p) => p.indexOf('**') >= 0),
+    polaFungsi);
   cek('batas anggaran lebih kecil dari maxDuration', wa.BATAS_BUDGET_DETIK < durasi, { budget: wa.BATAS_BUDGET_DETIK, durasi });
   const lama = (await hitDispatch('?detik=999', { token: T })).tubuh.result.lamaMs;
   cek('minta 999 detik tetap selesai jauh di bawah batas', lama < wa.BATAS_BUDGET_DETIK * 1000, lama);
