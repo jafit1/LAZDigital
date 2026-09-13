@@ -46,7 +46,11 @@ module.exports = async (req, res) => {
     }
   }
 
-  const budget = Math.min(Number(url.searchParams.get('detik') || c.rate.budgetSeconds), 55);
+  /* Batas lama 55 detik padahal maxDuration fungsi ini 30 — satu putaran bisa
+     diputus Vercel di tengah kirim dan kunci dispatcher menggantung sampai TTL
+     habis. Sekarang diklem ke BATAS_BUDGET_DETIK (50), di bawah maxDuration 60. */
+  const dimintaDetik = Number(url.searchParams.get('detik') || c.rate.budgetSeconds);
+  const budget = Math.max(Math.min(Number.isFinite(dimintaDetik) ? dimintaDetik : c.rate.budgetSeconds, wa.BATAS_BUDGET_DETIK), 5);
   const mulai = Date.now();
   let hasil;
   try {
@@ -56,20 +60,29 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // rantai otomatis
+  /* ---- rantai otomatis ----
+     Versi lama berhenti merantai begitu satu putaran tidak sempat mengirim apa
+     pun (adaKemajuan). Padahal putaran bisa habis hanya karena menunggu jeda
+     acak antar pesan — antreannya masih penuh, dan pengiriman berhenti di
+     tengah jalan. Sekarang patokannya `segeraJatuhTempo` dari dispatcher:
+     lanjut selama masih ada yang siap atau jatuh tempo <=3 menit lagi, berhenti
+     kalau sisanya menunggu jam kirim besok (itu urusan cron). */
   const rantai = Number(url.searchParams.get('rantai') || 0);
-  let rantaiBerikut = false;
-  const adaSisa = (hasil.antrean && hasil.antrean.total) > 0;
-  const adaKemajuan = ((hasil.hitungan && hasil.hitungan.terkirim) || 0) + ((hasil.hitungan && hasil.hitungan.gagal) || 0) > 0;
-  if (!hasil.dilewati && adaSisa && adaKemajuan && rantai < c.rate.maxRantai && c.cronSecret) {
+  let rantaiBerikut = false, alasanBerhenti = '';
+  const lanjut = !hasil.dilewati && hasil.segeraJatuhTempo;
+  if (lanjut && rantai >= c.rate.maxRantai) alasanBerhenti = 'batas rantai (' + c.rate.maxRantai + ') tercapai';
+  else if (lanjut && !c.cronSecret) alasanBerhenti = 'CRON_SECRET belum diisi — rantai otomatis mati';
+  else if (!lanjut && (hasil.antrean && hasil.antrean.total) > 0) alasanBerhenti = 'sisa antrean menunggu jam kirim / batas harian';
+
+  if (lanjut && rantai < c.rate.maxRantai && c.cronSecret) {
     const proto = (req.headers['x-forwarded-proto'] || 'https');
     const host = req.headers['host'];
     if (host) {
       const next = proto + '://' + host + '/api/wa-dispatch?rantai=' + (rantai + 1) + '&detik=' + budget;
       fetch(next, { method: 'POST', headers: { Authorization: 'Bearer ' + c.cronSecret } }).catch(() => {});
       rantaiBerikut = true;
-    }
+    } else alasanBerhenti = 'host tidak terbaca';
   }
 
-  res.status(200).json({ result: Object.assign({}, hasil, { lamaMs: Date.now() - mulai, pemicu: lewatCron ? 'cron' : 'admin', rantai: rantai, rantaiBerikut: rantaiBerikut }) });
+  res.status(200).json({ result: Object.assign({}, hasil, { lamaMs: Date.now() - mulai, pemicu: lewatCron ? 'cron' : 'admin', rantai: rantai, rantaiBerikut: rantaiBerikut, alasanBerhenti: alasanBerhenti, cronSiap: !!c.cronSecret }) });
 };

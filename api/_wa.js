@@ -23,6 +23,18 @@ const path = require('path');
  * ================================================================== */
 function num(v, d) { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : d; }
 
+/* Batas keras satu putaran dispatcher. maxDuration fungsi wa-dispatch di
+   vercel.json 60 detik; disisakan 10 detik untuk melepas kunci & membalas. */
+const BATAS_BUDGET_DETIK = 50;
+
+/* Batas penerima per kampanye. Penerima ditulis ke Redis di dalam SATU
+   permintaan HTTP, jadi angkanya harus muat di batas 30 detik: ~5.000 baris
+   ≈ 20 gelombang tulis ≈ 4 detik. Kontak yang lebih banyak dipecah otomatis
+   oleh dashboard menjadi beberapa kampanye. (Batas lama 50.000 tidak pernah
+   bisa dipenuhi — pasti kena timeout jauh sebelum itu.) */
+const BATAS_PENERIMA = num(process.env.WA_BATAS_PENERIMA, 5000);
+const GELOMBANG_TULIS = 250;
+
 function cfg() {
   return {
     prefix: process.env.WA_PREFIX || 'wab',
@@ -45,8 +57,10 @@ function cfg() {
       jedaMin: Number(process.env.WA_JEDA_MIN_DETIK != null ? process.env.WA_JEDA_MIN_DETIK : 10),
       jedaMax: Number(process.env.WA_JEDA_MAX_DETIK != null ? process.env.WA_JEDA_MAX_DETIK : 20),
       maxAttempts: num(process.env.WA_MAX_ATTEMPTS, 4),
-      budgetSeconds: num(process.env.WA_DISPATCH_BUDGET_SECONDS, 45),
-      maxRantai: num(process.env.WA_MAX_RANTAI, 20),
+      budgetSeconds: Math.min(num(process.env.WA_DISPATCH_BUDGET_SECONDS, 45), BATAS_BUDGET_DETIK),
+      /* Tiap mata rantai adalah pemanggilan fungsi baru, jadi panjangnya tidak
+         menambah risiko timeout. 200 x ~50 dtk = ~2,7 jam kirim beruntun. */
+      maxRantai: num(process.env.WA_MAX_RANTAI, 200),
     },
     antispam: {
       jamAktif: String(process.env.WA_JAM_KIRIM_AKTIF != null ? process.env.WA_JAM_KIRIM_AKTIF : 'true').toLowerCase() !== 'false',
@@ -446,6 +460,9 @@ function golongkanFonnte(status, json, teks) {
   return { kelas: 'permanen', kode: null, pesan: alasan, jedaDetik: 0 };
 }
 async function infoFonnte() {
+  /* WA_DRY_RUN menahan pengiriman sungguhan; pembacaan status perangkat ikut
+     dipalsukan supaya mode uji tidak menuntut token Fonnte yang sah. */
+  if (cfg().dryRun) return { jenis: 'fonnte', nomor: '628000000000', nama: 'Mode uji (WA_DRY_RUN)', paket: 'uji', tersambung: true, kuota: 9999, kedaluwarsa: null, mentah: { dryRun: true } };
   const f = await konfFonnte(); if (!f.token) throw new Error('Token Fonnte belum diisi (atur di tab Setelan)');
   const res = await fetch(f.baseUrl + '/device', { method: 'POST', headers: { Authorization: f.token, 'Content-Type': 'application/json' }, body: '{}' });
   const json = await res.json().catch(() => null);
@@ -494,6 +511,8 @@ const ST_KAMPANYE = { BERJALAN: 'berjalan', DITAHAN: 'ditahan', SELESAI: 'selesa
 async function saringOptout(daftar) { const semua = new Set(await store.smembers(K.optout())); const tertolak = daftar.filter((t) => semua.has(t)); return { tertolak }; }
 
 async function buatKampanye(o) {
+  if (!Array.isArray(o.penerima) || !o.penerima.length) throw new Error('Tidak ada penerima.');
+  if (o.penerima.length > BATAS_PENERIMA) throw new Error('Satu kampanye maksimal ' + BATAS_PENERIMA.toLocaleString('id-ID') + ' nomor (dikirim ' + o.penerima.length.toLocaleString('id-ID') + ').');
   const kid = buatId('k_'); const now = Date.now(); const mode = o.mode === 'template' ? 'template' : 'pesan';
   const { tertolak } = await saringOptout(o.penerima.map((p) => p.telepon)); const setT = new Set(tertolak);
   const kampanye = {
@@ -512,7 +531,7 @@ async function buatKampanye(o) {
   });
   await setJson(K.kampanye(kid), kampanye);
   await store.zadd(K.indeksKampanye(), [{ member: kid, score: now }]);
-  for (const grup of bagi(rows, 80)) { await Promise.all(grup.map((r) => setJson(K.penerima(kid, r.id), r))); await store.rpush(K.daftarPenerima(kid), grup.map((r) => r.id)); }
+  for (const grup of bagi(rows, GELOMBANG_TULIS)) { await Promise.all(grup.map((r) => setJson(K.penerima(kid, r.id), r))); await store.rpush(K.daftarPenerima(kid), grup.map((r) => r.id)); }
   const dilewatiN = rows.filter((r) => r.status === ST_PENERIMA.DILEWATI).length;
   await store.hset(K.statKampanye(kid), { total: rows.length, antre: rows.length - dilewatiN, terkirim: 0, diterima: 0, dibaca: 0, gagal: 0, dilewati: dilewatiN, dibatalkan: 0 });
   if (kampanye.status === ST_KAMPANYE.BERJALAN && pekerjaan.length) for (const g of bagi(pekerjaan, 200)) await store.rpush(K.antrean(), g.map((x) => JSON.stringify(x)));
@@ -646,6 +665,15 @@ async function promosikanTertunda(batas) {
 }
 async function ukuranAntrean() { const siap = await store.llen(K.antrean()); const tunda = await store.zcard(K.antreanTertunda()); return { siap, tunda, total: siap + tunda }; }
 
+/* Apakah ada pekerjaan tertunda yang jatuh tempo dalam `ms` ke depan?
+   Dipakai wa-dispatch untuk memutuskan lanjut merantai atau berhenti: kalau
+   sisanya baru jatuh tempo besok pagi (di luar jam kirim), merantai sekarang
+   hanya membakar waktu fungsi tanpa mengirim apa pun. */
+async function adaSiapDalam(ms) {
+  const r = await store.zrangebyscore(K.antreanTertunda(), 0, Date.now() + Math.max(Number(ms) || 0, 0), 1);
+  return r.length > 0;
+}
+
 async function jalankanDispatcher(opsi) {
   opsi = opsi || {}; const c = cfg(); const budgetMs = opsi.budgetMs || c.rate.budgetSeconds * 1000; const tenggat = Date.now() + budgetMs; const log = opsi.log;
   const nilaiKunci = process.pid + '-' + Date.now();
@@ -666,7 +694,11 @@ async function jalankanDispatcher(opsi) {
     }
   } finally { const skg = await store.get(K.kunciDispatch()); if (skg === nilaiKunci) await store.del(K.kunciDispatch()); }
   for (const kid of tersentuh) await segarkanSelesai(kid);
-  return { dilewati: false, hitungan, antrean: await ukuranAntrean() };
+  const antrean = await ukuranAntrean();
+  /* segeraJatuhTempo: masih ada yang siap dikirim sebentar lagi (jeda acak,
+     backoff) — beda dengan sisa yang menunggu jam kirim besok. */
+  const segeraJatuhTempo = antrean.siap > 0 || (antrean.tunda > 0 && await adaSiapDalam(3 * 60 * 1000));
+  return { dilewati: false, hitungan, antrean, segeraJatuhTempo };
 }
 
 /* ================================================================== *
@@ -788,7 +820,8 @@ module.exports = {
   getSetelan, simpanSetelan, periksaJamKirim, periksaBatasHarian, terkirimHariIni, catatKirimHarian, tanggalWIB,
   kirim, infoPengirim, pakaiPesanBebas,
   buatKampanye, ambilKampanye, ambilStat, daftarKampanye, daftarPenerima, aksiKampanye, ubahStatusPenerima,
-  jalankanDispatcher, ukuranAntrean, promosikanTertunda,
+  jalankanDispatcher, ukuranAntrean, promosikanTertunda, adaSiapDalam,
+  BATAS_PENERIMA, BATAS_BUDGET_DETIK,
   verifikasiKunci, prosesWebhookFonnte, catatLogWebhook,
   simpanPesan, daftarPesan, hapusPesan, catatPemakaian, ambilPesanById: (id) => getJson(K.pesan(id)),
   tambahOptout, hapusOptout, daftarOptout,

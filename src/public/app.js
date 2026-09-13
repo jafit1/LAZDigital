@@ -193,7 +193,14 @@ function startApp(){
   function buildNav(){
     var nav=el('nav');nav.innerHTML='';
     MENU.forEach(function(m){if(m.mod&&!canDo(m.mod,'view'))return;var d=document.createElement('button');d.className='tn-item';d.id='nav_'+m.id;d.title=m.label;d.setAttribute('aria-label',m.label);d.innerHTML='<span class="ic">'+m.ic+'</span><span class="tn-tip">'+m.label+'</span>';d.onclick=function(){if(m.url){location.href=m.url;}else{go(m.id);}};nav.appendChild(d);});   // klik menu = langsung buka halamannya, sidebar tidak ikut melebar
-    var first=MENU.find(function(m){return !m.mod||canDo(m.mod,'view');});
+    /* Halaman broadcast berdiri di berkas HTML sendiri, jadi menunya kembali ke
+       sini lewat /?hal=<id>. Tanpa ini, klik "Penghimpunan" dari broadcast
+       selalu mendarat di Dashboard. */
+    var minta='';
+    try{ minta=(new URLSearchParams(location.search)).get('hal')||''; }catch(e){}
+    var tujuan=MENU.find(function(m){return m.id===minta && !m.url && (!m.mod||canDo(m.mod,'view'));});
+    if(minta){ try{ history.replaceState(null,'',location.pathname); }catch(e){} }
+    var first=tujuan||MENU.find(function(m){return !m.url&&(!m.mod||canDo(m.mod,'view'));});
     go(first?first.id:'dashboard');
   }
   gas('apiGetPermissionMeta')(TOKEN).then(function(meta){PERM_META=meta||{modules:[],actions:[]};buildNav();}).catch(function(){buildNav();});

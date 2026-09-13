@@ -9,6 +9,9 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 30
+    },
+    "api/wa-dispatch.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
