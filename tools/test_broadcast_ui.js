@@ -192,6 +192,80 @@ const RE_EMOJI = String.raw`[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BF
  cek('URL berkunci tidak dicetak di halaman', bocor.teks===false, bocor);
  cek('hanya menandai kunci terpasang / belum', /kunci webhook|belum ada kunci/i.test(bocor.secretInfo||''), bocor);
 
+ console.log('\n=== H2. PEMILIH JAM KIRIM ===');
+ const jam=await p.evaluate(()=>({
+   adaInputTime:document.querySelectorAll('input[type=time]').length,
+   tombol:document.querySelectorAll('#kotakJam .btn-dropdown').length,
+   opsiJam:document.querySelectorAll('#mulaiJ option').length,
+   opsiMenit:document.querySelectorAll('#mulaiM option').length,
+   nilai:(document.getElementById('mulaiJ')||{}).value+':'+(document.getElementById('mulaiM')||{}).value,
+   teksTombol:[...document.querySelectorAll('#kotakJam .btn-dropdown .sel-teks')].map(x=>x.textContent).join('|')
+ }));
+ cek('tidak ada lagi input type=time bawaan browser', jam.adaInputTime===0, jam);
+ cek('dua dropdown per kolom (jam & menit)', jam.tombol===4, jam);
+ cek('pilihan jam 24 jam penuh, bukan AM/PM', jam.opsiJam===24, jam);
+ cek('menit kelipatan 5', jam.opsiMenit>=12, jam);
+ cek('nilai tersimpan terbaca benar', jam.nilai==='08:00', jam);
+ cek('tombolnya menampilkan angka jamnya', /08/.test(jam.teksTombol), jam.teksTombol);
+ /* Fixture uji menjalankan server dengan jam kirim dimatikan, jadi pilihan
+    jamnya memang sengaja diredupkan & tidak bisa diklik. Itu diperiksa dulu,
+    baru sakelarnya dinyalakan untuk menguji dropdownnya. */
+ const mati=await p.evaluate(()=>{const k=document.getElementById('kotakJam');
+   return {redup:k.classList.contains('set-mati'), opacity:getComputedStyle(k).opacity,
+           klik:getComputedStyle(k).pointerEvents};});
+ cek('jam kirim mati → pilihan jamnya diredupkan', mati.redup && Number(mati.opacity)<1, mati);
+ cek('dan tidak bisa diklik selagi mati', mati.klik==='none', mati);
+ /* kotak centangnya disembunyikan di balik .switch, jadi diklik lewat elemennya */
+ await p.evaluate(()=>document.getElementById('jamAktif').click()); await p.waitForTimeout(400);
+ cek('dinyalakan → kembali bisa dipakai',
+   await p.evaluate(()=>!document.getElementById('kotakJam').classList.contains('set-mati')));
+
+ await p.click('#kotakJam .btn-dropdown'); await p.waitForTimeout(400);
+ const pop=await p.evaluate(()=>{const x=document.querySelector('.select-enhanced-popover');
+   return x?{ada:true,item:x.querySelectorAll('.dropdown-item').length}:{ada:false};});
+ cek('dropdown jam terbuka pakai gaya halaman sendiri', pop.ada && pop.item===24, pop);
+ await p.evaluate(()=>{const it=[...document.querySelectorAll('.select-enhanced-popover .dropdown-item')].find(x=>x.textContent==='06'); if(it) it.click();});
+ await p.waitForTimeout(400);
+ cek('memilih jam mengubah nilainya', await p.evaluate(()=>document.getElementById('mulaiJ').value==='06'));
+ cek('tombolnya ikut berubah jadi 06',
+   await p.evaluate(()=>document.querySelector('#kotakJam .btn-dropdown .sel-teks').textContent==='06'));
+ /* Tombol dua digit tidak boleh melebar mengikuti kolom — kalau melebar,
+    tanda titik dua terdorong ke baris berikutnya dan barisnya pecah. */
+ const bentuk=await p.evaluate(()=>{
+   const w=document.querySelector('#kotakJam .waktu');
+   const b=[...w.querySelectorAll('.btn-dropdown')].map(x=>Math.round(x.getBoundingClientRect().width));
+   /* titik dua lebih pendek dari tombolnya, jadi tepi atasnya memang beda.
+      Yang menentukan sebaris atau tidak adalah titik tengah vertikalnya. */
+   const tengah=[...w.children].filter(x=>x.offsetParent!==null)
+     .map(x=>{const r=x.getBoundingClientRect(); return Math.round(r.top+r.height/2);});
+   return {lebar:b, tengah:tengah,
+           satuBaris:Math.max.apply(null,tengah)-Math.min.apply(null,tengah)<=2,
+           lebarKotak:Math.round(w.getBoundingClientRect().width)};
+ });
+ cek('jam & menit ada di satu baris dengan titik dua di tengah', bentuk.satuBaris, bentuk);
+ cek('tombolnya ringkas, tidak selebar kolom', bentuk.lebar.every(x=>x<=120), bentuk);
+ /* simpan lalu muat ulang: nilai dari dropdown harus benar-benar tersimpan */
+ await p.click('#simpanSetelan'); await p.waitForTimeout(2200);
+ await p.click('.tab-btn[data-tab=baru]'); await p.waitForTimeout(500);
+ await p.click('.tab-btn[data-tab=setelan]'); await p.waitForTimeout(1800);
+ cek('jam hasil pilihan tersimpan di server',
+   await p.evaluate(()=>document.getElementById('mulaiJ').value==='06'),
+   await p.evaluate(()=>document.getElementById('mulaiJ').value));
+
+ console.log('\n=== H3. TATA LETAK SETELAN RINGKAS ===');
+ const set=await p.evaluate(()=>{
+   const s=document.querySelector('[data-panel=setelan]');
+   const d=s.querySelector('.rinci-perangkat');
+   return {kartu:s.querySelectorAll('.card').length,
+           tinggi:s.scrollHeight,
+           mentahDilipat:!!d && !d.open,
+           tinggiMentah:d?Math.round(d.getBoundingClientRect().height):0};
+ });
+ cek('setelan cukup dua kartu, bukan tiga', set.kartu===2, set);
+ cek('keluaran mentah perangkat dilipat', set.mentahDilipat, set);
+ cek('lipatan tertutup tidak makan tempat (< 40px)', set.tinggiMentah<40, set);
+ cek('seluruh tab setelan muat tanpa gulungan panjang (< 700px)', set.tinggi<700, set.tinggi);
+
  console.log('\n=== I. KIRIM SUNGGUHAN (dry run) ===');
  await p.click('.tab-btn[data-tab=baru]'); await p.waitForTimeout(700);
  await p.fill('#isiPesan','Assalamualaikum {nama}, terima kasih. Balas STOP untuk berhenti.');
@@ -215,6 +289,76 @@ const RE_EMOJI = String.raw`[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BF
  cek('3 penerima tercatat', /3 penerima/.test(riwayat.tabel), riwayat.tabel.slice(0,160));
  const detail=await p.evaluate(()=>document.getElementById('detail').innerText);
  cek('rincian kampanye terbuka otomatis', /Terkirim/i.test(detail), detail.slice(0,120));
+
+ console.log('\n=== I1b. SISIP NAMA DI POSISI KURSOR ===');
+ await p.click('.tab-btn[data-tab=baru]'); await p.waitForTimeout(600);
+ /* chip {nama} harus tersedia bahkan sebelum kontak diunggah */
+ await p.evaluate(()=>{ S.kontak=null; chipKolom(); });
+ await p.waitForTimeout(300);
+ const chipAwal=await p.evaluate(()=>({
+   ada:!!document.querySelector('#chipKolom .chip-nama'),
+   teks:(document.querySelector('#chipKolom .chip-nama')||{}).textContent||'',
+   jumlah:document.querySelectorAll('#chipKolom .chip').length
+ }));
+ cek('chip {nama} tersedia walau kontak belum diunggah', chipAwal.ada && chipAwal.teks==='{nama}', chipAwal);
+
+ /* muat kontak dengan judul kolom BUKAN "nama" */
+ await p.fill('#tempel','telepon;Nama Donatur;nominal\n08170001001;Rahmat Hidayat;200.000\n08170001002;Sari Wulandari;350.000');
+ await p.click('#prosesTempel'); await p.waitForTimeout(1700);
+ const baca=await p.evaluate(()=>({
+   ringkas:document.getElementById('ringkasKontak').innerText,
+   chip:[...document.querySelectorAll('#chipKolom .chip')].map(x=>x.textContent)
+ }));
+ cek('kolom nama dikenali walau judulnya "Nama Donatur"', /Nama Donatur/.test(baca.ringkas), baca.ringkas.slice(0,140));
+ cek('nama kontaknya ikut terbaca dan ditampilkan', /Rahmat Hidayat/.test(baca.ringkas) && /Sari Wulandari/.test(baca.ringkas), baca.ringkas.slice(0,200));
+ cek('chip {nama} tetap satu, tidak dobel dengan kolom aslinya',
+   baca.chip.filter(x=>x==='{nama}').length===1, baca.chip);
+ cek('kolom lain ikut jadi chip', baca.chip.indexOf('{nominal}')>=0, baca.chip);
+
+ /* sisipkan TEPAT di tengah kalimat, bukan di ujung */
+ await p.fill('#isiPesan','Assalamualaikum , terima kasih. Balas STOP untuk berhenti.');
+ await p.evaluate(()=>{ const ta=document.getElementById('isiPesan');
+   const pos='Assalamualaikum '.length; ta.focus(); ta.setSelectionRange(pos,pos);
+   ta.dispatchEvent(new Event('click')); });
+ await p.waitForTimeout(250);
+ await p.click('#chipKolom .chip-nama'); await p.waitForTimeout(600);
+ const hasil=await p.evaluate(()=>({
+   teks:document.getElementById('isiPesan').value,
+   kursor:document.getElementById('isiPesan').selectionStart,
+   pra:document.getElementById('pra').textContent
+ }));
+ cek('placeholder masuk di posisi kursor, bukan di akhir',
+   hasil.teks==='Assalamualaikum {nama}, terima kasih. Balas STOP untuk berhenti.', hasil.teks);
+ cek('kursor pindah ke belakang sisipan', hasil.kursor==='Assalamualaikum {nama}'.length, hasil.kursor);
+ cek('pratinjau langsung memakai nama sungguhan', /Assalamualaikum Rahmat Hidayat,/.test(hasil.pra), hasil.pra.slice(0,80));
+
+ /* sisip di awal teks — dulu selalu meleset ke akhir karena posisi 0 dianggap kosong */
+ await p.fill('#isiPesan','apa kabar?');
+ await p.evaluate(()=>{ const ta=document.getElementById('isiPesan'); ta.focus(); ta.setSelectionRange(0,0); ta.dispatchEvent(new Event('click')); });
+ await p.waitForTimeout(250);
+ await p.click('#chipKolom .chip-nama'); await p.waitForTimeout(500);
+ cek('sisip di posisi paling awal juga tepat',
+   await p.evaluate(()=>document.getElementById('isiPesan').value==='{nama}apa kabar?'),
+   await p.evaluate(()=>document.getElementById('isiPesan').value));
+
+ /* menimpa teks yang sedang disorot */
+ await p.fill('#isiPesan','Halo SIAPA di sana');
+ await p.evaluate(()=>{ const ta=document.getElementById('isiPesan'); ta.focus(); ta.setSelectionRange(5,10); ta.dispatchEvent(new Event('select')); });
+ await p.waitForTimeout(250);
+ await p.click('#chipKolom .chip-nama'); await p.waitForTimeout(500);
+ cek('teks yang disorot diganti placeholder',
+   await p.evaluate(()=>document.getElementById('isiPesan').value==='Halo {nama} di sana'),
+   await p.evaluate(()=>document.getElementById('isiPesan').value));
+
+ /* kirim sungguhan: {nama} harus terisi walau kolomnya "Nama Donatur" */
+ await p.fill('#isiPesan','Assalamualaikum {nama}, laporan sudah terbit. Balas STOP untuk berhenti.');
+ await p.fill('#namaKampanye','Uji Sapaan Nama');
+ await p.waitForTimeout(900);
+ await p.click('#kirim'); await p.waitForTimeout(600);
+ await p.evaluate(()=>[...document.querySelectorAll('#modalFoot .btn')].find(b=>/kirim/i.test(b.textContent)).click());
+ await p.waitForTimeout(3000);
+ const kirimNama=await p.evaluate(()=>document.getElementById('detail').innerText);
+ cek('kampanye dengan sapaan terkirim', /Uji Sapaan Nama/.test(kirimNama), kirimNama.slice(0,100));
 
  console.log('\n=== I2. DAFTAR KONTAK TERSIMPAN ===');
  await p.click('.tab-btn[data-tab=baru]'); await p.waitForTimeout(700);
@@ -249,6 +393,89 @@ const RE_EMOJI = String.raw`[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BF
  cek('daftar yang sudah tersimpan tidak menawarkan disimpan ulang', dipakai.simpanTersembunyi===true, dipakai);
  cek('dropdown daftar tersimpan ikut terisi',
    await p.evaluate(()=>document.querySelectorAll('#pilihDaftar option').length===2));
+
+ console.log('\n=== I3. RIWAYAT: 3 BARIS, SISANYA DIGULUNG ===');
+ /* buat beberapa kampanye supaya daftarnya lebih dari tiga baris */
+ for(let k=0;k<4;k++){
+   await p.click('.tab-btn[data-tab=baru]'); await p.waitForTimeout(500);
+   await p.fill('#namaKampanye','Kampanye Gulung '+(k+1));
+   await p.fill('#tempel','telepon;nama\n0814000'+k+'001;Uji'+k);
+   await p.click('#prosesTempel'); await p.waitForTimeout(1400);
+   await p.click('#kirim'); await p.waitForTimeout(500);
+   await p.evaluate(()=>[...document.querySelectorAll('#modalFoot .btn')].find(b=>/kirim/i.test(b.textContent)).click());
+   await p.waitForTimeout(2600);
+ }
+ await p.click('.tab-btn[data-tab=riwayat]'); await p.waitForTimeout(2200);
+ const gul=await p.evaluate(()=>{
+   const kotak=document.querySelector('.riwayat-gulung');
+   const baris=[...kotak.querySelectorAll('tbody tr')];
+   const kepala=kotak.querySelector('thead');
+   const tinggi3=Math.ceil(kepala.getBoundingClientRect().height
+     + baris.slice(0,3).reduce((a,b)=>a+b.getBoundingClientRect().height,0));
+   return {jumlahBaris:baris.length, tinggiKotak:Math.round(kotak.getBoundingClientRect().height),
+           tinggi3:tinggi3, bisaGulung:kotak.scrollHeight>kotak.clientHeight+2,
+           gaya:getComputedStyle(kotak).overflowY};
+ });
+ cek('riwayatnya memang lebih dari 3 baris', gul.jumlahBaris>3, gul);
+ cek('kotak riwayat dipatok setinggi 3 baris', Math.abs(gul.tinggiKotak-gul.tinggi3)<=4, gul);
+ cek('sisanya bisa digulung', gul.bisaGulung && gul.gaya==='auto', gul);
+ const lengket=await p.evaluate(()=>{
+   const kotak=document.querySelector('.riwayat-gulung');
+   const th=kotak.querySelector('thead th');
+   kotak.scrollTop=200;
+   return {pos:getComputedStyle(th).position, atas:Math.round(th.getBoundingClientRect().top-kotak.getBoundingClientRect().top)};
+ });
+ cek('kepala tabel tetap lengket saat digulung', lengket.pos==='sticky' && Math.abs(lengket.atas)<=2, lengket);
+ await p.evaluate(()=>{document.querySelector('.riwayat-gulung').scrollTop=0;});
+ /* kartu rincian harus terlihat tanpa menggulung halaman jauh */
+ await p.evaluate(()=>document.querySelector('[data-buka]').click());
+ await p.waitForTimeout(1800);
+ const rinci=await p.evaluate(()=>{
+   const d=document.getElementById('detail');
+   return {tampil:!d.hidden, atas:Math.round(d.getBoundingClientRect().top), layar:window.innerHeight};
+ });
+ cek('kartu rincian muncul di dalam layar, bukan jauh di bawah',
+   rinci.tampil && rinci.atas < rinci.layar, rinci);
+
+ console.log('\n=== I4. CENTANG & BALASAN ===');
+ const tanda=await p.evaluate(()=>{
+   const b=[...document.querySelectorAll('#tabelPenerima tr')];
+   const w=b[0]&&b[0].querySelector('.ck-wrap');
+   return {baris:b.length, adaWrap:!!w, kelas:w?w.className:'', judul:w?w.getAttribute('title'):'',
+           svg:w?w.querySelectorAll('svg path').length:0,
+           adaKataDilewati:document.getElementById('detail').innerText.toLowerCase().indexOf('dilewati')>=0,
+           ubin:[...document.querySelectorAll('.bc-tile .l')].map(x=>x.textContent)};
+ });
+ cek('status penerima digambar sebagai centang, bukan kata', tanda.adaWrap, tanda);
+ cek('terkirim = satu centang', /ck-abu/.test(tanda.kelas) && tanda.svg===1, tanda);
+ cek('centangnya punya keterangan saat disentuh kursor', /belum sampai/i.test(tanda.judul||''), tanda.judul);
+ cek('ubin "Dilewati" sudah tidak ada', tanda.ubin.indexOf('Dilewati')<0, tanda.ubin);
+ cek('ubin "Dibalas" menggantikannya', tanda.ubin.indexOf('Dibalas')>=0, tanda.ubin);
+ cek('kata "dilewati" tidak lagi muncul di rincian', tanda.adaKataDilewati===false, tanda);
+
+ /* kirim balasan lewat webhook, lalu pastikan tampil di tabel */
+ const nomorBls=await p.evaluate(()=>document.querySelector('#tabelPenerima td.kode').textContent.trim());
+ const kunciWh='rahasia-ui-'+Date.now();
+ await p.evaluate(async(k)=>{await fetch('/api/wa',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({aksi:'setelan-simpan',token:localStorage.getItem('laz_token'),webhookSecret:k})});},kunciWh);
+ await p.evaluate(async({k,n})=>{await fetch('/api/wa-webhook?kunci='+encodeURIComponent(k),{method:'POST',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify({sender:n,message:'Waalaikumsalam, terima kasih infonya'})});},{k:kunciWh,n:nomorBls});
+ await p.waitForTimeout(600);
+ await p.evaluate(()=>muatPenerima()); await p.waitForTimeout(1500);
+ const bls=await p.evaluate(()=>{
+   const tr=document.querySelector('#tabelPenerima tr');
+   const w=tr.querySelector('.ck-wrap');
+   return {kelas:w?w.className:'', svg:w?w.querySelectorAll('svg path').length:0,
+           balasan:(tr.querySelector('.bls')||{}).textContent||'',
+           teks:(tr.querySelector('.bls-teks')||{}).textContent||''};
+ });
+ cek('setelah dibalas, centangnya jadi dua & biru', /ck-biru/.test(bls.kelas) && bls.svg===2, bls);
+ cek('kolom balasan menandai sudah dibalas', /dibalas/i.test(bls.balasan), bls);
+ cek('isi balasannya ikut ditampilkan', /terima kasih infonya/i.test(bls.teks), bls);
+ await p.evaluate(()=>muatKampanye()); await p.waitForTimeout(1500);
+ cek('jumlah balasan muncul di daftar kampanye',
+   await p.evaluate(()=>document.getElementById('tabelKampanye').innerText.length>0
+     && !!document.querySelector('#tabelKampanye .bls')));
 
  console.log('\n=== J. GERBANG IZIN SAAT URL DIBUKA LANGSUNG ===');
  const p2=await b.newPage({viewport:{width:1280,height:900}});

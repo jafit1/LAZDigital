@@ -182,6 +182,38 @@ async function hitDispatch(query, body, headers) {
   cek('format +62 dengan tanda pisah ikut normal', pet.baris[1].telepon === '628123456780', pet.baris[1]);
   cek('nomor terlalu pendek ditolak', pet.ditolak.length === 1, pet.ditolak);
 
+  console.log('\n=== H2. KOLOM NAMA DIKENALI OTOMATIS ===');
+  cek('judul "nama" dikenali', wa.tebakKolomNama(['nama', 'nominal']) === 'nama');
+  cek('judul "Nama Donatur" dikenali', wa.tebakKolomNama(['Nama Donatur', 'nominal']) === 'Nama Donatur');
+  cek('judul "Muzakki" dikenali', wa.tebakKolomNama(['Muzakki', 'kota']) === 'Muzakki');
+  cek('judul "NAMA LENGKAP" dikenali', wa.tebakKolomNama(['NAMA LENGKAP']) === 'NAMA LENGKAP');
+  cek('tanpa kolom nama mengembalikan null', wa.tebakKolomNama(['nominal', 'kota']) === null, wa.tebakKolomNama(['nominal', 'kota']));
+  cek('kolom telepon tidak salah dikira nama', wa.tebakKolomNama(['nominal']) === null);
+
+  const mat2 = wa.bacaDelimited('telepon;Nama Donatur;nominal\n08123456789;Ahmad Fauzi;150000\n08123456780;Budi Santoso;250000');
+  const pet2 = wa.petakanKontak(mat2, { kodeNegara: '62' });
+  cek('kolom nama ikut dilaporkan hasil urai', pet2.kolomNama === 'Nama Donatur', pet2.kolomNama);
+  cek('nama dilekatkan ke tiap baris', pet2.baris[0].nama === 'Ahmad Fauzi' && pet2.baris[1].nama === 'Budi Santoso', pet2.baris.map((x) => x.nama));
+
+  r = await hitWa({ aksi: 'kontak-parse', token: T, teks: 'telepon;Nama Donatur\n08123456789;Ahmad Fauzi' });
+  cek('kontak-parse mengirimkan kolomNama ke dashboard', r.tubuh.result.kolomNama === 'Nama Donatur', r.tubuh.result.kolomNama);
+
+  /* {nama} harus sah walau judul kolomnya bukan "nama" */
+  r = await hitWa({ aksi: 'pesan-periksa', token: T, teks: 'Halo {nama}. Balas STOP untuk berhenti.', kolom: ['Nama Donatur'] });
+  cek('{nama} diterima walau kolomnya bernama lain', r.tubuh.result.sah === true, r.tubuh.result);
+  r = await hitWa({ aksi: 'pesan-periksa', token: T, teks: 'Halo {nama}. Balas STOP untuk berhenti.', kolom: ['nominal'] });
+  cek('{nama} tetap ditolak kalau memang tidak ada kolom nama', r.tubuh.result.sah === false, r.tubuh.result);
+
+  /* dan benar-benar terisi saat kampanye dibuat */
+  r = await hitWa({ aksi: 'kampanye-buat', token: T, nama: 'Uji Sapaan',
+    pesan: { teks: 'Assalamualaikum {nama}, terima kasih. Balas STOP untuk berhenti.' },
+    kolom: ['Nama Donatur'],
+    baris: [{ telepon: '628191000001', kolom: { 'Nama Donatur': 'Siti Aminah' } }] });
+  cek('kampanye dengan kolom bernama lain tetap terbuat', r.statusCode === 200, r.tubuh);
+  const contohKirim = r.tubuh.result.contohPesan && r.tubuh.result.contohPesan[0];
+  cek('{nama} terisi dari kolom "Nama Donatur"', contohKirim && /Assalamualaikum Siti Aminah/.test(contohKirim.teks), contohKirim);
+  cek('placeholder tidak tertinggal mentah', contohKirim && contohKirim.teks.indexOf('{nama}') < 0, contohKirim);
+
   console.log('\n=== I. WEBHOOK: STATUS & BALASAN STOP ===');
   const kirimWebhook = async (q, badan) => {
     const req = { method: 'POST', url: '/api/wa-webhook' + q, headers: { host: 'contoh.test' }, body: badan };
@@ -197,6 +229,42 @@ async function hitDispatch(query, body, headers) {
   cek('balasan STOP masuk daftar tolak kirim', optout.indexOf('628777000111') >= 0, optout.slice(0, 5));
   w = await kirimWebhook('?kunci=rahasia-uji-123', { sender: '628777000222', message: 'terima kasih' });
   cek('balasan biasa tidak ikut di-optout', (await wa.daftarOptout()).indexOf('628777000222') < 0);
+
+  console.log('\n=== I2. STATUS DIBACA & BALASAN MASUK ===');
+  cek('status "read" dipetakan ke dibaca', wa.petakanStatusFonnte('read') === 'dibaca');
+  cek('status "delivered" dipetakan ke diterima', wa.petakanStatusFonnte('delivered') === 'diterima');
+  cek('status "sent" dipetakan ke terkirim', wa.petakanStatusFonnte('sent') === 'terkirim');
+
+  /* nomor penerima dari kampanye di bagian E — balasannya harus nyangkut ke situ */
+  const nomorUji = '62812000000' + '03';   /* sama dengan pola di bagian E */
+  const tautan = await wa.cariTelpTerakhir(nomorUji);
+  cek('nomor yang sudah dikirimi tercatat penerimanya', !!tautan && tautan.kid === kid, tautan);
+
+  w = await kirimWebhook('?kunci=rahasia-uji-123', { sender: nomorUji, message: 'Terima kasih, sudah saya terima' });
+  cek('webhook balasan diproses', w.statusCode === 200 && w.tubuh.ringkasan.balasan === 1, w.tubuh);
+  r = await hitWa({ aksi: 'kampanye-recipients', token: T, id: kid, status: 'dibaca' });
+  const yangBalas = (r.tubuh.result.baris || []).find((x) => x.telepon === nomorUji);
+  cek('pesannya otomatis jadi DIBACA setelah dibalas', !!yangBalas, r.tubuh.result.baris.length);
+  cek('isi balasannya tersimpan', yangBalas && /sudah saya terima/i.test(yangBalas.balasan.teks), yangBalas && yangBalas.balasan);
+  cek('waktu dibaca ikut terisi', !!(yangBalas && yangBalas.waktu && yangBalas.waktu.dibaca), yangBalas && yangBalas.waktu);
+
+  r = await hitWa({ aksi: 'kampanye-get', token: T, id: kid });
+  cek('kampanye menghitung 1 balasan', r.tubuh.result.stat.dibalas === 1, r.tubuh.result.stat);
+
+  /* balasan kedua dari nomor yang sama tidak boleh dihitung dua kali */
+  await kirimWebhook('?kunci=rahasia-uji-123', { sender: nomorUji, message: 'sekali lagi ya' });
+  r = await hitWa({ aksi: 'kampanye-get', token: T, id: kid });
+  cek('balasan kedua tidak menggandakan hitungan', r.tubuh.result.stat.dibalas === 1, r.tubuh.result.stat);
+  r = await hitWa({ aksi: 'kampanye-recipients', token: T, id: kid, status: 'dibaca' });
+  const lagi = (r.tubuh.result.baris || []).find((x) => x.telepon === nomorUji);
+  cek('tapi jumlah balasannya bertambah jadi 2', lagi && lagi.balasan.jumlah === 2, lagi && lagi.balasan);
+  cek('teks balasan terbaru yang disimpan', lagi && /sekali lagi/i.test(lagi.balasan.teks), lagi && lagi.balasan.teks);
+
+  /* balasan dari nomor asing tidak boleh menyentuh kampanye mana pun */
+  const sebelum = (await hitWa({ aksi: 'kampanye-get', token: T, id: kid })).tubuh.result.stat.dibalas;
+  await kirimWebhook('?kunci=rahasia-uji-123', { sender: '628555444333', message: 'halo?' });
+  const sesudah = (await hitWa({ aksi: 'kampanye-get', token: T, id: kid })).tubuh.result.stat.dibalas;
+  cek('balasan dari nomor asing tidak mengubah kampanye', sebelum === sesudah, { sebelum, sesudah });
 
   console.log('\n=== J. ANTI-SPAM ===');
   const s0 = { jamKirimAktif: true, jamMulai: '08:00', jamSelesai: '20:00', batasHarian: 0 };

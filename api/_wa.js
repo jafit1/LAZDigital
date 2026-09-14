@@ -253,6 +253,10 @@ const K = {
   jedaGlobal: () => `${P()}:jeda-global`,
   jedaNomor: (t) => `${P()}:jeda:${t}`,
   wamid: (id) => `${P()}:wamid:${id}`,
+  /* nomor -> penerima terakhir yang dikirimi, supaya balasan masuk bisa
+     dicocokkan ke kampanyenya. Webhook balasan Fonnte tidak menyertakan id
+     pesan asalnya, jadi nomornya yang dipakai sebagai penghubung. */
+  telpTerakhir: (t) => `${P()}:telp:${t}`,
   optout: () => `${P()}:optout`,
   kontak: (id) => `${P()}:kontak:${id}`,
   indeksKontak: () => `${P()}:kontak:indeks`,
@@ -325,7 +329,17 @@ function bacaDelimited(teks, pemisah) {
   row.push(sel); baris.push(row);
   return baris.filter((r) => r.some((c) => String(c).trim() !== ''));
 }
-const KATA_TELP = ['telepon', 'telp', 'nohp', 'nohp', 'hp', 'wa', 'whatsapp', 'phone', 'nomor', 'msisdn'];
+const KATA_TELP = ['telepon', 'telp', 'nohp', 'hp', 'wa', 'whatsapp', 'phone', 'nomor', 'msisdn'];
+/* Kolom nama dikenali otomatis supaya {nama} tetap jalan walau judul kolomnya
+   "Nama Donatur", "Muzakki", atau "Nama Lengkap" — petugas tidak perlu hafal
+   judul kolom di berkasnya sendiri. */
+const KATA_NAMA = ['nama', 'name', 'namalengkap', 'namadonatur', 'namapenerima', 'namamuzakki', 'panggilan', 'sapaan', 'muzakki', 'donatur', 'penerima'];
+function tebakKolomNama(headerParameter) {
+  const kolom = headerParameter || []; const nm = kolom.map(nk);
+  for (const kata of KATA_NAMA) { const i = nm.indexOf(nk(kata)); if (i >= 0) return kolom[i]; }
+  for (const kata of KATA_NAMA) { const i = nm.findIndex((x) => x.indexOf(nk(kata)) >= 0); if (i >= 0) return kolom[i]; }
+  return null;
+}
 function nk(s) { return String(s).toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function petakanKontak(matriks, opsi) {
   opsi = opsi || {};
@@ -348,7 +362,11 @@ function petakanKontak(matriks, opsi) {
     baris.push({ telepon: h.telepon, params: params });
   });
   const headerParameter = header.filter((_, i) => i !== kolomTelepon);
-  return { header, adaHeader, kolomTelepon, headerParameter, baris, ditolak };
+  const kolomNama = tebakKolomNama(headerParameter);
+  /* nama ikut dilekatkan ke tiap baris supaya dashboard bisa menampilkannya
+     tanpa perlu tahu kolom ke berapa */
+  if (kolomNama) { const ik = headerParameter.indexOf(kolomNama); baris.forEach((b) => { b.nama = (b.params[ik] || '').trim() || null; }); }
+  return { header, adaHeader, kolomTelepon, headerParameter, kolomNama, baris, ditolak };
 }
 
 /* ================================================================== *
@@ -539,7 +557,7 @@ async function buatKampanye(o) {
 }
 async function ambilStat(kid) {
   const h = await store.hgetall(K.statKampanye(kid)); const g = (x) => Number(h[x] || 0);
-  const s = { total: g('total'), antre: g('antre'), terkirim: g('terkirim'), diterima: g('diterima'), dibaca: g('dibaca'), gagal: g('gagal'), dilewati: g('dilewati'), dibatalkan: g('dibatalkan') };
+  const s = { total: g('total'), antre: g('antre'), terkirim: g('terkirim'), diterima: g('diterima'), dibaca: g('dibaca'), gagal: g('gagal'), dilewati: g('dilewati'), dibatalkan: g('dibatalkan'), dibalas: g('dibalas') };
   s.selesai = s.terkirim + s.diterima + s.dibaca + s.gagal + s.dilewati + s.dibatalkan;
   s.persen = s.total > 0 ? Math.round((s.selesai / s.total) * 100) : 0; return s;
 }
@@ -573,6 +591,7 @@ async function ubahStatusPenerima(kid, rid, statusBaru, tambahan, opsi) {
   return baris;
 }
 async function catatWamid(wamid, kid, rid) { await store.set(K.wamid(wamid), kid + ':' + rid, { ttl: 2592000 }); }
+async function cariTelpTerakhir(telepon) { const v = await store.get(K.telpTerakhir(telepon)); if (!v) return null; const p = String(v).split(':'); return p[0] && p[1] ? { kid: p[0], rid: p[1] } : null; }
 async function cariWamid(wamid) { const v = await store.get(K.wamid(wamid)); if (!v) return null; const p = String(v).split(':'); return p[0] && p[1] ? { kid: p[0], rid: p[1] } : null; }
 async function simpanKampanye(k) { k.diperbaruiPada = Date.now(); await setJson(K.kampanye(k.id), k); return k; }
 async function buangPekerjaanKampanye(kid) {
@@ -646,6 +665,7 @@ async function prosesSatu(pekerjaan, log) {
   const hasil = await kirim(siapkanPengiriman(k, baris)); const coba = (pekerjaan.coba || 0) + 1;
   if (hasil.ok) {
     await catatKirimHarian(); await catatWamid(hasil.wamid, kid, rid);
+    await store.set(K.telpTerakhir(baris.telepon), kid + ':' + rid, { ttl: 2592000 });
     await ubahStatusPenerima(kid, rid, ST_PENERIMA.TERKIRIM, { wamid: hasil.wamid, coba, kodeGalat: null, pesanGalat: null, waktu: { dikirim: Date.now() } });
     return 'terkirim';
   }
@@ -739,8 +759,29 @@ async function prosesWebhookFonnte(payload) {
   const dari = payload && (payload.sender || payload.from || payload.pengirim);
   const isi = payload && (payload.message !== undefined ? payload.message : (payload.text !== undefined ? payload.text : payload.pesan));
   if (dari && isi !== undefined) {
-    ring.masuk++; const teks = String(isi).trim().toLowerCase(); const h = normalisasiTelepon(dari, (await konfFonnte()).countryCode);
+    ring.masuk++;
+    const mentah = String(isi).trim();
+    const teks = mentah.toLowerCase();
+    const h = normalisasiTelepon(dari, (await konfFonnte()).countryCode);
     if (h.ok && KATA_BERHENTI.some((kata) => teks === kata || teks.indexOf(kata) === 0)) { await store.sadd(K.optout(), [h.telepon]); ring.optout++; }
+    /* Balasan dicocokkan ke penerima terakhir di nomor itu, lalu pesannya
+       sekaligus ditandai SUDAH DIBACA: orang tidak membalas tanpa membaca, dan
+       sebagian perangkat Fonnte tidak pernah mengirim status 'read' sama sekali. */
+    if (h.ok) {
+      const tgt = await cariTelpTerakhir(h.telepon);
+      if (tgt) {
+        const baris = await getJson(K.penerima(tgt.kid, tgt.rid));
+        if (baris) {
+          const now = Date.now();
+          const pertama = !baris.balasan;
+          const balasan = { teks: potong(mentah, 500), pada: now, jumlah: ((baris.balasan && baris.balasan.jumlah) || 0) + 1 };
+          const dibacaPada = (baris.waktu && baris.waktu.dibaca) || now;
+          await ubahStatusPenerima(tgt.kid, tgt.rid, ST_PENERIMA.DIBACA, { balasan: balasan, waktu: { dibaca: dibacaPada } });
+          if (pertama) await store.hincrby(K.statKampanye(tgt.kid), 'dibalas', 1);
+          ring.balasan = (ring.balasan || 0) + 1; kset.add(tgt.kid);
+        }
+      }
+    }
   }
   for (const kid of kset) await segarkanSelesai(kid);
   ring.kampanye = [...kset]; return ring;
@@ -815,12 +856,13 @@ module.exports = {
   cfg, store, K, PAKAI_REDIS,
   getJson, setJson, mgetJson,
   buatId, normalisasiTelepon, samaAman, tidur,
-  bacaDelimited, petakanKontak,
+  bacaDelimited, petakanKontak, tebakKolomNama,
   ambilPlaceholder, isiPlaceholder, periksaPesan,
   getSetelan, simpanSetelan, periksaJamKirim, periksaBatasHarian, terkirimHariIni, catatKirimHarian, tanggalWIB,
   kirim, infoPengirim, pakaiPesanBebas,
   buatKampanye, ambilKampanye, ambilStat, daftarKampanye, daftarPenerima, aksiKampanye, ubahStatusPenerima,
   jalankanDispatcher, ukuranAntrean, promosikanTertunda, adaSiapDalam,
+  cariTelpTerakhir, petakanStatusFonnte,
   BATAS_PENERIMA, BATAS_BUDGET_DETIK,
   verifikasiKunci, prosesWebhookFonnte, catatLogWebhook,
   simpanPesan, daftarPesan, hapusPesan, catatPemakaian, ambilPesanById: (id) => getJson(K.pesan(id)),

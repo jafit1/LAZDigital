@@ -29,6 +29,14 @@ const IZIN = {
   'pesan-hapus': 'delete', 'kontak-hapus': 'delete', 'optout-hapus': 'delete', 'daftarkontak-hapus': 'delete',
 };
 
+/* {nama} selalu sah dipakai selama berkas kontaknya punya kolom nama, apa pun
+   judul kolomnya — jadi ia ikut didaftarkan sebagai kolom yang tersedia. */
+function kolomTersedia(kolom) {
+  const k = Array.isArray(kolom) ? kolom.slice() : [];
+  if (wa.tebakKolomNama(k) && k.map((x) => String(x).toLowerCase()).indexOf('nama') < 0) k.push('nama');
+  return k;
+}
+
 function balas(res, obj, status) {
   res.status(status || 200).json(obj);
 }
@@ -128,17 +136,17 @@ async function jalankan(aksi, b, pengguna, asal) {
       const hasil = wa.petakanKontak(matriks, { kodeNegara: b.kodeNegara || '62' });
       const semua = new Set(await wa.daftarOptout());
       const kenaOptout = hasil.baris.filter((x) => semua.has(x.telepon)).map((x) => x.telepon);
-      return { header: hasil.header, headerParameter: hasil.headerParameter, jumlahSah: hasil.baris.length, jumlahDitolak: hasil.ditolak.length, jumlahOptout: kenaOptout.length, baris: hasil.baris, ditolak: hasil.ditolak.slice(0, 200) };
+      return { header: hasil.header, headerParameter: hasil.headerParameter, kolomNama: hasil.kolomNama, jumlahSah: hasil.baris.length, jumlahDitolak: hasil.ditolak.length, jumlahOptout: kenaOptout.length, baris: hasil.baris, ditolak: hasil.ditolak.slice(0, 200) };
     }
 
     case 'pesan-list': return { pesan: await wa.daftarPesan() };
     case 'pesan-simpan': {
-      const cek = wa.periksaPesan(b.teks, { kolomTersedia: b.kolom || [] });
+      const cek = wa.periksaPesan(b.teks, { kolomTersedia: kolomTersedia(b.kolom) });
       if (!cek.sah) throw new Error(cek.galat.join(' '));
       const pesan = await wa.simpanPesan({ id: b.id, nama: b.nama, teks: b.teks, lampiranUrl: b.lampiranUrl, lampiranNama: b.lampiranNama });
       return { pesan: pesan, placeholder: wa.ambilPlaceholder(pesan.teks), peringatan: cek.peringatan };
     }
-    case 'pesan-periksa': return wa.periksaPesan(b.teks, { kolomTersedia: b.kolom || [] });
+    case 'pesan-periksa': return wa.periksaPesan(b.teks, { kolomTersedia: kolomTersedia(b.kolom) });
     case 'pesan-hapus': await wa.hapusPesan(b.id); return { dihapus: b.id };
 
     case 'kampanye-list': return { kampanye: await wa.daftarKampanye(b.limit || 50) };
@@ -155,8 +163,16 @@ async function jalankan(aksi, b, pengguna, asal) {
     case 'kontak-simpan': return { kontak: await wa.simpanKontak(b) };
     case 'kontak-hapus': await wa.hapusKontak(b.id); return { dihapus: b.id };
 
-    case 'daftarkontak-list': return { daftar: await wa.daftarDaftarKontak(b.limit || 100) };
-    case 'daftarkontak-get': return { daftar: await wa.ambilDaftarKontak(b.id) };
+    case 'daftarkontak-list': {
+      const daftar = await wa.daftarDaftarKontak(b.limit || 100);
+      /* kolom nama dihitung di sini, bukan disimpan — daftar lama yang tersimpan
+         sebelum fitur ini ada pun ikut kebagian */
+      return { daftar: daftar.map((d) => Object.assign({}, d, { kolomNama: wa.tebakKolomNama(d.headerParameter) })) };
+    }
+    case 'daftarkontak-get': {
+      const d = await wa.ambilDaftarKontak(b.id);
+      return { daftar: d ? Object.assign({}, d, { kolomNama: wa.tebakKolomNama(d.headerParameter) }) : d };
+    }
     case 'daftarkontak-simpan': return { daftar: await wa.simpanDaftarKontak(b) };
     case 'daftarkontak-hapus': await wa.hapusDaftarKontak(b.id); return { dihapus: b.id };
 
@@ -187,14 +203,19 @@ async function buatKampanye(b, pengguna) {
     const pesanId = (b.pesan && b.pesan.pesanId) || null;
     if (pesanId) { const t = await wa.ambilPesanById(pesanId); if (t) { if (!teks.trim()) teks = t.teks; if (lampiranUrl == null) lampiranUrl = t.lampiranUrl; if (lampiranNama == null) lampiranNama = t.lampiranNama; } }
     const kolom = Array.isArray(b.kolom) ? b.kolom : [];
-    const cek = wa.periksaPesan(teks, { kolomTersedia: kolom });
+    const cek = wa.periksaPesan(teks, { kolomTersedia: kolomTersedia(kolom) });
     if (!cek.sah) throw new Error(cek.galat.join(' '));
     const penerima = [];
+    /* {nama} adalah sapaan yang paling sering dipakai. Kalau berkas kontaknya
+       memakai judul lain ("Nama Donatur", "Muzakki"), nilainya tetap disalin ke
+       kunci "nama" supaya {nama} di pesan tidak pernah kosong. */
+    const kolomNama = wa.tebakKolomNama(kolom);
     b.baris.forEach((x) => {
       const telp = String(x.telepon || '').replace(/\D/g, ''); if (!telp) return;
       let nilai = {};
-      if (x.kolom && typeof x.kolom === 'object') nilai = x.kolom;
+      if (x.kolom && typeof x.kolom === 'object') nilai = Object.assign({}, x.kolom);
       else if (Array.isArray(x.params)) kolom.forEach((nm, i) => { nilai[nm] = String(x.params[i] == null ? '' : x.params[i]); });
+      if (kolomNama && !nilai.nama && nilai[kolomNama]) nilai.nama = nilai[kolomNama];
       penerima.push({ telepon: telp, nama: nilai.nama || x.nama || null, kolom: nilai });
     });
     if (!penerima.length) throw new Error('Tidak ada penerima yang sah.');
