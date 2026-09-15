@@ -3962,3 +3962,126 @@ tr.lay-klik:hover td{background:var(--surface2)}
   .app.collapsed .topnav:hover .tn-item{gap:10px !important}
   .app.collapsed .topnav:hover .user-chip{gap:11px !important}
 }
+
+/* ============================================================
+   33. SCAN KWITANSI
+   Kamera dengan bingkai seukuran kwitansi, lalu fotonya menemani
+   formulir sebagai penuntun (tidak disimpan ke basis data).
+   ============================================================ */
+.modal.scan-modal{max-width:660px !important}
+.scan-wrap{display:flex;flex-direction:column;gap:12px}
+.scan-panggung{
+  position:relative;width:100%;aspect-ratio:4/3;max-height:62vh;
+  background:#171310;border-radius:var(--radius-sm);overflow:hidden;
+  display:grid;place-items:center;
+}
+.scan-panggung video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
+.scan-panggung.siap video{opacity:1}
+/* Bingkai kwitansi: mendatar seperti lembar kuitansi lembaga. */
+.scan-bingkai{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:86%;aspect-ratio:1.45/1;
+  border:2px solid rgba(255,255,255,.92);border-radius:8px;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.42);pointer-events:none;
+  transition:width .2s,aspect-ratio .2s;
+}
+.scan-bingkai.tegak{width:62%;aspect-ratio:1/1.45}
+.scan-bingkai .sudut{position:absolute;width:20px;height:20px;border:3px solid var(--accent)}
+.scan-bingkai .ka{top:-3px;left:-3px;border-right:none;border-bottom:none;border-radius:8px 0 0 0}
+.scan-bingkai .ki{top:-3px;right:-3px;border-left:none;border-bottom:none;border-radius:0 8px 0 0}
+.scan-bingkai .kb{bottom:-3px;left:-3px;border-right:none;border-top:none;border-radius:0 0 0 8px}
+.scan-bingkai .kn{bottom:-3px;right:-3px;border-left:none;border-top:none;border-radius:0 0 8px 0}
+.scan-pesan{position:relative;z-index:2;color:#fff;font-size:13px;text-align:center;
+  padding:0 26px;line-height:1.55;max-width:420px}
+.scan-pesan.gagal{color:#ffd9cf}
+.scan-petunjuk{font-size:12.5px;color:var(--muted);text-align:center}
+.scan-alat{display:flex;align-items:center;justify-content:center;gap:20px}
+.scan-jepret{
+  width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--grad-accent);color:#fff;box-shadow:var(--glow);
+  display:grid;place-items:center;transition:transform .15s,opacity .15s;
+}
+.scan-jepret:hover{transform:scale(1.05)}
+.scan-jepret:active{transform:scale(.95)}
+.scan-jepret:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+.scan-kecil{
+  width:44px;height:44px;border-radius:13px;cursor:pointer;
+  background:var(--surface2);border:1px solid var(--border);color:var(--text2);
+  display:grid;place-items:center;transition:.15s;
+}
+.scan-kecil:hover{background:var(--accent-soft);border-color:var(--accent-soft2);color:var(--accent-d)}
+.scan-putar-bingkai{
+  align-self:center;background:none;border:none;cursor:pointer;
+  font-family:var(--sans);font-size:12px;font-weight:600;color:var(--muted);
+  display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;
+}
+.scan-putar-bingkai:hover{color:var(--accent);background:var(--accent-soft)}
+
+/* --- panel penuntun di samping formulir --- */
+.himpun-kerja{display:block}
+.himpun-kerja.ada-scan{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:18px;align-items:start}
+.scan-panel{display:none}
+.himpun-kerja.ada-scan .scan-panel{
+  display:block;position:sticky;top:12px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface2);overflow:hidden;
+}
+.sp-kepala{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.sp-judul{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.sp-alat{display:flex;gap:2px}
+.sp-alat .icon-btn{width:30px;height:30px}
+.sp-gambar{overflow:auto;max-height:min(70vh,560px);background:#1d1815;display:grid;place-items:center}
+.sp-gambar img{max-width:100%;display:block;transform-origin:center;transition:transform .18s ease}
+
+@media (max-width:900px){
+  .himpun-kerja.ada-scan{grid-template-columns:1fr}
+  .himpun-kerja.ada-scan .scan-panel{position:static}
+  .sp-gambar{max-height:46vh}
+}
+.form-card-aksi{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+
+/* ============================================================
+   34. MENYESUAIKAN PLATFORM
+   Sidebar yang melebar saat disentuh kursor tidak punya makna di layar
+   sentuh: tidak ada "hover" di sana, sekali sentuh langsung terpicu lalu
+   menutupi konten. Di perangkat sentuh perilakunya dimatikan — membuka
+   menu cukup lewat ketukan logo.
+   ============================================================ */
+@media (min-width:1024px){
+  html.plat-sentuh .app.collapsed .topnav:hover{
+    width:84px !important;padding:20px 12px !important;box-shadow:none !important;
+  }
+  html.plat-sentuh .app.collapsed .topnav:hover .tn-brand .brand-name,
+  html.plat-sentuh .app.collapsed .topnav:hover .tn-item .tn-tip,
+  html.plat-sentuh .app.collapsed .topnav:hover .user-chip .uc-meta,
+  html.plat-sentuh .app.collapsed .topnav:hover .tn-icon span{
+    max-width:0 !important;opacity:0 !important;
+  }
+  html.plat-sentuh .app.collapsed .topnav:hover .tn-brand .logo-img{display:none}
+  html.plat-sentuh .app.collapsed .topnav:hover .logo-mini{display:inline-flex}
+}
+/* Sasaran sentuh minimal 40px di perangkat sentuh — tombol ikon 30px
+   terlalu kecil untuk jempol. */
+html.plat-sentuh .icon-btn{min-width:38px;min-height:38px}
+html.plat-sentuh .btn-sm{min-height:36px}
+
+/* ============================================================
+   35. PERBAIKAN LEBAR DI LAYAR SEMPIT
+   Anak grid/flex bawaannya min-width:auto — artinya ia menolak menyusut
+   lebih kecil dari isinya, lalu meluber keluar induknya tanpa membuat
+   bilah gulung (jadi isinya terpotong diam-diam).
+   ============================================================ */
+.kll-baris > *,
+.kll-kepala > *{min-width:0}
+.kll-nama,.kll-nama-k{min-width:0;overflow-wrap:anywhere}
+.kll-n{min-width:0;overflow-wrap:anywhere}
+.pub-lay-c{min-width:0;overflow-wrap:anywhere}
+
+/* Tombol selebar 186px di wadah flex-end pada layar 390px terdorong keluar
+   ke kiri sampai minus. Dibiarkan membungkus dan menyusut. */
+.lap-panel-a{flex-wrap:wrap;gap:8px}
+@media (max-width:560px){
+  .lap-panel-a{justify-content:flex-start}
+  .lap-panel-a > .btn{flex:1 1 auto;min-width:0}
+}

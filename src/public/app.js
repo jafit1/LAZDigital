@@ -431,8 +431,14 @@ function viewPenghimpunan(){
 function renderPenghimpunan(rows){
   var h='<div class="page-head"><div><h2>Input Penghimpunan</h2><div class="desc">Catat penerimaan dana</div></div></div>';
   if(canDo('penghimpunan','create'))h+='<div class="card form-card">'
-    +'<div class="form-card-h"><h3>Form Penerimaan Dana</h3><span class="form-hint">Ctrl + Enter untuk menyimpan</span></div>'
-    +'<div id="himpunFormHost"></div>'
+    +'<div class="form-card-h"><h3>Form Penerimaan Dana</h3>'
+      +'<div class="form-card-aksi">'
+      /* Tombol kamera: langsung membuka kamera dengan bingkai kwitansi.
+         Fotonya menemani formulir saat mengisi, tidak ikut tersimpan. */
+      +'<button class="btn btn-sm btn-ghost" type="button" onclick="scanBuka()" title="Buka kamera dan paskan kwitansi di bingkai">'+SVG_ICONS.kamera+' Scan Kwitansi</button>'
+      +'<span class="form-hint">Ctrl + Enter untuk menyimpan</span></div></div>'
+    +'<div class="himpun-kerja" id="himpunKerja"><div class="scan-panel" id="scanPanel"></div>'
+      +'<div id="himpunFormHost"></div></div>'
     +'<div class="form-actions"><button class="btn btn-ghost" onclick="formHimpun(\'\',\'himpunFormHost\')">'+SVG_ICONS.putar+' Reset</button>'
     +'<button class="btn btn-primary" onclick="saveHimpun(\'\')">Simpan Penerimaan</button></div></div>';
   var delBtn = canDo('penghimpunan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'himpun\')">'+SVG_ICONS.sampah+' Hapus Rentang Tanggal</button>' : '';
@@ -559,7 +565,7 @@ function formHimpun(id,host){
 
   var b='<div class="fform">'+sec1+sec2+sec3+'</div>';
 
-  if(host){el(host).innerHTML=b;}
+  if(host){el(host).innerHTML=b; if(typeof scanGambarPanel==='function') scanGambarPanel();}
   else{
     openModal(id?'Edit Penghimpunan':'Catat Penghimpunan',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveHimpun(\''+(id||'')+'\')">Simpan</button>');
     var mc=el('modalCard'); if(mc) mc.classList.add('form-modal');   // modal lebih lega untuk form 12 kolom
@@ -641,7 +647,7 @@ function saveHimpun(id){
   if(!d.fundraising){markFieldError('f_fundraising','Fundraising wajib dipilih');bad=true;}
   if(bad){toast('Lengkapi field yang ditandai',true);return;}
   if(id)d.id=id;
-  gas('apiSavePenghimpunan')(TOKEN,d).then(function(saved){closeModal();toast('Penghimpunan tersimpan');viewPenghimpunan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak kwitansi sekarang?',okText:'Cetak Sekarang',cancelText:'Nanti Saja',icon:SVG_ICONS.dlgBeres}).then(function(__ok){if(__ok)cetakKwitansi(saved.id);});},300);}).catch(handleErr);
+  gas('apiSavePenghimpunan')(TOKEN,d).then(function(saved){closeModal();/* kwitansi penuntun dilepas — tugasnya sudah selesai */if(typeof scanLepas==='function')scanLepas();toast('Penghimpunan tersimpan');viewPenghimpunan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak kwitansi sekarang?',okText:'Cetak Sekarang',cancelText:'Nanti Saja',icon:SVG_ICONS.dlgBeres}).then(function(__ok){if(__ok)cetakKwitansi(saved.id);});},300);}).catch(handleErr);
 }
 function delHimpun(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)return;gas('apiDeletePenghimpunan')(TOKEN,id).then(function(){toast('Terhapus');viewPenghimpunan();}).catch(handleErr);});}
 
@@ -8387,3 +8393,177 @@ function buildA2HTML(d, opt){
     + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (A5 melintang)</button></div>'
     + '</body></html>';
 }
+
+/* ============================================================
+   PENGENALAN PLATFORM
+   Beberapa perilaku memang harus berbeda: sidebar yang melebar saat
+   disentuh kursor tidak masuk akal di layar sentuh (tidak ada "hover",
+   sekali sentuh langsung terpicu), dan kamera belakang hanya relevan di
+   HP. Kelasnya dipasang di <html> supaya CSS maupun JS bisa membacanya.
+   ============================================================ */
+function bacaPlatform(){
+  var l = window.innerWidth;
+  var jenis = l < 640 ? 'hp' : (l < 1024 ? 'tablet' : 'desktop');
+  var sentuh = false;
+  try { sentuh = window.matchMedia('(hover: none) and (pointer: coarse)').matches; } catch(e){}
+  var d = document.documentElement;
+  ['hp','tablet','desktop'].forEach(function(x){ d.classList.toggle('plat-'+x, jenis===x); });
+  d.classList.toggle('plat-sentuh', sentuh);
+  d.classList.toggle('plat-tetikus', !sentuh);
+  window.PLATFORM = { jenis: jenis, sentuh: sentuh, hp: jenis==='hp', desktop: jenis==='desktop' };
+  return window.PLATFORM;
+}
+bacaPlatform();
+(function(){
+  var t=null;
+  function ulang(){ clearTimeout(t); t=setTimeout(bacaPlatform,120); }
+  window.addEventListener('resize',ulang);
+  window.addEventListener('orientationchange',ulang);
+})();
+
+/* ============================================================
+   SCAN KWITANSI
+   Kamera dibuka langsung dengan bingkai seukuran kwitansi. Fotonya TIDAK
+   disimpan ke basis data — ia hanya menemani formulir supaya petugas
+   menyalin sambil melihat, lalu dibuang setelah tersimpan. Kwitansi
+   lembaga ditulis tangan, jadi pembacaan otomatis tidak dipakai: hasilnya
+   justru harus dikoreksi satu per satu.
+   ============================================================ */
+var SCAN = { aliran:null, kamera:'environment', tegak:false, foto:null, zoom:1, putar:0 };
+
+var IKON_SCAN = {
+  jepret:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>',
+  balik:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11a8 8 0 0 1 13.3-6"/><polyline points="17 3 17 6 14 6"/><path d="M21 13a8 8 0 0 1-13.3 6"/><polyline points="7 21 7 18 10 18"/></svg>',
+  bingkai:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 3v3"/><path d="M16 18v3"/></svg>',
+  zoomIn:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/><path d="m20 20-3.5-3.5"/></svg>',
+  zoomOut:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/><path d="m20 20-3.5-3.5"/></svg>'
+};
+
+function scanDidukung(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+function scanBuka(){
+  var isi =
+    '<div class="scan-wrap">'
+    + '<div class="scan-panggung" id="scanPanggung">'
+    +   '<video id="scanVideo" playsinline muted autoplay></video>'
+    +   '<div class="scan-bingkai" id="scanBingkai"><span class="sudut ka"></span><span class="sudut ki"></span><span class="sudut kb"></span><span class="sudut kn"></span></div>'
+    +   '<div class="scan-pesan" id="scanPesan">Menyalakan kamera…</div>'
+    + '</div>'
+    + '<div class="scan-petunjuk">Paskan kwitansi di dalam bingkai, lalu tekan tombol kamera.</div>'
+    + '<div class="scan-alat">'
+    +   '<button class="scan-kecil" type="button" id="scanBalik" title="Ganti kamera depan / belakang">'+IKON_SCAN.balik+'</button>'
+    +   '<button class="scan-jepret" type="button" id="scanJepret" title="Ambil foto">'+IKON_SCAN.jepret+'</button>'
+    +   '<label class="scan-kecil" title="Pilih foto dari galeri">'+SVG_ICONS.unggah
+    +     '<input type="file" accept="image/*" id="scanBerkas" hidden></label>'
+    + '</div>'
+    + '<button class="scan-putar-bingkai" type="button" id="scanTegak">'+IKON_SCAN.bingkai+' Bingkai tegak</button>'
+    + '</div>';
+  openModal('Scan Kwitansi', isi,
+    '<button class="btn btn-ghost" onclick="closeModal()">Tutup</button>');
+  var mc=el('modalCard'); if(mc) mc.classList.add('scan-modal');
+
+  el('scanJepret').onclick = scanJepret;
+  el('scanBalik').onclick = function(){ SCAN.kamera = (SCAN.kamera==='environment') ? 'user' : 'environment'; scanNyalakan(); };
+  el('scanTegak').onclick = function(){
+    SCAN.tegak = !SCAN.tegak;
+    el('scanBingkai').classList.toggle('tegak', SCAN.tegak);
+    this.innerHTML = IKON_SCAN.bingkai + (SCAN.tegak ? ' Bingkai mendatar' : ' Bingkai tegak');
+  };
+  el('scanBerkas').onchange = function(e){
+    var f=e.target.files && e.target.files[0]; if(!f) return;
+    var fr=new FileReader();
+    fr.onload=function(){ scanPakai(String(fr.result)); };
+    fr.readAsDataURL(f);
+  };
+  /* kamera belakang hanya masuk akal di perangkat genggam */
+  SCAN.kamera = (window.PLATFORM && window.PLATFORM.hp) ? 'environment' : 'user';
+  scanNyalakan();
+}
+
+function scanMatikan(){
+  if(SCAN.aliran){ try{ SCAN.aliran.getTracks().forEach(function(t){t.stop();}); }catch(e){} SCAN.aliran=null; }
+}
+
+function scanNyalakan(){
+  scanMatikan();
+  var v=el('scanVideo'), pesan=el('scanPesan');
+  if(!v) return;
+  if(!scanDidukung()){ scanGagal('Peramban ini tidak bisa membuka kamera. Pakai tombol unggah di sebelah kanan.'); return; }
+  navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:{ ideal:SCAN.kamera }, width:{ideal:1920}, height:{ideal:1080} }, audio:false
+  }).then(function(s){
+    SCAN.aliran=s; v.srcObject=s; if(pesan) pesan.style.display='none';
+    el('scanPanggung').classList.add('siap');
+  }).catch(function(err){
+    var m=String(err&&err.name||'');
+    scanGagal(m==='NotAllowedError'
+      ? 'Izin kamera ditolak. Aktifkan lewat ikon gembok di bilah alamat, atau pakai tombol unggah.'
+      : (m==='NotFoundError' ? 'Tidak ada kamera di perangkat ini. Pakai tombol unggah.'
+                             : 'Kamera tidak bisa dibuka ('+m+'). Pakai tombol unggah.'));
+  });
+}
+function scanGagal(teks){
+  var pesan=el('scanPesan'); if(pesan){ pesan.style.display=''; pesan.textContent=teks; pesan.classList.add('gagal'); }
+  var j=el('scanJepret'); if(j) j.disabled=true;
+  var p=el('scanPanggung'); if(p) p.classList.remove('siap');
+}
+
+/* Video ditampilkan object-fit:cover, jadi bingkai yang terlihat di layar
+   harus dipetakan balik ke piksel sumber sebelum dipotong. */
+function scanJepret(){
+  var v=el('scanVideo'), bing=el('scanBingkai'), pang=el('scanPanggung');
+  if(!v||!v.videoWidth){ toast('Kamera belum siap',true); return; }
+  var pr=pang.getBoundingClientRect(), br=bing.getBoundingClientRect();
+  var vw=v.videoWidth, vh=v.videoHeight;
+  var skala=Math.max(pr.width/vw, pr.height/vh);            // object-fit: cover
+  var tampilW=vw*skala, tampilH=vh*skala;
+  var geserX=(tampilW-pr.width)/2, geserY=(tampilH-pr.height)/2;
+  var sx=(br.left-pr.left+geserX)/skala;
+  var sy=(br.top-pr.top+geserY)/skala;
+  var sw=br.width/skala, sh=br.height/skala;
+  sx=Math.max(0,Math.min(sx,vw)); sy=Math.max(0,Math.min(sy,vh));
+  sw=Math.min(sw,vw-sx); sh=Math.min(sh,vh-sy);
+
+  var maksSisi=1600, r=Math.min(1, maksSisi/Math.max(sw,sh));
+  var c=document.createElement('canvas');
+  c.width=Math.round(sw*r); c.height=Math.round(sh*r);
+  c.getContext('2d').drawImage(v, sx,sy,sw,sh, 0,0,c.width,c.height);
+  scanPakai(c.toDataURL('image/jpeg',0.82));
+}
+
+function scanPakai(dataUrl){
+  SCAN.foto=dataUrl; SCAN.zoom=1; SCAN.putar=0;
+  scanMatikan(); closeModal();
+  scanGambarPanel();
+  toast('Kwitansi berhasil dibaca');
+}
+
+function scanGambarPanel(){
+  var kerja=el('himpunKerja'), wadah=el('scanPanel');
+  if(!kerja||!wadah) return;
+  if(!SCAN.foto){ kerja.classList.remove('ada-scan'); wadah.innerHTML=''; return; }
+  kerja.classList.add('ada-scan');
+  wadah.innerHTML =
+    '<div class="sp-kepala"><span class="sp-judul">Kwitansi</span>'
+    + '<div class="sp-alat">'
+    +   '<button class="icon-btn" type="button" onclick="scanZoom(-1)" title="Perkecil">'+IKON_SCAN.zoomOut+'</button>'
+    +   '<button class="icon-btn" type="button" onclick="scanZoom(1)" title="Perbesar">'+IKON_SCAN.zoomIn+'</button>'
+    +   '<button class="icon-btn" type="button" onclick="scanPutar()" title="Putar 90°">'+SVG_ICONS.putar+'</button>'
+    +   '<button class="icon-btn" type="button" onclick="scanBuka()" title="Foto ulang">'+SVG_ICONS.kamera+'</button>'
+    +   '<button class="icon-btn" type="button" onclick="scanLepas()" title="Tutup kwitansi">'+SVG_ICONS.close+'</button>'
+    + '</div></div>'
+    + '<div class="sp-gambar" id="spGambar"><img id="spImg" src="'+SCAN.foto+'" alt="kwitansi"></div>';
+  scanTerap();
+}
+function scanTerap(){
+  var im=el('spImg'); if(!im) return;
+  im.style.transform='rotate('+SCAN.putar+'deg) scale('+SCAN.zoom+')';
+}
+function scanZoom(arah){
+  SCAN.zoom=Math.max(1,Math.min(4, SCAN.zoom + arah*0.25));
+  scanTerap();
+}
+function scanPutar(){ SCAN.putar=(SCAN.putar+90)%360; SCAN.zoom=1; scanTerap(); }
+function scanLepas(){ SCAN.foto=null; scanGambarPanel(); }
