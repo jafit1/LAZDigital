@@ -454,8 +454,13 @@ function gambarKerangka(){
   if(ciut) app.classList.add('collapsed');
 
   var logo=SETTINGS.logoData||'', nm=SETTINGS.namaLembaga||'LAZ Digital';
-  var ident = logo ? '<img class="logo-img" src="'+logo+'" alt="logo">'
-                   : '<span class="logo">LZ</span><span class="brand-name">'+esc(nm)+'</span>';
+  /* sama dengan halaman utama: lencana inisial saat sidebar ciut, logo penuh
+     saat lebar — wordmark tidak muat di rel 84px */
+  var ini=(function(){var k=String(nm||'').replace(/[^A-Za-z0-9 ]/g,' ').split(/\s+/).filter(Boolean);
+    if(!k.length) return 'LZ'; if(k.length===1) return k[0].slice(0,2).toUpperCase();
+    return (k[0].charAt(0)+k[1].charAt(0)).toUpperCase();})();
+  var ident = logo ? '<img class="logo-img" src="'+logo+'" alt="logo"><span class="logo-mini">'+esc(ini)+'</span>'
+                   : '<span class="logo">'+esc(ini)+'</span><span class="brand-name">'+esc(nm)+'</span>';
   $('#brandBox').innerHTML='<button class="tn-brand-id" type="button" id="btnBrand"'
     +' title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu">'+ident+'</button>';
   $('#btnBrand').addEventListener('click',toggleSidebar);

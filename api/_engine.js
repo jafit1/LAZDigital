@@ -492,9 +492,19 @@ function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); var l
   audit(u.id,u.username,'delete_layanan',(lm&&lm.nama)||id,{modul:'layanan',entitasId:id,ringkas:lm?_layLabel(lm):''}); return {ok:true}; }
 
 /* ===== USER MGMT ===== */
-function apiListUsers(t){ _requirePerm(t,'users','view'); return readAll(SHEETS.USERS).map(sanitizeUser); }
+/* sanitizeUser sengaja membuang kolom sensitif (hash, salt) dan TIDAK membawa
+   'aktif'. Dulu daftar user memakainya apa adanya, sehingga u.aktif selalu
+   undefined: semua akun tampil "Nonaktif", dan menyimpan dari dialog Edit
+   menuliskan aktif='false' — akunnya benar-benar terkunci. */
+function apiListUsers(t){ _requirePerm(t,'users','view');
+  return readAll(SHEETS.USERS).map(function(u){
+    return Object.assign(sanitizeUser(u), { aktif: String(u.aktif) !== 'false', dibuat: u.dibuat || '' });
+  }); }
 function apiSaveUser(t,d){ var a=_requirePerm(t,'users',d.id?'edit':'create');
-  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.layanan!==undefined) up.layanan=(d.role==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
+  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{})};
+    /* hanya disentuh kalau pemanggil memang mengirimkannya — supaya penyimpanan
+       dari formulir yang tidak memuat kolom ini tidak diam-diam mengunci akun */
+    if(d.aktif!==undefined) up.aktif=(d.aktif===true||String(d.aktif)==='true')?'true':'false'; if(d.layanan!==undefined) up.layanan=(d.role==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
     audit(a.id,a.username,'edit_user',d.username||d.id,{modul:'users',entitasId:d.id,
       ringkas:ringkasPerubahan(lamaU,up)+(d.password?(ringkasPerubahan(lamaU,up)?' | ':'')+'password diganti':'')}); }
   else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString(),layanan:(d.role==='superadmin')?'':String(d.layanan||'').trim()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }

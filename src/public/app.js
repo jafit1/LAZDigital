@@ -210,14 +210,25 @@ function applyTheme(t){t=(t==='dark')?'dark':'light';document.documentElement.se
    ikut terhapus, dan nama lembaga ditulis sebagai <span> polos tanpa class —
    jadi tidak bisa disembunyikan saat sidebar diciutkan dan teksnya membungkus
    menutupi logo. Sekarang identitas dan tombol toggle dipisah rapi. */
+/* "Lazismu Bantul" -> "LB", "Lazismu" -> "LZ". Dipakai untuk lencana ringkas
+   di sidebar ciut dan sebagai pengganti kalau logo belum diunggah. */
+function inisialLembaga(nama){
+  var kata=String(nama||'').replace(/[^A-Za-z0-9 ]/g,' ').split(/\s+/).filter(Boolean);
+  if(!kata.length) return 'LZ';
+  if(kata.length===1) return kata[0].slice(0,2).toUpperCase();
+  return (kata[0].charAt(0)+kata[1].charAt(0)).toUpperCase();
+}
 function applyBranding(){
   var logo=SETTINGS.logoData||'';
   var nm=SETTINGS.namaLembaga||'LAZ Digital';
   var b=el('brandBox'),tb=el('tbBrand');
   if(b){
+    /* Sidebar ciut hanya selebar 84px — wordmark lembaga yang dipaksa masuk ke
+       sana jadi terpotong. Jadi keduanya dipasang, dan CSS yang memilih:
+       lencana inisial saat ciut, logo penuh saat lebar. */
     var ident = logo
-      ? '<img class="logo-img" src="'+logo+'" alt="logo">'
-      : '<span class="logo">LZ</span><span class="brand-name">'+esc(nm)+'</span>';
+      ? '<img class="logo-img" src="'+logo+'" alt="logo"><span class="logo-mini">'+esc(inisialLembaga(nm))+'</span>'
+      : '<span class="logo">'+esc(inisialLembaga(nm))+'</span><span class="brand-name">'+esc(nm)+'</span>';
     // Logo merangkap tombol buka/tutup menu — tidak ada tombol panel terpisah lagi.
     b.innerHTML = '<button class="tn-brand-id" type="button" onclick="toggleSidebar()"'
       + ' title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu">'
@@ -253,7 +264,7 @@ function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAl
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
 function closeModal(){
   el('modalBg').classList.remove('show');
-  var mc=el('modalCard'); if(mc) mc.classList.remove('form-modal','import-modal');
+  var mc=el('modalCard'); if(mc) mc.classList.remove('form-modal','import-modal','user-modal');
 }
 el('modalBg').addEventListener('click',function(e){if(e.target===el('modalBg'))closeModal();});
 
@@ -1659,7 +1670,9 @@ function viewUsers(){
 function renderUsers(rows){var add=canDo('users','create')?'<button class="btn btn-primary" onclick="formUser()">+ Tambah User</button>':'';
   var h='<div class="page-head"><div><h1>Manajemen User</h1><div class="desc">Akun dan hak aksesnya</div></div>'+add+'</div>';
   h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Username</th><th>Role</th><th>Kantor</th><th>Status</th><th>Hak Akses</th><th></th></tr></thead><tbody>';
-  rows.forEach(function(u){var act=String(u.aktif)==='true'||u.aktif===true;var pc=u.role==='superadmin'?'Semua akses':countPerm(u.permissions)+' izin';
+  /* patokan sama dengan Rekening & KLL: apa pun selain 'false' berarti aktif,
+     jadi nilai lama yang tersimpan sebagai boolean maupun teks sama-sama terbaca */
+  rows.forEach(function(u){var act=String(u.aktif)!=='false';var pc=u.role==='superadmin'?'Semua akses':countPerm(u.permissions)+' izin';
     h+='<tr><td><b>'+esc(u.nama)+'</b></td><td>'+esc(u.username)+'</td><td>'+(u.role==='superadmin'?'<span class="badge purple">Superadmin</span>':'<span class="badge blue">'+esc(u.role||'staff')+'</span>')+'</td><td>'+(u.layanan?'<span class="badge amber">'+esc(u.layanan)+'</span>':'<span class="muted">semua</span>')+'</td><td><span class="badge '+(act?'green':'amber')+'">'+(act?'Aktif':'Nonaktif')+'</span></td><td class="muted">'+pc+'</td><td><div class="actions-cell">'+(canDo('users','edit')?'<button class="icon-btn" onclick="formUser(\''+u.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('users','delete')?'<button class="icon-btn" onclick="delUser(\''+u.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el('content').innerHTML=h;}
 function countPerm(p){var n=0;p=p||{};Object.keys(p).forEach(function(m){Object.keys(p[m]||{}).forEach(function(a){if(p[m][a])n++;});});return n;}
@@ -1705,9 +1718,30 @@ function permBaris(btn, mod){
   kotak.forEach(function(c){ c.checked = !semua; });
 }
 function formUser(id){var u=id?CACHE.users.find(function(x){return x.id===id;}):{role:'staff',aktif:true,permissions:{}};
-  var b='<div class="row"><div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div><div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div></div><div class="row"><div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div><div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div></div><div class="row"><div class="field"><label>Status Akun</label>'+selOpt('u_aktif',['true','false'],String(u.aktif===true||String(u.aktif)==='true'))+'</div><div class="field"><label>Batasi ke kantor layanan</label><select id="u_layanan">'+_opsiLayananUser(u.layanan||'')+'</select><div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun ini hanya melihat saldo kantor tersebut. Superadmin selalu melihat semua.</div></div></div><div class="divider"></div><label style="font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:8px;display:block">HAK AKSES (Permission) — diabaikan jika role Superadmin</label>'+permGrid(u.permissions);
-  openModal(id?'Edit User':'Tambah User',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveUser(\''+(id||'')+'\')">Simpan</button>');}
-function saveUser(id){var perm={};document.querySelectorAll('.perm-table input[type=checkbox]').forEach(function(c){var m=c.dataset.mod,a=c.dataset.act;perm[m]=perm[m]||{};perm[m][a]=c.checked;});var d={nama:el('u_nama').value,username:el('u_username').value.trim(),role:el('u_role').value,aktif:el('u_aktif').value,layanan:(el('u_layanan')?el('u_layanan').value:''),permissions:perm};var pw=el('u_password').value;if(pw)d.password=pw;if(id)d.id=id;if(!d.nama||!d.username){toast('Nama & username wajib',true);return;}if(!id&&!pw){toast('Password wajib untuk user baru',true);return;}gas('apiSaveUser')(TOKEN,d).then(function(){closeModal();toast('User tersimpan');viewUsers();}).catch(handleErr);}
+  var aktif=String(u.aktif)!=='false';
+  /* Dua zona berdampingan: identitas akun di kiri, hak akses di kanan. Dulu
+     semuanya bertumpuk dalam modal 560px sehingga tabel izinnya terpotong. */
+  var kiri='<div class="uf-kiri">'
+    +'<div class="uf-judul">Data akun</div>'
+    +'<div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div>'
+    +'<div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div>'
+    +'<div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div>'
+    +'<div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div>'
+    +'<div class="field"><label>Batasi ke kantor layanan</label><select id="u_layanan">'+_opsiLayananUser(u.layanan||'')+'</select>'
+      +'<div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun ini hanya melihat saldo kantor tersebut. Superadmin selalu melihat semua.</div></div>'
+    /* Dulu dropdown berisi teks mentah "true"/"false" — tidak jelas artinya dan
+       mudah tersimpan terbalik. Diganti sakelar berlabel. */
+    +'<div class="uf-status"><div><div class="uf-status-j">Akun aktif</div>'
+      +'<div class="uf-status-k">Kalau dimatikan, akun ini tidak bisa login.</div></div>'
+      +'<span class="switch"><input type="checkbox" id="u_aktif"'+(aktif?' checked':'')+'><span class="slider"></span></span></div>'
+    +'</div>';
+  var kanan='<div class="uf-kanan">'
+    +'<div class="uf-judul">Hak akses <span class="muted" style="font-weight:500">— diabaikan jika role Superadmin</span></div>'
+    +permGrid(u.permissions)+'</div>';
+  openModal(id?'Edit User':'Tambah User','<div class="uf-grid">'+kiri+kanan+'</div>',
+    '<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveUser(\''+(id||'')+'\')">Simpan</button>');
+  var mc=el('modalCard'); if(mc) mc.classList.add('user-modal');}
+function saveUser(id){var perm={};document.querySelectorAll('.perm-table input[type=checkbox]').forEach(function(c){var m=c.dataset.mod,a=c.dataset.act;perm[m]=perm[m]||{};perm[m][a]=c.checked;});var d={nama:el('u_nama').value,username:el('u_username').value.trim(),role:el('u_role').value,aktif:el('u_aktif').checked,layanan:(el('u_layanan')?el('u_layanan').value:''),permissions:perm};var pw=el('u_password').value;if(pw)d.password=pw;if(id)d.id=id;if(!d.nama||!d.username){toast('Nama & username wajib',true);return;}if(!id&&!pw){toast('Password wajib untuk user baru',true);return;}gas('apiSaveUser')(TOKEN,d).then(function(){closeModal();toast('User tersimpan');viewUsers();}).catch(handleErr);}
 function delUser(id){uiConfirm('Hapus user ini?').then(function(__ok){if(!__ok)return;gas('apiDeleteUser')(TOKEN,id).then(function(){toast('User dihapus');viewUsers();}).catch(handleErr);});}
 
 /* ============ SETTINGS ============ */

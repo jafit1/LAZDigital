@@ -3853,3 +3853,112 @@ tr.lay-klik:hover td{background:var(--surface2)}
   .saldo-angka{font-size:13px}
   .saldo-buku-h{font-size:11.5px}
 }
+
+/* ============================================================
+   31. DIALOG USER — dua zona berdampingan
+   Modal bawaan 560px terlalu sempit untuk tabel hak akses (4 kolom
+   centang + tombol "semua"), isinya terpotong di sisi kanan.
+   ============================================================ */
+.modal.user-modal{max-width:1020px !important}
+.uf-grid{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:22px;align-items:start}
+.uf-judul{font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.02em;
+  text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border2)}
+.uf-kiri .field{margin-bottom:11px}
+.uf-kanan{min-width:0}
+.uf-status{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-top:14px;padding:11px 13px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:var(--radius-sm)}
+.uf-status-j{font-weight:600;font-size:13.5px}
+.uf-status-k{font-size:11.5px;color:var(--muted);margin-top:2px}
+@media (max-width:900px){
+  .uf-grid{grid-template-columns:1fr;gap:18px}
+  .modal.user-modal{max-width:calc(100% - 24px) !important}
+}
+
+/* ============================================================
+   32. SIDEBAR MENEMPEL KE HALAMAN
+   Sebelumnya sidebar melayang: berjarak 14px dari tiap tepi, sudut
+   membulat 26px, dan berbayang tebal — terbaca seperti panel yang
+   terlepas dari halamannya. Sekarang ia menempel penuh ke tepi kiri
+   dengan garis pemisah, seperti sidebar aplikasi pada umumnya.
+   ============================================================ */
+@media (min-width:1024px){
+  .topnav{
+    top:0 !important;left:0 !important;bottom:0 !important;
+    height:100dvh !important;border-radius:0 !important;
+    border:none !important;border-right:1px solid var(--border) !important;
+    box-shadow:none !important;
+    padding:20px 14px !important;
+  }
+  .app.collapsed .topnav{width:84px !important;padding:20px 12px !important}
+
+  /* Dipaku terbuka lewat klik logo: konten ikut bergeser, tidak tertimpa. */
+  .app:not(.collapsed) .topnav{box-shadow:none !important}
+  .app:not(.collapsed) .main{
+    margin-left:250px !important;width:calc(100% - 250px) !important;
+    transition:margin .26s cubic-bezier(.22,.7,.2,1),width .26s cubic-bezier(.22,.7,.2,1) !important;
+  }
+  .app.collapsed .main{
+    margin-left:84px !important;width:calc(100% - 84px) !important;
+    transition:margin .26s cubic-bezier(.22,.7,.2,1),width .26s cubic-bezier(.22,.7,.2,1) !important;
+  }
+  /* Melebar sementara karena kursor: ini SATU-SATUNYA keadaan yang boleh
+     menutupi konten, jadi hanya di sini bayangannya dimunculkan. */
+  .app.collapsed .topnav:hover{
+    box-shadow:0 18px 44px -20px rgba(70,45,35,.34) !important;
+    border-right-color:var(--border2) !important;
+  }
+}
+
+/* --- logo menyesuaikan lebar sidebar --- */
+.tn-brand{margin-bottom:20px !important}
+.tn-brand-id{width:100%;justify-content:flex-start}
+.tn-brand .logo-img{height:38px;max-width:150px;width:auto;object-fit:contain}
+/* Lencana ringkas menggantikan logo lebar saat sidebar ciut: wordmark yang
+   dipaksa masuk ke rel 84px hanya jadi terpotong atau terlalu kecil dibaca. */
+.logo-mini{display:none;flex:none;width:40px;height:40px;border-radius:13px;
+  background:var(--grad-accent);box-shadow:var(--glow);color:#fff;
+  font-family:var(--head);font-weight:800;font-size:14px;letter-spacing:.01em;
+  align-items:center;justify-content:center}
+.app.collapsed .tn-brand{justify-content:center !important}
+.app.collapsed .tn-brand-id{justify-content:center;width:auto}
+.app.collapsed .tn-brand .logo-img{display:none}
+.app.collapsed .logo-mini{display:inline-flex}
+/* saat kursor menyentuh sidebar ciut, logo penuh kembali muncul */
+@media (min-width:1024px){
+  .app.collapsed .topnav:hover .tn-brand{justify-content:flex-start !important}
+  .app.collapsed .topnav:hover .tn-brand-id{justify-content:flex-start;width:100%}
+  .app.collapsed .topnav:hover .tn-brand .logo-img{display:block}
+  .app.collapsed .topnav:hover .logo-mini{display:none}
+}
+
+/* Label yang disembunyikan saat sidebar ciut dibuat opacity:0 tapi tetap
+   position:static — jadi ia masih memakan lebar dan mendorong logo serta ikon
+   keluar dari titik tengah rel. Lebarnya ikut diciutkan ke nol, dan dibuka
+   lagi saat kursor menyentuh sidebar. */
+@media (min-width:1024px){
+  .app.collapsed .tn-brand .brand-name,
+  .app.collapsed .tn-item .tn-tip,
+  .app.collapsed .user-chip .uc-meta,
+  .app.collapsed .tn-icon span{
+    max-width:0 !important;overflow:hidden !important;
+    margin-left:0 !important;margin-right:0 !important;
+    transition:opacity .18s ease,max-width .24s cubic-bezier(.22,.7,.2,1) !important;
+  }
+  .app.collapsed .topnav:hover .tn-brand .brand-name,
+  .app.collapsed .topnav:hover .tn-item .tn-tip,
+  .app.collapsed .topnav:hover .user-chip .uc-meta,
+  .app.collapsed .topnav:hover .tn-icon span{
+    max-width:170px !important;
+  }
+}
+/* Label berlebar nol masih menyisakan jarak antar-item (gap), dan jarak itu
+   sendiri menggeser logo ~5px dari titik tengah. Saat ciut, jaraknya ditiadakan. */
+@media (min-width:1024px){
+  .app.collapsed .tn-brand-id,
+  .app.collapsed .tn-item,
+  .app.collapsed .user-chip{gap:0 !important}
+  .app.collapsed .topnav:hover .tn-brand-id,
+  .app.collapsed .topnav:hover .tn-item{gap:10px !important}
+  .app.collapsed .topnav:hover .user-chip{gap:11px !important}
+}
