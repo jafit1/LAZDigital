@@ -26,12 +26,17 @@ const rpc = require('./rpc.js');
 const PENYEDIA = String(process.env.OCR_PENYEDIA || 'gemini').toLowerCase().trim();
 const KUNCI = String(process.env.OCR_API_KEY || '').trim();
 
-/* Urutannya sengaja dari yang paling murah & kuotanya paling longgar ke yang
-   paling pintar. Model yang tidak didukung kunci ini akan tersingkir sendiri
-   pada pemakaian pertama, jadi daftar bawaan boleh optimistis. */
+/* Sengaja memakai ALIAS "-latest", bukan nomor versi. Model bernomor punya masa
+   pensiun: ia tetap terdaftar di ListModels tetapi panggilannya mulai dibalas
+   404, dan fitur ini mati diam-diam sampai ada yang menyadarinya. Alias selalu
+   menunjuk ke versi yang masih hidup, jadi tidak perlu disentuh tiap Google
+   memensiunkan satu generasi.
+
+   Urutannya dari yang paling murah & kuotanya paling longgar ke yang paling
+   pintar; pro hanya terpakai kalau dua di atasnya sedang habis. */
 const MODEL_BAWAAN = PENYEDIA === 'openai'
   ? ['gpt-4o-mini']
-  : ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+  : ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest'];
 const RANTAI = (function () {
   const d = String(process.env.OCR_MODEL || '').split(',')
     .map(function (s) { return s.trim(); })
@@ -207,10 +212,15 @@ function galatPenyedia(status, j, model) {
     e.lewatiDetik = harian ? detikSampaiResetKuota() : 90;
     e.alasan = harian ? 'kuota harian habis' : 'dibatasi sementara';
   } else if (status === 404) {
-    e = new Error('Model AI "' + model + '" tidak tersedia untuk kunci ini.');
+    /* Pesan asli Google dibawa apa adanya: ia membedakan "nama modelnya salah"
+       dari "versi API-nya tidak mendukung", dan tanpa itu penyebabnya cuma bisa
+       ditebak-tebak. */
+    e = new Error('Model AI "' + model + '" tidak tersedia untuk kunci ini'
+      + (bersih ? ' — ' + bersih : '') + '.');
     e.lewati = true;
     e.lewatiDetik = 6 * 3600;
     e.alasan = 'tidak tersedia untuk kunci ini';
+    e.rinci = bersih;
   } else if (status === 503 || status === 500 || status === 502 || status === 504) {
     e = new Error('Model ' + model + ' sedang sibuk (HTTP ' + status + ').');
     e.lewati = true;
@@ -355,10 +365,25 @@ function susunPesanHabis(dilewati, galatAkhir) {
   const nama = Object.keys(dilewati);
   if (!nama.length) return (galatAkhir && galatAkhir.message) || 'Tidak ada model AI yang bisa dipakai.';
   const adaKuota = nama.some(function (m) { return /kuota/i.test(dilewati[m]); });
-  const rinci = nama.map(function (m) { return m + ' (' + dilewati[m] + ')'; }).join(', ');
-  return (adaKuota
-    ? 'Kuota semua model AI sedang habis: ' + rinci + '. Kuota gratis harian pulih tengah malam waktu Pasifik (sekitar pukul 14.00–15.00 WIB). Sementara ini isi manual sambil melihat foto.'
-    : 'Tidak ada model AI yang bisa dipakai: ' + rinci + '.');
+  const semuaAsing = nama.every(function (m) { return /tidak tersedia/i.test(dilewati[m]); });
+
+  if (adaKuota) {
+    return 'Kuota semua model AI sedang habis: '
+      + nama.map(function (m) { return m + ' (' + dilewati[m] + ')'; }).join(', ')
+      + '. Kuota gratis harian pulih tengah malam waktu Pasifik (sekitar pukul 14.00–15.00 WIB). Sementara ini isi manual sambil melihat foto.';
+  }
+
+  /* Semua model ditolak 404 hampir selalu berarti setelan, bukan gangguan:
+     nama model salah, atau kuncinya dari project yang belum mengaktifkan
+     Generative Language API. Pesannya menunjuk ke cara memeriksanya. */
+  if (semuaAsing) {
+    return 'Tidak ada model AI yang cocok untuk kunci ini (' + nama.join(', ') + ').'
+      + (galatAkhir && galatAkhir.rinci ? ' Kata penyedia: ' + galatAkhir.rinci + '.' : '')
+      + ' Periksa daftar model yang benar-benar didukung kunci ini lewat aksi "model-list", lalu sesuaikan OCR_MODEL di Vercel.';
+  }
+
+  return 'Tidak ada model AI yang bisa dipakai: '
+    + nama.map(function (m) { return m + ' (' + dilewati[m] + ')'; }).join(', ') + '.';
 }
 
 function uraikanJSON(t) {
@@ -381,6 +406,31 @@ async function kuotaLewat() {
   return n > BATAS_HARIAN;
 }
 
+/* Model yang ada di daftar penyedia tetapi jelas bukan untuk membaca gambar:
+   pembuat gambar, suara, transkripsi, robotika, dan sejenisnya. */
+const POLA_BUKAN_VISI = /(-image|-tts|transcribe|robotics|lyria|nano-banana|computer-use|deep-research|embedding|veo|imagen)/i;
+
+/* Gambar 8x8 putih — dipakai aksi 'uji-model' untuk mengetuk tiap model
+   sekali dengan biaya paling murah yang mungkin. */
+const GAMBAR_UJI = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDs6KKKAP/Z';
+
+/* Mengetuk satu model dan melaporkan APA ADANYA: status HTTP dan kalimat asli
+   penyedia. Tanpa ini, model yang ditolak cuma bisa ditebak sebabnya. */
+async function ujiSatuModel(model) {
+  try {
+    const t = await panggilModel(model, GAMBAR_UJI, 'image/jpeg',
+      'Balas persis satu kata: OK');
+    return { model: model, bisa: true, status: 200, jawab: String(t || '').trim().slice(0, 60) };
+  } catch (e) {
+    return {
+      model: model, bisa: false,
+      status: e.status || 0,
+      pesan: (e && e.message) || 'gagal',
+      bisaDiganti: !!e.lewati,
+    };
+  }
+}
+
 /* ─── Daftar model yang benar-benar didukung kunci ini ─── */
 async function daftarModelPenyedia() {
   if (PENYEDIA === 'openai') {
@@ -400,7 +450,10 @@ async function daftarModelPenyedia() {
 }
 
 /* ─── Handler ─── */
-const AKSI_IZIN = { status: 'view', 'model-list': 'view', baca: 'create' };
+const AKSI_IZIN = {
+  status: 'view', 'model-list': 'view', 'uji-model': 'view',
+  'reset-istirahat': 'edit', baca: 'create',
+};
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ __error: 'Method not allowed' }); return; }
@@ -448,19 +501,64 @@ module.exports = async (req, res) => {
   if (aksi === 'model-list') {
     try {
       const semua = await daftarModelPenyedia();
-      const pakai = semua.filter(function (m) { return /vision|gemini|gpt|flash|pro/i.test(m); });
+      const visi = semua.filter(function (m) { return !POLA_BUKAN_VISI.test(m); });
+      /* Alias "-latest" didahulukan di saran, justru supaya rantai tidak perlu
+         diperbarui lagi saat Google memensiunkan versi bernomor. */
+      const alias = visi.filter(function (m) { return /-latest$/.test(m); });
+      const saran = [
+        alias.find(function (m) { return /flash-lite-latest/.test(m); }),
+        alias.find(function (m) { return /flash-latest/.test(m); }),
+        alias.find(function (m) { return /pro-latest/.test(m); }),
+      ].filter(Boolean);
       res.status(200).json({
         result: {
           rantai: RANTAI.slice(),
-          tersedia: pakai.length ? pakai : semua,
+          tersedia: visi,
+          visiSaja: visi.length !== semua.length,
+          alias: alias,
+          saran: saran.length ? [saran[1], saran[0], saran[2]].filter(Boolean) : [],
           rantaiSah: RANTAI.filter(function (m) { return semua.indexOf(m) >= 0; }),
           rantaiTidakDikenal: RANTAI.filter(function (m) { return semua.indexOf(m) < 0; }),
           istirahat: await petaIstirahat(),
+          catatan: 'Terdaftar di sini belum tentu bisa dipakai — model yang sudah pensiun tetap terdaftar tapi panggilannya dibalas 404. Pakai aksi "uji-model" untuk memastikan.',
         },
       });
     } catch (e) {
       res.status(200).json({ __error: (e && e.message) || 'Daftar model tidak bisa diambil.' });
     }
+    return;
+  }
+
+  /* Mengetuk model satu per satu dengan gambar 8x8 — murah, dan hasilnya
+     memastikan model mana yang SUNGGUH bisa dipakai, bukan sekadar terdaftar. */
+  if (aksi === 'uji-model') {
+    const minta = Array.isArray(body.model) ? body.model
+      : (body.model ? [String(body.model)] : RANTAI.slice());
+    const daftar = minta.map(function (x) { return String(x).trim(); })
+      .filter(Boolean).slice(0, 8);
+    const hasil = [];
+    for (let i = 0; i < daftar.length; i++) hasil.push(await ujiSatuModel(daftar[i]));
+    res.status(200).json({
+      result: {
+        diuji: daftar,
+        hasil: hasil,
+        bisaDipakai: hasil.filter(function (h) { return h.bisa; }).map(function (h) { return h.model; }),
+      },
+    });
+    return;
+  }
+
+  /* Setelah OCR_MODEL dibetulkan, model yang telanjur diistirahatkan tidak
+     perlu ditunggu sampai masanya habis. */
+  if (aksi === 'reset-istirahat') {
+    module.exports._internal.lupakanIstirahat();
+    let redisDihapus = 0;
+    if (rpc._internal.PAKAI_REDIS) {
+      for (let i = 0; i < RANTAI.length; i++) {
+        try { redisDihapus += Number(await rpc._internal.redis(['DEL', 'laz:ocr:istirahat:' + RANTAI[i]])) || 0; } catch (e) {}
+      }
+    }
+    res.status(200).json({ result: { ok: true, redisDihapus: redisDihapus, istirahat: await petaIstirahat() } });
     return;
   }
 
@@ -534,6 +632,6 @@ module.exports = async (req, res) => {
 module.exports._internal = {
   rapikanTanggal, rapikanJumlah, cocokkan, uraikanJSON, teks,
   rapikanTelepon, rapikanEmail, ambilPilihan, susunPrompt, galatPenyedia,
-  detikSampaiResetKuota, susunPesanHabis, RANTAI,
+  detikSampaiResetKuota, susunPesanHabis, RANTAI, POLA_BUKAN_VISI,
   lupakanIstirahat: function () { ISTIRAHAT_MEM.clear(); },
 };

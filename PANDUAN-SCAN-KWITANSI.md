@@ -65,11 +65,23 @@ Buka Penghimpunan → Scan Kwitansi → foto apa saja. Kalau muncul baris hijau
 Bawaannya:
 
 ```
-gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro
+gemini-flash-latest,gemini-flash-lite-latest,gemini-pro-latest
 ```
 
-Urutannya sengaja dari yang paling murah dan kuotanya paling longgar ke yang
-paling pintar. Kalau model pertama menjawab:
+### Kenapa alias "-latest", bukan nomor versi
+
+Model bernomor seperti `gemini-2.5-flash` punya masa pensiun. Yang menjebak:
+saat pensiun, model itu **masih terdaftar** di daftar model, tetapi setiap
+panggilan dibalas **404**. Jadi dari luar seperti "nama modelnya benar tapi
+tidak mau jalan", dan fiturnya mati diam-diam sampai ada yang menyadarinya.
+
+Alias `-latest` selalu menunjuk ke versi yang masih hidup, jadi rantai ini tidak
+perlu disentuh lagi setiap Google memensiunkan satu generasi. Pakai nomor versi
+hanya kalau Anda memang ingin mengunci ke satu model tertentu — dan siap
+memperbaruinya sendiri.
+
+Urutannya dari yang paling murah dan kuotanya paling longgar ke yang paling
+pintar. Kalau model pertama menjawab:
 
 | Jawaban penyedia | Yang dilakukan sistem | Lama istirahat |
 |---|---|---|
@@ -92,20 +104,40 @@ Kalau **semua** model habis, fitur tidak error keras: baris status menjelaskan
 kuota habis dan kapan pulih, foto tetap ditampilkan, formulir tetap bisa diisi
 manual.
 
-### Melihat model apa saja yang didukung kunci Anda
+### Alat pemeriksa (Console peramban, F12, saat sudah login)
 
-Model yang tersedia berbeda-beda per kunci dan per project. Untuk melihat
-daftar sebenarnya, jalankan dari Console peramban (F12) saat sudah login:
+**1. Model apa saja yang dikenal kunci ini:**
 
 ```js
 fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({aksi:'model-list',token:TOKEN})}).then(r=>r.json()).then(console.log)
+  body:JSON.stringify({aksi:'model-list',token:TOKEN})}).then(r=>r.json()).then(j=>console.log(JSON.stringify(j,null,1)))
 ```
 
-Hasilnya menyebut `tersedia` (semua model yang bisa dipakai kunci itu),
-`rantaiSah` (model di `OCR_MODEL` yang memang ada), dan `rantaiTidakDikenal`
-(yang salah tulis atau tidak didukung). Model yang tidak dikenal tidak
-merusak apa-apa — ia dilewati otomatis — tapi lebih baik dibuang dari daftar.
+Hasilnya menyebut `tersedia` (model yang bisa membaca gambar — pembuat gambar,
+suara, dan transkripsi sudah disaring), `alias` (yang berakhiran `-latest`),
+`saran` (rantai yang direkomendasikan untuk kunci ini), `rantaiSah`, dan
+`rantaiTidakDikenal`.
+
+**2. Mana yang SUNGGUH bisa dipakai** — ini yang menentukan, karena terdaftar
+belum tentu hidup:
+
+```js
+fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({aksi:'uji-model',token:TOKEN})}).then(r=>r.json()).then(j=>console.log(JSON.stringify(j,null,1)))
+```
+
+Ini mengetuk tiap model di `OCR_MODEL` dengan gambar 8×8 piksel (biaya hampir
+nol) dan melaporkan status HTTP serta kalimat asli dari Google per model.
+`bisaDipakai` berisi yang benar-benar menjawab. Untuk menguji model lain,
+tambahkan `model:'nama-model'` atau `model:['a','b']` ke badan permintaan.
+
+**3. Setelah `OCR_MODEL` dibetulkan**, model yang telanjur diistirahatkan bisa
+dibangunkan tanpa menunggu:
+
+```js
+fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({aksi:'reset-istirahat',token:TOKEN})}).then(r=>r.json()).then(console.log)
+```
 
 ### Catatan biaya
 
@@ -176,7 +208,7 @@ memang keputusan petugas.
 |---|---|
 | *Kunci AI ditolak penyedia* | `OCR_API_KEY` salah atau sudah dicabut. Ganti model tidak menolong. |
 | *Kuota semua model AI sedang habis* | Seluruh rantai kehabisan kuota gratis. Pulih tengah malam waktu Pasifik (± 14.00–15.00 WIB). Tambah model ke `OCR_MODEL`, atau isi manual dulu. |
-| *Tidak ada model AI yang bisa dipakai: … (tidak tersedia untuk kunci ini)* | Semua model di `OCR_MODEL` salah tulis atau tidak didukung kunci itu. Jalankan `model-list` di atas. |
+| *Tidak ada model AI yang cocok untuk kunci ini* | Model di `OCR_MODEL` ditolak 404. Paling sering karena **modelnya sudah pensiun** (masih terdaftar, tapi panggilannya ditolak). Jalankan `uji-model`, lalu ganti `OCR_MODEL` dengan alias `-latest`. |
 | *Batas pembacaan hari ini sudah tercapai* | `OCR_BATAS_HARIAN` tercapai. Naikkan kalau memang perlu. |
 | *Tulisan belum terbaca* | Fotonya kurang jelas. Coba foto ulang: cahaya cukup, kwitansi rata, penuhi bingkai. |
 | *Dibaca model cadangan …* | Bukan masalah — model utama sedang istirahat, pembacaan tetap jalan. |

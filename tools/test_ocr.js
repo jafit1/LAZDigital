@@ -105,7 +105,7 @@ function galat429Menit() {
 }
 const G404 = { status: 404, body: { error: { message: 'models/x is not found' } } };
 
-const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+const RANTAI3 = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest'];
 
 (async () => {
   simpanDB();
@@ -211,7 +211,7 @@ const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
 
   console.log('\n=== F. RANTAI MODEL ===');
   cek('rantai bawaan gemini berisi 3 model', JSON.stringify(M._internal.RANTAI) === JSON.stringify(RANTAI3), M._internal.RANTAI);
-  cek('yang paling murah didahulukan', M._internal.RANTAI[0] === 'gemini-2.5-flash', M._internal.RANTAI);
+  cek('yang paling murah didahulukan', M._internal.RANTAI[0] === 'gemini-flash-latest', M._internal.RANTAI);
   r = await hit(M, { aksi: 'status', token: TOKEN });
   cek('status melaporkan seluruh rantai', JSON.stringify(r.tubuh.result.rantai) === JSON.stringify(RANTAI3), r.tubuh.result);
 
@@ -226,36 +226,36 @@ const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
   console.log('\n=== G. PERGANTIAN MODEL SAAT KUOTA HABIS ===');
   const C = muatOcr({ OCR_API_KEY: 'kunci-uji' });
   reset();
-  PER_MODEL['gemini-2.5-flash'] = galat429Harian();
-  PER_MODEL['gemini-2.5-flash-lite'] = jawabGemini({ namaDonatur: 'Pindah Model', jumlah: 10000 });
+  PER_MODEL['gemini-flash-latest'] = galat429Harian();
+  PER_MODEL['gemini-flash-lite-latest'] = jawabGemini({ namaDonatur: 'Pindah Model', jumlah: 10000 });
   r = await hit(C, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
   cek('model pertama kehabisan kuota → langsung pindah, bukan gagal',
     r.tubuh.result && r.tubuh.result.isi.namaDonatur === 'Pindah Model', r.tubuh);
   cek('dicoba tepat dua model', PANGGILAN.length === 2, PANGGILAN.map((x) => x.model));
-  cek('urutannya sesuai rantai', PANGGILAN[0].model === 'gemini-2.5-flash' && PANGGILAN[1].model === 'gemini-2.5-flash-lite', PANGGILAN.map((x) => x.model));
-  cek('hasil menyebut model yang dipakai', r.tubuh.result.model === 'gemini-2.5-flash-lite', r.tubuh.result);
+  cek('urutannya sesuai rantai', PANGGILAN[0].model === 'gemini-flash-latest' && PANGGILAN[1].model === 'gemini-flash-lite-latest', PANGGILAN.map((x) => x.model));
+  cek('hasil menyebut model yang dipakai', r.tubuh.result.model === 'gemini-flash-lite-latest', r.tubuh.result);
   cek('ditandai sebagai model cadangan', r.tubuh.result.cadangan === true, r.tubuh.result);
 
   /* model yang kehabisan kuota harian tidak boleh dicoba lagi hari itu */
   PANGGILAN = [];
   r = await hit(C, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
   cek('permintaan berikutnya TIDAK menyentuh model yang kuotanya habis',
-    PANGGILAN.every((x) => x.model !== 'gemini-2.5-flash'), PANGGILAN.map((x) => x.model));
+    PANGGILAN.every((x) => x.model !== 'gemini-flash-latest'), PANGGILAN.map((x) => x.model));
   cek('langsung ke model cadangan, hemat satu panggilan', PANGGILAN.length === 1, PANGGILAN.map((x) => x.model));
   r = await hit(C, { aksi: 'status', token: TOKEN });
   cek('status melaporkan model yang sedang istirahat',
-    /kuota harian/i.test(r.tubuh.result.istirahat['gemini-2.5-flash'] || ''), r.tubuh.result.istirahat);
+    /kuota harian/i.test(r.tubuh.result.istirahat['gemini-flash-latest'] || ''), r.tubuh.result.istirahat);
 
   console.log('\n=== H. BEDA KUOTA HARIAN vs BATAS PER MENIT ===');
   const P = muatOcr({ OCR_API_KEY: 'kunci-uji' });
   reset();
-  PER_MODEL['gemini-2.5-flash'] = galat429Menit();
-  PER_MODEL['gemini-2.5-flash-lite'] = jawabGemini({ namaDonatur: 'Sebentar', jumlah: 5000 });
+  PER_MODEL['gemini-flash-latest'] = galat429Menit();
+  PER_MODEL['gemini-flash-lite-latest'] = jawabGemini({ namaDonatur: 'Sebentar', jumlah: 5000 });
   r = await hit(P, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
-  cek('batas per menit juga memicu pindah model', r.tubuh.result.model === 'gemini-2.5-flash-lite', r.tubuh.result);
+  cek('batas per menit juga memicu pindah model', r.tubuh.result.model === 'gemini-flash-lite-latest', r.tubuh.result);
   r = await hit(P, { aksi: 'status', token: TOKEN });
   cek('alasannya dibedakan dari kuota harian',
-    /sementara/i.test(r.tubuh.result.istirahat['gemini-2.5-flash'] || ''), r.tubuh.result.istirahat);
+    /sementara/i.test(r.tubuh.result.istirahat['gemini-flash-latest'] || ''), r.tubuh.result.istirahat);
   cek('istirahat harian jauh lebih lama dari yang per menit',
     H.detikSampaiResetKuota() > 90, H.detikSampaiResetKuota());
   cek('hitungan reset kuota masuk akal (5 menit – 24 jam)',
@@ -264,16 +264,27 @@ const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
   console.log('\n=== I. MODEL TIDAK DIDUKUNG KUNCI (404) ===');
   const N = muatOcr({ OCR_API_KEY: 'kunci-uji' });
   reset();
-  PER_MODEL['gemini-2.5-flash'] = G404;
-  PER_MODEL['gemini-2.5-flash-lite'] = G404;
-  PER_MODEL['gemini-2.5-pro'] = jawabGemini({ namaDonatur: 'Cuma Pro', jumlah: 7000 });
+  PER_MODEL['gemini-flash-latest'] = G404;
+  PER_MODEL['gemini-flash-lite-latest'] = G404;
+  PER_MODEL['gemini-pro-latest'] = jawabGemini({ namaDonatur: 'Cuma Pro', jumlah: 7000 });
   r = await hit(N, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
   cek('model yang tidak dikenal kunci dilewati, bukan menggagalkan',
     r.tubuh.result && r.tubuh.result.isi.namaDonatur === 'Cuma Pro', r.tubuh);
   cek('seluruh rantai ditelusuri sampai ketemu', PANGGILAN.length === 3, PANGGILAN.map((x) => x.model));
   PANGGILAN = [];
   r = await hit(N, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
-  cek('model yang tidak ada diingat, tidak dicoba lagi', PANGGILAN.length === 1 && PANGGILAN[0].model === 'gemini-2.5-pro', PANGGILAN.map((x) => x.model));
+  cek('model yang tidak ada diingat, tidak dicoba lagi', PANGGILAN.length === 1 && PANGGILAN[0].model === 'gemini-pro-latest', PANGGILAN.map((x) => x.model));
+
+  const N2 = muatOcr({ OCR_API_KEY: 'kunci-uji' });
+  reset();
+  RANTAI3.forEach((m) => { PER_MODEL[m] = { status: 404, body: { error: {
+    message: 'models/' + m + ' is not found for API version v1beta, or is not supported for generateContent.' } } }; });
+  r = await hit(N2, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
+  cek('semua model 404: pesannya BUKAN soal kuota', !/kuota/i.test(r.tubuh.__error), r.tubuh.__error);
+  cek('semua model 404: pesannya menunjuk ke model-list', /model-list/.test(r.tubuh.__error), r.tubuh.__error);
+  cek('semua model 404: pesannya menyebut OCR_MODEL', /OCR_MODEL/.test(r.tubuh.__error), r.tubuh.__error);
+  cek('semua model 404: alasan asli dari Google ikut ditampilkan',
+    /not found for API version/i.test(r.tubuh.__error), r.tubuh.__error);
 
   console.log('\n=== J. SEMUA MODEL HABIS ===');
   const Z = muatOcr({ OCR_API_KEY: 'kunci-uji' });
@@ -336,7 +347,7 @@ const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
   r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
   const hasil = r.tubuh.result;
   cek('cukup satu panggilan kalau model pertama sehat', PANGGILAN.length === 1, PANGGILAN.length);
-  cek('model utama tidak ditandai cadangan', hasil.cadangan === false && hasil.model === 'gemini-2.5-flash', hasil);
+  cek('model utama tidak ditandai cadangan', hasil.cadangan === false && hasil.model === 'gemini-flash-latest', hasil);
   cek('URL menuju Gemini', /generativelanguage\.googleapis\.com/.test(PANGGILAN[0].url), PANGGILAN[0].url);
   cek('kunci dikirim lewat header, bukan query string', PANGGILAN[0].url.indexOf('kunci-uji') < 0
     && PANGGILAN[0].opt.headers['x-goog-api-key'] === 'kunci-uji', PANGGILAN[0].url);
@@ -386,6 +397,13 @@ const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
   JAWABAN = { status: 200, body: { models: [
     { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
     { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-flash-latest', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-pro-latest', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-3.1-flash-image', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-2.5-flash-preview-tts', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-3.5-transcribe', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/nano-banana-pro-preview', supportedGenerationMethods: ['generateContent'] },
     { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
   ] } };
   r = await hit(D, { aksi: 'model-list', token: TOKEN });
@@ -397,6 +415,68 @@ const RANTAI3 = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
   cek('model rantai yang tidak dikenal ditandai',
     (r.tubuh.result.rantaiTidakDikenal || []).indexOf('gemini-9.9-khayalan') >= 0, r.tubuh.result);
   cek('daftar model tidak membocorkan kunci', JSON.stringify(r.tubuh).indexOf('kunci-uji') < 0, r.tubuh);
+
+  /* Pembuat gambar/suara ikut mendukung generateContent, tapi bukan pembaca
+     kwitansi — kalau ikut disarankan, orang akan memasangnya dan bingung. */
+  const ters = r.tubuh.result.tersedia || [];
+  cek('pembuat gambar disaring dari daftar', ters.indexOf('gemini-3.1-flash-image') < 0, ters);
+  cek('model suara (tts) disaring', ters.every((x) => !/-tts/.test(x)), ters);
+  cek('model transkripsi disaring', ters.indexOf('gemini-3.5-transcribe') < 0, ters);
+  cek('nano-banana (pembuat gambar) disaring', ters.indexOf('nano-banana-pro-preview') < 0, ters);
+  cek('ditandai bahwa daftarnya sudah disaring', r.tubuh.result.visiSaja === true, r.tubuh.result);
+
+  const saran = r.tubuh.result.saran || [];
+  cek('alias -latest dikenali', (r.tubuh.result.alias || []).indexOf('gemini-flash-latest') >= 0, r.tubuh.result.alias);
+  cek('saran rantai memakai alias, bukan versi bernomor',
+    saran.length === 3 && saran.every((x) => /-latest$/.test(x)), saran);
+  cek('saran diurut flash → flash-lite → pro',
+    saran[0] === 'gemini-flash-latest' && saran[1] === 'gemini-flash-lite-latest' && saran[2] === 'gemini-pro-latest', saran);
+  cek('ada peringatan bahwa terdaftar ≠ bisa dipakai',
+    /404|pensiun/i.test(r.tubuh.result.catatan || ''), r.tubuh.result.catatan);
+
+  console.log('\n=== O2. MENGETUK MODEL SATU PER SATU ===');
+  const U = muatOcr({ OCR_API_KEY: 'kunci-uji' });
+  reset();
+  PER_MODEL['gemini-flash-latest'] = jawabGemini('OK');
+  PER_MODEL['gemini-flash-lite-latest'] = { status: 404, body: { error: { message: 'is not found for API version v1beta' } } };
+  PER_MODEL['gemini-pro-latest'] = galat429Harian();
+  r = await hit(U, { aksi: 'uji-model', token: TOKEN });
+  const uji = r.tubuh.result;
+  cek('tanpa argumen: seluruh rantai diketuk', uji.diuji.length === 3, uji.diuji);
+  cek('model sehat ditandai bisa', uji.hasil[0].bisa === true && uji.hasil[0].status === 200, uji.hasil[0]);
+  cek('model 404 ditandai tidak bisa', uji.hasil[1].bisa === false && uji.hasil[1].status === 404, uji.hasil[1]);
+  cek('alasan asli penyedia ikut dilaporkan', /not found/i.test(uji.hasil[1].pesan || ''), uji.hasil[1]);
+  cek('model yang kuotanya habis juga terlaporkan', uji.hasil[2].status === 429, uji.hasil[2]);
+  cek('ringkasan bisaDipakai hanya memuat yang berhasil',
+    JSON.stringify(uji.bisaDipakai) === JSON.stringify(['gemini-flash-latest']), uji.bisaDipakai);
+  cek('gambar uji dikirim sebagai JPEG kecil',
+    PANGGILAN[0].opt.body.indexOf('image/jpeg') >= 0 && PANGGILAN[0].opt.body.length < 4000,
+    PANGGILAN[0].opt.body.length);
+  cek('uji-model tidak membocorkan kunci', JSON.stringify(r.tubuh).indexOf('kunci-uji') < 0);
+
+  reset();
+  PER_MODEL['gemini-3.8-flash'] = jawabGemini('OK');
+  r = await hit(U, { aksi: 'uji-model', token: TOKEN, model: 'gemini-3.8-flash' });
+  cek('bisa menguji model di luar rantai', r.tubuh.result.diuji.length === 1 && r.tubuh.result.hasil[0].bisa === true, r.tubuh.result);
+  r = await hit(U, { aksi: 'uji-model', token: TOKEN, model: new Array(30).fill('gemini-3.8-flash') });
+  cek('jumlah model yang diuji sekali jalan dibatasi', r.tubuh.result.diuji.length <= 8, r.tubuh.result.diuji.length);
+
+  console.log('\n=== O3. MELUPAKAN MASA ISTIRAHAT ===');
+  const RS = muatOcr({ OCR_API_KEY: 'kunci-uji' });
+  reset();
+  RANTAI3.forEach((m) => { PER_MODEL[m] = galat429Harian(); });
+  await hit(RS, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
+  r = await hit(RS, { aksi: 'status', token: TOKEN });
+  cek('seluruh rantai tercatat istirahat', Object.keys(r.tubuh.result.istirahat).length === 3, r.tubuh.result.istirahat);
+  r = await hit(RS, { aksi: 'reset-istirahat', token: TOKEN });
+  cek('reset-istirahat mengosongkan catatan', Object.keys(r.tubuh.result.istirahat).length === 0, r.tubuh.result);
+  reset();
+  JAWABAN = jawabGemini({ namaDonatur: 'Setelah Reset', jumlah: 3000 });
+  r = await hit(RS, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });
+  cek('model langsung bisa dipakai lagi tanpa menunggu',
+    r.tubuh.result && r.tubuh.result.isi.namaDonatur === 'Setelah Reset', r.tubuh);
+  r = await hit(RS, { aksi: 'reset-istirahat', token: tamu.token });
+  cek('reset-istirahat butuh izin ubah, bukan sekadar lihat', r.statusCode === 403, r.statusCode);
 
   console.log('\n=== P. PENYEDIA OPENAI ===');
   const O = muatOcr({ OCR_PENYEDIA: 'openai', OCR_API_KEY: 'sk-uji' });

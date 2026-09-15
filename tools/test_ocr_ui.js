@@ -209,8 +209,8 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  console.log('\n=== J. KUOTA MODEL UTAMA HABIS ===');
  await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
  await aturAI({lupakan:true, status:200, isi:{}, perModel:{
-   'gemini-2.5-flash':{status:429},
-   'gemini-2.5-flash-lite':{status:200, isi:{namaDonatur:'Lewat Cadangan', jumlah:125000}}
+   'gemini-flash-latest':{status:429},
+   'gemini-flash-lite-latest':{status:200, isi:{namaDonatur:'Lewat Cadangan', jumlah:125000}}
  }});
  await fotoBaru();
  await p.waitForSelector('#spStatus.ok',{timeout:20000});
@@ -222,7 +222,7 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  const stAda=await p.evaluate(()=>fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({aksi:'status',token:TOKEN})}).then(r=>r.json()));
  cek('status melaporkan model yang sedang istirahat',
-   !!(stAda.result.istirahat||{})['gemini-2.5-flash'], stAda.result);
+   !!(stAda.result.istirahat||{})['gemini-flash-latest'], stAda.result);
  cek('rantai model dilaporkan ke peramban', (stAda.result.rantai||[]).length>=2, stAda.result);
 
  await aturAI({lupakan:true, status:200, isi:{namaDonatur:'Normal Lagi'}, perModel:{}});
