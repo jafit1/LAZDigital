@@ -4126,10 +4126,12 @@ html.plat-sentuh .btn-sm{min-height:36px}
 .fld.ragu-ai .select-enhanced-btn,.fld.ragu-ai .datepicker-enhanced-btn{
   background:var(--amber-bg)!important;border-color:var(--amber)!important}
 .fld.terisi-ai .money-clear,.fld.ragu-ai .money-clear{background:transparent}
-.fld.terisi-ai > label::after{content:'AI';margin-left:6px;font-size:9px;font-weight:700;
+/* Kolom yang terisi benar tidak diberi tulisan apa pun — warnanya sudah cukup.
+   Lencana hanya dipasang pada yang PERLU tindakan, supaya matanya langsung
+   jatuh ke situ dan tidak tenggelam di antara belasan lencana. */
+.fld.ragu-ai > label::after{content:'periksa';margin-left:6px;font-size:9px;font-weight:700;
   letter-spacing:.04em;padding:1px 5px;border-radius:999px;
-  background:var(--green);color:#fff;vertical-align:middle}
-.fld.ragu-ai > label::after{content:'periksa';background:var(--amber);color:#3b2a00}
+  background:var(--amber);color:#3b2a00;vertical-align:middle}
 
 /* Di layar sempit dan di perangkat sentuh, tombolnya diberi ruang lebih
    supaya tetap enak ditekan jempol. */

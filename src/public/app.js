@@ -8437,7 +8437,7 @@ var SCAN = {
   aliran:null, kamera:'environment', tegak:false, foto:null, zoom:1, putar:0,
   ocrAktif:null,        /* null = belum diperiksa, true/false = hasil pemeriksaan */
   status:'',            /* '' | 'baca' | 'ok' | 'kosong' | 'gagal' */
-  pesan:'', terisi:0, potret:null
+  pesan:'', terisi:0, potret:null, catatan:[]
 };
 
 var IKON_SCAN = {
@@ -8569,7 +8569,7 @@ function scanJepret(){
 
 function scanPakai(dataUrl){
   SCAN.foto=dataUrl; SCAN.zoom=1; SCAN.putar=0;
-  SCAN.status=''; SCAN.pesan=''; SCAN.terisi=0;
+  SCAN.status=''; SCAN.pesan=''; SCAN.terisi=0; SCAN.catatan=[];
   scanMatikan(); closeModal();
   scanGambarPanel();
   toast('Kwitansi masuk');
@@ -8598,8 +8598,9 @@ function scanCekOcr(){
 /* Daftar kolom yang boleh diisi otomatis, beserta nilai sekarang.
    Dipotret sebelum permintaan dikirim: yang sudah diubah petugas selama
    menunggu tidak akan ditimpa. */
-var SCAN_KOLOM = ['f_tanggal','f_jenisDana','f_subJenis','f_tipeDonatur','f_namaDonatur',
-                  'f_telepon','f_email','f_alamat','f_program','f_metode','f_jumlah','f_keterangan'];
+var SCAN_KOLOM = ['f_tanggal','f_jenisDana','f_subJenis','f_pilar','f_tipeDonatur','f_namaDonatur',
+                  'f_telepon','f_email','f_alamat','f_program','f_metode','f_rekeningId',
+                  'f_fundraising','f_jumlah','f_keterangan'];
 function scanPotret(){
   var p={};
   SCAN_KOLOM.forEach(function(id){ var n=el(id); p[id]=n?String(n.value||''):null; });
@@ -8616,11 +8617,15 @@ function scanBaca(){
   if(!el('himpunKerja')) return;                 /* formulir tidak sedang terbuka */
   scanCekOcr().then(function(aktif){
     if(!aktif){ SCAN.status=''; scanBarisStatus(); return; }
-    SCAN.status='baca'; SCAN.pesan=''; scanBarisStatus();
+    SCAN.status='baca'; SCAN.pesan=''; SCAN.catatan=[]; scanBarisStatus();
     SCAN.potret=scanPotret();
     return ocrPanggil({
       aksi:'baca', gambar:SCAN.foto,
-      pilihan:{ jenisDana:JENIS_TOP, subJenis:SUBJENIS, metode:METODE, tipeDonatur:TIPE_DONATUR }
+      /* Daftar rekening SENGAJA tidak ikut: nomor rekening lembaga tidak perlu
+         sampai ke penyedia AI. Pencocokannya dikerjakan di sini, dari teks
+         "Melalui" yang dibaca apa adanya. */
+      pilihan:{ jenisDana:JENIS_TOP, subJenis:SUBJENIS, metode:METODE,
+                tipeDonatur:TIPE_DONATUR, pilar:KATEGORI_TERIKAT, fundraising:frDaftar() }
     }).then(function(h){
       /* Model cadangan dipakai kalau kuota model utama habis — perlu terlihat
          supaya petugas tahu hasilnya mungkin sedikit berbeda kualitasnya. */
@@ -8630,10 +8635,12 @@ function scanBaca(){
         SCAN.pesan='Tulisan belum terbaca — isi manual sambil melihat foto.'+ekor;
         scanBarisStatus(); return;
       }
-      var n=scanIsiFormulir(h.isi, h.raguRagu||[]);
+      var n=scanIsiFormulir(h);
       SCAN.terisi=n; SCAN.status = n ? 'ok' : 'kosong';
       SCAN.pesan = (n ? (n+' isian terbaca — mohon periksa sebelum disimpan.')
-                      : 'Tidak ada isian baru yang bisa diisikan.') + ekor;
+                      : 'Tidak ada isian baru yang bisa diisikan.')
+                 + (SCAN.catatan.length ? ' ' + SCAN.catatan.join(' ') : '')
+                 + ekor;
       scanBarisStatus();
     }).catch(function(e){
       SCAN.status='gagal';
@@ -8674,12 +8681,15 @@ function scanSetPilih(id, nilai, ragu){
   return 1;
 }
 
-/* Urutannya penting: jenis dana membangun ulang sub-jenis, dan metode bisa
-   mengubah nama donatur (QRIS → NN), jadi nama diisi belakangan. */
-function scanIsiFormulir(isi, ragu){
-  isi = isi || {}; ragu = ragu || [];
+/* Urutannya penting: jenis dana membangun ulang sub-jenis, metode membangun
+   daftar rekening, dan metode juga bisa mengubah nama donatur (QRIS → NN) —
+   jadi nama dan rekening diisi belakangan. */
+function scanIsiFormulir(hasil){
+  hasil = hasil || {};
+  var isi = hasil.isi || {}, ragu = hasil.raguRagu || [];
   function r(k){ return ragu.indexOf(k)>=0; }
   var n=0;
+  SCAN.catatan=[];
 
   if(isi.tanggal && scanBolehIsi('f_tanggal')) n+=scanSetTeks('f_tanggal', isi.tanggal, r('tanggal'));
 
@@ -8691,15 +8701,36 @@ function scanIsiFormulir(isi, ragu){
   if(isi.subJenis && scanSetPilih('f_subJenis', isi.subJenis, r('subJenis'))){
     n++; try{ onSubChange(); }catch(e){}
   }
+  /* Pilar baru ada di halaman setelah onSubChange membuka pilarWrap. */
+  if(isi.pilar && el('pilarWrap') && el('pilarWrap').style.display!=='none'){
+    if(SCAN.potret && SCAN.potret['f_pilar']==null && el('f_pilar')) SCAN.potret['f_pilar']=String(el('f_pilar').value||'');
+    n+=scanSetPilih('f_pilar', isi.pilar, r('pilar'));
+  }
 
   if(isi.tipeDonatur && scanSetPilih('f_tipeDonatur', isi.tipeDonatur, r('tipeDonatur'))){
     n++; try{ onTipeChange(); }catch(e){}
   }
-  if(isi.metode && scanSetPilih('f_metode', isi.metode, r('metode'))){
+
+  /* Metode: kalau baris "Melalui" jelas menunjuk sebuah rekening bank, itu
+     lebih bisa dipercaya daripada centang Kas/Bank yang sering asal. */
+  var rek = scanCariRekening(isi.rekening, isi.jenisDana);
+  var metode = isi.metode;
+  if(rek.status==='ketemu' && (!metode || !isTransferMethod(metode))) metode='Transfer Bank';
+  if(rek.status==='tunai' && !metode) metode='Cash/Tunai';
+
+  if(metode && scanSetPilih('f_metode', metode, r('metode'))){
     n++;
     try{ onMetodeChange(); }catch(e){}
-    /* onMetodeChange boleh menulis 'NN' sendiri — jangan dihitung perubahan petugas */
     if(SCAN.potret) SCAN.potret['f_namaDonatur']=el('f_namaDonatur')?String(el('f_namaDonatur').value||''):null;
+  }
+  /* Daftar rekening baru dibangun onMetodeChange, jadi pengisiannya di sini. */
+  if(rek.status==='ketemu' && el('rekWrap') && el('rekWrap').style.display!=='none'){
+    if(SCAN.potret && SCAN.potret['f_rekeningId']==null && el('f_rekeningId')) SCAN.potret['f_rekeningId']=String(el('f_rekeningId').value||'');
+    if(scanSetPilih('f_rekeningId', rek.id, false)) n++;
+  } else if(rek.status==='ambigu'){
+    SCAN.catatan.push('Rekening "'+isi.rekening+'" cocok ke '+rek.kandidat.length+' rekening — pilih sendiri.');
+  } else if(rek.status==='tidakKetemu'){
+    SCAN.catatan.push('Rekening "'+isi.rekening+'" tidak ada di daftar — pilih sendiri.');
   }
 
   n+=scanSetTeks('f_namaDonatur', isi.namaDonatur, r('namaDonatur'));
@@ -8708,6 +8739,20 @@ function scanIsiFormulir(isi, ragu){
   n+=scanSetTeks('f_alamat', isi.alamat, r('alamat'));
   n+=scanSetTeks('f_program', isi.program, r('program'));
   n+=scanSetTeks('f_keterangan', isi.keterangan, r('keterangan'));
+
+  /* Fundraiser = penanda tangan "Penerima". Nama yang belum terdaftar TIDAK
+     ditambahkan diam-diam ke daftar induk: satu salah baca akan melahirkan
+     fundraiser bayangan yang membawa sebagian dana, persis masalah nama KLL
+     yang sudah pernah terjadi. Ia diisikan sebagai pilihan sementara, ditandai
+     kuning, dan disebut di baris status supaya diputuskan manusia. */
+  if(isi.fundraising){
+    var terdaftar = !!hasil.fundraisingTerdaftar;
+    if(!terdaftar) scanTambahPilihan('f_fundraising', isi.fundraising);
+    if(scanSetPilih('f_fundraising', isi.fundraising, !terdaftar)){
+      n++;
+      if(!terdaftar) SCAN.catatan.push('Penerima "'+isi.fundraising+'" belum terdaftar sebagai fundraiser — periksa, lalu tambahkan di Pengaturan bila benar.');
+    }
+  }
 
   if(isi.jumlah && scanBolehIsi('f_jumlah')){
     var j=el('f_jumlah');
@@ -8721,6 +8766,60 @@ function scanIsiFormulir(isi, ragu){
   }
   scanSegarkanKontrol();
   return n;
+}
+
+/* Menyisipkan satu pilihan sementara ke sebuah select (dipakai untuk nama
+   fundraiser yang belum ada di daftar induk). */
+function scanTambahPilihan(id, nilai){
+  var s=el(id); if(!s||!s.options) return false;
+  for(var i=0;i<s.options.length;i++) if(s.options[i].value===nilai) return true;
+  var o=document.createElement('option');
+  o.value=nilai; o.textContent=nilai+' (belum terdaftar)';
+  s.insertBefore(o, s.options[1] || null);
+  return true;
+}
+
+/* ─── Mencocokkan baris "Melalui" ke rekening yang terdaftar ───
+   Petugas menulis nama bank diikuti 2–3 digit terakhir nomor rekening,
+   mis. "BSI 88" atau "BPD 742". Pencocokan dikerjakan di sini, bukan oleh AI,
+   supaya hasilnya pasti dan nomor rekening lembaga tidak perlu dikirim keluar. */
+function scanNormalBank(s){
+  return String(s||'').toUpperCase()
+    .replace(/BANK\s+SYARIAH\s+INDONESIA|MANDIRI\s+SYARIAH|\bBSM\b/g,'BSI')
+    .replace(/\bMUAMALAT\b/g,'MUAMMALAT')
+    .replace(/[^A-Z0-9]+/g,' ')
+    .trim();
+}
+var SCAN_KATA_ABAI = ['BANK','NO','NO.','REK','REKENING','TRANSFER','TF','VIA','MELALUI','AN','A','N'];
+
+function scanCariRekening(teksMelalui, jenisDana){
+  var t=scanNormalBank(teksMelalui);
+  if(!t) return {status:'kosong'};
+  if(/\b(KAS|TUNAI|CASH)\b/.test(t) && !/\d/.test(t)) return {status:'tunai'};
+
+  var digit=(t.match(/(\d{2,6})\s*$/)||[])[1]||'';
+  var kata=t.replace(/\d+/g,' ').split(/\s+/).filter(function(w){
+    return w.length>=2 && SCAN_KATA_ABAI.indexOf(w)<0;
+  });
+  var daftar=(window.CACHE && CACHE.rekening) || [];
+  if(!daftar.length) return {status:'tidakKetemu', kandidat:[]};
+
+  var kandidat=daftar.filter(function(rk){
+    var nb=scanNormalBank(rk.namaBank);
+    var okNama = kata.length ? kata.some(function(w){ return nb.indexOf(w)>=0; }) : true;
+    var okNo = digit ? String(rk.nomor||'').slice(-digit.length)===digit : true;
+    return okNama && okNo;
+  });
+  if(!kandidat.length) return {status:'tidakKetemu', kandidat:[]};
+
+  /* Masih lebih dari satu: kelompok dananya dipakai sebagai pemutus. */
+  if(kandidat.length>1 && jenisDana){
+    var jd=String(jenisDana).toLowerCase();
+    var sempit=kandidat.filter(function(rk){ return String(rk.fundGroup||'').toLowerCase()===jd; });
+    if(sempit.length===1) kandidat=sempit;
+  }
+  if(kandidat.length===1) return {status:'ketemu', id:kandidat[0].id, rek:kandidat[0]};
+  return {status:'ambigu', kandidat:kandidat};
 }
 
 /* Select dan kolom tanggal diganti tombol buatan sendiri, yang labelnya baru
@@ -8774,7 +8873,7 @@ function scanZoom(arah){
 }
 function scanPutar(){ SCAN.putar=(SCAN.putar+90)%360; SCAN.zoom=1; scanTerap(); }
 function scanLepas(){
-  SCAN.foto=null; SCAN.status=''; SCAN.pesan=''; SCAN.terisi=0; SCAN.potret=null;
+  SCAN.foto=null; SCAN.status=''; SCAN.pesan=''; SCAN.terisi=0; SCAN.potret=null; SCAN.catatan=[];
   document.querySelectorAll('.fld.terisi-ai').forEach(function(n){ n.classList.remove('terisi-ai'); n.classList.remove('ragu-ai'); });
   scanGambarPanel();
 }

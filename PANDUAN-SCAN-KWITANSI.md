@@ -7,12 +7,58 @@ Alurnya:
 1. Petugas memotret kwitansi (atau memilih foto dari galeri).
 2. Fotonya muncul di panel samping formulir sebagai penuntun.
 3. Foto dikirim ke `/api/ocr`, dibaca AI, lalu hasilnya **mengisi formulir otomatis**.
-4. Kolom hasil AI diberi warna hijau dan lencana **AI**; yang AI sendiri ragu diberi
-   warna kuning dan lencana **periksa**. Warnanya hilang begitu petugas menyentuh kolom itu.
+4. Kolom hasil AI diberi warna **hijau**; yang AI sendiri ragu diberi warna **kuning**
+   dan lencana **periksa**. Warnanya hilang begitu petugas menyentuh kolom itu.
 5. Petugas memeriksa, membetulkan yang perlu, lalu menyimpan.
 
 Foto kwitansinya **tidak pernah disimpan** — tidak ke basis data, tidak ke server.
 Ia hidup di peramban saja dan dibuang setelah transaksi tersimpan.
+
+---
+
+## Apa saja yang dibaca
+
+| Kolom formulir | Diambil dari kwitansi |
+|---|---|
+| Tanggal | Kotak tanggal. `1 4 \| 0 9 \| 2 6` dibaca 14 September 2026 — tahun 2 digit selalu 20xx. |
+| Nama Donatur | Tanda tangan **Penyetor** |
+| Fundraising | Tanda tangan **Penerima** (petugas Lazismu) |
+| Jenis Dana + Sub Jenis | Baris yang dicentang. Kalau ada peruntukan tertulis → **Terikat**, bukan Umum. |
+| Pilar Infak Terikat | Disimpulkan dari peruntukannya (mis. "Air Bersih Dlingo" → Kemanusiaan) |
+| Program / Peruntukan | Tulisan di sebelah baris yang dicentang |
+| Jumlah | Angka rupiah; kalau angka dan terbilang berbeda, yang huruf dipakai dan ditandai ragu |
+| Metode + Rekening Tujuan | Baris **Melalui** |
+| Telepon / WA | Baris Hp maupun Telepon/Fax |
+| Alamat | Baris Alamat |
+
+### Rekening dari baris "Melalui"
+
+Petugas biasa menulis nama bank diikuti 2–3 digit terakhir nomor rekening —
+`BSI 88`, `BPD 742`. Yang terjadi:
+
+1. AI **hanya menyalin teksnya apa adanya**, tidak menafsirkan.
+2. Pencocokan ke rekening yang terdaftar dikerjakan **di peramban**, dengan
+   mencocokkan nama bank dan digit akhir nomor rekening.
+
+Nomor rekening lembaga karena itu **tidak pernah dikirim ke penyedia AI**, dan
+hasilnya pasti, bukan tebakan. Ejaan yang lazim ikut dikenali (`Mandiri
+Syariah` → BSI, `Muamalat` → Muammalat, awalan `Bank` diabaikan).
+
+Kalau tulisannya cocok ke lebih dari satu rekening, jenis dananya dipakai
+sebagai pemutus. Kalau masih ambigu atau tidak ketemu, kolomnya dibiarkan
+kosong dan disebutkan di baris status — lebih baik daripada salah rekening.
+
+### Fundraiser yang belum terdaftar
+
+Nama Penerima dicocokkan ke daftar fundraiser di Pengaturan. Kalau tidak ada
+yang cocok, namanya **tetap diisikan** (supaya transaksi bisa disimpan) tetapi
+ditandai kuning dan disebut di baris status.
+
+Namanya **tidak** ditambahkan otomatis ke daftar induk. Alasannya: satu salah
+baca akan melahirkan fundraiser bayangan yang membawa sebagian dana milik orang
+lain — persis masalah nama KLL salah ketik yang sudah pernah terjadi di data
+ini. Kalau namanya memang benar, tambahkan sekali di **Pengaturan → Fundraising**,
+setelah itu ia dikenali terus.
 
 ---
 
@@ -193,7 +239,8 @@ paling sering meleset dan wajib dilihat ulang:
 
 - **Nominal.** Angka tulisan tangan (1 vs 7, 3 vs 8) dan jumlah nol.
 - **Nama muzakki.** Ejaan nama orang tidak bisa ditebak dari konteks.
-- **Tanggal**, terutama yang ditulis `5/6/26`.
+- **Tanggal**, terutama tahunnya. Pernah terjadi kotak `14|09|26` dibaca 2024.
+- **Rekening**, kalau baris Melalui ditulis tidak lengkap.
 
 Kolom yang AI sendiri tidak yakin sudah ditandai kuning, tapi tanda itu bukan
 jaminan — yang hijau pun tetap perlu dilirik. Nomor kwitansi sengaja **tidak**

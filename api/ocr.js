@@ -74,6 +74,8 @@ function ambilPilihan(p) {
     subJenis: sub,
     metode: daftarBersih(p.metode, 20),
     tipeDonatur: daftarBersih(p.tipeDonatur, 20),
+    pilar: daftarBersih(p.pilar, 20),
+    fundraising: daftarBersih(p.fundraising, 40),
   };
 }
 
@@ -152,6 +154,8 @@ function susunPrompt(pil) {
   const jen = pil.jenisDana.join(' | ') || '(bebas)';
   const met = pil.metode.join(' | ') || '(bebas)';
   const tip = pil.tipeDonatur.join(' | ') || '(bebas)';
+  const pil2 = pil.pilar.join(' | ') || '(bebas)';
+  const fr = pil.fundraising.join(' | ') || '(bebas)';
   const sub = Object.keys(pil.subJenis).map(function (k) {
     return '  ' + k + ': ' + pil.subJenis[k].join(' | ');
   }).join('\n') || '  (bebas)';
@@ -163,16 +167,19 @@ function susunPrompt(pil) {
     'Keluarkan HANYA satu objek JSON dengan kunci berikut (semua boleh string kosong bila tidak terbaca):',
     '{',
     '  "tanggal": "YYYY-MM-DD",',
-    '  "namaDonatur": "nama orang atau lembaga yang menyerahkan dana",',
+    '  "namaDonatur": "nama PENYETOR — orang atau lembaga yang menyerahkan dana",',
     '  "tipeDonatur": "salah satu dari: ' + tip + '",',
     '  "jumlah": angka rupiah tanpa titik/koma, mis. 1500000,',
     '  "jenisDana": "salah satu dari: ' + jen + '",',
     '  "subJenis": "sesuai jenisDana yang dipilih:",',
     sub,
-    '  "program": "program atau peruntukan bila disebut, mis. Beasiswa Yatim",',
+    '  "pilar": "hanya bila subJenis mengandung kata Terikat — salah satu dari: ' + pil2 + '",',
+    '  "program": "program atau peruntukan bila disebut, mis. Beasiswa Yatim, Air Bersih Dlingo",',
     '  "metode": "salah satu dari: ' + met + '",',
+    '  "rekening": "isi baris MELALUI apa adanya, mis. \\"BSI 88\\", \\"BPD 742\\", \\"Kas\\", \\"Tunai\\"",',
+    '  "fundraising": "nama PENERIMA (petugas Lazismu yang menandatangani), bukan penyetor",',
     '  "noKwitansi": "nomor kwitansi bila tercetak",',
-    '  "telepon": "nomor HP/WA bila ada",',
+    '  "telepon": "nomor HP atau WA bila ada — periksa baris Hp maupun Telepon/Fax",',
     '  "alamat": "alamat bila ada",',
     '  "keterangan": "catatan singkat lain yang tertulis",',
     '  "raguRagu": ["daftar nama kunci di atas yang kamu tidak yakin"]',
@@ -180,10 +187,28 @@ function susunPrompt(pil) {
     '',
     'Aturan:',
     '- JANGAN menebak. Kalau tulisan tidak terbaca jelas, kosongkan dan masukkan nama kuncinya ke "raguRagu".',
+    '- TANGGAL sering ditulis di kotak-kotak terpisah dengan urutan HARI BULAN TAHUN 2 digit.',
+    '  Contoh kotak "1 4 | 0 9 | 2 6" berarti 14 September 2026 → "2026-09-14". Tahun 2 digit',
+    '  SELALU berarti 20xx. Jangan pernah mengarang tahun yang tidak tertulis di gambar.',
+    '- PENERIMA vs PENYETOR: kwitansi punya dua tanda tangan. "Penerima" adalah petugas Lazismu',
+    '  → masuk ke "fundraising". "Penyetor" adalah donatur → masuk ke "namaDonatur". Jangan tertukar.',
+    (pil.fundraising.length
+      ? '  Nama petugas yang sudah terdaftar: ' + fr + '. Kalau nama di kwitansi jelas merujuk salah satu'
+        + ' (mis. tertulis nama lengkap "Sherli Rizki M." untuk "Sherli"), pakai nama yang terdaftar itu.'
+      : ''),
+    '- INFAK/SEDEKAH TERIKAT: kalau ada peruntukan tertentu yang tertulis (mis. "Air Bersih Dlingo",',
+    '  "Beasiswa Yatim", "Palestina"), maka subJenis-nya yang mengandung kata "Terikat", BUKAN "Umum",',
+    '  dan "pilar" wajib diisi. Hanya kalau tidak ada peruntukan sama sekali, pakai yang "Umum".',
+    '- Panduan pilar: air bersih, bencana, NTT, Palestina, kekeringan → Kemanusiaan; beasiswa, sekolah,',
+    '  santri → Pendidikan; berobat, ambulans, operasi → Kesehatan; masjid, dakwah, guru ngaji → Sosial Dakwah;',
+    '  dam haji → DAM; fidyah → Fidyah; qurban → Qurban.',
+    '- MELALUI: salin apa adanya, termasuk angkanya. Petugas biasa menulis nama bank diikuti 2-3 digit',
+    '  terakhir nomor rekening, mis. "BSI 88" atau "BPD 742". JANGAN ditafsirkan atau dilengkapi sendiri.',
+    '  Kalau yang dicentang Kas/Tunai, tulis "Kas".',
     '- "jumlah" diambil dari angka rupiah. Kalau ada terbilang (huruf) dan angka berbeda, pakai yang huruf dan tandai ragu.',
     '- Jangan mengarang nama, nominal, atau tanggal yang tidak ada di gambar.',
     '- Balas JSON saja, tanpa penjelasan dan tanpa pagar kode.',
-  ].join('\n');
+  ].filter(function (b) { return b !== ''; }).join('\n');
 }
 
 /* ─── Klasifikasi galat penyedia ───
@@ -599,21 +624,34 @@ module.exports = async (req, res) => {
 
   const jenisDana = cocokkan(j.jenisDana, pil.jenisDana);
   const subDaftar = (jenisDana && pil.subJenis[jenisDana]) || [];
+  const subJenis = cocokkan(j.subJenis, subDaftar);
   const isi = {
     tanggal: rapikanTanggal(j.tanggal),
     namaDonatur: teks(j.namaDonatur, 80),
     tipeDonatur: cocokkan(j.tipeDonatur, pil.tipeDonatur),
     jumlah: rapikanJumlah(j.jumlah),
     jenisDana: jenisDana,
-    subJenis: cocokkan(j.subJenis, subDaftar),
+    subJenis: subJenis,
+    /* Pilar hanya bermakna untuk dana terikat; di luar itu ia mengotori formulir. */
+    pilar: /terikat/i.test(subJenis) ? cocokkan(j.pilar, pil.pilar) : '',
     program: teks(j.program, 80),
     metode: cocokkan(j.metode, pil.metode),
+    /* Teks mentah baris "Melalui" — pencocokan ke rekening dikerjakan di
+       peramban, supaya nomor rekening lembaga tidak perlu ikut ke penyedia AI. */
+    rekening: teks(j.rekening, 40),
+    /* Nama penerima dibiarkan apa adanya kalau tidak cocok daftar; peramban
+       yang memutuskan memakainya atau menandainya untuk diperiksa. */
+    fundraising: cocokkan(j.fundraising, pil.fundraising) || teks(j.fundraising, 60),
     noKwitansi: teks(j.noKwitansi, 40),
     telepon: rapikanTelepon(j.telepon),
     email: rapikanEmail(j.email),
     alamat: teks(j.alamat, 140),
     keterangan: teks(j.keterangan, 200),
   };
+  /* Sengaja DI LUAR isi: ia penanda, bukan isian formulir. Kalau ikut masuk,
+     nilai false-nya terhitung sebagai kolom terisi dan jadi bisa muncul di
+     daftar raguRagu. */
+  const frTerdaftar = !!isi.fundraising && pil.fundraising.indexOf(isi.fundraising) >= 0;
 
   const ragu = Array.isArray(j.raguRagu)
     ? j.raguRagu.map(function (x) { return teks(x, 24); }).filter(function (x) { return Object.prototype.hasOwnProperty.call(isi, x); }).slice(0, 15)
@@ -623,6 +661,7 @@ module.exports = async (req, res) => {
   res.status(200).json({
     result: {
       terbaca: terisi.length > 0, isi: isi, raguRagu: ragu, jumlahTerisi: terisi.length,
+      fundraisingTerdaftar: frTerdaftar,
       model: jawab.model, cadangan: jawab.cadangan,
     },
   });

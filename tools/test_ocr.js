@@ -366,6 +366,66 @@ const RANTAI3 = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-
   cek('ragu-ragu diteruskan', hasil.raguRagu.indexOf('alamat') >= 0, hasil.raguRagu);
   cek('balasan tidak memuat kunci', JSON.stringify(r.tubuh).indexOf('kunci-uji') < 0);
 
+  console.log('\n=== M2. PILAR, FUNDRAISER, REKENING ===');
+  const PIL2 = Object.assign({}, PILIHAN, {
+    pilar: ['Kesehatan', 'Pendidikan', 'Sosial Dakwah', 'DAM', 'Kemanusiaan', 'Fidyah', 'Qurban'],
+    fundraising: ['Lazismu Daerah Bantul', 'Kantor', 'Sherli', 'Renata'],
+  });
+  reset();
+  JAWABAN = jawabGemini({
+    jenisDana: 'Infak', subJenis: 'Infak Terikat', pilar: 'Kemanusiaan',
+    program: 'Air bersih Dlingo', rekening: 'BSI 88', fundraising: 'Sherli',
+    telepon: '081234567890',
+  });
+  r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PIL2 });
+  cek('pilar dicocokkan ke daftar', r.tubuh.result.isi.pilar === 'Kemanusiaan', r.tubuh.result.isi);
+  cek('teks rekening diteruskan apa adanya', r.tubuh.result.isi.rekening === 'BSI 88', r.tubuh.result.isi);
+  cek('fundraiser dicocokkan ke daftar', r.tubuh.result.isi.fundraising === 'Sherli', r.tubuh.result.isi);
+  cek('fundraiser ditandai terdaftar', r.tubuh.result.fundraisingTerdaftar === true, r.tubuh.result);
+  cek('nomor HP terbaca', r.tubuh.result.isi.telepon === '081234567890', r.tubuh.result.isi);
+  cek('prompt memuat daftar pilar', H.susunPrompt(H.ambilPilihan(PIL2)).indexOf('Kemanusiaan') >= 0);
+  cek('prompt memuat daftar fundraiser terdaftar', H.susunPrompt(H.ambilPilihan(PIL2)).indexOf('Renata') >= 0);
+  cek('prompt menjelaskan beda Penerima dan Penyetor',
+    /PENERIMA vs PENYETOR/i.test(H.susunPrompt(H.ambilPilihan(PIL2))));
+  cek('prompt menerangkan aturan tahun dua digit',
+    /2 digit[\s\S]*20xx|20xx/i.test(H.susunPrompt(H.ambilPilihan(PIL2))));
+  cek('prompt menerangkan aturan Terikat bila ada peruntukan',
+    /Terikat.*BUKAN.*Umum/i.test(H.susunPrompt(H.ambilPilihan(PIL2))));
+  cek('prompt melarang menafsirkan baris Melalui',
+    /JANGAN ditafsirkan/i.test(H.susunPrompt(H.ambilPilihan(PIL2))));
+
+  /* Pilar cuma bermakna untuk dana terikat. */
+  JAWABAN = jawabGemini({ jenisDana: 'Infak', subJenis: 'Infak Umum', pilar: 'Kemanusiaan' });
+  r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PIL2 });
+  cek('pilar dibuang kalau sub jenisnya bukan Terikat', r.tubuh.result.isi.pilar === '', r.tubuh.result.isi);
+
+  JAWABAN = jawabGemini({ jenisDana: 'Infak', subJenis: 'Infak Terikat', pilar: 'Luar Angkasa' });
+  r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PIL2 });
+  cek('pilar di luar daftar dibuang', r.tubuh.result.isi.pilar === '', r.tubuh.result.isi);
+
+  /* Nama penerima yang tidak dikenal TETAP diteruskan, tetapi ditandai. */
+  JAWABAN = jawabGemini({ fundraising: 'Petugas Yang Belum Terdaftar', jumlah: 1000 });
+  r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PIL2 });
+  cek('fundraiser asing tetap diteruskan, tidak dibuang',
+    r.tubuh.result.isi.fundraising === 'Petugas Yang Belum Terdaftar', r.tubuh.result.isi);
+  cek('fundraiser asing ditandai belum terdaftar',
+    r.tubuh.result.fundraisingTerdaftar === false, r.tubuh.result);
+  cek('penanda terdaftar TIDAK ikut jadi isian formulir',
+    !('fundraisingTerdaftar' in r.tubuh.result.isi), Object.keys(r.tubuh.result.isi));
+
+  JAWABAN = jawabGemini({ fundraising: 'sherli rizki maulani', jumlah: 1000 });
+  r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PIL2 });
+  cek('nama lengkap penerima dipetakan ke nama terdaftar',
+    r.tubuh.result.isi.fundraising === 'Sherli' && r.tubuh.result.fundraisingTerdaftar === true, r.tubuh.result);
+
+  /* Tahun dua digit: AI boleh saja mengirim "14/09/26". */
+  cek('tanggal 14/09/26 jadi 2026-09-14', H.rapikanTanggal('14/09/26') === '2026-09-14', H.rapikanTanggal('14/09/26'));
+  /* Kwitansi bertahun 1999 tidak mungkin ada di lembaga ini, jadi dikosongkan
+     saja — lebih aman daripada menebak abad dan mengisi tanggal yang salah. */
+  cek('tanggal mustahil (01/01/99) dikosongkan, bukan ditebak',
+    H.rapikanTanggal('01/01/99') === '', H.rapikanTanggal('01/01/99'));
+  cek('tanggal 14/09/24 tetap terbaca sebagai 2024', H.rapikanTanggal('14/09/24') === '2024-09-14', H.rapikanTanggal('14/09/24'));
+
   console.log('\n=== N. HASIL AI YANG NAKAL ===');
   JAWABAN = jawabGemini({ jenisDana: 'Kripto', subJenis: 'Zakat Mal', metode: 'Barter', tipeDonatur: 'Alien', jumlah: 'entah' });
   r = await hit(G, { aksi: 'baca', token: TOKEN, gambar: GAMBAR, pilihan: PILIHAN });

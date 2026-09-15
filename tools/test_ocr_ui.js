@@ -5,7 +5,7 @@
    pembersihan nilai tetap dilewati sungguhan. */
 const {chromium}=require('/opt/node-tools/node_modules/playwright');
 const {spawn}=require('child_process');
-const PORT=8231, DBF='db-kll2-uji.json';
+const PORT=8231, DBF='db-ocr-uji.json';
 let ok=0,g=0;
 const cek=(n,c,i)=>{if(c){ok++;console.log('  OK   |',n);}else{g++;console.log('  GAGAL|',n,i===undefined?'':JSON.stringify(i).slice(0,300));}};
 
@@ -101,11 +101,17 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  cek('kolom yang AI ragu ditandai berbeda', /ragu-ai/.test(await kelasFld('f_alamat')), await kelasFld('f_alamat'));
  cek('kolom yang yakin tidak ikut ditandai ragu', !/ragu-ai/.test(await kelasFld('f_namaDonatur')), await kelasFld('f_namaDonatur'));
  const warna=await p.evaluate(()=>{
+   const lbl=(id)=>getComputedStyle(document.getElementById(id).closest('.fld').querySelector('label'),'::after').content;
    const n=document.getElementById('f_namaDonatur');
-   return {latar:getComputedStyle(n).backgroundColor, lencana:getComputedStyle(n.closest('.fld').querySelector('label'),'::after').content};
+   return {latar:getComputedStyle(n).backgroundColor, lencana:lbl('f_namaDonatur'), lencanaRagu:lbl('f_alamat')};
  });
  cek('kolomnya berwarna, bukan sekadar kelas', warna.latar!=='rgba(0, 0, 0, 0)' && warna.latar!=='rgb(255, 255, 255)', warna);
- cek('labelnya diberi lencana AI', /AI/.test(warna.lencana||''), warna.lencana);
+ /* Tulisan "AI" di atas tiap kolom dihapus — warnanya sudah cukup, dan belasan
+    lencana serentak justru menenggelamkan yang perlu diperiksa. */
+ cek('TIDAK ada tulisan AI di label kolom yang terisi benar',
+   !/AI/.test(warna.lencana||''), warna.lencana);
+ cek('lencana "periksa" tetap ada di kolom yang AI ragu',
+   /periksa/i.test(warna.lencanaRagu||''), warna.lencanaRagu);
  await p.waitForTimeout(1200);   /* beri kesempatan penyegar berkala jalan sekali */
  const warnaBtn=await p.evaluate(()=>{
    const bg=(id,kls)=>{const n=document.getElementById(id);const w=n&&n.previousSibling;
@@ -206,7 +212,107 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  cek('isian yang sudah terlanjur masuk tetap ada (tidak ikut terhapus)',
    await nilai('f_program')==='Terakhir', await nilai('f_program'));
 
- console.log('\n=== J. KUOTA MODEL UTAMA HABIS ===');
+ console.log('\n=== J2. INFAK TERIKAT, PILAR, REKENING, FUNDRAISER ===');
+ await p.evaluate(()=>scanLepas()); await p.waitForTimeout(300);
+ await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
+ await aturAI({lupakan:true, status:200, isi:{
+   tanggal:'2026-09-14', namaDonatur:'Nurina Aziza Kusumaningrum', tipeDonatur:'Perorangan',
+   jumlah:100000, jenisDana:'Infak', subJenis:'Infak Terikat', pilar:'Kemanusiaan',
+   program:'Air bersih Dlingo', rekening:'BSI 88', fundraising:'Sherli',
+   telepon:'081234567890', alamat:'Murangan, Sleman'
+ }});
+ await fotoBaru();
+ await p.waitForSelector('#spStatus.ok',{timeout:20000});
+ await p.waitForTimeout(600);
+
+ cek('sub jenis jadi Infak Terikat', await nilai('f_subJenis')==='Infak Terikat', await nilai('f_subJenis'));
+ cek('kolom Pilar muncul karena terikat',
+   await p.evaluate(()=>document.getElementById('pilarWrap').style.display!=='none'));
+ cek('pilar terisi Kemanusiaan', await nilai('f_pilar')==='Kemanusiaan', await nilai('f_pilar'));
+ cek('pilar ikut ditandai hasil AI', /terisi-ai/.test(await kelasFld('f_pilar')), await kelasFld('f_pilar'));
+ cek('nomor HP terbaca', await nilai('f_telepon')==='081234567890', await nilai('f_telepon'));
+
+ cek('metode jadi Transfer Bank karena melalui bank',
+   await nilai('f_metode')==='Transfer Bank', await nilai('f_metode'));
+ cek('kolom Rekening Tujuan muncul',
+   await p.evaluate(()=>document.getElementById('rekWrap').style.display!=='none'));
+ const rekPilih=await p.evaluate(()=>{
+   const s=document.getElementById('f_rekeningId');
+   const o=s&&s.options[s.selectedIndex];
+   return {nilai:s?s.value:null, label:o?o.textContent:null};
+ });
+ cek('"BSI 88" tertuju ke rekening berakhiran 88, bukan BSI yang lain',
+   /7591001188/.test(rekPilih.label||''), rekPilih);
+ cek('rekening tidak tertukar ke BSI Zakat (…77)', !/7591001177/.test(rekPilih.label||''), rekPilih);
+
+ cek('fundraiser terisi dari nama Penerima', await nilai('f_fundraising')==='Sherli', await nilai('f_fundraising'));
+ cek('fundraiser yang terdaftar tidak ditandai perlu diperiksa',
+   !/ragu-ai/.test(await kelasFld('f_fundraising')), await kelasFld('f_fundraising'));
+
+ /* nomor rekening lembaga tidak boleh ikut dikirim ke penyedia AI */
+ const kirim2=await p.evaluate(()=>window.__ocrKirim[window.__ocrKirim.length-1]);
+ cek('nomor rekening TIDAK ikut dikirim ke AI', kirim2.indexOf('7591001188')<0 && kirim2.indexOf('803211000510')<0);
+ cek('daftar pilar ikut dikirim', kirim2.indexOf('Kemanusiaan')>=0);
+ cek('daftar fundraiser ikut dikirim', kirim2.indexOf('Sherli')>=0);
+
+ console.log('\n=== J3. PENCOCOKAN REKENING ===');
+ const cocok=await p.evaluate(()=>{
+   const uji=(t,jd)=>{const h=scanCariRekening(t,jd);return {s:h.status,no:h.rek?h.rek.nomor:null,n:h.kandidat?h.kandidat.length:0};};
+   return {
+     bsi88: uji('BSI 88'),
+     bsi77: uji('BSI 77'),
+     bpd742: uji('BPD 742'),
+     bankBsi: uji('Bank BSI 88'),
+     mandiriSyariah: uji('Mandiri Syariah 88'),
+     muamalat: uji('Muamalat 13'),
+     bsiSaja: uji('BSI'),
+     bsiSajaZakat: uji('BSI', 'Zakat'),
+     kas: uji('Kas'),
+     tunai: uji('Tunai'),
+     ngawur: uji('Bank Antah Berantah 99'),
+     kosong: uji(''),
+   };
+ });
+ cek('"BSI 88" → rekening 7591001188', cocok.bsi88.s==='ketemu' && cocok.bsi88.no==='7591001188', cocok.bsi88);
+ cek('"BSI 77" → rekening 7591001177', cocok.bsi77.s==='ketemu' && cocok.bsi77.no==='7591001177', cocok.bsi77);
+ cek('"BPD 742" → rekening 803241001742', cocok.bpd742.s==='ketemu' && cocok.bpd742.no==='803241001742', cocok.bpd742);
+ cek('awalan "Bank" diabaikan', cocok.bankBsi.s==='ketemu' && cocok.bankBsi.no==='7591001188', cocok.bankBsi);
+ cek('"Mandiri Syariah" dikenali sebagai BSI', cocok.mandiriSyariah.s==='ketemu' && cocok.mandiriSyariah.no==='7591001188', cocok.mandiriSyariah);
+ cek('ejaan "Muamalat" satu M tetap ketemu', cocok.muamalat.s==='ketemu' && cocok.muamalat.no==='5670010013', cocok.muamalat);
+ cek('tanpa digit dan banyak kandidat → ambigu, tidak menebak',
+   cocok.bsiSaja.s==='ambigu' && cocok.bsiSaja.n===3, cocok.bsiSaja);
+ cek('jenis dana dipakai sebagai pemutus saat ambigu',
+   cocok.bsiSajaZakat.s==='ketemu' && cocok.bsiSajaZakat.no==='7591001177', cocok.bsiSajaZakat);
+ cek('"Kas" dikenali tunai', cocok.kas.s==='tunai', cocok.kas);
+ cek('"Tunai" dikenali tunai', cocok.tunai.s==='tunai', cocok.tunai);
+ cek('bank asing → tidak ketemu, bukan asal pilih', cocok.ngawur.s==='tidakKetemu', cocok.ngawur);
+ cek('teks kosong → tidak melakukan apa-apa', cocok.kosong.s==='kosong', cocok.kosong);
+
+ console.log('\n=== J4. FUNDRAISER BELUM TERDAFTAR ===');
+ await p.evaluate(()=>scanLepas()); await p.waitForTimeout(300);
+ await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
+ await aturAI({lupakan:true, status:200, isi:{
+   namaDonatur:'Budi', jumlah:50000, fundraising:'Petugas Baru Sekali',
+   rekening:'BSI', jenisDana:'Infak'
+ }});
+ await fotoBaru();
+ await p.waitForSelector('#spStatus.ok',{timeout:20000});
+ await p.waitForTimeout(600);
+ cek('nama penerima asing tetap diisikan supaya bisa disimpan',
+   await nilai('f_fundraising')==='Petugas Baru Sekali', await nilai('f_fundraising'));
+ cek('ditandai kuning karena perlu diperiksa',
+   /ragu-ai/.test(await kelasFld('f_fundraising')), await kelasFld('f_fundraising'));
+ cek('pilihannya diberi keterangan "belum terdaftar"',
+   await p.evaluate(()=>{const s=document.getElementById('f_fundraising');
+     return /belum terdaftar/i.test(s.options[s.selectedIndex].textContent);}));
+ const catatan=await p.evaluate(()=>document.getElementById('spStatus').textContent);
+ cek('status menyebut fundraiser belum terdaftar', /belum terdaftar/i.test(catatan), catatan);
+ cek('status juga menyebut rekening yang ambigu', /rekening/i.test(catatan), catatan);
+ cek('daftar induk fundraiser TIDAK ikut berubah diam-diam',
+   await p.evaluate(()=>frDaftar().indexOf('Petugas Baru Sekali')<0),
+   await p.evaluate(()=>frDaftar()));
+
+ console.log('\n=== K. KUOTA MODEL UTAMA HABIS ===');
  await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
  await aturAI({lupakan:true, status:200, isi:{}, perModel:{
    'gemini-flash-latest':{status:429},
@@ -234,7 +340,7 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
    !/model cadangan/i.test(await p.evaluate(()=>document.getElementById('spStatus').textContent)),
    await p.evaluate(()=>document.getElementById('spStatus').textContent));
 
- console.log('\n=== K. SEMUA MODEL HABIS ===');
+ console.log('\n=== L. SEMUA MODEL HABIS ===');
  await aturAI({lupakan:true, status:429, isi:{}, perModel:{}});
  await p.click('#spStatus .sp-ulang');
  await p.waitForSelector('#spStatus.gagal',{timeout:20000});
@@ -245,7 +351,7 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  cek('formulir tetap bisa dipakai manual', await p.evaluate(()=>!!document.getElementById('f_namaDonatur')));
  cek('foto tetap ada sebagai penuntun', await p.evaluate(()=>!!SCAN.foto));
 
- console.log('\n=== L. DI LAYAR HP ===');
+ console.log('\n=== M. DI LAYAR HP ===');
  await aturAI({lupakan:true, status:200, isi:{}, perModel:{}});
  await p.setViewportSize({width:390,height:844}); await p.waitForTimeout(700);
  await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
@@ -263,7 +369,7 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  cek('halaman tidak melebar', hp.luber===false, hp);
  cek('isian tetap masuk di HP', await nilai('f_namaDonatur')==='Uji HP', await nilai('f_namaDonatur'));
 
- console.log('\n=== M. FOTO TETAP TIDAK IKUT TERSIMPAN ===');
+ console.log('\n=== N. FOTO TETAP TIDAK IKUT TERSIMPAN ===');
  await p.setViewportSize({width:1440,height:960}); await p.waitForTimeout(500);
  const simpan=await p.evaluate(()=>{
    const asli=window.fetch; let badan=null;
