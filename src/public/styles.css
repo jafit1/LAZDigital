@@ -4085,3 +4085,56 @@ html.plat-sentuh .btn-sm{min-height:36px}
   .lap-panel-a{justify-content:flex-start}
   .lap-panel-a > .btn{flex:1 1 auto;min-width:0}
 }
+
+/* ============================================================
+   36. PEMBACAAN KWITANSI OLEH AI
+   Baris status duduk di antara kepala panel dan fotonya. Kolom yang diisi
+   AI diberi warna supaya jelas mana yang perlu diperiksa ulang — warnanya
+   hilang begitu petugas menyentuh kolom itu.
+   ============================================================ */
+.sp-status:empty{display:none}
+.sp-status{display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border-bottom:1px solid var(--border);font-size:12px;line-height:1.35;
+  background:var(--surface2);color:var(--text2)}
+.sp-status svg{flex:none}
+.sp-status-teks{flex:1;min-width:0;overflow-wrap:anywhere}
+.sp-status.ok{background:var(--green-bg);color:var(--green)}
+.sp-status.kosong{background:var(--amber-bg);color:#8a6100}
+.sp-status.gagal{background:var(--red-bg);color:var(--red)}
+[data-theme="dark"] .sp-status.kosong{color:var(--amber)}
+.sp-ulang{flex:none;border:1px solid currentColor;background:transparent;color:inherit;
+  border-radius:999px;padding:4px 11px;min-height:28px;font:inherit;font-size:11px;font-weight:600;
+  cursor:pointer;opacity:.85}
+.sp-ulang:hover{opacity:1}
+.sp-putar{flex:none;width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--border);border-top-color:var(--accent);
+  animation:sp-berputar .7s linear infinite}
+@keyframes sp-berputar{to{transform:rotate(360deg)}}
+
+/* Kolom hasil bacaan AI. Sebagian kontrol dibungkus span/div (subWrap,
+   money-box, custom-dropdown), jadi pemilihnya keturunan, bukan anak. */
+.fld.terisi-ai input,.fld.terisi-ai select,.fld.terisi-ai textarea{
+  background:var(--green-bg);border-color:var(--green)}
+.fld.ragu-ai input,.fld.ragu-ai select,.fld.ragu-ai textarea{
+  background:var(--amber-bg);border-color:var(--amber)}
+.fld.terisi-ai .money-box{border-color:var(--green)}
+.fld.ragu-ai .money-box{border-color:var(--amber)}
+/* Select dan tanggal digantikan tombol buatan sendiri — yang tanggal bahkan
+   memakai gaya sebaris, jadi di sini harus !important supaya ikut berwarna. */
+.fld.terisi-ai .select-enhanced-btn,.fld.terisi-ai .datepicker-enhanced-btn{
+  background:var(--green-bg)!important;border-color:var(--green)!important}
+.fld.ragu-ai .select-enhanced-btn,.fld.ragu-ai .datepicker-enhanced-btn{
+  background:var(--amber-bg)!important;border-color:var(--amber)!important}
+.fld.terisi-ai .money-clear,.fld.ragu-ai .money-clear{background:transparent}
+.fld.terisi-ai > label::after{content:'AI';margin-left:6px;font-size:9px;font-weight:700;
+  letter-spacing:.04em;padding:1px 5px;border-radius:999px;
+  background:var(--green);color:#fff;vertical-align:middle}
+.fld.ragu-ai > label::after{content:'periksa';background:var(--amber);color:#3b2a00}
+
+/* Di layar sempit dan di perangkat sentuh, tombolnya diberi ruang lebih
+   supaya tetap enak ditekan jempol. */
+@media (max-width:640px){
+  .sp-status{padding:9px 10px}
+  .sp-ulang{min-height:34px;padding:6px 13px}
+}
+html.plat-sentuh .sp-ulang{min-height:34px;padding:6px 13px}

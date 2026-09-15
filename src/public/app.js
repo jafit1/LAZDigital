@@ -8424,19 +8424,29 @@ bacaPlatform();
 /* ============================================================
    SCAN KWITANSI
    Kamera dibuka langsung dengan bingkai seukuran kwitansi. Fotonya TIDAK
-   disimpan ke basis data — ia hanya menemani formulir supaya petugas
-   menyalin sambil melihat, lalu dibuang setelah tersimpan. Kwitansi
-   lembaga ditulis tangan, jadi pembacaan otomatis tidak dipakai: hasilnya
-   justru harus dikoreksi satu per satu.
+   disimpan ke basis data — ia menemani formulir sebentar lalu dibuang.
+
+   Setelah dipotret, gambarnya dikirim ke /api/ocr untuk dibaca AI vision
+   (kuncinya hidup di Environment Variables Vercel, tidak pernah di peramban).
+   Hasil bacaan diperlakukan sebagai USULAN: hanya mengisi kolom yang belum
+   disentuh petugas, ditandai warna, dan tetap harus diperiksa sebelum
+   disimpan. Kalau AI belum disetel, fitur ini diam saja dan formulir tetap
+   diisi manual seperti biasa.
    ============================================================ */
-var SCAN = { aliran:null, kamera:'environment', tegak:false, foto:null, zoom:1, putar:0 };
+var SCAN = {
+  aliran:null, kamera:'environment', tegak:false, foto:null, zoom:1, putar:0,
+  ocrAktif:null,        /* null = belum diperiksa, true/false = hasil pemeriksaan */
+  status:'',            /* '' | 'baca' | 'ok' | 'kosong' | 'gagal' */
+  pesan:'', terisi:0, potret:null
+};
 
 var IKON_SCAN = {
   jepret:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>',
   balik:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11a8 8 0 0 1 13.3-6"/><polyline points="17 3 17 6 14 6"/><path d="M21 13a8 8 0 0 1-13.3 6"/><polyline points="7 21 7 18 10 18"/></svg>',
   bingkai:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 3v3"/><path d="M16 18v3"/></svg>',
   zoomIn:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/><path d="m20 20-3.5-3.5"/></svg>',
-  zoomOut:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/><path d="m20 20-3.5-3.5"/></svg>'
+  zoomOut:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/><path d="m20 20-3.5-3.5"/></svg>',
+  ai:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 13.6 8 18 9.6 13.6 11.2 12 15.7 10.4 11.2 6 9.6 10.4 8Z"/><path d="M18.5 15.5l.7 1.9 1.9.7-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.7Z"/></svg>'
 };
 
 function scanDidukung(){
@@ -8474,9 +8484,12 @@ function scanBuka(){
   el('scanBerkas').onchange = function(e){
     var f=e.target.files && e.target.files[0]; if(!f) return;
     var fr=new FileReader();
-    fr.onload=function(){ scanPakai(String(fr.result)); };
+    /* Foto galeri dari HP bisa 8 MB — dikecilkan dulu supaya panel ringan
+       dan badan permintaan ke /api/ocr tidak ditolak. */
+    fr.onload=function(){ scanKecilkan(String(fr.result)).then(scanPakai); };
     fr.readAsDataURL(f);
   };
+
   /* kamera belakang hanya masuk akal di perangkat genggam */
   SCAN.kamera = (window.PLATFORM && window.PLATFORM.hp) ? 'environment' : 'user';
   scanNyalakan();
@@ -8510,6 +8523,27 @@ function scanGagal(teks){
   var p=el('scanPanggung'); if(p) p.classList.remove('siap');
 }
 
+/* Gambar apa pun dikecilkan ke sisi terpanjang 1600 px dan dikodekan ulang
+   JPEG. Kembalinya selalu Promise supaya pemanggilnya seragam. */
+function scanKecilkan(dataUrl, maksSisi){
+  maksSisi = maksSisi || 1600;
+  return new Promise(function(selesai){
+    var im=new Image();
+    im.onload=function(){
+      var w=im.naturalWidth||im.width, h=im.naturalHeight||im.height;
+      if(!w||!h){ selesai(dataUrl); return; }
+      var r=Math.min(1, maksSisi/Math.max(w,h));
+      if(r>=1 && dataUrl.indexOf('data:image/jpeg')===0){ selesai(dataUrl); return; }
+      var c=document.createElement('canvas');
+      c.width=Math.round(w*r); c.height=Math.round(h*r);
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      try{ selesai(c.toDataURL('image/jpeg',0.82)); }catch(e){ selesai(dataUrl); }
+    };
+    im.onerror=function(){ selesai(dataUrl); };
+    im.src=dataUrl;
+  });
+}
+
 /* Video ditampilkan object-fit:cover, jadi bingkai yang terlihat di layar
    harus dipetakan balik ke piksel sumber sebelum dipotong. */
 function scanJepret(){
@@ -8535,9 +8569,177 @@ function scanJepret(){
 
 function scanPakai(dataUrl){
   SCAN.foto=dataUrl; SCAN.zoom=1; SCAN.putar=0;
+  SCAN.status=''; SCAN.pesan=''; SCAN.terisi=0;
   scanMatikan(); closeModal();
   scanGambarPanel();
-  toast('Kwitansi berhasil dibaca');
+  toast('Kwitansi masuk');
+  scanBaca();
+}
+
+/* ─── pembacaan otomatis ─── */
+
+function ocrPanggil(badan){
+  badan = badan || {};
+  badan.token = TOKEN;
+  return fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(badan)})
+    .then(function(r){ return r.json().catch(function(){ return {__error:'Balasan server tidak terbaca (HTTP '+r.status+')'}; }); })
+    .then(function(j){ if(j&&j.__error) throw new Error(j.__error); return j.result; });
+}
+
+/* Diperiksa sekali per sesi: kalau AI belum disetel, tidak ada permintaan
+   dan tidak ada pesan galat yang mengganggu. */
+function scanCekOcr(){
+  if(SCAN.ocrAktif!==null) return Promise.resolve(SCAN.ocrAktif);
+  return ocrPanggil({aksi:'status'})
+    .then(function(h){ SCAN.ocrAktif=!!(h&&h.aktif); return SCAN.ocrAktif; })
+    .catch(function(){ SCAN.ocrAktif=false; return false; });
+}
+
+/* Daftar kolom yang boleh diisi otomatis, beserta nilai sekarang.
+   Dipotret sebelum permintaan dikirim: yang sudah diubah petugas selama
+   menunggu tidak akan ditimpa. */
+var SCAN_KOLOM = ['f_tanggal','f_jenisDana','f_subJenis','f_tipeDonatur','f_namaDonatur',
+                  'f_telepon','f_email','f_alamat','f_program','f_metode','f_jumlah','f_keterangan'];
+function scanPotret(){
+  var p={};
+  SCAN_KOLOM.forEach(function(id){ var n=el(id); p[id]=n?String(n.value||''):null; });
+  return p;
+}
+function scanBolehIsi(id){
+  var n=el(id); if(!n) return false;
+  if(!SCAN.potret) return true;
+  return String(n.value||'') === String(SCAN.potret[id]==null?'':SCAN.potret[id]);
+}
+
+function scanBaca(){
+  if(!SCAN.foto) return;
+  if(!el('himpunKerja')) return;                 /* formulir tidak sedang terbuka */
+  scanCekOcr().then(function(aktif){
+    if(!aktif){ SCAN.status=''; scanBarisStatus(); return; }
+    SCAN.status='baca'; SCAN.pesan=''; scanBarisStatus();
+    SCAN.potret=scanPotret();
+    return ocrPanggil({
+      aksi:'baca', gambar:SCAN.foto,
+      pilihan:{ jenisDana:JENIS_TOP, subJenis:SUBJENIS, metode:METODE, tipeDonatur:TIPE_DONATUR }
+    }).then(function(h){
+      if(!h||!h.terbaca){
+        SCAN.status='kosong';
+        SCAN.pesan='Tulisan belum terbaca — isi manual sambil melihat foto.';
+        scanBarisStatus(); return;
+      }
+      var n=scanIsiFormulir(h.isi, h.raguRagu||[]);
+      SCAN.terisi=n; SCAN.status = n ? 'ok' : 'kosong';
+      SCAN.pesan = n ? (n+' isian terbaca — mohon periksa sebelum disimpan.')
+                     : 'Tidak ada isian baru yang bisa diisikan.';
+      scanBarisStatus();
+    }).catch(function(e){
+      SCAN.status='gagal';
+      SCAN.pesan=(e&&e.message)||'Pembacaan gagal.';
+      scanBarisStatus();
+    });
+  });
+}
+
+function scanTandai(id, ragu){
+  var n=el(id); if(!n) return;
+  var f=n.closest ? n.closest('.fld') : null;
+  if(f){ f.classList.add('terisi-ai'); f.classList.toggle('ragu-ai', !!ragu); }
+  var lepas=function(){
+    if(f){ f.classList.remove('terisi-ai'); f.classList.remove('ragu-ai'); }
+    n.removeEventListener('input',lepas); n.removeEventListener('change',lepas);
+  };
+  n.addEventListener('input',lepas); n.addEventListener('change',lepas);
+}
+
+function scanSetTeks(id, nilai, ragu){
+  if(!nilai) return 0;
+  if(!scanBolehIsi(id)) return 0;
+  var n=el(id); if(!n) return 0;
+  n.value=nilai; scanTandai(id, ragu);
+  if(SCAN.potret) SCAN.potret[id]=String(nilai);
+  return 1;
+}
+function scanSetPilih(id, nilai, ragu){
+  if(!nilai) return 0;
+  if(!scanBolehIsi(id)) return 0;
+  var n=el(id); if(!n||!n.options) return 0;
+  var ada=false;
+  for(var i=0;i<n.options.length;i++){ if(n.options[i].value===nilai){ ada=true; break; } }
+  if(!ada) return 0;
+  n.value=nilai; scanTandai(id, ragu);
+  if(SCAN.potret) SCAN.potret[id]=String(nilai);
+  return 1;
+}
+
+/* Urutannya penting: jenis dana membangun ulang sub-jenis, dan metode bisa
+   mengubah nama donatur (QRIS → NN), jadi nama diisi belakangan. */
+function scanIsiFormulir(isi, ragu){
+  isi = isi || {}; ragu = ragu || [];
+  function r(k){ return ragu.indexOf(k)>=0; }
+  var n=0;
+
+  if(isi.tanggal && scanBolehIsi('f_tanggal')) n+=scanSetTeks('f_tanggal', isi.tanggal, r('tanggal'));
+
+  if(isi.jenisDana && scanSetPilih('f_jenisDana', isi.jenisDana, r('jenisDana'))){
+    n++;
+    try{ onJenisChange(isi.subJenis||''); }catch(e){}
+    if(SCAN.potret) SCAN.potret['f_subJenis']=el('f_subJenis')?String(el('f_subJenis').value||''):null;
+  }
+  if(isi.subJenis && scanSetPilih('f_subJenis', isi.subJenis, r('subJenis'))){
+    n++; try{ onSubChange(); }catch(e){}
+  }
+
+  if(isi.tipeDonatur && scanSetPilih('f_tipeDonatur', isi.tipeDonatur, r('tipeDonatur'))){
+    n++; try{ onTipeChange(); }catch(e){}
+  }
+  if(isi.metode && scanSetPilih('f_metode', isi.metode, r('metode'))){
+    n++;
+    try{ onMetodeChange(); }catch(e){}
+    /* onMetodeChange boleh menulis 'NN' sendiri — jangan dihitung perubahan petugas */
+    if(SCAN.potret) SCAN.potret['f_namaDonatur']=el('f_namaDonatur')?String(el('f_namaDonatur').value||''):null;
+  }
+
+  n+=scanSetTeks('f_namaDonatur', isi.namaDonatur, r('namaDonatur'));
+  n+=scanSetTeks('f_telepon', isi.telepon, r('telepon'));
+  n+=scanSetTeks('f_email', isi.email, r('email'));
+  n+=scanSetTeks('f_alamat', isi.alamat, r('alamat'));
+  n+=scanSetTeks('f_program', isi.program, r('program'));
+  n+=scanSetTeks('f_keterangan', isi.keterangan, r('keterangan'));
+
+  if(isi.jumlah && scanBolehIsi('f_jumlah')){
+    var j=el('f_jumlah');
+    if(j){
+      j.value=String(isi.jumlah);
+      try{ j.dispatchEvent(new Event('input',{bubbles:true})); }catch(e){ j.value=formatRibuan(String(isi.jumlah)); }
+      scanTandai('f_jumlah', r('jumlah'));
+      if(SCAN.potret) SCAN.potret['f_jumlah']=String(j.value||'');
+      n++;
+    }
+  }
+  scanSegarkanKontrol();
+  return n;
+}
+
+/* Select dan kolom tanggal diganti tombol buatan sendiri, yang labelnya baru
+   ikut berubah saat penyegar berkala jalan (sampai 800 ms kemudian). Dipanggil
+   langsung supaya isian AI terlihat seketika, bukan berkedip belakangan. */
+function scanSegarkanKontrol(){
+  try{
+    if(typeof runEnhancers==='function'){ __enhDirty=true; runEnhancers(); }
+  }catch(e){}
+}
+
+function scanBarisStatus(){
+  var b=el('spStatus'); if(!b) return;
+  if(!SCAN.status){ b.className='sp-status'; b.innerHTML=''; return; }
+  b.className='sp-status '+SCAN.status;
+  if(SCAN.status==='baca'){
+    b.innerHTML='<span class="sp-putar"></span><span class="sp-status-teks">Membaca kwitansi…</span>';
+    return;
+  }
+  b.innerHTML=IKON_SCAN.ai
+    + '<span class="sp-status-teks">'+esc(SCAN.pesan)+'</span>'
+    + '<button class="sp-ulang" type="button" onclick="scanBaca()">Baca ulang</button>';
 }
 
 function scanGambarPanel(){
@@ -8554,7 +8756,9 @@ function scanGambarPanel(){
     +   '<button class="icon-btn" type="button" onclick="scanBuka()" title="Foto ulang">'+SVG_ICONS.kamera+'</button>'
     +   '<button class="icon-btn" type="button" onclick="scanLepas()" title="Tutup kwitansi">'+SVG_ICONS.close+'</button>'
     + '</div></div>'
+    + '<div class="sp-status" id="spStatus"></div>'
     + '<div class="sp-gambar" id="spGambar"><img id="spImg" src="'+SCAN.foto+'" alt="kwitansi"></div>';
+  scanBarisStatus();
   scanTerap();
 }
 function scanTerap(){
@@ -8566,4 +8770,8 @@ function scanZoom(arah){
   scanTerap();
 }
 function scanPutar(){ SCAN.putar=(SCAN.putar+90)%360; SCAN.zoom=1; scanTerap(); }
-function scanLepas(){ SCAN.foto=null; scanGambarPanel(); }
+function scanLepas(){
+  SCAN.foto=null; SCAN.status=''; SCAN.pesan=''; SCAN.terisi=0; SCAN.potret=null;
+  document.querySelectorAll('.fld.terisi-ai').forEach(function(n){ n.classList.remove('terisi-ai'); n.classList.remove('ragu-ai'); });
+  scanGambarPanel();
+}

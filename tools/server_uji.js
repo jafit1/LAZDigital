@@ -24,7 +24,38 @@ async function lewatkan(handler, req, res, badan){
   catch(e){ if(!res.writableEnded){ res.statusCode=500; res.end(JSON.stringify({__error:String(e&&e.message||e)})); } }
 }
 
+/* ---- AI vision tiruan untuk menguji /api/ocr ----
+   Kunci palsu diisikan lewat env sebelum ocr.js dimuat, dan fetch ke penyedia
+   dibelokkan ke jawaban yang diatur uji lewat POST /uji/ocr. Tidak ada
+   permintaan keluar, tidak ada kuota terpakai. */
+let OCR_JAWAB={ status:200, isi:{} };
+if(process.env.OCR_PALSU==='1'){
+  process.env.OCR_API_KEY=process.env.OCR_API_KEY||'kunci-uji-lokal';
+  const fetchAsli=global.fetch;
+  global.fetch=async function(u,o){
+    const s=String(u);
+    if(s.indexOf('generativelanguage.googleapis.com')>=0 || s.indexOf('api.openai.com')>=0){
+      const j=OCR_JAWAB;
+      if(j.tunda) await new Promise(t=>setTimeout(t,j.tunda));
+      const badan = j.status>=200&&j.status<300
+        ? { candidates:[{content:{parts:[{text:JSON.stringify(j.isi||{})}]}}] }
+        : { error:{ message:'tiruan galat '+j.status } };
+      return { ok:j.status>=200&&j.status<300, status:j.status, json:async()=>badan };
+    }
+    return fetchAsli.apply(this,arguments);
+  };
+}
+
 const srv=http.createServer(async (req,res)=>{
+  if(req.url.startsWith('/uji/ocr')&&req.method==='POST'){
+    const b=await bacaBadan(req);
+    try{ OCR_JAWAB=Object.assign({status:200,isi:{}},JSON.parse(b||'{}')); }catch(e){}
+    res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true,OCR_JAWAB}));
+    return;
+  }
+  if(req.url.startsWith('/api/ocr')){
+    const b=await bacaBadan(req); return lewatkan(require('./ocr.js'), req, res, b);
+  }
   if(req.url.startsWith('/api/wa-dispatch')){
     const b=await bacaBadan(req); return lewatkan(require('./wa-dispatch.js'), req, res, b);
   }
