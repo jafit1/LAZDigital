@@ -194,7 +194,8 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
    await p.evaluate(()=>document.getElementById('spStatus').textContent));
 
  console.log('\n=== I. MELEPAS KWITANSI ===');
- await aturAI({status:200,isi:{namaDonatur:'Terakhir', program:'Terakhir'}});
+ /* 429 barusan mengistirahatkan seluruh rantai model — dilupakan dulu */
+ await aturAI({lupakan:true, status:200, isi:{namaDonatur:'Terakhir', program:'Terakhir'}});
  await p.click('#spStatus .sp-ulang');
  await p.waitForSelector('#spStatus.ok',{timeout:15000});
  await p.evaluate(()=>scanLepas()); await p.waitForTimeout(400);
@@ -205,7 +206,47 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  cek('isian yang sudah terlanjur masuk tetap ada (tidak ikut terhapus)',
    await nilai('f_program')==='Terakhir', await nilai('f_program'));
 
- console.log('\n=== J. DI LAYAR HP ===');
+ console.log('\n=== J. KUOTA MODEL UTAMA HABIS ===');
+ await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
+ await aturAI({lupakan:true, status:200, isi:{}, perModel:{
+   'gemini-2.5-flash':{status:429},
+   'gemini-2.5-flash-lite':{status:200, isi:{namaDonatur:'Lewat Cadangan', jumlah:125000}}
+ }});
+ await fotoBaru();
+ await p.waitForSelector('#spStatus.ok',{timeout:20000});
+ cek('formulir tetap terisi walau kuota model utama habis',
+   await nilai('f_namaDonatur')==='Lewat Cadangan', await nilai('f_namaDonatur'));
+ const cad=await p.evaluate(()=>document.getElementById('spStatus').textContent);
+ cek('petugas diberi tahu yang dipakai model cadangan', /model cadangan/i.test(cad), cad);
+ cek('nama model cadangannya disebut', /flash-lite/i.test(cad), cad);
+ const stAda=await p.evaluate(()=>fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({aksi:'status',token:TOKEN})}).then(r=>r.json()));
+ cek('status melaporkan model yang sedang istirahat',
+   !!(stAda.result.istirahat||{})['gemini-2.5-flash'], stAda.result);
+ cek('rantai model dilaporkan ke peramban', (stAda.result.rantai||[]).length>=2, stAda.result);
+
+ await aturAI({lupakan:true, status:200, isi:{namaDonatur:'Normal Lagi'}, perModel:{}});
+ await p.evaluate(()=>scanLepas()); await p.waitForTimeout(300);
+ await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
+ await fotoBaru();
+ await p.waitForSelector('#spStatus.ok',{timeout:20000});
+ cek('kembali normal: tidak lagi menyebut cadangan',
+   !/model cadangan/i.test(await p.evaluate(()=>document.getElementById('spStatus').textContent)),
+   await p.evaluate(()=>document.getElementById('spStatus').textContent));
+
+ console.log('\n=== K. SEMUA MODEL HABIS ===');
+ await aturAI({lupakan:true, status:429, isi:{}, perModel:{}});
+ await p.click('#spStatus .sp-ulang');
+ await p.waitForSelector('#spStatus.gagal',{timeout:20000});
+ const habis=await p.evaluate(()=>document.getElementById('spStatus').textContent);
+ cek('pesan menyebut semua model habis', /semua model/i.test(habis), habis);
+ cek('pesan memberi tahu kapan kuota pulih', /pulih|WIB|Pasifik/i.test(habis), habis);
+ cek('pesan menyarankan isi manual', /manual/i.test(habis), habis);
+ cek('formulir tetap bisa dipakai manual', await p.evaluate(()=>!!document.getElementById('f_namaDonatur')));
+ cek('foto tetap ada sebagai penuntun', await p.evaluate(()=>!!SCAN.foto));
+
+ console.log('\n=== L. DI LAYAR HP ===');
+ await aturAI({lupakan:true, status:200, isi:{}, perModel:{}});
  await p.setViewportSize({width:390,height:844}); await p.waitForTimeout(700);
  await p.evaluate(()=>go('penghimpunan')); await p.waitForTimeout(1800);
  await aturAI({status:200,isi:{namaDonatur:'Uji HP', jumlah:50000}});
@@ -222,7 +263,7 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  cek('halaman tidak melebar', hp.luber===false, hp);
  cek('isian tetap masuk di HP', await nilai('f_namaDonatur')==='Uji HP', await nilai('f_namaDonatur'));
 
- console.log('\n=== K. FOTO TETAP TIDAK IKUT TERSIMPAN ===');
+ console.log('\n=== M. FOTO TETAP TIDAK IKUT TERSIMPAN ===');
  await p.setViewportSize({width:1440,height:960}); await p.waitForTimeout(500);
  const simpan=await p.evaluate(()=>{
    const asli=window.fetch; let badan=null;

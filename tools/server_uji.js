@@ -28,18 +28,29 @@ async function lewatkan(handler, req, res, badan){
    Kunci palsu diisikan lewat env sebelum ocr.js dimuat, dan fetch ke penyedia
    dibelokkan ke jawaban yang diatur uji lewat POST /uji/ocr. Tidak ada
    permintaan keluar, tidak ada kuota terpakai. */
-let OCR_JAWAB={ status:200, isi:{} };
+let OCR_JAWAB={ status:200, isi:{} };   /* jawaban bawaan untuk semua model */
+let OCR_PER_MODEL={};                   /* {namaModel:{status,isi,tunda}} */
 if(process.env.OCR_PALSU==='1'){
   process.env.OCR_API_KEY=process.env.OCR_API_KEY||'kunci-uji-lokal';
   const fetchAsli=global.fetch;
   global.fetch=async function(u,o){
     const s=String(u);
     if(s.indexOf('generativelanguage.googleapis.com')>=0 || s.indexOf('api.openai.com')>=0){
-      const j=OCR_JAWAB;
+      const cocok=s.match(/models\/([^:?]+)/);
+      const model=cocok?decodeURIComponent(cocok[1]):'';
+      const j=OCR_PER_MODEL[model]||OCR_JAWAB;
       if(j.tunda) await new Promise(t=>setTimeout(t,j.tunda));
-      const badan = j.status>=200&&j.status<300
-        ? { candidates:[{content:{parts:[{text:JSON.stringify(j.isi||{})}]}}] }
-        : { error:{ message:'tiruan galat '+j.status } };
+      let badan;
+      if(j.status>=200&&j.status<300){
+        badan={ candidates:[{content:{parts:[{text:JSON.stringify(j.isi||{})}]}}] };
+      } else if(j.status===429){
+        /* bentuk galat kuota HARIAN Gemini, supaya jalur istirahat ikut diuji */
+        badan={ error:{ code:429, message:'Resource has been exhausted',
+          details:[{ '@type':'type.googleapis.com/google.rpc.QuotaFailure',
+            violations:[{ quotaId:'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] } };
+      } else {
+        badan={ error:{ message:'tiruan galat '+j.status } };
+      }
       return { ok:j.status>=200&&j.status<300, status:j.status, json:async()=>badan };
     }
     return fetchAsli.apply(this,arguments);
@@ -49,8 +60,15 @@ if(process.env.OCR_PALSU==='1'){
 const srv=http.createServer(async (req,res)=>{
   if(req.url.startsWith('/uji/ocr')&&req.method==='POST'){
     const b=await bacaBadan(req);
-    try{ OCR_JAWAB=Object.assign({status:200,isi:{}},JSON.parse(b||'{}')); }catch(e){}
-    res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true,OCR_JAWAB}));
+    try{
+      const p=JSON.parse(b||'{}');
+      OCR_PER_MODEL=p.perModel||{};
+      delete p.perModel;
+      OCR_JAWAB=Object.assign({status:200,isi:{}},p);
+      /* uji boleh meminta ingatan istirahat model dilupakan */
+      if(p.lupakan){ try{ require('./ocr.js')._internal.lupakanIstirahat(); }catch(e){} }
+    }catch(e){}
+    res.writeHead(200,{'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true,OCR_JAWAB,OCR_PER_MODEL}));
     return;
   }
   if(req.url.startsWith('/api/ocr')){

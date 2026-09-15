@@ -1,12 +1,17 @@
 /**
  * api/ocr.js — pembacaan kwitansi dengan AI vision untuk LAZDigital.
  *
- * POST /api/ocr   body: { aksi:'status'|'baca', token, gambar, pilihan }
+ * POST /api/ocr   body: { aksi:'status'|'model-list'|'baca', token, gambar, pilihan }
  *
  * Alur: peramban memotret kwitansi, mengirim gambarnya ke sini, lalu server
  * memanggil penyedia AI vision memakai kunci dari environment variable.
  * Kunci TIDAK PERNAH sampai ke peramban — repositori ini publik, jadi kunci
  * hanya boleh hidup di Environment Variables Vercel.
+ *
+ * OCR_MODEL berisi RANTAI model dipisah koma. Model dicoba berurutan; yang
+ * kehabisan kuota (429), sedang sesak (503), atau tidak dikenal kunci ini (404)
+ * diistirahatkan dan permintaan langsung dilanjutkan ke model berikutnya —
+ * jadi kuota gratis harian yang habis tidak mematikan fitur, ia turun kelas.
  *
  * Hasil bacaan selalu dianggap USULAN: server membersihkan dan mencocokkannya
  * ke daftar pilihan yang sah, dan petugas tetap harus memeriksa sebelum
@@ -20,8 +25,21 @@ const rpc = require('./rpc.js');
 /* ─── Setelan dari environment ─── */
 const PENYEDIA = String(process.env.OCR_PENYEDIA || 'gemini').toLowerCase().trim();
 const KUNCI = String(process.env.OCR_API_KEY || '').trim();
-const MODEL = String(process.env.OCR_MODEL || '').trim()
-  || (PENYEDIA === 'openai' ? 'gpt-4o-mini' : 'gemini-2.5-flash');
+
+/* Urutannya sengaja dari yang paling murah & kuotanya paling longgar ke yang
+   paling pintar. Model yang tidak didukung kunci ini akan tersingkir sendiri
+   pada pemakaian pertama, jadi daftar bawaan boleh optimistis. */
+const MODEL_BAWAAN = PENYEDIA === 'openai'
+  ? ['gpt-4o-mini']
+  : ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+const RANTAI = (function () {
+  const d = String(process.env.OCR_MODEL || '').split(',')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return !!s; })
+    .slice(0, 6);
+  return d.length ? d : MODEL_BAWAAN;
+})();
+
 /* Pagar biaya: berapa kali kwitansi boleh dibaca dalam satu hari. */
 const BATAS_HARIAN = Math.max(0, Number(process.env.OCR_BATAS_HARIAN || 300)) || 300;
 
@@ -163,10 +181,104 @@ function susunPrompt(pil) {
   ].join('\n');
 }
 
+/* ─── Klasifikasi galat penyedia ───
+   Galat yang bisa diperbaiki dengan MENGGANTI MODEL ditandai .lewati, lengkap
+   dengan berapa lama model itu diistirahatkan. Galat kunci/izin tidak ditandai
+   karena berganti model tidak menolong apa pun. */
+function galatPenyedia(status, j, model) {
+  const isi = j ? JSON.stringify(j) : '';
+  const asli = (j && j.error && (j.error.message || j.error.type)) || '';
+  const bersih = String(asli).split(KUNCI || ' ').join('***').slice(0, 160);
+  let e;
+
+  if (status === 401 || status === 403) {
+    e = new Error('Kunci AI ditolak penyedia. Periksa OCR_API_KEY di Vercel.');
+  } else if (status === 400 && /API_KEY|api key/i.test(isi)) {
+    e = new Error('Kunci AI tidak sah. Periksa OCR_API_KEY di Vercel.');
+  } else if (status === 429) {
+    /* Gemini membedakan kuota harian (RPD) dan per menit (RPM) di detail galat.
+       Yang harian baru pulih tengah malam waktu Pasifik; yang per menit cukup
+       ditunggu sebentar. Salah menebak berarti model bagus dibuang seharian. */
+    const harian = /PerDay|per day|GenerateRequestsPerDay|RequestsPerDay/i.test(isi);
+    e = new Error(harian
+      ? 'Kuota harian model ' + model + ' habis.'
+      : 'Model ' + model + ' sedang dibatasi sementara.');
+    e.lewati = true;
+    e.lewatiDetik = harian ? detikSampaiResetKuota() : 90;
+    e.alasan = harian ? 'kuota harian habis' : 'dibatasi sementara';
+  } else if (status === 404) {
+    e = new Error('Model AI "' + model + '" tidak tersedia untuk kunci ini.');
+    e.lewati = true;
+    e.lewatiDetik = 6 * 3600;
+    e.alasan = 'tidak tersedia untuk kunci ini';
+  } else if (status === 503 || status === 500 || status === 502 || status === 504) {
+    e = new Error('Model ' + model + ' sedang sibuk (HTTP ' + status + ').');
+    e.lewati = true;
+    e.lewatiDetik = 120;
+    e.alasan = 'sedang sibuk';
+  } else {
+    e = new Error('Layanan AI menolak permintaan (HTTP ' + status + ')'
+      + (bersih ? ': ' + bersih : '') + '.');
+  }
+  e.status = status;
+  return e;
+}
+
+/* Kuota harian Gemini pulih tengah malam waktu Pasifik. Dihitung lewat Intl
+   supaya ikut benar saat daylight saving bergeser. */
+function detikSampaiResetKuota() {
+  try {
+    const f = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles', hour12: false,
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const b = {};
+    f.formatToParts(new Date()).forEach(function (p) { b[p.type] = Number(p.value); });
+    const jam = (b.hour === 24 ? 0 : b.hour) || 0;
+    const lewat = jam * 3600 + (b.minute || 0) * 60 + (b.second || 0);
+    const sisa = 86400 - lewat;
+    return Math.max(300, Math.min(86400, sisa + 120));   /* beri jeda 2 menit */
+  } catch (e) { return 3600; }
+}
+
+/* ─── Masa istirahat per model ───
+   Redis kalau ada (dibagi seluruh instance Vercel), kalau tidak cukup di
+   memori instance ini — tetap menolong dalam satu instance. */
+const ISTIRAHAT_MEM = new Map();
+
+async function tandaiIstirahat(model, detik, alasan) {
+  const sampai = Date.now() + detik * 1000;
+  ISTIRAHAT_MEM.set(model, { sampai: sampai, alasan: alasan });
+  if (!rpc._internal.PAKAI_REDIS) return;
+  try {
+    await rpc._internal.redis(['SET', 'laz:ocr:istirahat:' + model, alasan || 'istirahat', 'EX', String(Math.round(detik))]);
+  } catch (e) { /* gagal menyimpan jangan sampai membatalkan pembacaan */ }
+}
+
+async function sedangIstirahat(model) {
+  const m = ISTIRAHAT_MEM.get(model);
+  if (m && m.sampai > Date.now()) return m.alasan || 'istirahat';
+  if (m) ISTIRAHAT_MEM.delete(model);
+  if (!rpc._internal.PAKAI_REDIS) return '';
+  try {
+    const v = await rpc._internal.redis(['GET', 'laz:ocr:istirahat:' + model]);
+    return v ? String(v) : '';
+  } catch (e) { return ''; }
+}
+
+async function petaIstirahat() {
+  const out = {};
+  for (let i = 0; i < RANTAI.length; i++) {
+    const a = await sedangIstirahat(RANTAI[i]);
+    if (a) out[RANTAI[i]] = a;
+  }
+  return out;
+}
+
 /* ─── Pemanggilan penyedia ─── */
-async function panggilGemini(b64, mime, prompt) {
+async function panggilGemini(model, b64, mime, prompt) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-    + encodeURIComponent(MODEL) + ':generateContent';
+    + encodeURIComponent(model) + ':generateContent';
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KUNCI },
@@ -176,18 +288,18 @@ async function panggilGemini(b64, mime, prompt) {
     }),
   });
   const j = await res.json().catch(function () { return null; });
-  if (!res.ok) throw new Error(pesanPenyedia(res.status, j));
+  if (!res.ok) throw galatPenyedia(res.status, j, model);
   const c = j && j.candidates && j.candidates[0];
   const parts = (c && c.content && c.content.parts) || [];
   return parts.map(function (p) { return p && p.text ? p.text : ''; }).join('');
 }
 
-async function panggilOpenAI(b64, mime, prompt) {
+async function panggilOpenAI(model, b64, mime, prompt) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KUNCI },
     body: JSON.stringify({
-      model: MODEL,
+      model: model,
       temperature: 0,
       response_format: { type: 'json_object' },
       max_tokens: 1200,
@@ -201,19 +313,52 @@ async function panggilOpenAI(b64, mime, prompt) {
     }),
   });
   const j = await res.json().catch(function () { return null; });
-  if (!res.ok) throw new Error(pesanPenyedia(res.status, j));
+  if (!res.ok) throw galatPenyedia(res.status, j, model);
   return (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
 }
 
-/* Pesan galat penyedia disaring: jangan sampai kunci atau URL internal
-   ikut terkirim ke peramban. */
-function pesanPenyedia(status, j) {
-  const asli = (j && j.error && (j.error.message || j.error.type)) || '';
-  if (status === 401 || status === 403) return 'Kunci AI ditolak penyedia. Periksa OCR_API_KEY di Vercel.';
-  if (status === 429) return 'Kuota AI penyedia sedang penuh. Coba lagi beberapa saat lagi.';
-  if (status === 404) return 'Model AI "' + MODEL + '" tidak ditemukan. Periksa OCR_MODEL di Vercel.';
-  return 'Layanan AI menolak permintaan (HTTP ' + status + ')'
-    + (asli ? ': ' + String(asli).replace(KUNCI || ' ', '***').slice(0, 160) : '') + '.';
+function panggilModel(model, b64, mime, prompt) {
+  return PENYEDIA === 'openai'
+    ? panggilOpenAI(model, b64, mime, prompt)
+    : panggilGemini(model, b64, mime, prompt);
+}
+
+/* Mencoba seluruh rantai. Berhenti pada model pertama yang berhasil. */
+async function bacaDenganRantai(b64, mime, prompt) {
+  const dicoba = [], dilewati = {};
+  let galatAkhir = null;
+
+  for (let i = 0; i < RANTAI.length; i++) {
+    const model = RANTAI[i];
+    const alasan = await sedangIstirahat(model);
+    if (alasan) { dilewati[model] = alasan; continue; }
+
+    dicoba.push(model);
+    try {
+      const teksJawab = await panggilModel(model, b64, mime, prompt);
+      return { teks: teksJawab, model: model, cadangan: model !== RANTAI[0], dicoba: dicoba, dilewati: dilewati };
+    } catch (e) {
+      galatAkhir = e;
+      if (!e.lewati) throw e;                       /* ganti model tidak menolong */
+      dilewati[model] = e.alasan || 'gagal';
+      await tandaiIstirahat(model, e.lewatiDetik || 120, e.alasan || 'gagal');
+    }
+  }
+
+  const habis = new Error(susunPesanHabis(dilewati, galatAkhir));
+  habis.semuaHabis = true;
+  habis.dilewati = dilewati;
+  throw habis;
+}
+
+function susunPesanHabis(dilewati, galatAkhir) {
+  const nama = Object.keys(dilewati);
+  if (!nama.length) return (galatAkhir && galatAkhir.message) || 'Tidak ada model AI yang bisa dipakai.';
+  const adaKuota = nama.some(function (m) { return /kuota/i.test(dilewati[m]); });
+  const rinci = nama.map(function (m) { return m + ' (' + dilewati[m] + ')'; }).join(', ');
+  return (adaKuota
+    ? 'Kuota semua model AI sedang habis: ' + rinci + '. Kuota gratis harian pulih tengah malam waktu Pasifik (sekitar pukul 14.00–15.00 WIB). Sementara ini isi manual sambil melihat foto.'
+    : 'Tidak ada model AI yang bisa dipakai: ' + rinci + '.');
 }
 
 function uraikanJSON(t) {
@@ -226,7 +371,7 @@ function uraikanJSON(t) {
   return null;
 }
 
-/* ─── Pagar kuota harian (hanya bila Redis tersedia) ─── */
+/* ─── Pagar kuota harian sendiri (hanya bila Redis tersedia) ─── */
 async function kuotaLewat() {
   if (!rpc._internal.PAKAI_REDIS) return false;
   const hari = new Date().toISOString().slice(0, 10);
@@ -236,7 +381,27 @@ async function kuotaLewat() {
   return n > BATAS_HARIAN;
 }
 
+/* ─── Daftar model yang benar-benar didukung kunci ini ─── */
+async function daftarModelPenyedia() {
+  if (PENYEDIA === 'openai') {
+    const res = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: 'Bearer ' + KUNCI } });
+    const j = await res.json().catch(function () { return null; });
+    if (!res.ok) throw galatPenyedia(res.status, j, '(daftar)');
+    return ((j && j.data) || []).map(function (m) { return String(m.id); }).sort();
+  }
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',
+    { headers: { 'x-goog-api-key': KUNCI } });
+  const j = await res.json().catch(function () { return null; });
+  if (!res.ok) throw galatPenyedia(res.status, j, '(daftar)');
+  return ((j && j.models) || [])
+    .filter(function (m) { return (m.supportedGenerationMethods || []).indexOf('generateContent') >= 0; })
+    .map(function (m) { return String(m.name || '').replace(/^models\//, ''); })
+    .filter(Boolean).sort();
+}
+
 /* ─── Handler ─── */
+const AKSI_IZIN = { status: 'view', 'model-list': 'view', baca: 'create' };
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ __error: 'Method not allowed' }); return; }
   let body = req.body;
@@ -244,7 +409,8 @@ module.exports = async (req, res) => {
   body = body || {};
 
   const aksi = String(body.aksi || 'baca');
-  if (aksi !== 'status' && aksi !== 'baca') { res.status(400).json({ __error: 'Aksi tidak dikenal: ' + aksi }); return; }
+  const perlu = AKSI_IZIN[aksi];
+  if (!perlu) { res.status(400).json({ __error: 'Aksi tidak dikenal: ' + aksi }); return; }
 
   /* Autentikasi memakai token LAZDigital yang sama. Membaca kwitansi adalah
      langkah mencatat penghimpunan, jadi izinnya 'create'. */
@@ -252,7 +418,7 @@ module.exports = async (req, res) => {
   try {
     const r = await rpc._internal.muat();
     const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-    engine.cekIzin(r.db, token, 'penghimpunan', aksi === 'status' ? 'view' : 'create',
+    engine.cekIzin(r.db, token, 'penghimpunan', perlu,
       { ip: ip, ua: String(req.headers['user-agent'] || '').slice(0, 160) });
   } catch (e) {
     const pesan = (e && e.message) || String(e);
@@ -262,12 +428,39 @@ module.exports = async (req, res) => {
   }
 
   if (aksi === 'status') {
-    res.status(200).json({ result: { aktif: AKTIF, penyedia: AKTIF ? PENYEDIA : '', model: AKTIF ? MODEL : '' } });
+    res.status(200).json({
+      result: {
+        aktif: AKTIF,
+        penyedia: AKTIF ? PENYEDIA : '',
+        model: AKTIF ? RANTAI[0] : '',
+        rantai: AKTIF ? RANTAI.slice() : [],
+        istirahat: AKTIF ? await petaIstirahat() : {},
+      },
+    });
     return;
   }
 
   if (!AKTIF) {
     res.status(200).json({ __error: 'Pembacaan otomatis belum disetel. Isi OCR_API_KEY di Environment Variables Vercel.' });
+    return;
+  }
+
+  if (aksi === 'model-list') {
+    try {
+      const semua = await daftarModelPenyedia();
+      const pakai = semua.filter(function (m) { return /vision|gemini|gpt|flash|pro/i.test(m); });
+      res.status(200).json({
+        result: {
+          rantai: RANTAI.slice(),
+          tersedia: pakai.length ? pakai : semua,
+          rantaiSah: RANTAI.filter(function (m) { return semua.indexOf(m) >= 0; }),
+          rantaiTidakDikenal: RANTAI.filter(function (m) { return semua.indexOf(m) < 0; }),
+          istirahat: await petaIstirahat(),
+        },
+      });
+    } catch (e) {
+      res.status(200).json({ __error: (e && e.message) || 'Daftar model tidak bisa diambil.' });
+    }
     return;
   }
 
@@ -292,18 +485,19 @@ module.exports = async (req, res) => {
   const pil = ambilPilihan(body.pilihan);
   const prompt = susunPrompt(pil);
 
-  let mentahJawab;
+  let jawab;
   try {
-    mentahJawab = PENYEDIA === 'openai'
-      ? await panggilOpenAI(b64, mime, prompt)
-      : await panggilGemini(b64, mime, prompt);
+    jawab = await bacaDenganRantai(b64, mime, prompt);
   } catch (e) {
     res.status(200).json({ __error: (e && e.message) || 'Layanan AI tidak bisa dihubungi.' });
     return;
   }
 
-  const j = uraikanJSON(mentahJawab);
-  if (!j) { res.status(200).json({ result: { terbaca: false, isi: {}, raguRagu: [], catatan: 'Jawaban AI tidak bisa dibaca.' } }); return; }
+  const j = uraikanJSON(jawab.teks);
+  if (!j) {
+    res.status(200).json({ result: { terbaca: false, isi: {}, raguRagu: [], model: jawab.model, cadangan: jawab.cadangan, catatan: 'Jawaban AI tidak bisa dibaca.' } });
+    return;
+  }
 
   const jenisDana = cocokkan(j.jenisDana, pil.jenisDana);
   const subDaftar = (jenisDana && pil.subJenis[jenisDana]) || [];
@@ -328,11 +522,18 @@ module.exports = async (req, res) => {
     : [];
 
   const terisi = Object.keys(isi).filter(function (k) { return isi[k] !== '' && isi[k] !== 0; });
-  res.status(200).json({ result: { terbaca: terisi.length > 0, isi: isi, raguRagu: ragu, jumlahTerisi: terisi.length } });
+  res.status(200).json({
+    result: {
+      terbaca: terisi.length > 0, isi: isi, raguRagu: ragu, jumlahTerisi: terisi.length,
+      model: jawab.model, cadangan: jawab.cadangan,
+    },
+  });
 };
 
 /* Dipakai pengujian. */
 module.exports._internal = {
   rapikanTanggal, rapikanJumlah, cocokkan, uraikanJSON, teks,
-  rapikanTelepon, rapikanEmail, ambilPilihan, susunPrompt, pesanPenyedia,
+  rapikanTelepon, rapikanEmail, ambilPilihan, susunPrompt, galatPenyedia,
+  detikSampaiResetKuota, susunPesanHabis, RANTAI,
+  lupakanIstirahat: function () { ISTIRAHAT_MEM.clear(); },
 };

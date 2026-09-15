@@ -8622,15 +8622,18 @@ function scanBaca(){
       aksi:'baca', gambar:SCAN.foto,
       pilihan:{ jenisDana:JENIS_TOP, subJenis:SUBJENIS, metode:METODE, tipeDonatur:TIPE_DONATUR }
     }).then(function(h){
+      /* Model cadangan dipakai kalau kuota model utama habis — perlu terlihat
+         supaya petugas tahu hasilnya mungkin sedikit berbeda kualitasnya. */
+      var ekor = (h && h.cadangan && h.model) ? ' Dibaca model cadangan ' + h.model + '.' : '';
       if(!h||!h.terbaca){
         SCAN.status='kosong';
-        SCAN.pesan='Tulisan belum terbaca — isi manual sambil melihat foto.';
+        SCAN.pesan='Tulisan belum terbaca — isi manual sambil melihat foto.'+ekor;
         scanBarisStatus(); return;
       }
       var n=scanIsiFormulir(h.isi, h.raguRagu||[]);
       SCAN.terisi=n; SCAN.status = n ? 'ok' : 'kosong';
-      SCAN.pesan = n ? (n+' isian terbaca — mohon periksa sebelum disimpan.')
-                     : 'Tidak ada isian baru yang bisa diisikan.';
+      SCAN.pesan = (n ? (n+' isian terbaca — mohon periksa sebelum disimpan.')
+                      : 'Tidak ada isian baru yang bisa diisikan.') + ekor;
       scanBarisStatus();
     }).catch(function(e){
       SCAN.status='gagal';

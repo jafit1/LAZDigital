@@ -44,7 +44,7 @@ tambahkan, untuk *Production*, *Preview*, dan *Development*:
 |---|---|---|
 | `OCR_API_KEY` | kunci dari langkah 1 | ya |
 | `OCR_PENYEDIA` | `gemini` atau `openai` | tidak (bawaan `gemini`) |
-| `OCR_MODEL` | mis. `gemini-2.5-flash` | tidak |
+| `OCR_MODEL` | rantai model dipisah koma — lihat bagian di bawah | tidak |
 | `OCR_BATAS_HARIAN` | mis. `300` | tidak (bawaan 300) |
 
 ### 3. Deploy
@@ -56,6 +56,64 @@ baru — mengisinya saja tidak cukup.
 
 Buka Penghimpunan → Scan Kwitansi → foto apa saja. Kalau muncul baris hijau
 *"… isian terbaca — mohon periksa"*, fitur sudah hidup.
+
+---
+
+## Rantai model & pergantian otomatis
+
+`OCR_MODEL` berisi **daftar model dipisah koma**, dicoba berurutan dari kiri.
+Bawaannya:
+
+```
+gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.5-pro
+```
+
+Urutannya sengaja dari yang paling murah dan kuotanya paling longgar ke yang
+paling pintar. Kalau model pertama menjawab:
+
+| Jawaban penyedia | Yang dilakukan sistem | Lama istirahat |
+|---|---|---|
+| **429** kuota harian habis | pindah ke model berikutnya | sampai tengah malam waktu Pasifik |
+| **429** terlalu cepat (per menit) | pindah ke model berikutnya | 90 detik |
+| **503 / 500** model sibuk | pindah ke model berikutnya | 2 menit |
+| **404** model tak dikenal kunci ini | pindah ke model berikutnya | 6 jam |
+| **401 / 403** kunci ditolak | **berhenti** — ganti model tidak menolong | — |
+
+Model yang sedang istirahat **tidak dicoba lagi** sampai waktunya habis, jadi
+setelah kuota flash habis, permintaan berikutnya langsung ke model cadangan
+tanpa membuang satu panggilan. Kalau Redis terpasang, ingatan ini dibagi ke
+seluruh instance Vercel; kalau tidak, hanya berlaku per instance.
+
+Saat model cadangan yang dipakai, baris status di panel menyebutkannya —
+misalnya *"9 isian terbaca — mohon periksa sebelum disimpan. Dibaca model
+cadangan gemini-2.5-flash-lite."*
+
+Kalau **semua** model habis, fitur tidak error keras: baris status menjelaskan
+kuota habis dan kapan pulih, foto tetap ditampilkan, formulir tetap bisa diisi
+manual.
+
+### Melihat model apa saja yang didukung kunci Anda
+
+Model yang tersedia berbeda-beda per kunci dan per project. Untuk melihat
+daftar sebenarnya, jalankan dari Console peramban (F12) saat sudah login:
+
+```js
+fetch('/api/ocr',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({aksi:'model-list',token:TOKEN})}).then(r=>r.json()).then(console.log)
+```
+
+Hasilnya menyebut `tersedia` (semua model yang bisa dipakai kunci itu),
+`rantaiSah` (model di `OCR_MODEL` yang memang ada), dan `rantaiTidakDikenal`
+(yang salah tulis atau tidak didukung). Model yang tidak dikenal tidak
+merusak apa-apa — ia dilewati otomatis — tapi lebih baik dibuang dari daftar.
+
+### Catatan biaya
+
+Selama masih di **free tier**, semua model gratis sampai batas hariannya, jadi
+rantai panjang justru menguntungkan. Begitu pindah ke **paid tier**, urutan ini
+penting: `gemini-2.5-pro` jauh lebih mahal daripada `flash`. Kalau sudah
+berbayar dan ingin biaya tetap rata, cukup isi `OCR_MODEL=gemini-2.5-flash`
+saja.
 
 ---
 
@@ -116,11 +174,12 @@ memang keputusan petugas.
 
 | Pesan di panel | Artinya |
 |---|---|
-| *Kunci AI ditolak penyedia* | `OCR_API_KEY` salah atau sudah dicabut. |
-| *Model AI "…" tidak ditemukan* | `OCR_MODEL` salah tulis, atau modelnya sudah pensiun. |
-| *Kuota AI penyedia sedang penuh* | Kuota gratis habis, atau terlalu cepat beruntun. Tunggu sebentar. |
+| *Kunci AI ditolak penyedia* | `OCR_API_KEY` salah atau sudah dicabut. Ganti model tidak menolong. |
+| *Kuota semua model AI sedang habis* | Seluruh rantai kehabisan kuota gratis. Pulih tengah malam waktu Pasifik (± 14.00–15.00 WIB). Tambah model ke `OCR_MODEL`, atau isi manual dulu. |
+| *Tidak ada model AI yang bisa dipakai: … (tidak tersedia untuk kunci ini)* | Semua model di `OCR_MODEL` salah tulis atau tidak didukung kunci itu. Jalankan `model-list` di atas. |
 | *Batas pembacaan hari ini sudah tercapai* | `OCR_BATAS_HARIAN` tercapai. Naikkan kalau memang perlu. |
 | *Tulisan belum terbaca* | Fotonya kurang jelas. Coba foto ulang: cahaya cukup, kwitansi rata, penuhi bingkai. |
+| *Dibaca model cadangan …* | Bukan masalah — model utama sedang istirahat, pembacaan tetap jalan. |
 
 Tombol **Baca ulang** di panel mengulang pembacaan tanpa perlu foto ulang.
 
