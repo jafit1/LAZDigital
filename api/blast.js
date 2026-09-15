@@ -1,0 +1,738 @@
+// api/rpc.js — satu pintu untuk seluruh tindakan aplikasi
+//
+// Bentuk permintaan : POST { tindakan: 'kontak.daftar', data: {...} }
+// Bentuk balasan    : { ok: true, ... } atau { ok: false, pesan: '...' }
+//
+// Hak akses diperiksa di SINI (server), bukan di tampilan.
+
+const db = require('../lib/blast/db');
+const util = require('../lib/blast/util');
+const auth = require('../lib/blast/auth');
+const { PERAN, punyaIzin, kantorTerkunci, IZIN } = require('../lib/blast/peran');
+const setelanLib = require('../lib/blast/setelan');
+const kontakLib = require('../lib/blast/kontak');
+const antreanLib = require('../lib/blast/antrean');
+const webhookLib = require('../lib/blast/webhook');
+const { pilihDriver, DRIVER } = require('../lib/blast/pengirim');
+const { siapkanAwal, sudahSiap } = require('../lib/blast/siap');
+
+const { sukses, gagal, bacaBody, GalatAplikasi, id, sekarang, isiPlaceholder, normalkanNomor } = util;
+
+// ---------------------------------------------------------------- tindakan
+const tindakan = {};
+
+/* Daftar izin yang dikirim ke tampilan hanya untuk menyembunyikan menu.
+   Yang menentukan boleh-tidaknya tetap pemeriksaan di server (wajibIzin).
+   Setelah digabung, daftarnya disaring ulang lewat izin LAZDigital supaya
+   menu yang muncul benar-benar sesuai centang akunnya. */
+function izinTampil(pengguna) {
+  if (!pengguna) return [];
+  if (!pengguna._laz) return IZIN[pengguna.peran] || [];
+  /* Setelah digabung, menu TIDAK boleh diturunkan dari peran tebakan: peran
+     "penyelia" misalnya tidak memuat setelan.ubah, sehingga akun yang memang
+     dicentang "ubah" kehilangan menunya padahal server mengizinkan. Jadi
+     kandidatnya seluruh izin yang dikenal, lalu disaring izin sungguhan. */
+  const semua = new Set(Object.keys(require('../lib/blast/sesi-laz').PETA_IZIN));
+  Object.keys(IZIN).forEach(function (p) {
+    (IZIN[p] || []).forEach(function (i) { if (i !== '*') semua.add(i); });
+  });
+  return Array.from(semua).filter(function (i) { return punyaIzin(pengguna, i); });
+}
+
+// Dorongan sekali jalan setelah pesan diantrekan, supaya pengiriman kecil
+// terasa langsung tanpa menunggu cron. Kegagalannya tidak boleh menggagalkan
+// permintaan — antrean tetap akan disapu cron berikutnya.
+async function dorongAntrean() {
+  try { await antreanLib.prosesAntrean(2500); } catch (e) { console.error('[dorong]', e.message); }
+}
+
+// --- Sistem ---------------------------------------------------------------
+tindakan['sistem.status'] = { publik: true, async jalankan({ req }) {
+  const siap = await sudahSiap();
+  if (!siap) await siapkanAwal(); // penyiapan otomatis saat pertama dibuka
+  const setelan = await setelanLib.ambilSetelan();
+  const pengguna = await auth.penggunaDariPermintaan(req);
+  return {
+    siap: true,
+    penyimpanan: db.pakaiUpstash ? 'Upstash Redis' : 'Berkas lokal (.data/blast.json)',
+    driver: setelan.pengirim.driver,
+    lembaga: setelan.lembaga,
+    masuk: Boolean(pengguna),
+    pengguna: pengguna ? auth.pengunaTampil(pengguna) : null,
+    izin: pengguna ? izinTampil(pengguna) : [],
+  };
+} };
+
+// --- Autentikasi ----------------------------------------------------------
+// DIGABUNG KE LAZDIGITAL: masuk, keluar, dan ganti sandi adalah urusan
+// LAZDigital. Tindakannya sengaja TIDAK sekadar dihapus, melainkan dijawab
+// dengan penjelasan — kalau dihapus begitu saja, tampilan lama yang masih
+// memanggilnya hanya dapat "Tindakan tidak dikenal" dan orang mengira rusak.
+function urusanLazdigital(apa) {
+  return { publik: true, async jalankan() {
+    throw new GalatAplikasi(apa + ' dilakukan di LAZDigital, bukan di sini.', 400);
+  } };
+}
+tindakan['auth.masuk'] = urusanLazdigital('Masuk');
+tindakan['auth.keluar'] = urusanLazdigital('Keluar');
+tindakan['auth.gantiSandi'] = urusanLazdigital('Ganti sandi');
+
+tindakan['auth.saya'] = { async jalankan({ pengguna }) {
+  return { pengguna: auth.pengunaTampil(pengguna), izin: izinTampil(pengguna) };
+} };
+
+// --- Dasbor ---------------------------------------------------------------
+tindakan['dasbor.ringkas'] = { izin: 'dasbor', async jalankan({ pengguna }) {
+  const kunciKantor = kantorTerkunci(pengguna);
+  const [idPesan, perangkatId, setelan, antrean] = await Promise.all([
+    db.ambil('pesan:baru'),
+    db.anggotaHimpunan('perangkat:daftar'),
+    setelanLib.ambilSetelan(),
+    antreanLib.ringkasAntrean(),
+  ]);
+
+  const pesan = (await db.ambilBanyak((idPesan || []).slice(0, 500).map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+  const perangkat = (await db.ambilBanyak(perangkatId.map((i) => `perangkat:${i}`))).filter(Boolean);
+
+  const { tanggal } = util.waktuLokal();
+  const hariIni = pesan.filter((p) => String(p.dibuat).slice(0, 10) === tanggal);
+
+  const hitung = (daftar) => ({
+    total: daftar.length,
+    terkirim: daftar.filter((p) => ['terkirim', 'sampai', 'dibaca'].includes(p.status)).length,
+    sampai: daftar.filter((p) => ['sampai', 'dibaca'].includes(p.status)).length,
+    dibaca: daftar.filter((p) => p.status === 'dibaca').length,
+    gagal: daftar.filter((p) => p.status === 'gagal').length,
+    antre: daftar.filter((p) => p.status === 'antre').length,
+  });
+
+  // Grafik 14 hari terakhir
+  const grafik = [];
+  for (let i = 13; i >= 0; i--) {
+    const t = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const hari = pesan.filter((p) => String(p.dibuat).slice(0, 10) === t);
+    grafik.push({ tanggal: t, total: hari.length, terkirim: hitung(hari).terkirim, gagal: hitung(hari).gagal });
+  }
+
+  const kontak = await kontakLib.daftarKontak({ perHalaman: 1, kantorTerkunci: kunciKantor });
+
+  return {
+    hariIni: hitung(hariIni),
+    keseluruhan: hitung(pesan),
+    grafik,
+    antrean,
+    kontak: { total: kontak.total },
+    perangkat: perangkat.map((d) => ({
+      id: d.id, nama: d.nama, nomor: d.nomor, status: d.status, driver: d.driver,
+    })),
+    biaya: {
+      perPesan: setelan.biaya.biayaPerPesan,
+      perkiraanBulanIni: setelan.biaya.biayaPerPesan * hitung(pesan.filter(
+        (p) => String(p.dibuat).slice(0, 7) === tanggal.slice(0, 7))).terkirim,
+      saldoDicatat: setelan.biaya.saldoDicatat,
+      peringatan: setelan.biaya.saldoDicatat > 0 && setelan.biaya.saldoDicatat <= setelan.biaya.peringatanSaldo,
+    },
+  };
+} };
+
+// --- Perangkat ------------------------------------------------------------
+tindakan['perangkat.daftar'] = { izin: 'perangkat.lihat', async jalankan({ pengguna }) {
+  const idDaftar = await db.anggotaHimpunan('perangkat:daftar');
+  const isi = (await db.ambilBanyak(idDaftar.map((i) => `perangkat:${i}`))).filter(Boolean);
+  const bolehUbah = punyaIzin(pengguna, 'perangkat.ubah');
+  const baris = await Promise.all(isi.map(async (d) => ({
+    ...d,
+    token: bolehUbah && d.token ? '••••••••' : '',
+    terpakaiHariIni: await antreanLib.hitungHarian(d.id),
+  })));
+  baris.sort((a, b) => String(a.nama).localeCompare(String(b.nama), 'id'));
+  return { baris, driver: Object.values(DRIVER).map((d) => ({ nama: d.nama, label: d.label, butuhKredensial: d.butuhKredensial })) };
+} };
+
+tindakan['perangkat.simpan'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
+  const { bersih, galat } = util.periksaSkema(data, {
+    nama: { wajib: true, label: 'Nama perangkat', maks: 80 },
+    nomor: { label: 'Nomor', maks: 25 },
+    keterangan: { label: 'Keterangan', maks: 200 },
+    driver: { label: 'Pengirim', pilihan: Object.keys(DRIVER), bawaan: 'sandbox' },
+    token: { label: 'Token', maks: 500 },
+    nomorId: { label: 'Phone Number ID', maks: 80 },
+  });
+  if (galat.length) throw new GalatAplikasi(galat.join('. '));
+
+  let perangkat = data.id ? await db.ambil(`perangkat:${data.id}`) : null;
+  if (data.id && !perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);
+
+  const baru = !perangkat;
+  perangkat = Object.assign(
+    { id: id('d_'), status: 'terputus', aktif: true, dibuat: sekarang(), bolehKirimSetelah: 0 },
+    perangkat || {},
+    {
+      nama: bersih.nama,
+      nomor: bersih.nomor ? normalkanNomor(bersih.nomor) : (perangkat ? perangkat.nomor : ''),
+      keterangan: bersih.keterangan || '',
+      driver: bersih.driver,
+      nomorId: bersih.nomorId || (perangkat ? perangkat.nomorId : ''),
+      diubah: sekarang(),
+    }
+  );
+  // Token hanya ditimpa bila benar-benar diisi baru (bukan tanda bintang)
+  if (bersih.token && !/^•+$/.test(bersih.token)) perangkat.token = bersih.token;
+  if (data.aktif !== undefined) perangkat.aktif = Boolean(data.aktif);
+
+  await db.simpan(`perangkat:${perangkat.id}`, perangkat);
+  await db.tambahKeHimpunan('perangkat:daftar', perangkat.id);
+  await auth.catatAudit(pengguna, baru ? 'perangkat.tambah' : 'perangkat.ubah', { id: perangkat.id, nama: perangkat.nama }, req);
+  return { perangkat: { ...perangkat, token: perangkat.token ? '••••••••' : '' } };
+} };
+
+tindakan['perangkat.hapus'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
+  const perangkat = await db.ambil(`perangkat:${data.id}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);
+  await db.hapus(`perangkat:${data.id}`);
+  await db.keluarDariHimpunan('perangkat:daftar', data.id);
+  await auth.catatAudit(pengguna, 'perangkat.hapus', { id: data.id, nama: perangkat.nama }, req);
+  return { pesan: `Perangkat "${perangkat.nama}" dihapus.` };
+} };
+
+tindakan['perangkat.sambung'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
+  const perangkat = await db.ambil(`perangkat:${data.id}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);
+  const setelan = await setelanLib.ambilSetelan();
+  const driver = pilihDriver(setelan, perangkat);
+  const hasil = await driver.sambungkan(perangkat, setelan);
+  perangkat.status = hasil.status;
+  if (hasil.nomor) perangkat.nomor = hasil.nomor;
+  perangkat.qrTerakhir = hasil.qr || '';
+  perangkat.diubah = sekarang();
+  await db.simpan(`perangkat:${perangkat.id}`, perangkat);
+  await webhookLib.kirimKejadian(hasil.status === 'tersambung' ? 'tersambung' : 'qr', { id: perangkat.id, nomor: perangkat.nomor, status: hasil.status, perangkatId: perangkat.id });
+  await auth.catatAudit(pengguna, 'perangkat.sambung', { id: perangkat.id }, req);
+  return { status: hasil.status, qr: hasil.qr, keterangan: hasil.keterangan };
+} };
+
+tindakan['perangkat.putus'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
+  const perangkat = await db.ambil(`perangkat:${data.id}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);
+  const setelan = await setelanLib.ambilSetelan();
+  const driver = pilihDriver(setelan, perangkat);
+  await driver.putuskan(perangkat, setelan);
+  perangkat.status = 'terputus';
+  await db.simpan(`perangkat:${perangkat.id}`, perangkat);
+  await webhookLib.kirimKejadian('terputus', { id: perangkat.id, perangkatId: perangkat.id, status: 'terputus' });
+  await auth.catatAudit(pengguna, 'perangkat.putus', { id: perangkat.id }, req);
+  return { status: 'terputus' };
+} };
+
+tindakan['perangkat.periksa'] = { izin: 'perangkat.lihat', async jalankan({ data }) {
+  const perangkat = await db.ambil(`perangkat:${data.id}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);
+  const setelan = await setelanLib.ambilSetelan();
+  const driver = pilihDriver(setelan, perangkat);
+  const hasil = await driver.periksa(perangkat, setelan);
+  if (hasil.status && hasil.status !== perangkat.status) {
+    perangkat.status = hasil.status;
+    await db.simpan(`perangkat:${perangkat.id}`, perangkat);
+  }
+  return hasil;
+} };
+
+// --- Kontak ---------------------------------------------------------------
+tindakan['kontak.daftar'] = { izin: 'kontak.lihat', async jalankan({ data, pengguna }) {
+  const hasil = await kontakLib.daftarKontak({
+    cari: util.bersihkanTeks(data.cari, 80),
+    segmen: util.bersihkanTeks(data.segmen, 40),
+    label: util.bersihkanTeks(data.label, 40),
+    halaman: Number(data.halaman) || 1,
+    perHalaman: Math.min(100, Number(data.perHalaman) || 25),
+    kantorTerkunci: kantorTerkunci(pengguna),
+  });
+  return { ...hasil, segmen: kontakLib.SEGMEN };
+} };
+
+tindakan['kontak.simpan'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const kunci = kantorTerkunci(pengguna);
+  if (kunci) data.kantor = kunci; // pengurus KLL hanya boleh menulis untuk kantornya
+  const { kontak, baru } = await kontakLib.simpanKontak(data, pengguna);
+  await auth.catatAudit(pengguna, baru ? 'kontak.tambah' : 'kontak.ubah', { id: kontak.id, nomor: kontak.nomor }, req);
+  return { kontak, baru };
+} };
+
+tindakan['kontak.hapus'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const kontak = await db.ambil(kontakLib.KUNCI(data.id));
+  if (!kontak) throw new GalatAplikasi('Kontak tidak ditemukan', 404);
+  const kunci = kantorTerkunci(pengguna);
+  if (kunci && kontak.kantor !== kunci) throw new GalatAplikasi('Kontak ini bukan milik kantor Anda', 403);
+  await kontakLib.hapusKontak(data.id);
+  await auth.catatAudit(pengguna, 'kontak.hapus', { id: data.id, nomor: kontak.nomor }, req);
+  return { pesan: 'Kontak dihapus.' };
+} };
+
+tindakan['kontak.ubahLangganan'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const kontak = await db.ambil(kontakLib.KUNCI(data.id));
+  if (!kontak) throw new GalatAplikasi('Kontak tidak ditemukan', 404);
+  if (data.langganan !== undefined) kontak.langganan = Boolean(data.langganan);
+  if (data.daftarHitam !== undefined) kontak.daftarHitam = Boolean(data.daftarHitam);
+  kontak.diubah = sekarang();
+  await db.simpan(kontakLib.KUNCI(kontak.id), kontak);
+  await auth.catatAudit(pengguna, 'kontak.langganan', { id: kontak.id, langganan: kontak.langganan, daftarHitam: kontak.daftarHitam }, req);
+  return { kontak };
+} };
+
+tindakan['kontak.impor'] = { izin: 'kontak.impor', async jalankan({ data, pengguna, req }) {
+  const teks = String(data.teks || '');
+  if (!teks.trim()) throw new GalatAplikasi('Tidak ada data untuk diimpor');
+  if (teks.length > 2 * 1024 * 1024) throw new GalatAplikasi('Data terlalu besar, bagi menjadi beberapa bagian');
+  const hasil = await kontakLib.imporKontak(teks, pengguna);
+  await auth.catatAudit(pengguna, 'kontak.impor', hasil, req);
+  return { hasil };
+} };
+
+tindakan['kontak.ekspor'] = { izin: 'kontak.lihat', async jalankan({ pengguna }) {
+  const kunci = kantorTerkunci(pengguna);
+  let isi = await kontakLib.semuaKontak();
+  if (kunci) isi = isi.filter((k) => k.kantor === kunci);
+  return { csv: kontakLib.keCsv(isi), jumlah: isi.length };
+} };
+
+// --- Templat pesan --------------------------------------------------------
+tindakan['templat.daftar'] = { izin: 'pesan.lihat', async jalankan() {
+  return { baris: (await db.ambil('templat')) || [] };
+} };
+
+tindakan['templat.simpan'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const { bersih, galat } = util.periksaSkema(data, {
+    nama: { wajib: true, label: 'Nama templat', maks: 100 },
+    isi: { wajib: true, label: 'Isi pesan', maks: 4000 },
+  });
+  if (galat.length) throw new GalatAplikasi(galat.join('. '));
+  const daftar = (await db.ambil('templat')) || [];
+  if (data.id) {
+    const i = daftar.findIndex((t) => t.id === data.id);
+    if (i === -1) throw new GalatAplikasi('Templat tidak ditemukan', 404);
+    daftar[i] = { ...daftar[i], ...bersih, diubah: sekarang() };
+  } else {
+    daftar.unshift({ id: id('t_'), ...bersih, dibuat: sekarang() });
+  }
+  await db.simpan('templat', daftar.slice(0, 200));
+  await auth.catatAudit(pengguna, 'templat.simpan', { nama: bersih.nama }, req);
+  return { baris: daftar };
+} };
+
+tindakan['templat.hapus'] = { izin: 'pesan.kirim', async jalankan({ data }) {
+  const daftar = ((await db.ambil('templat')) || []).filter((t) => t.id !== data.id);
+  await db.simpan('templat', daftar);
+  return { baris: daftar };
+} };
+
+// --- Pesan ----------------------------------------------------------------
+tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const { bersih, galat } = util.periksaSkema(data, {
+    perangkatId: { wajib: true, label: 'Perangkat pengirim', maks: 60 },
+    nomor: { wajib: true, label: 'Nomor tujuan', maks: 25 },
+    teks: { wajib: true, label: 'Isi pesan', maks: 4000 },
+    berkasUrl: { label: 'Tautan berkas', maks: 500 },
+    namaBerkas: { label: 'Nama berkas', maks: 120 },
+  });
+  if (galat.length) throw new GalatAplikasi(galat.join('. '));
+
+  const perangkat = await db.ambil(`perangkat:${bersih.perangkatId}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat pengirim tidak ditemukan', 404);
+  if (!util.nomorValid(bersih.nomor)) throw new GalatAplikasi('Nomor tujuan tidak sah');
+
+  const kontak = await kontakLib.cariLewatNomor(bersih.nomor);
+  if (kontak && kontak.daftarHitam) throw new GalatAplikasi('Nomor ini ada di daftar hitam');
+
+  const pesan = await antreanLib.antrikan({
+    perangkatId: perangkat.id,
+    nomor: bersih.nomor,
+    nama: (kontak && kontak.nama) || '',
+    kontakId: kontak ? kontak.id : null,
+    isi: {
+      teks: isiPlaceholder(bersih.teks, { nama: (kontak && kontak.nama) || 'Bapak/Ibu', kantor: (kontak && kontak.kantor) || '' }),
+      berkasUrl: bersih.berkasUrl,
+      namaBerkas: bersih.namaBerkas,
+    },
+    prioritas: 2, // pesan tunggal didahulukan atas kiriman massal
+    jadwal: data.jadwal || undefined,
+    oleh: pengguna.id,
+  });
+  await auth.catatAudit(pengguna, 'pesan.kirim', { pesanId: pesan.id, nomor: pesan.nomor }, req);
+  await dorongAntrean();
+  return { pesan, catatan: 'Pesan masuk antrean dan dikirim mengikuti jeda aman.' };
+} };
+
+tindakan['pesan.daftar'] = { izin: 'pesan.lihat', async jalankan({ data, pengguna }) {
+  const idDaftar = ((await db.ambil('pesan:baru')) || []).slice(0, 1000);
+  let isi = (await db.ambilBanyak(idDaftar.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+
+  const kunci = kantorTerkunci(pengguna);
+  if (kunci) {
+    const kontakKantor = (await kontakLib.semuaKontak()).filter((k) => k.kantor === kunci).map((k) => k.nomor);
+    const set = new Set(kontakKantor);
+    isi = isi.filter((p) => set.has(p.nomor));
+  }
+
+  if (data.status) isi = isi.filter((p) => p.status === data.status);
+  if (data.perangkatId) isi = isi.filter((p) => p.perangkatId === data.perangkatId);
+  if (data.cari) {
+    const q = String(data.cari).toLowerCase();
+    isi = isi.filter((p) => util.nomorCocok(p.nomor, data.cari) ||
+      String(p.nama).toLowerCase().includes(q) ||
+      String(p.isi.teks).toLowerCase().includes(q));
+  }
+
+  const perHalaman = Math.min(100, Number(data.perHalaman) || 25);
+  const halaman = Math.max(1, Number(data.halaman) || 1);
+  return {
+    total: isi.length,
+    halaman,
+    perHalaman,
+    baris: isi.slice((halaman - 1) * perHalaman, halaman * perHalaman),
+  };
+} };
+
+tindakan['pesan.batal'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const pesan = await antreanLib.batalkan(data.id);
+  await auth.catatAudit(pengguna, 'pesan.batal', { pesanId: data.id }, req);
+  return { pesan };
+} };
+
+tindakan['pesan.ulangi'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const pesan = await antreanLib.ulangi(data.id);
+  await auth.catatAudit(pengguna, 'pesan.ulangi', { pesanId: data.id }, req);
+  return { pesan };
+} };
+
+// --- Kiriman massal -------------------------------------------------------
+tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengguna, req }) {
+  const { bersih, galat } = util.periksaSkema(data, {
+    nama: { wajib: true, label: 'Nama kiriman', maks: 100 },
+    perangkatId: { wajib: true, label: 'Perangkat pengirim', maks: 60 },
+    teks: { wajib: true, label: 'Isi pesan', maks: 4000 },
+    segmen: { label: 'Segmen', maks: 40 },
+  });
+  if (galat.length) throw new GalatAplikasi(galat.join('. '));
+
+  const perangkat = await db.ambil(`perangkat:${bersih.perangkatId}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat pengirim tidak ditemukan', 404);
+
+  let sasaran = await kontakLib.semuaKontak();
+  if (bersih.segmen) sasaran = sasaran.filter((k) => (k.segmen || []).includes(bersih.segmen));
+  if (Array.isArray(data.kontakId) && data.kontakId.length) {
+    const set = new Set(data.kontakId);
+    sasaran = sasaran.filter((k) => set.has(k.id));
+  }
+  const dilewati = sasaran.filter((k) => !kontakLib.bolehDikirimiMassal(k)).length;
+  sasaran = sasaran.filter(kontakLib.bolehDikirimiMassal);
+
+  if (!sasaran.length) throw new GalatAplikasi('Tidak ada penerima yang memenuhi syarat (perhatikan daftar hitam dan berhenti berlangganan)');
+
+  const massal = {
+    id: id('c_'),
+    nama: bersih.nama,
+    perangkatId: perangkat.id,
+    teks: bersih.teks,
+    segmen: bersih.segmen || '',
+    jumlah: sasaran.length,
+    dilewati,
+    status: 'berjalan',
+    dibuat: sekarang(),
+    oleh: pengguna.id,
+  };
+  await db.simpan(`massal:${massal.id}`, massal);
+  await db.tambahKeHimpunan('massal:daftar', massal.id);
+
+  const jadwal = data.jadwal || sekarang();
+  for (const k of sasaran) {
+    await antreanLib.antrikan({
+      perangkatId: perangkat.id,
+      nomor: k.nomor,
+      nama: k.nama,
+      kontakId: k.id,
+      isi: {
+        teks: isiPlaceholder(bersih.teks, {
+          nama: k.anonim ? 'Bapak/Ibu' : (k.nama || 'Bapak/Ibu'),
+          kantor: k.kantor || '',
+          lembaga: 'LAZISMU Bantul',
+        }),
+      },
+      prioritas: 6,
+      jadwal,
+      massalId: massal.id,
+      kunciIdempoten: `${massal.id}:${k.nomor}`,
+      oleh: pengguna.id,
+    });
+  }
+
+  await auth.catatAudit(pengguna, 'massal.kirim', { id: massal.id, nama: massal.nama, jumlah: massal.jumlah }, req);
+  await dorongAntrean();
+  return { massal, catatan: `${massal.jumlah} pesan masuk antrean. ${dilewati} kontak dilewati karena berhenti berlangganan atau masuk daftar hitam.` };
+} };
+
+tindakan['massal.daftar'] = { izin: 'pesan.lihat', async jalankan() {
+  const idDaftar = await db.anggotaHimpunan('massal:daftar');
+  const isi = (await db.ambilBanyak(idDaftar.map((i) => `massal:${i}`))).filter(Boolean);
+  const semuaPesanId = ((await db.ambil('pesan:baru')) || []).slice(0, 2000);
+  const pesan = (await db.ambilBanyak(semuaPesanId.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+
+  const baris = isi.map((m) => {
+    const milik = pesan.filter((p) => p.massalId === m.id);
+    return {
+      ...m,
+      statistik: {
+        antre: milik.filter((p) => p.status === 'antre').length,
+        terkirim: milik.filter((p) => ['terkirim', 'sampai', 'dibaca'].includes(p.status)).length,
+        sampai: milik.filter((p) => ['sampai', 'dibaca'].includes(p.status)).length,
+        dibaca: milik.filter((p) => p.status === 'dibaca').length,
+        gagal: milik.filter((p) => p.status === 'gagal').length,
+      },
+    };
+  }).sort((a, b) => new Date(b.dibuat) - new Date(a.dibuat));
+  return { baris };
+} };
+
+tindakan['massal.hentikan'] = { izin: 'massal.kelola', async jalankan({ data, pengguna, req }) {
+  const massal = await db.ambil(`massal:${data.id}`);
+  if (!massal) throw new GalatAplikasi('Kiriman tidak ditemukan', 404);
+  const idAntre = await db.anggotaHimpunan(antreanLib.KUNCI_ANTREAN);
+  const pesan = (await db.ambilBanyak(idAntre.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+  let n = 0;
+  for (const p of pesan) {
+    if (p.massalId === data.id && p.status === 'antre') { await antreanLib.batalkan(p.id); n++; }
+  }
+  massal.status = 'dihentikan';
+  await db.simpan(`massal:${massal.id}`, massal);
+  await auth.catatAudit(pengguna, 'massal.hentikan', { id: data.id, dibatalkan: n }, req);
+  return { pesan: `${n} pesan yang belum terkirim dibatalkan.` };
+} };
+
+// --- Antrean --------------------------------------------------------------
+tindakan['antrean.ringkas'] = { izin: 'dasbor', async jalankan() {
+  return antreanLib.ringkasAntrean();
+} };
+
+tindakan['antrean.proses'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const laporan = await antreanLib.prosesAntrean(15000);
+  // Dorongan berkala dari tampilan tidak dicatat — audit hanya untuk tindakan
+  // yang benar-benar ditekan pengguna, agar catatannya tetap berguna dibaca.
+  if (!data.diam) await auth.catatAudit(pengguna, 'antrean.proses-manual', laporan, req);
+  return { laporan };
+} };
+
+// --- Setelan --------------------------------------------------------------
+tindakan['setelan.ambil'] = { izin: 'setelan.lihat', async jalankan() {
+  const setelan = await setelanLib.ambilSetelan();
+  return { setelan: setelanLib.setelanAman(setelan) };
+} };
+
+tindakan['setelan.simpan'] = { izin: 'setelan.ubah', async jalankan({ data, pengguna, req }) {
+  const masuk = data.setelan || {};
+  // Jangan timpa rahasia dengan tanda bintang dari tampilan
+  if (masuk.webhook && /^•+$/.test(String(masuk.webhook.rahasia || ''))) delete masuk.webhook.rahasia;
+  const setelan = await setelanLib.simpanSetelan(masuk);
+  await auth.catatAudit(pengguna, 'setelan.simpan', {}, req);
+  return { setelan: setelanLib.setelanAman(setelan) };
+} };
+
+// --- Pengguna -------------------------------------------------------------
+tindakan['pengguna.daftar'] = { izin: 'pengguna.lihat', async jalankan() {
+  const idDaftar = await db.anggotaHimpunan('pengguna:daftar');
+  const isi = (await db.ambilBanyak(idDaftar.map(auth.KUNCI_PENGGUNA))).filter(Boolean);
+  return {
+    baris: isi.map(auth.pengunaTampil).sort((a, b) => String(a.nama).localeCompare(String(b.nama), 'id')),
+    peran: PERAN,
+  };
+} };
+
+tindakan['pengguna.simpan'] = { izin: 'pengguna.ubah', async jalankan({ data, pengguna, req }) {
+  if (data.id) {
+    const sasaran = await db.ambil(auth.KUNCI_PENGGUNA(data.id));
+    if (!sasaran) throw new GalatAplikasi('Pengguna tidak ditemukan', 404);
+    if (sasaran.peran === 'superadmin' && pengguna.peran !== 'superadmin') {
+      throw new GalatAplikasi('Hanya superadmin yang boleh mengubah akun superadmin', 403);
+    }
+    if (data.nama) sasaran.nama = util.bersihkanTeks(data.nama, 80);
+    if (data.peran && PERAN[data.peran]) sasaran.peran = data.peran;
+    if (data.kantor !== undefined) sasaran.kantor = util.bersihkanTeks(data.kantor, 80);
+    if (data.aktif !== undefined) sasaran.aktif = Boolean(data.aktif);
+    if (data.sandiBaru) {
+      if (!auth.sandiLayak(data.sandiBaru)) throw new GalatAplikasi('Sandi minimal 8 karakter dan memuat huruf serta angka');
+      sasaran.garam = auth.acakGaram();
+      sasaran.sandiHash = auth.hashSandi(data.sandiBaru, sasaran.garam);
+      sasaran.sandiDiubah = sekarang();
+      await auth.hapusSemuaSesi(sasaran.id);
+    }
+    await auth.simpanPengguna(sasaran);
+    await auth.catatAudit(pengguna, 'pengguna.ubah', { id: sasaran.id, username: sasaran.username }, req);
+    return { pengguna: auth.pengunaTampil(sasaran) };
+  }
+
+  const baru = await auth.buatPengguna({
+    nama: data.nama, username: data.username, sandi: data.sandi,
+    peran: data.peran || 'petugas', kantor: data.kantor || '',
+  });
+  await auth.catatAudit(pengguna, 'pengguna.tambah', { id: baru.id, username: baru.username, peran: baru.peran }, req);
+  return { pengguna: auth.pengunaTampil(baru) };
+} };
+
+tindakan['pengguna.hapus'] = { izin: 'pengguna.ubah', async jalankan({ data, pengguna, req }) {
+  if (data.id === pengguna.id) throw new GalatAplikasi('Anda tidak dapat menghapus akun sendiri');
+  const sasaran = await db.ambil(auth.KUNCI_PENGGUNA(data.id));
+  if (!sasaran) throw new GalatAplikasi('Pengguna tidak ditemukan', 404);
+  if (sasaran.peran === 'superadmin' && pengguna.peran !== 'superadmin') {
+    throw new GalatAplikasi('Hanya superadmin yang boleh menghapus akun superadmin', 403);
+  }
+  await auth.hapusSemuaSesi(sasaran.id);
+  await db.hapus(auth.KUNCI_PENGGUNA(sasaran.id));
+  await db.keluarDariHimpunan('pengguna:daftar', sasaran.id);
+  const peta = (await db.ambil('idx:username')) || {};
+  delete peta[sasaran.username];
+  await db.simpan('idx:username', peta);
+  await auth.catatAudit(pengguna, 'pengguna.hapus', { username: sasaran.username }, req);
+  return { pesan: `Akun ${sasaran.username} dihapus.` };
+} };
+
+// --- Audit & webhook ------------------------------------------------------
+tindakan['audit.daftar'] = { izin: 'audit.lihat', async jalankan({ data }) {
+  const daftar = (await db.ambil('audit')) || [];
+  return { baris: daftar.slice(0, Math.min(500, Number(data.batas) || 100)) };
+} };
+
+tindakan['webhook.riwayat'] = { izin: 'setelan.lihat', async jalankan({ data }) {
+  return { baris: await webhookLib.riwayat(Number(data.batas) || 50), mati: await webhookLib.kotakMati() };
+} };
+
+tindakan['webhook.uji'] = { izin: 'setelan.ubah', async jalankan({ pengguna, req }) {
+  const kejadian = await webhookLib.kirimKejadian('uji', {
+    id: 'uji', nomor: '628000000000', status: 'uji', perangkatId: 'uji',
+  });
+  await auth.catatAudit(pengguna, 'webhook.uji', {}, req);
+  return { kejadian, catatan: 'Kejadian uji dikirim. Periksa riwayat untuk hasilnya.' };
+} };
+
+tindakan['webhook.kirimUlang'] = { izin: 'setelan.ubah', async jalankan({ data }) {
+  const kejadian = await webhookLib.kirimUlangMati(data.id);
+  return { kejadian };
+} };
+
+// --- Kesiapan deploy ------------------------------------------------------
+// Daftar periksa sebelum aplikasi dipakai sungguhan. Sengaja dibuat sebagai
+// tindakan, bukan catatan di dokumen, supaya jawabannya berasal dari keadaan
+// aplikasi yang sebenarnya.
+tindakan['sistem.kesiapan'] = { izin: 'setelan.lihat', async jalankan() {
+  const setelan = await setelanLib.ambilSetelan();
+  const idPengguna = await db.anggotaHimpunan('pengguna:daftar');
+  const pengguna = (await db.ambilBanyak(idPengguna.map(auth.KUNCI_PENGGUNA))).filter(Boolean);
+  const sandiBawaan = process.env.ADMIN_AWAL_SANDI || 'lazismu123';
+
+  const masihBawaan = [];
+  for (const p of pengguna) {
+    if (util.bandingAman(auth.hashSandi(sandiBawaan, p.garam), p.sandiHash)) masihBawaan.push(p.username);
+  }
+
+  const idPerangkat = await db.anggotaHimpunan('perangkat:daftar');
+  const perangkat = (await db.ambilBanyak(idPerangkat.map((i) => `perangkat:${i}`))).filter(Boolean);
+  const perluToken = perangkat.filter((d) => d.driver !== 'sandbox' && !d.token);
+
+  const butir = [
+    {
+      kode: 'basisdata',
+      label: 'Basis data Upstash Redis tersambung',
+      lolos: db.pakaiUpstash,
+      wajib: true,
+      saran: 'Isi UPSTASH_REDIS_REST_URL dan UPSTASH_REDIS_REST_TOKEN di Environment Variables Vercel. Tanpa ini, data hilang setiap deploy.',
+    },
+    {
+      kode: 'rahasia',
+      label: 'RAHASIA_SESI sudah diganti',
+      lolos: Boolean(process.env.RAHASIA_SESI) && !/ubah-saya/i.test(process.env.RAHASIA_SESI),
+      wajib: true,
+      saran: 'Isi dengan teks acak panjang. Dipakai menandatangani webhook keluar.',
+    },
+    {
+      kode: 'cron',
+      label: 'CRON_SECRET sudah diisi',
+      lolos: Boolean(process.env.CRON_SECRET) && !/ubah-saya/i.test(process.env.CRON_SECRET),
+      wajib: true,
+      saran: 'Tanpa ini, siapa pun dapat memanggil pemroses antrean Anda.',
+    },
+    {
+      kode: 'sandi',
+      label: 'Sandi bawaan sudah diganti',
+      lolos: masihBawaan.length === 0,
+      wajib: true,
+      saran: masihBawaan.length
+        ? `Akun ini masih memakai sandi contoh: ${masihBawaan.join(', ')}. Ganti lewat Tim & Petugas.`
+        : '',
+    },
+    {
+      kode: 'pengirim',
+      label: 'Pengirim sungguhan sudah dipilih',
+      lolos: setelan.pengirim.driver !== 'sandbox',
+      wajib: false,
+      saran: 'Masih mode sandbox — pesan tidak benar-benar terkirim. Ini aman untuk uji coba; ganti ke Fonnte atau Meta saat siap.',
+    },
+    {
+      kode: 'token',
+      label: 'Semua perangkat non-sandbox punya token',
+      lolos: perluToken.length === 0,
+      wajib: false,
+      saran: perluToken.length ? `Belum ada token: ${perluToken.map((d) => d.nama).join(', ')}.` : '',
+    },
+    {
+      kode: 'lembaga',
+      label: 'Identitas lembaga sudah diisi',
+      lolos: Boolean(setelan.lembaga.nama && setelan.lembaga.situs),
+      wajib: false,
+      saran: 'Nama dan tautan lembaga dipakai pada balasan otomatis.',
+    },
+  ];
+
+  return {
+    butir,
+    siapDeploy: butir.filter((b) => b.wajib).every((b) => b.lolos),
+    diVercel: db.diVercel,
+    catatanCron: db.diVercel
+      ? 'Paket Hobby Vercel hanya mengizinkan cron sekali sehari. Agar antrean berjalan tiap menit, pakai paket Pro (ubah jadwal jadi "* * * * *") atau arahkan pemicu luar ke /api/cron/antrean?kunci=CRON_SECRET.'
+      : 'Di komputer sendiri, antrean diproses server.js tiap 5 detik.',
+  };
+} };
+
+// --- Admin ----------------------------------------------------------------
+tindakan['admin.dataContoh'] = { izin: 'pengguna.ubah', async jalankan({ pengguna, req }) {
+  const hasil = await siapkanAwal({ paksa: true });
+  await auth.catatAudit(pengguna, 'admin.dataContoh', hasil, req);
+  return { hasil };
+} };
+
+// ---------------------------------------------------------------- penangan
+module.exports = async function penangan(req, res) {
+  if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
+  if (req.method !== 'POST') return gagal(res, 405, 'Gunakan metode POST');
+
+  let nama = '(tidak diketahui)';
+  try {
+    const badan = await bacaBody(req);
+    nama = String(badan.tindakan || '');
+    const data = badan.data || {};
+
+    const pintu = tindakan[nama];
+    if (!pintu) return gagal(res, 404, `Tindakan "${nama}" tidak dikenal`);
+
+    let pengguna = null;
+    if (!pintu.publik) {
+      pengguna = await auth.wajibMasuk(req);
+      if (pintu.izin) auth.wajibIzin(pengguna, pintu.izin);
+    }
+
+    const hasil = await pintu.jalankan({ data, pengguna, req, res });
+    return sukses(res, hasil || {});
+  } catch (e) {
+    const kode = e.kode || 500;
+    if (kode >= 500) console.error(`[rpc] ${nama}:`, e);
+    return gagal(res, kode, e.message || 'Terjadi kesalahan di server', kode >= 500 ? { tindakan: nama } : {});
+  }
+};
+
+module.exports.tindakan = tindakan;

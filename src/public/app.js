@@ -84,7 +84,7 @@ var MENU=[
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
   {id:'settings',label:'Pengaturan',ic:NAV_ICONS.settings,mod:'settings'},
   {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'},
-  {id:'broadcast',label:'Broadcast WA',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/broadcast.html'}
+  {id:'broadcast',label:'Broadcast',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/blast.html'}
 ];
 function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }
 
@@ -135,6 +135,9 @@ function isTransferMethod(m){ m=(m||'').toLowerCase(); return m.indexOf('transfe
 
 /* ============ BOOTSTRAP ============ */
 window.addEventListener('load',function(){
+  /* Layar pembuka tidak punya batas waktu sendiri — ia hilang saat datanya
+     siap. Yang dipantau cuma: kalau kelamaan, beri keterangan. */
+  try{ LZ.bootPantau(); }catch(e){}
   if(TOKEN){ gas('apiBootstrap')(TOKEN).then(function(b){ME=b.user;SETTINGS=b.settings;startApp();}).catch(function(){ tryAutoLogin(); }); }
   else { tryAutoLogin(); }
 });
@@ -145,7 +148,7 @@ function tryAutoLogin(){
     else showLogin();
   });
 }
-function showLogin(){ el('boot').classList.add('hidden'); el('appView').classList.add('hidden'); el('loginView').classList.remove('hidden'); try{ var c=getSavedCreds(); if(c&&el('lUser')&&!el('lUser').value){ el('lUser').value=c.u; if(el('lRemember'))el('lRemember').checked=true; } }catch(e){} }
+function showLogin(){ try{ LZ.bootSelesai(); }catch(e){} el('boot').classList.add('hidden'); el('appView').classList.add('hidden'); el('loginView').classList.remove('hidden'); try{ var c=getSavedCreds(); if(c&&el('lUser')&&!el('lUser').value){ el('lUser').value=c.u; if(el('lRemember'))el('lRemember').checked=true; } }catch(e){} }
 function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.textContent='Memproses...';el('loginErr').textContent='';
   var u=el('lUser').value.trim(), p=el('lPass').value;
   var remember=el('lRemember')?el('lRemember').checked:true;
@@ -179,6 +182,7 @@ function muatFundraising(paksa){
   }).catch(function(){ return CACHE.fundraising || []; });
 }
 function startApp(){
+  try{ LZ.bootSelesai(); }catch(e){}
   el('boot').classList.add('hidden');el('loginView').classList.add('hidden');el('appView').classList.remove('hidden');
   muatFundraising();
   // Default sidebar ciut (ikon saja); klik logo untuk melebarkan.
@@ -2036,11 +2040,112 @@ function openPassword(){openModal('Ubah Password','<div class="field"><label>Pas
 function savePassword(){var o=el('p_old').value,n=el('p_new').value,n2=el('p_new2').value;if(n.length<8||!/[A-Za-z]/.test(n)||!/[0-9]/.test(n)){toast('Sandi minimal 8 karakter dan memuat huruf serta angka',true);return;}if(n!==n2){toast('Konfirmasi tidak cocok',true);return;}gas('apiChangeMyPassword')(TOKEN,o,n).then(function(){closeModal();toast('Password diubah');}).catch(handleErr);}
 
 
+
+/* ============================================================
+   LAYAR MUAT LAZISMU
+   Dua peran, satu tampilan:
+   - #boot dipasang di index.html dan sudah berdenyut sebelum app.js jalan.
+   - selubung sibuk muncul HANYA bila sebuah proses ternyata lama. Menutupi
+     layar untuk permintaan yang selesai 200 ms justru membuat aplikasi
+     terasa berkedip-kedip, jadi ada ambang tunggu dulu.
+
+   Tidak ada batas waktu yang menyembunyikan loader sendiri: selama masih ada
+   yang ditunggu, denyutnya terus berulang. Yang lama diberi keterangan supaya
+   petugas bisa membedakan "sedang jalan" dari "macet".
+   ============================================================ */
+var LZ = (function(){
+  var AMBANG_TAMPIL = 900;      /* proses di bawah ini cukup bilah tipis saja */
+  var AMBANG_LAMA   = 6000;     /* setelah ini diberi keterangan menenangkan */
+  var AMBANG_SANGAT = 20000;
+
+  var sibuk=null, tTampil=null, tLama=null, tLamaBoot=null, mulai=0;
+
+  function markBoot(){
+    var b=document.getElementById('boot');
+    return b ? b.querySelector('.lz-mark') : null;
+  }
+
+  function buatSibuk(){
+    if(sibuk) return sibuk;
+    var mb=markBoot();
+    sibuk=document.createElement('div');
+    sibuk.id='lzSibuk';
+    sibuk.className='lz lz--full lz--sibuk';
+    sibuk.setAttribute('data-anim','denyut');
+    sibuk.setAttribute('role','status');
+    sibuk.setAttribute('aria-live','polite');
+    /* Lambangnya disalin dari #boot supaya gambarnya tidak dimuat dua kali. */
+    sibuk.innerHTML='<div class="lz-mark">'+(mb?mb.innerHTML:'')+'</div>'
+      + '<div class="lz-line"><i></i></div>'
+      + '<div class="lz-lama" id="lzSibukLama"></div>';
+    var b=document.getElementById('boot');
+    if(b && b.classList.contains('lz-tanpa-word')) sibuk.classList.add('lz-tanpa-word');
+    document.body.appendChild(sibuk);
+    return sibuk;
+  }
+
+  function pesanLama(el, teks){
+    if(!el) return;
+    var k=el.closest ? el.closest('.lz') : null;
+    el.textContent=teks||'';
+    if(k) k.classList.toggle('lz-lama-tampil', !!teks);
+  }
+
+  function bersihkanTimer(){
+    if(tTampil){ clearTimeout(tTampil); tTampil=null; }
+    if(tLama){ clearTimeout(tLama); tLama=null; }
+  }
+
+  return {
+    /* Dipanggil tiap permintaan mulai; hanya yang pertama yang memasang timer. */
+    sibukMulai:function(){
+      if(tTampil||(sibuk&&sibuk.classList.contains('tampil'))) return;
+      mulai=Date.now();
+      tTampil=setTimeout(function(){
+        tTampil=null;
+        var s=buatSibuk();
+        s.classList.add('tampil');
+        tLama=setTimeout(function(){
+          pesanLama(document.getElementById('lzSibukLama'),'Masih memuat — koneksinya sedang lambat.');
+          tLama=setTimeout(function(){
+            pesanLama(document.getElementById('lzSibukLama'),'Masih berjalan. Jangan tutup halaman ini.');
+          }, AMBANG_SANGAT-AMBANG_LAMA);
+        }, AMBANG_LAMA);
+      }, AMBANG_TAMPIL);
+    },
+    sibukSelesai:function(){
+      bersihkanTimer();
+      if(sibuk){
+        sibuk.classList.remove('tampil');
+        pesanLama(document.getElementById('lzSibukLama'),'');
+      }
+    },
+    /* Layar pembuka: disembunyikan oleh showLogin()/tampilApp(), tetapi kalau
+       pembukaannya lama, diberi keterangan juga. */
+    bootPantau:function(){
+      tLamaBoot=setTimeout(function(){
+        pesanLama(document.getElementById('bootLama'),'Masih memuat — koneksinya sedang lambat.');
+      }, AMBANG_LAMA);
+    },
+    bootSelesai:function(){
+      if(tLamaBoot){ clearTimeout(tLamaBoot); tLamaBoot=null; }
+      pesanLama(document.getElementById('bootLama'),'');
+    }
+  };
+})();
+
+/* Tab yang tidak dilihat tidak perlu membakar baterai untuk animasi. */
+document.addEventListener('visibilitychange',function(){
+  document.querySelectorAll('.lz').forEach(function(n){
+    n.classList.toggle('lz-jeda', document.hidden);
+  });
+});
+
 /* ====== v4: loader, modal konfirmasi, animasi transisi ====== */
 function __barEl(){ var b=document.getElementById('topbar-loader'); if(!b){ b=document.createElement('div'); b.id='topbar-loader'; document.body.appendChild(b);} return b; }
 var __pending=0;
-function __barShow(){ __pending++; __barEl().classList.add('active'); }
-function __barHide(){ __pending--; if(__pending<=0){ __pending=0; var b=__barEl(); b.style.width='100%'; setTimeout(function(){ b.classList.remove('active'); b.style.width=''; },250);} }
+function __barShow(){ __pending++; __barEl().classList.add('active'); try{ LZ.sibukMulai(); }catch(e){} }
+function __barHide(){ __pending--; if(__pending<=0){ __pending=0; var b=__barEl(); b.style.width='100%'; setTimeout(function(){ b.classList.remove('active'); b.style.width=''; },250); try{ LZ.sibukSelesai(); }catch(e){} } }
 
 function confirmDialog(opts){ opts=opts||{}; return new Promise(function(resolve){
   var ov=document.createElement('div'); ov.className='cd-overlay';

@@ -28,14 +28,18 @@
   </script>
 
   <!-- ============ LOADING ============ -->
-  <div id="boot">
-    <div class="loadingspinner">
-      <div id="square1"></div>
-      <div id="square2"></div>
-      <div id="square3"></div>
-      <div id="square4"></div>
-      <div id="square5"></div>
+  <!-- Ditulis langsung di HTML, bukan dibuat app.js, supaya sudah terlihat
+       sebelum berkas JS yang besar selesai diunduh. Animasinya berulang tanpa
+       batas waktu; yang menghentikannya adalah datanya siap, bukan hitungan
+       detik. Kelas lz-tanpa-word dilepas begitu berkas wordmark dipasang. -->
+  <div id="boot" class="lz lz--full lz-tanpa-word" data-anim="denyut" role="status" aria-live="polite" aria-label="Memuat">
+    <div class="lz-mark">
+      <div class="lz-flower" role="img" aria-label="Lazismu"></div>
+      <div class="lz-word" aria-hidden="true"></div>
+      <div class="lz-bantul" role="img" aria-label="Bantul"></div>
     </div>
+    <div class="lz-line"><i></i></div>
+    <div class="lz-lama" id="bootLama"></div>
   </div>
 
   <!-- ============ LOGIN ============ -->
