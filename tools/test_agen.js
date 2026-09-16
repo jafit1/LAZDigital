@@ -263,6 +263,79 @@ async function serahkan(id) { await lepasJeda(); await majukan(id); return antre
   r = await hit('ambil', { perangkatId: PERANGKAT, maks: 5 });
   cek('tarikan beruntun tidak mendorong dua kali', r.tubuh.dorong === null || r.tubuh.dorong === undefined, r.tubuh.dorong);
 
+  console.log('\n=== M. LAMPIRAN BERKAS ===');
+  const berkasLib = require('../lib/blast/berkas');
+  const isiPdf = Buffer.from('%PDF-1.4 uji').toString('base64');
+  const bk = await berkasLib.simpanBerkas({ nama: 'Panduan Zakat.pdf', tipe: 'application/pdf', base64: isiPdf });
+  cek('berkas PDF bisa disimpan', !!bk.id && bk.jenis === 'dokumen', bk);
+  cek('ukurannya dicatat', bk.byte > 0, bk.byte);
+
+  let ditolak = '';
+  try { await berkasLib.simpanBerkas({ nama: 'virus.exe', tipe: 'application/x-msdownload', base64: isiPdf }); }
+  catch (e) { ditolak = e.message; }
+  cek('jenis yang tidak didukung ditolak dengan penjelasan', /belum didukung/i.test(ditolak), ditolak);
+  cek('penjelasannya menyebut yang boleh', /PDF/i.test(ditolak), ditolak);
+
+  ditolak = '';
+  try {
+    await berkasLib.simpanBerkas({ nama: 'besar.pdf', tipe: 'application/pdf',
+      base64: 'A'.repeat(Math.ceil((berkasLib.BATAS_BYTE + 200000) * 4 / 3)) });
+  } catch (e) { ditolak = e.message; }
+  cek('berkas kebesaran ditolak, bukan gagal diam-diam', /melebihi batas/i.test(ditolak), ditolak);
+  cek('disebut berapa besarnya dan berapa batasnya', /MB.*batas.*MB/i.test(ditolak), ditolak);
+
+  /* Nama berkas ikut ke sistem berkas gateway, jadi tidak boleh bisa keluar
+     dari foldernya. */
+  const nakal = await berkasLib.simpanBerkas({ nama: '../../etc/passwd', tipe: 'image/png', base64: isiPdf });
+  cek('nama berkas yang mencoba keluar folder dijinakkan',
+    !nakal.nama.includes('/') && !nakal.nama.includes('..'), nakal.nama);
+
+  /* Lampiran menempel di pesan lewat id, dan gateway menariknya terpisah. */
+  await lepasJeda();
+  const pLampir = await antrean.antrikan({
+    perangkatId: PERANGKAT, nomor: '081666555444',
+    isi: { teks: 'Ada lampiran', berkasId: bk.id, namaBerkas: bk.nama, tipeBerkas: bk.tipe },
+  });
+  await serahkan(pLampir.id);
+  r = await hit('ambil', { perangkatId: PERANGKAT, maks: 5 });
+  const kerja = (r.tubuh.pekerjaan || []).find((k) => k.pesanId === pLampir.id);
+  cek('pekerjaan membawa id lampiran', kerja && kerja.berkasId === bk.id, kerja);
+  cek('isi berkasnya TIDAK ikut di tiap pekerjaan', kerja && !('base64' in kerja), Object.keys(kerja || {}));
+
+  r = await hit('berkas', { berkasId: bk.id });
+  cek('gateway bisa menarik isi lampiran terpisah', !!(r.tubuh.berkas && r.tubuh.berkas.base64), r.tubuh);
+  cek('isinya utuh', r.tubuh.berkas.base64 === isiPdf, r.tubuh.berkas.base64);
+
+  r = await hit('berkas', { berkasId: 'f_tidakada' });
+  cek('lampiran kedaluwarsa dijawab 404 dengan penjelasan',
+    r.statusCode === 404 && /kedaluwarsa/i.test(r.tubuh.pesan || ''), r.tubuh);
+
+  console.log('\n=== N. CENTANG SAMPAI DAN DIBACA ===');
+  await lepasJeda();
+  const pCentang = await antrean.antrikan({ perangkatId: PERANGKAT, nomor: '081444333222', isi: { teks: 'Centang' } });
+  await serahkan(pCentang.id);
+  await hit('ambil', { perangkatId: PERANGKAT, maks: 5 });
+  await hit('lapor', { hasil: [{ pesanId: pCentang.id, status: 'terkirim', idLuar: 'WAXYZ' }] });
+
+  r = await hit('lapor-status', { hasil: [{ idLuar: 'WAXYZ', status: 'sampai' }] });
+  m = await pesanDi(pCentang.id);
+  cek('centang "sampai" menaikkan status', m.status === 'sampai', m.status);
+  cek('waktunya dicatat', !!m.sampai, m.sampai);
+
+  r = await hit('lapor-status', { hasil: [{ idLuar: 'WAXYZ', status: 'dibaca' }] });
+  m = await pesanDi(pCentang.id);
+  cek('centang "dibaca" menaikkan lagi', m.status === 'dibaca', m.status);
+
+  /* WhatsApp kadang mengirim centang lama menyusul yang baru. */
+  r = await hit('lapor-status', { hasil: [{ idLuar: 'WAXYZ', status: 'sampai' }] });
+  m = await pesanDi(pCentang.id);
+  cek('centang lama tidak menurunkan yang sudah dibaca', m.status === 'dibaca', m.status);
+  cek('dan dihitung sebagai diabaikan', r.tubuh.diabaikan === 1, r.tubuh);
+
+  r = await hit('lapor-status', { hasil: [{ idLuar: 'WA-tidak-dikenal', status: 'dibaca' }] });
+  cek('id WhatsApp yang tidak dikenal diabaikan, bukan bikin galat',
+    r.tubuh.ok !== false && r.tubuh.diabaikan === 1, r.tubuh);
+
   console.log('\n=== L. DRIVER LAMA TIDAK IKUT BERUBAH ===');
   /* Perubahan di antrean.js menambah status 'diserahkan'. Driver yang memang
      mengirim sendiri (sandbox, fonnte, meta) tidak boleh ikut terpengaruh —

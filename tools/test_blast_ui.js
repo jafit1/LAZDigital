@@ -109,6 +109,7 @@ const JAWABAN = {
     },
   },
   'antrean.proses': { laporan: { diproses: 0, terkirim: 0, diserahkan: 0, gagal: 0, ditunda: 0, alasan: [] } },
+  'berkas.unggah': { berkas: { id: 'f_uji1', nama: 'Panduan Zakat.pdf', tipe: 'application/pdf', jenis: 'dokumen', byte: 204800 } },
 };
 
 const TIPE = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -124,7 +125,8 @@ const server = http.createServer((req, res) => {
       if (t === '__hitung') {
         return res.end(JSON.stringify({ ok: true,
           sambung: hitungTindakan['perangkat.sambung'] || 0,
-          periksa: hitungTindakan['perangkat.periksa'] || 0 }));
+          periksa: hitungTindakan['perangkat.periksa'] || 0,
+          unggah: hitungTindakan['berkas.unggah'] || 0 }));
       }
       const khusus = dinamis[t] ? dinamis[t](hitungTindakan[t]) : null;
       res.end(JSON.stringify(Object.assign({ ok: true }, khusus || JAWABAN[t] || {})));
@@ -287,6 +289,122 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     if (luber) luberDi.push(kode);
   }
   cek('tidak ada halaman yang melebar di layar HP', luberDi.length === 0, luberDi);
+
+  console.log('\n=== F0. PENANDA NAMA DISISIPKAN DI POSISI KURSOR ===');
+  /* Penggantian nama per kontak sudah jalan sejak awal; yang tidak ada adalah
+     sesuatu yang memberitahu petugas bahwa penandanya ada. */
+  await p.setViewportSize({ width: 1280, height: 900 });
+  await p.evaluate(() => { location.hash = '#kirim'; });
+  await p.waitForTimeout(800);
+  const keping = await p.evaluate(() => Array.from(document.querySelectorAll('#isi .keping')).map((k) => k.textContent.trim()));
+  cek('ada keping {{nama}} di komposer', keping.includes('{{nama}}'), keping);
+  cek('ada keping {{kantor}}', keping.includes('{{kantor}}'), keping);
+
+  const sisip = await p.evaluate(() => {
+    const t = document.querySelector('#isi [name=teks]');
+    t.value = 'Assalamualaikum , terima kasih.';
+    t.focus();
+    const pos = 'Assalamualaikum '.length;        // tepat sebelum koma
+    t.setSelectionRange(pos, pos);
+    Array.from(document.querySelectorAll('#isi .keping')).find((k) => k.textContent.trim() === '{{nama}}').click();
+    return { teks: t.value, kursor: t.selectionStart };
+  });
+  cek('penanda masuk di tengah kalimat, bukan di ujung',
+    sisip.teks === 'Assalamualaikum {{nama}}, terima kasih.', sisip.teks);
+  cek('kursor pindah ke belakang penanda', sisip.kursor === 'Assalamualaikum {{nama}}'.length, sisip.kursor);
+
+  const pratinjau = await p.evaluate(() => (document.getElementById('pratinjau') || {}).textContent || '');
+  cek('pratinjau memakai contoh nama sungguhan, bukan {{nama}} mentah',
+    /Bapak Budi/.test(pratinjau) && !/\{\{/.test(pratinjau), pratinjau);
+
+  console.log('\n=== F1. LAMPIRAN BERKAS ===');
+  const kotak = await p.evaluate(() => {
+    const f = document.querySelector('#isi input[type=file]');
+    return f ? { ada: true, terima: f.accept, ket: (document.getElementById('fkBerkasKet') || {}).textContent || '' } : { ada: false };
+  });
+  cek('ada pemilih berkas di Kirim Pesan', kotak.ada, kotak);
+  cek('menerima PDF dan gambar', /pdf/i.test(kotak.terima) && /png/i.test(kotak.terima), kotak.terima);
+  cek('batas ukurannya tertulis sebelum petugas mencoba', /3 MB/.test(kotak.ket), kotak.ket);
+
+  /* Berkas kebesaran ditolak DI LAYAR, tanpa perlu diunggah dulu. */
+  const sebelumUnggah = await p.evaluate(async () => {
+    const r = await fetch('/api/blast', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tindakan: '__hitung', data: {} }) });
+    return (await r.json()).unggah || 0;
+  });
+  const besar = await p.evaluate(async () => {
+    const f = document.querySelector('#isi input[type=file]');
+    const berkas = new File([new Uint8Array(4 * 1024 * 1024)], 'besar.pdf', { type: 'application/pdf' });
+    const dt = new DataTransfer(); dt.items.add(berkas); f.files = dt.files;
+    f.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 400));
+    return { ket: document.getElementById('fkBerkasKet').textContent, id: document.getElementById('fkBerkasId').value };
+  });
+  cek('berkas kebesaran ditolak di layar', /melebihi batas/i.test(besar.ket), besar.ket);
+  cek('dan tidak ikut terkirim ke server', besar.id === '', besar.id);
+
+  const kecil = await p.evaluate(async () => {
+    const f = document.querySelector('#isi input[type=file]');
+    const berkas = new File([new Uint8Array(1024)], 'Panduan Zakat.pdf', { type: 'application/pdf' });
+    const dt = new DataTransfer(); dt.items.add(berkas); f.files = dt.files;
+    f.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 700));
+    return { ket: document.getElementById('fkBerkasKet').textContent, id: document.getElementById('fkBerkasId').value };
+  });
+  cek('berkas yang muat langsung diunggah', kecil.id === 'f_uji1', kecil);
+  cek('namanya ditampilkan supaya petugas yakin', /Panduan Zakat/.test(kecil.ket), kecil.ket);
+
+  await p.evaluate(() => { location.hash = '#massal'; });
+  await p.waitForTimeout(800);
+  const massal = await p.evaluate(() => ({
+    berkas: !!document.querySelector('#isi input[type=file]'),
+    keping: Array.from(document.querySelectorAll('#isi .keping')).map((k) => k.textContent.trim()),
+  }));
+  cek('Kiriman Massal juga bisa melampirkan berkas', massal.berkas, massal);
+  cek('dan juga punya keping penanda', massal.keping.includes('{{nama}}'), massal.keping);
+
+  console.log('\n=== F1b. CENTANG SAMPAI DAN DIBACA ===');
+  await p.evaluate(() => { location.hash = '#antrean'; });
+  await p.waitForTimeout(800);
+  const centang = await p.evaluate(() => {
+    const cari = (t) => Array.from(document.querySelectorAll('#isi .badge')).find((b) => b.textContent.trim() === t);
+    const diserahkan = cari('diserahkan'), terkirim = cari('terkirim');
+    return {
+      terkirimPunyaCentang: !!(terkirim && terkirim.querySelector('svg')),
+      diserahkanTanpaCentang: !!(diserahkan && !diserahkan.querySelector('svg')),
+    };
+  });
+  cek('status terkirim ditandai centang', centang.terkirimPunyaCentang, centang);
+  cek('status yang belum sampai HP tidak diberi centang', centang.diserahkanTanpaCentang, centang);
+
+  await p.evaluate(() => { location.hash = '#dasbor'; });
+  await p.waitForTimeout(800);
+  const dasbor = await p.evaluate(() => {
+    const ubin = Array.from(document.querySelectorAll('#isi .ringkas .stat'));
+    return {
+      jumlah: ubin.length,
+      /* Satu baris berarti semuanya berbagi tepi atas yang sama. Kalau ada
+         yang turun, angkanya langsung terlihat berbeda di sini. */
+      barisAtas: new Set(ubin.map((u) => Math.round(u.getBoundingClientRect().top))).size,
+      garisAksen: ubin.filter((u) => getComputedStyle(u, '::before').display !== 'none').length,
+      isi: ubin.map((u) => ({
+        judul: u.querySelector('.lbl').textContent.trim(),
+        svg: !!u.querySelector('.lbl svg'),
+        nilai: u.querySelector('.val').textContent.trim(),
+        catatan: (u.querySelector('.ket') || {}).textContent || '',
+        terpotong: u.querySelector('.ket').scrollWidth > u.querySelector('.ket').clientWidth + 1,
+      })),
+    };
+  });
+  const uSampai = dasbor.isi.find((u) => /Sampai di HP/i.test(u.judul));
+  const uDibaca = dasbor.isi.find((u) => /Dibaca/i.test(u.judul));
+  cek('dasbor menampilkan berapa yang sampai di HP', !!uSampai && uSampai.nilai === '15', uSampai);
+  cek('dan berapa yang sudah dibaca', !!uDibaca && uDibaca.nilai === '9', uDibaca);
+  cek('keduanya memakai gambar centang, bukan kata saja', !!(uSampai && uSampai.svg && uDibaca && uDibaca.svg), { uSampai, uDibaca });
+  cek('disertai persentasenya terhadap yang terkirim', /83%/.test(uSampai.catatan) && /50%/.test(uDibaca.catatan), { s: uSampai.catatan, d: uDibaca.catatan });
+  cek('keenam angka muat dalam SATU baris', dasbor.jumlah === 6 && dasbor.barisAtas === 1, dasbor);
+  cek('tanpa garis aksen di tepi kiri kotak', dasbor.garisAksen === 0, dasbor.garisAksen);
+  cek('tidak ada keterangan yang terpotong', dasbor.isi.every((u) => !u.terpotong), dasbor.isi.filter((u) => u.terpotong));
 
   console.log('\n=== F2. LAYAR QR MENUNGGU, TIDAK MENYURUH ULANG ===');
   /* Ini bug yang paling memakan waktu di lapangan: QR belum ada saat tombol

@@ -107,7 +107,21 @@ const LENCANA_STATUS = {
   menunggu: 'amber',
   memindai: 'amber',
 };
-const lencana = (teks) => `<span class="badge ${LENCANA_STATUS[teks] || ''}">${H(teks)}</span>`;
+/* Centang WhatsApp, digambar sendiri supaya artinya sama persis dengan yang
+   dilihat donatur di HP-nya: satu centang = sampai di server, dua centang =
+   sampai di HP, dua centang biru = sudah dibaca. */
+function centang(jumlah, biru) {
+  const warna = biru ? '#2196f3' : 'currentColor';
+  const satu = (geser) => `<path d="M1.5 ${geser} 4 ${geser + 2.5} 9 ${geser - 2.5}" />`;
+  return `<svg viewBox="0 0 ${jumlah > 1 ? 14 : 11} 12" width="${jumlah > 1 ? 16 : 13}" height="12" fill="none"
+    stroke="${warna}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+    style="vertical-align:-1px" aria-hidden="true">
+    ${satu(7)}${jumlah > 1 ? '<path d="M5.5 7 8 9.5 13 4.5" />' : ''}</svg>`;
+}
+const CENTANG = { terkirim: centang(1, false), sampai: centang(2, false), dibaca: centang(2, true) };
+const persen = (bagian, dari) => (dari > 0 ? Math.round((bagian / dari) * 100) + '%' : '—');
+
+const lencana = (teks) => `<span class="badge ${LENCANA_STATUS[teks] || ''}">${CENTANG[teks] ? CENTANG[teks] + ' ' : ''}${H(teks)}</span>`;
 
 const kartu = (isi, kelas = '') => `<section class="card ${kelas}">${isi}</section>`;
 
@@ -183,6 +197,95 @@ function tandaiMenu(kode) {
   $$('.tn-item').forEach((n) => n.classList.remove('active'));
   const a = $('#nav_' + kode);
   if (a) a.classList.add('active');
+}
+
+/* ================= perkakas komposer: penanda nama & lampiran =============
+ *
+ * Penggantian {{nama}} per kontak sebenarnya sudah jalan sejak awal — tiap
+ * pesan diisi dengan nama kontaknya masing-masing saat masuk antrean. Yang
+ * tidak ada adalah sesuatu yang MEMBERITAHU petugas bahwa penandanya ada.
+ * Tanpa itu, fiturnya sama saja dengan tidak ada.
+ */
+const PENANDA = [
+  { tulis: '{{nama}}', jelas: 'nama kontak' },
+  { tulis: '{{kantor}}', jelas: 'kantor kontak' },
+];
+
+const kepingPenanda = () => `
+  <div class="row" style="gap:6px;margin-top:6px;align-items:center">
+    <span class="muted" style="font-size:11.5px">Sisipkan:</span>
+    ${PENANDA.map((p) => `<button type="button" class="keping" data-sisip="${p.tulis}" title="Diganti dengan ${p.jelas} tiap penerima">${p.tulis}</button>`).join('')}
+  </div>`;
+
+/* Petugas menyusun kalimatnya dulu, baru memutuskan di mana namanya muncul:
+   "Assalamualaikum {{nama}}, terima kasih…". Jadi penandanya harus masuk TEPAT
+   di posisi kursor, bukan ditempel di ujung pesan. */
+function sisipDiKursor(area, penanda) {
+  const teks = area.value || '';
+  const a = (area.selectionStart == null) ? teks.length : area.selectionStart;
+  const b = (area.selectionEnd == null) ? a : area.selectionEnd;
+  area.value = teks.slice(0, a) + penanda + teks.slice(b);
+  const posBaru = a + penanda.length;
+  area.focus();
+  try { area.setSelectionRange(posBaru, posBaru); } catch (e) { /* peramban lama */ }
+  area.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function pasangKeping(el, area) {
+  $$('[data-sisip]', el).forEach((b) => {
+    b.onclick = () => sisipDiKursor(area, b.dataset.sisip);
+  });
+}
+
+const JENIS_LAMPIRAN = '.pdf,.jpg,.jpeg,.png,.webp,.mp4,.mp3,.doc,.docx,.xls,.xlsx';
+const BATAS_LAMPIRAN_MB = 3;
+
+const kotakLampiran = (idAwalan) => `
+  <div class="field">
+    <label>Lampiran <span class="muted" style="font-weight:400">(opsional)</span></label>
+    <input type="file" id="${idAwalan}Berkas" accept="${JENIS_LAMPIRAN}">
+    <input type="hidden" name="berkasId" id="${idAwalan}BerkasId">
+    <div class="muted" id="${idAwalan}BerkasKet" style="font-size:11.5px;margin-top:4px">
+      PDF, gambar, Word, Excel, MP4, MP3 &middot; maksimal ${BATAS_LAMPIRAN_MB} MB.
+    </div>
+  </div>`;
+
+/* Mengunggah lampiran begitu dipilih, bukan saat tombol kirim ditekan.
+   Unggahan yang menumpang tombol kirim membuat satu klik bisa menggantung
+   setengah menit tanpa penjelasan, dan kalau gagal, pesannya ikut hilang. */
+function pasangLampiran(el, idAwalan) {
+  const pilih = $('#' + idAwalan + 'Berkas', el);
+  const simpan = $('#' + idAwalan + 'BerkasId', el);
+  const ket = $('#' + idAwalan + 'BerkasKet', el);
+  if (!pilih) return;
+  const bawaan = ket.innerHTML;
+
+  pilih.onchange = async () => {
+    const f = pilih.files && pilih.files[0];
+    simpan.value = '';
+    if (!f) { ket.innerHTML = bawaan; return; }
+    if (f.size > BATAS_LAMPIRAN_MB * 1024 * 1024) {
+      ket.innerHTML = `<span style="color:var(--red)">Berkas ${(f.size / 1024 / 1024).toFixed(1)} MB melebihi batas ${BATAS_LAMPIRAN_MB} MB. Kecilkan dulu, atau cukup tulis tautannya di dalam pesan.</span>`;
+      pilih.value = '';
+      return;
+    }
+    ket.textContent = 'Mengunggah ' + f.name + '…';
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(',')[1] || '');
+        r.onerror = () => rej(new Error('Berkas tidak terbaca'));
+        r.readAsDataURL(f);
+      });
+      const h = await rpc('berkas.unggah', { nama: f.name, tipe: f.type || 'application/octet-stream', base64 });
+      simpan.value = h.berkas.id;
+      ket.innerHTML = `Siap dikirim: <strong>${H(h.berkas.nama)}</strong> (${Math.max(1, Math.round(h.berkas.byte / 1024))} KB)`;
+    } catch (e) {
+      simpan.value = '';
+      pilih.value = '';
+      ket.innerHTML = `<span style="color:var(--red)">${H(e.message)}</span>`;
+    }
+  };
 }
 
 /* Layar pemindaian QR.
@@ -271,11 +374,15 @@ halaman.dasbor = {
     let d;
     try { d = await rpc('dasbor.ringkas'); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
 
+    /* Judulnya memuat gambar centang, jadi tidak boleh dilolos-HTML — nilainya
+       datang dari daftar tetap di atas, bukan dari masukan siapa pun.
+       Keterangannya sengaja pendek: enam ubin dalam satu baris hanya terbaca
+       kalau tiap barisnya muat tanpa dipotong. */
     const tile = (judul, nilai, catatan, warna) => `
       <div class="stat">
-        <div class="lbl">${H(judul)}</div>
+        <div class="lbl">${judul}</div>
         <div class="val"${warna ? ` style="color:${warna}"` : ''}>${H(nilai)}</div>
-        <div class="muted" style="font-size:11.5px;margin-top:6px">${H(catatan)}</div>
+        <div class="ket">${H(catatan)}</div>
       </div>`;
 
     const maks = Math.max(1, ...d.grafik.map((g) => g.total));
@@ -288,11 +395,13 @@ halaman.dasbor = {
     }).join('');
 
     el.innerHTML = `
-      <div class="stats">
-        ${tile('Pesan hari ini', fmtAngka(d.hariIni.total), `${fmtAngka(d.hariIni.terkirim)} terkirim · ${fmtAngka(d.hariIni.gagal)} gagal`)}
-        ${tile('Menunggu di antrean', fmtAngka(d.antrean.antre), d.antrean.dalamJamKirim ? `Jam kirim ${d.antrean.jamKirim}` : `Di luar jam kirim (${d.antrean.jamKirim})`, d.antrean.antre ? 'var(--accent)' : '')}
-        ${tile('Kontak terdaftar', fmtAngka(d.kontak.total), 'Daftar kontak aplikasi ini')}
-        ${tile('Gagal kirim', fmtAngka(d.keseluruhan.gagal), 'Perlu ditinjau di menu Antrean', d.keseluruhan.gagal ? 'var(--red)' : '')}
+      <div class="ringkas">
+        ${tile('Terkirim hari ini', fmtAngka(d.hariIni.terkirim), `dari ${fmtAngka(d.hariIni.total)} pesan`)}
+        ${tile(`${CENTANG.sampai} Sampai di HP`, fmtAngka(d.hariIni.sampai), `${persen(d.hariIni.sampai, d.hariIni.terkirim)} dari terkirim`)}
+        ${tile(`${CENTANG.dibaca} Dibaca`, fmtAngka(d.hariIni.dibaca), `${persen(d.hariIni.dibaca, d.hariIni.terkirim)} dari terkirim`, d.hariIni.dibaca ? 'var(--green)' : '')}
+        ${tile('Menunggu antrean', fmtAngka(d.antrean.antre), d.antrean.dalamJamKirim ? d.antrean.jamKirim : `di luar jam kirim`, d.antrean.antre ? 'var(--accent)' : '')}
+        ${tile('Gagal kirim', fmtAngka(d.keseluruhan.gagal), 'perlu ditinjau', d.keseluruhan.gagal ? 'var(--red)' : '')}
+        ${tile('Kontak', fmtAngka(d.kontak.total), 'penerima terdaftar')}
       </div>
 
       <div class="grid-2">
@@ -537,12 +646,10 @@ halaman.kirim = {
                 </span>
               </div>
               <textarea name="teks" rows="9" required placeholder="Assalamu'alaikum {{nama}}, ..."></textarea>
-              <div class="muted" style="font-size:11.5px;margin-top:4px">Variabel yang tersedia: <code>{{nama}}</code>, <code>{{kantor}}</code></div>
+              ${kepingPenanda()}
+              <div class="muted" style="font-size:11.5px;margin-top:4px">Penanda diganti sendiri dengan data kontak penerima. Kontak tanpa nama disapa &ldquo;Bapak/Ibu&rdquo;.</div>
             </div>
-            <div class="field">
-              <label>Tautan berkas <span class="muted" style="font-weight:400">(opsional)</span></label>
-              <input name="berkasUrl" placeholder="https://… (gambar, PDF kwitansi, dsb.)">
-            </div>
+            ${kotakLampiran('fk')}
             <button class="btn btn-primary btn-block">Masukkan ke antrean kirim</button>
           </form>`)}
 
@@ -559,8 +666,17 @@ halaman.kirim = {
 
     const area = $('[name=teks]', el);
     const pratinjau = $('#pratinjau', el);
-    const perbarui = () => { pratinjau.textContent = area.value || 'Isi pesan akan tampil di sini…'; };
+    /* Pratinjau memakai contoh nama sungguhan, bukan menampilkan {{nama}} mentah:
+       yang perlu dilihat petugas adalah kalimat yang AKAN diterima donatur. */
+    const perbarui = () => {
+      const isi = area.value || '';
+      pratinjau.textContent = isi
+        ? isi.replace(/\{\{\s*nama\s*\}\}/g, 'Bapak Budi').replace(/\{\{\s*kantor\s*\}\}/g, 'KLL Sewon')
+        : 'Isi pesan akan tampil di sini…';
+    };
     area.addEventListener('input', perbarui);
+    pasangKeping(el, area);
+    pasangLampiran(el, 'fk');
 
     $('#pilihTemplat', el).onchange = (ev) => {
       const t = templat.baris.find((x) => x.id === ev.target.value);
@@ -629,8 +745,11 @@ halaman.massal = {
                 </select>
                 </span>
               </div>
-              <textarea name="teks" rows="8" required></textarea>
+              <textarea name="teks" rows="8" required placeholder="Assalamu'alaikum {{nama}}, ..."></textarea>
+              ${kepingPenanda()}
+              <div class="muted" style="font-size:11.5px;margin-top:4px">Tiap penerima menerima namanya sendiri. Kontak tanpa nama disapa &ldquo;Bapak/Ibu&rdquo;.</div>
             </div>
+            ${kotakLampiran('fm')}
             <div style="border-radius:var(--radius);background:var(--accent-soft);padding:14px;font-size:12px;color:var(--text2);margin-bottom:12px">
               Kontak yang sudah berhenti berlangganan atau masuk daftar hitam otomatis dilewati. Sertakan kalimat cara berhenti pada pesan ajakan.
             </div>
@@ -661,6 +780,8 @@ halaman.massal = {
       const t = templat.baris.find((x) => x.id === ev.target.value);
       if (t) $('[name=teks]', el).value = t.isi;
     };
+    pasangKeping(el, $('[name=teks]', el));
+    pasangLampiran(el, 'fm');
 
     $$('[data-henti]', el).forEach((b) => b.onclick = () => konfirmasi(
       'Hentikan kiriman?', 'Pesan yang belum terkirim akan dibatalkan. Yang sudah terkirim tidak dapat ditarik.',

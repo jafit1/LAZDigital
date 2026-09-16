@@ -4283,3 +4283,55 @@ html.plat-sentuh .sp-ulang{min-height:34px;padding:6px 13px}
 #lencanaDriver{justify-content:center;text-align:center;padding:6px 10px;line-height:1.35;white-space:normal}
 .app.collapsed #lencanaDriver{display:none}
 .tn-icon span{font-size:12.5px;font-weight:600}
+
+/* ========================================================================
+   39. KEPING PENANDA — tombol penyisip {{nama}} di komposer Broadcast
+   Bergaris putus-putus supaya terbaca sebagai "tempel ini", bukan sebagai
+   tombol aksi yang mengirim sesuatu.
+   ======================================================================== */
+.keping{
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11.5px; font-weight:600; line-height:1;
+  padding:5px 9px; border-radius:999px; cursor:pointer;
+  border:1px dashed var(--border); background:var(--surface2); color:var(--text2);
+  transition:.14s;
+}
+.keping:hover{ border-color:var(--accent); color:var(--accent-d); background:var(--accent-soft); }
+.keping:active{ scale:.97 }
+
+/* Berkas lampiran: pemilih bawaan peramban dibuat senada dengan isian lain. */
+input[type="file"]{
+  font-size:12.5px; padding:7px 10px; cursor:pointer;
+}
+input[type="file"]::file-selector-button{
+  font-family:var(--sans); font-size:12px; font-weight:600;
+  margin-right:10px; padding:5px 12px; cursor:pointer;
+  border:1px solid var(--border); border-radius:8px;
+  background:var(--surface2); color:var(--text2);
+}
+input[type="file"]::file-selector-button:hover{ border-color:var(--accent); color:var(--accent-d); }
+
+/* ========================================================================
+   40. DERET RINGKASAN BROADCAST — satu baris, enam angka
+   Dipisah dari .stats bawaan karena kebutuhannya berbeda: yang ini dibaca
+   sekilas sebagai satu deret, bukan sebagai enam kartu yang berdiri
+   sendiri-sendiri. Maka lebih rapat, tanpa bayangan, tanpa garis aksen di
+   tepi kiri, dan tanpa efek terangkat saat disentuh tetikus — ubinnya memang
+   tidak bisa diklik, jadi berpura-pura bisa hanya menyesatkan.
+   ======================================================================== */
+.ringkas{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:18px }
+.ringkas .stat{
+  padding:12px 14px; cursor:default; box-shadow:none; min-width:0;
+  display:flex; flex-direction:column; gap:3px;
+}
+.ringkas .stat::before{ display:none }
+.ringkas .stat:hover{ transform:none; box-shadow:none; border-color:var(--border) }
+.ringkas .lbl{
+  margin:0; gap:5px; justify-content:flex-start; font-size:11.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ringkas .val{ font-size:21px; line-height:1.15 }
+.ringkas .ket{ font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+/* Di layar sempit satu baris memaksa angkanya terpotong, jadi dipatahkan. */
+@media (max-width:1100px){ .ringkas{ grid-template-columns:repeat(3,1fr) } }
+@media (max-width:620px){ .ringkas{ grid-template-columns:repeat(2,1fr) } }

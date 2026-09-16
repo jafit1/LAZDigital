@@ -11,6 +11,7 @@ const auth = require('../lib/blast/auth');
 const { PERAN, punyaIzin, kantorTerkunci, IZIN } = require('../lib/blast/peran');
 const setelanLib = require('../lib/blast/setelan');
 const kontakLib = require('../lib/blast/kontak');
+const berkasLib = require('../lib/blast/berkas');
 const antreanLib = require('../lib/blast/antrean');
 const webhookLib = require('../lib/blast/webhook');
 const { pilihDriver, DRIVER } = require('../lib/blast/pengirim');
@@ -344,6 +345,25 @@ tindakan['templat.hapus'] = { izin: 'pesan.kirim', async jalankan({ data }) {
 } };
 
 // --- Pesan ----------------------------------------------------------------
+/* Lampiran disebut lewat id, bukan disalin ke tiap pesan: satu PDF untuk
+   lima ratus penerima cukup disimpan sekali, dan gateway pun menariknya sekali
+   lalu memakainya berulang. */
+async function lampiran(berkasId) {
+  if (!berkasId) return {};
+  const b = await berkasLib.ambilKeterangan(berkasId);
+  if (!b) throw new GalatAplikasi('Lampiran tidak ditemukan atau sudah kedaluwarsa. Unggah ulang berkasnya.', 404);
+  return { berkasId: b.id, namaBerkas: b.nama, tipeBerkas: b.tipe, jenisBerkas: b.jenis };
+}
+
+tindakan['berkas.unggah'] = { izin: 'pesan.kirim', async jalankan({ data }) {
+  const berkas = await berkasLib.simpanBerkas({
+    nama: data.nama, tipe: data.tipe, base64: data.base64,
+  });
+  /* base64-nya tidak dikembalikan: tampilan sudah memegang berkasnya sendiri,
+     dan memantulkannya balik hanya menggandakan lalu lintas beberapa megabita. */
+  return { berkas };
+} };
+
 tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
   const { bersih, galat } = util.periksaSkema(data, {
     perangkatId: { wajib: true, label: 'Perangkat pengirim', maks: 60 },
@@ -351,6 +371,7 @@ tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
     teks: { wajib: true, label: 'Isi pesan', maks: 4000 },
     berkasUrl: { label: 'Tautan berkas', maks: 500 },
     namaBerkas: { label: 'Nama berkas', maks: 120 },
+    berkasId: { label: 'Lampiran', maks: 60 },
   });
   if (galat.length) throw new GalatAplikasi(galat.join('. '));
 
@@ -370,6 +391,7 @@ tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
       teks: isiPlaceholder(bersih.teks, { nama: (kontak && kontak.nama) || 'Bapak/Ibu', kantor: (kontak && kontak.kantor) || '' }),
       berkasUrl: bersih.berkasUrl,
       namaBerkas: bersih.namaBerkas,
+      ...(await lampiran(bersih.berkasId)),
     },
     prioritas: 2, // pesan tunggal didahulukan atas kiriman massal
     jadwal: data.jadwal || undefined,
@@ -429,6 +451,7 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
     perangkatId: { wajib: true, label: 'Perangkat pengirim', maks: 60 },
     teks: { wajib: true, label: 'Isi pesan', maks: 4000 },
     segmen: { label: 'Segmen', maks: 40 },
+    berkasId: { label: 'Lampiran', maks: 60 },
   });
   if (galat.length) throw new GalatAplikasi(galat.join('. '));
 
@@ -458,6 +481,14 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
     dibuat: sekarang(),
     oleh: pengguna.id,
   };
+  /* Diperiksa SEBELUM ratusan pesan diantrekan: lampiran yang sudah kedaluwarsa
+     lebih baik ketahuan sekarang daripada nanti gagal satu per satu. */
+  const berkasMassal = await lampiran(bersih.berkasId);
+  if (berkasMassal.berkasId) {
+    massal.berkasId = berkasMassal.berkasId;
+    massal.namaBerkas = berkasMassal.namaBerkas;
+  }
+
   await db.simpan(`massal:${massal.id}`, massal);
   await db.tambahKeHimpunan('massal:daftar', massal.id);
 
@@ -474,6 +505,7 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
           kantor: k.kantor || '',
           lembaga: 'LAZISMU Bantul',
         }),
+        ...berkasMassal,
       },
       prioritas: 6,
       jadwal,

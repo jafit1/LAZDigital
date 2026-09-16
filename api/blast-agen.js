@@ -23,6 +23,7 @@ const { KUNCI_PESAN, KUNCI_ANTREAN, KUNCI_SERAHAN, catatKeDaftar, prosesAntrean 
 const { kirimKejadian } = require('../lib/blast/webhook');
 const mandiri = require('../lib/blast/pengirim/mandiri');
 const kontakLib = require('../lib/blast/kontak');
+const berkasLib = require('../lib/blast/berkas');
 const { cariBalasan } = require('../lib/blast/balasan');
 
 const KUNCI_PERANGKAT = (i) => `perangkat:${i}`;
@@ -31,6 +32,14 @@ const KUNCI_PERANGKAT = (i) => `perangkat:${i}`;
    kali ketika ada dua gateway menyala, atau satu gateway yang menarik ulang
    karena jawabannya hilang di tengah jalan. */
 const KUNCI_KLAIM = (pesanId) => `agen:klaim:${pesanId}`;
+/* Penghubung id pesan WhatsApp ke id pesan kita, dipakai laporan centang. */
+const KUNCI_LUAR = (idLuar) => `idluar:${idLuar}`;
+const LUAR_DETIK = 7 * 24 * 60 * 60;
+
+/* Status hanya boleh MAJU. WhatsApp kadang mengirim centang lama menyusul yang
+   baru, dan tanpa urutan ini sebuah pesan yang sudah dibaca bisa turun lagi
+   jadi "sampai" — laporannya lalu terlihat mundur tanpa sebab. */
+const URUTAN = { antre: 0, diserahkan: 1, terkirim: 2, sampai: 3, dibaca: 4 };
 const KLAIM_DETIK = 15 * 60;
 
 const MAKS_AMBIL = 20;
@@ -176,6 +185,13 @@ async function ambil({ data }) {
       teks: isiPlaceholder(String((pesan.isi && pesan.isi.teks) || ''), { nama: pesan.nama || '' }),
       berkasUrl: (pesan.isi && pesan.isi.berkasUrl) || '',
       namaBerkas: (pesan.isi && pesan.isi.namaBerkas) || '',
+      /* Yang dikirim hanya KETERANGAN lampirannya. Isi berkasnya ditarik
+         terpisah lewat tindakan "berkas" dan disimpan gateway — satu PDF untuk
+         lima ratus penerima kalau ikut di tiap pekerjaan berarti megabita yang
+         sama diunduh lima ratus kali. */
+      berkasId: (pesan.isi && pesan.isi.berkasId) || '',
+      tipeBerkas: (pesan.isi && pesan.isi.tipeBerkas) || '',
+      jenisBerkas: (pesan.isi && pesan.isi.jenisBerkas) || '',
     });
   }
   return { pekerjaan, sisa: Math.max(0, antre.length - pekerjaan.length), dorong: laporan };
@@ -208,6 +224,10 @@ async function lapor({ data }) {
       pesan.dikirim = sekarang();
       pesan.galatTerakhir = '';
       await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+      /* Centang sampai dan dibaca datang belakangan, dan WhatsApp hanya
+         menyebut id pesannya sendiri — bukan id kita. Indeks ini yang
+         menghubungkan keduanya. */
+      if (pesan.idLuar) await db.simpan(KUNCI_LUAR(pesan.idLuar), pesan.id, { detik: LUAR_DETIK });
       await kirimKejadian('terkirim', pesan, setelan);
       terkirim++;
       continue;
@@ -289,7 +309,43 @@ async function masuk({ data }) {
   return { pesanId: pesan.id, balas: balasan ? balasan.balasan : '', tindakan: balasan ? balasan.tindakan : '' };
 }
 
-const TINDAKAN = { halo, 'lapor-perangkat': laporPerangkat, ambil, lapor, masuk };
+/* --- berkas: isi lampiran, ditarik sekali lalu disimpan gateway ---------- */
+async function berkas({ data }) {
+  const berkasId = bersihkanTeks(data.berkasId || '', 60);
+  if (!berkasId) throw Object.assign(new Error('berkasId wajib diisi'), { kode: 400 });
+  const b = await berkasLib.ambilIsi(berkasId);
+  if (!b) throw Object.assign(new Error('Lampiran tidak ditemukan atau sudah kedaluwarsa'), { kode: 404 });
+  return { berkas: b };
+}
+
+/* --- lapor-status: centang sampai dan dibaca dari WhatsApp --------------- */
+async function laporStatus({ data }) {
+  const daftar = Array.isArray(data.hasil) ? data.hasil.slice(0, 200) : [];
+  if (!daftar.length) return { diproses: 0 };
+
+  const setelan = await ambilSetelan();
+  let naik = 0, diabaikan = 0;
+  for (const h of daftar) {
+    const idLuar = bersihkanTeks(h.idLuar || '', 120);
+    const status = ['sampai', 'dibaca'].includes(h.status) ? h.status : '';
+    if (!idLuar || !status) { diabaikan++; continue; }
+
+    const pesanId = await db.ambil(KUNCI_LUAR(idLuar));
+    if (!pesanId) { diabaikan++; continue; }
+    const pesan = await db.ambil(KUNCI_PESAN(pesanId));
+    if (!pesan) { diabaikan++; continue; }
+
+    if ((URUTAN[status] || 0) <= (URUTAN[pesan.status] || 0)) { diabaikan++; continue; }
+    pesan.status = status;
+    pesan[status] = sekarang();
+    await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+    await kirimKejadian(status, pesan, setelan);
+    naik++;
+  }
+  return { diproses: daftar.length, naik, diabaikan };
+}
+
+const TINDAKAN = { halo, 'lapor-perangkat': laporPerangkat, ambil, lapor, masuk, berkas, 'lapor-status': laporStatus };
 
 module.exports = async function penangan(req, res) {
   if (req.method !== 'POST') return gagal(res, 405, 'Gunakan metode POST');

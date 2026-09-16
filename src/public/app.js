@@ -83,8 +83,8 @@ var MENU=[
   {id:'laporan',label:'Laporan',ic:NAV_ICONS.laporan,mod:'laporan'},
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
   {id:'settings',label:'Pengaturan',ic:NAV_ICONS.settings,mod:'settings'},
-  {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'},
-  {id:'broadcast',label:'Broadcast',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/blast.html'}
+  {id:'broadcast',label:'Broadcast',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/blast.html'},
+  {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
 function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }
 
