@@ -108,8 +108,13 @@ async function laporPerangkat({ data }) {
     status,
     nomor: normalkanNomor(data.nomor || '') || '',
     /* QR hanya berumur pendek; menyimpannya lama tidak ada gunanya dan justru
-       menampilkan kode basi di layar amil. */
-    qr: status === 'menunggu' ? bersihkanTeks(data.qr || '', 4000) : '',
+       menampilkan kode basi di layar amil.
+
+       Yang dikirim gateway adalah GAMBARNYA (data URL PNG), bukan teks QR-nya —
+       teks itu kredensial yang tidak boleh keluar dari komputer gateway. Satu
+       gambar 264px berukuran sekitar 6 KB, jadi batasnya harus jauh di atas itu:
+       dipotong sedikit saja, QR-nya rusak dan tidak bisa dipindai. */
+    qr: status === 'menunggu' ? bersihkanTeks(data.qr || '', 20000) : '',
     keterangan: bersihkanTeks(data.keterangan || '', 300),
     agen: bersihkanTeks(data.agen || '', 60),
     waktu: sekarang(),

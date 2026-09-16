@@ -224,6 +224,24 @@ tindakan['perangkat.putus'] = { izin: 'perangkat.ubah', async jalankan({ data, p
   return { status: 'terputus' };
 } };
 
+tindakan['perangkat.gantiNomor'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
+  const perangkat = await db.ambil(`perangkat:${data.id}`);
+  if (!perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);
+  const setelan = await setelanLib.ambilSetelan();
+  const driver = pilihDriver(setelan, perangkat);
+  if (typeof driver.gantiNomor !== 'function') {
+    throw new GalatAplikasi(`Pengirim "${driver.nama}" tidak mendukung ganti nomor dari sini.`);
+  }
+  const hasil = await driver.gantiNomor(perangkat, setelan);
+  perangkat.status = hasil.status;
+  perangkat.nomor = '';          // nomor lama tidak berlaku lagi
+  perangkat.qrTerakhir = '';
+  perangkat.diubah = sekarang();
+  await db.simpan(`perangkat:${perangkat.id}`, perangkat);
+  await auth.catatAudit(pengguna, 'perangkat.gantiNomor', { id: perangkat.id }, req);
+  return { status: hasil.status, keterangan: hasil.keterangan };
+} };
+
 tindakan['perangkat.periksa'] = { izin: 'perangkat.lihat', async jalankan({ data }) {
   const perangkat = await db.ambil(`perangkat:${data.id}`);
   if (!perangkat) throw new GalatAplikasi('Perangkat tidak ditemukan', 404);

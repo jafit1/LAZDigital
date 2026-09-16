@@ -119,8 +119,15 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       let t = '';
       try { t = JSON.parse(b).tindakan; } catch (_) { /* biar jadi tindakan kosong */ }
+      hitungTindakan[t] = (hitungTindakan[t] || 0) + 1;
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(Object.assign({ ok: true }, JAWABAN[t] || {})));
+      if (t === '__hitung') {
+        return res.end(JSON.stringify({ ok: true,
+          sambung: hitungTindakan['perangkat.sambung'] || 0,
+          periksa: hitungTindakan['perangkat.periksa'] || 0 }));
+      }
+      const khusus = dinamis[t] ? dinamis[t](hitungTindakan[t]) : null;
+      res.end(JSON.stringify(Object.assign({ ok: true }, khusus || JAWABAN[t] || {})));
     });
     return;
   }
@@ -130,6 +137,11 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': TIPE[path.extname(berkas)] || 'text/plain' });
   res.end(fs.readFileSync(berkas));
 });
+
+/* Dipakai uji alur QR: menghitung berapa kali sebuah tindakan dipanggil, dan
+   memberi jawaban yang berubah-ubah menurut urutan panggilan. */
+const hitungTindakan = {};
+const dinamis = {};
 
 const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 'templat', 'webhook', 'pengguna', 'audit', 'setelan'];
 
@@ -275,6 +287,59 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     if (luber) luberDi.push(kode);
   }
   cek('tidak ada halaman yang melebar di layar HP', luberDi.length === 0, luberDi);
+
+  console.log('\n=== F2. LAYAR QR MENUNGGU, TIDAK MENYURUH ULANG ===');
+  /* Ini bug yang paling memakan waktu di lapangan: QR belum ada saat tombol
+     ditekan (perintahnya baru dititipkan), layar menyerah, petugas menekan
+     lagi — dan setiap tekanan membuka sambungan baru yang membatalkan QR
+     sebelumnya. Perintahnya harus dikirim SEKALI, sisanya cuma menanyakan. */
+  await p.setViewportSize({ width: 1280, height: 900 });
+  const QR_PALSU = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+  hitungTindakan['perangkat.sambung'] = 0;
+  hitungTindakan['perangkat.periksa'] = 0;
+  dinamis['perangkat.sambung'] = () => ({ status: 'menunggu', keterangan: 'Permintaan dikirim ke gateway.' });
+  /* Dua tarikan pertama belum ada QR-nya — persis seperti kenyataannya. */
+  dinamis['perangkat.periksa'] = (ke) => (ke >= 3
+    ? { status: 'menunggu', qr: QR_PALSU, keterangan: '' }
+    : { status: 'terputus', qr: '', keterangan: 'Menunggu gateway.' });
+
+  await p.evaluate(() => { location.hash = '#perangkat'; });
+  await p.waitForTimeout(700);
+  await p.click('[data-sambung]');
+  await p.waitForTimeout(600);
+  const awalQR = await p.evaluate(() => ({
+    terbuka: document.getElementById('modalBg').classList.contains('show'),
+    adaRangka: !!document.querySelector('#qrIsi .rangka'),
+    adaGambar: !!document.querySelector('#qrIsi img'),
+  }));
+  cek('layar QR langsung terbuka walau QR-nya belum ada', awalQR.terbuka, awalQR);
+  cek('sementara menunggu, ditampilkan bentuk kasarnya dulu', awalQR.adaRangka && !awalQR.adaGambar, awalQR);
+
+  await p.waitForSelector('#qrIsi img', { timeout: 12000 });
+  const sesudah = await p.evaluate(() => ({
+    src: (document.querySelector('#qrIsi img') || {}).src || '',
+    pesan: (document.getElementById('qrPesan') || {}).textContent || '',
+  }));
+  cek('QR muncul sendiri begitu gateway mengirimnya', sesudah.src.startsWith('data:image/png'), sesudah.src.slice(0, 30));
+  cek('ada petunjuk cara memindainya', /Perangkat Tertaut/i.test(sesudah.pesan), sesudah.pesan);
+
+  const hitung = await p.evaluate(async () => {
+    const r = await fetch('/api/blast', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tindakan: '__hitung', data: {} }),
+    });
+    return r.json();
+  });
+  cek('perintah sambungkan hanya dikirim SEKALI', hitung.sambung === 1, hitung);
+  cek('sisanya cuma menanyakan keadaan', hitung.periksa >= 3, hitung);
+
+  /* Begitu tersambung, layarnya menutup sendiri. */
+  dinamis['perangkat.periksa'] = () => ({ status: 'tersambung', nomor: '628111000111', qr: '' });
+  await p.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), { timeout: 12000 })
+    .then(() => cek('layar menutup sendiri setelah tersambung', true))
+    .catch(() => cek('layar menutup sendiri setelah tersambung', false));
+  delete dinamis['perangkat.sambung'];
+  delete dinamis['perangkat.periksa'];
 
   console.log('\n=== G. LAYAR PEMUATAN MENYATU DENGAN HALAMAN ===');
   /* Layar pembuka harus diperiksa SELAGI terlihat, jadi jawaban status

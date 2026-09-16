@@ -185,6 +185,80 @@ function tandaiMenu(kode) {
   if (a) a.classList.add('active');
 }
 
+/* Layar pemindaian QR.
+ *
+ * Sebelumnya layar ini sekali tembak: begitu tombol ditekan, ia menanyakan QR
+ * lalu langsung menyerah. Padahal QR-nya belum ada — perintahnya baru dititipkan
+ * dan gateway baru mengambilnya beberapa detik kemudian. Akibatnya petugas
+ * menekan tombol berkali-kali, dan setiap tekanan membuka sambungan baru yang
+ * MEMBATALKAN QR sebelumnya, jadi pemindaian tidak pernah selesai.
+ *
+ * Sekarang perintahnya dikirim SEKALI, lalu layar ini hanya menanyakan keadaan
+ * sampai QR-nya datang — dan berhenti sendiri begitu tersambung.
+ */
+async function bukaLayarQR(id, gantiNomor) {
+  let berhenti = false;
+  /* muatUlang() hanya ada di dalam halaman Perangkat, sedangkan fungsi ini
+     berdiri di luar. Jadi penyegarannya lewat wadah halaman yang sedang
+     terbuka — dan kalau petugas keburu pindah halaman, tidak terjadi apa-apa. */
+  const segarkan = () => {
+    const wadah = $('#isiHalaman');
+    if (wadah && negara.halaman === 'perangkat') halaman.perangkat.gambar(wadah).catch(() => {});
+  };
+  const tutupDanBerhenti = () => { berhenti = true; tutupModal(); segarkan(); };
+
+  modal(gantiNomor ? 'Ganti nomor WhatsApp' : 'Sambungkan WhatsApp', `
+    <div id="qrIsi" style="text-align:center;padding:8px 0">
+      <div class="rangka" style="width:264px;height:264px;margin:0 auto;border-radius:var(--radius)"></div>
+      <p class="muted" id="qrPesan" style="margin-top:14px">Menghubungi gateway…</p>
+    </div>`, null,
+    '<button class="btn" id="qrTutup" type="button">Tutup</button>');
+  $('#qrTutup').onclick = tutupDanBerhenti;
+
+  const tulis = (isiHtml, pesan) => {
+    const w = $('#qrIsi');
+    if (!w) { berhenti = true; return; }   // modal sudah ditutup petugas
+    w.innerHTML = isiHtml + `<p class="muted" id="qrPesan" style="margin-top:14px;font-size:12px">${H(pesan)}</p>`;
+  };
+
+  try {
+    await rpc(gantiNomor ? 'perangkat.gantiNomor' : 'perangkat.sambung', { id });
+  } catch (e) {
+    tulis('', e.message);
+    return;
+  }
+
+  const mulai = Date.now();
+  const BATAS_MS = 3 * 60 * 1000;   // QR WhatsApp berganti tiap ~20 detik; 3 menit sudah lebih dari cukup
+  while (!berhenti) {
+    await new Promise((r) => setTimeout(r, 2000));
+    if (berhenti) return;
+    let h;
+    try { h = await rpc('perangkat.periksa', { id }); } catch (e) { continue; }
+    if (berhenti) return;
+
+    if (h.status === 'tersambung') {
+      tulis('<div style="font-size:40px">✓</div>',
+        h.nomor ? `Tersambung sebagai ${h.nomor}.` : 'Tersambung.');
+      toast('Perangkat tersambung.', 'sukses');
+      setTimeout(tutupDanBerhenti, 1400);
+      return;
+    }
+    if (h.qr) {
+      tulis(`<img src="${H(h.qr)}" alt="Kode QR" style="display:block;margin:0 auto;max-width:100%;border:1px solid var(--border);border-radius:var(--radius)">`,
+        'Buka WhatsApp di ponsel → Perangkat Tertaut → Tautkan Perangkat, lalu pindai kode ini.');
+    } else if (Date.now() - mulai > 25000) {
+      tulis('<div class="rangka" style="width:264px;height:264px;margin:0 auto;border-radius:var(--radius)"></div>',
+        h.keterangan || 'Gateway belum menjawab. Pastikan jendela gateway di komputer kantor masih terbuka.');
+    }
+
+    if (Date.now() - mulai > BATAS_MS) {
+      tulis('', 'Sudah tiga menit belum ada yang memindai. Tutup layar ini, lalu coba lagi kalau sudah siap.');
+      return;
+    }
+  }
+}
+
 // ============================================================ halaman
 const halaman = {};
 
@@ -338,6 +412,7 @@ halaman.perangkat = {
             ${bolehUbah ? `
               <button data-sambung="${p.id}" class="btn btn-sm btn-primary">Sambungkan</button>
               <button data-putus="${p.id}" class="btn btn-sm">Putuskan</button>
+              <button data-gantinomor="${p.id}" data-nama="${H(p.nama)}" class="btn btn-sm">Ganti nomor</button>
               <button data-ubah="${p.id}" class="btn btn-sm">Ubah</button>
               <button data-hapus="${p.id}" class="btn btn-sm btn-danger">Hapus</button>` : ''}
           </div>
@@ -401,20 +476,12 @@ halaman.perangkat = {
         muatUlang();
       } catch (e) { toast(e.message, 'galat'); }
     });
-    $$('[data-sambung]', el).forEach((b) => b.onclick = async () => {
-      try {
-        const h = await rpc('perangkat.sambung', { id: b.dataset.sambung });
-        if (h.qr) {
-          modal('Pindai QR', `
-            <p class="muted" style="margin-bottom:14px">Buka WhatsApp di ponsel perangkat ini, lalu pindai kode berikut.</p>
-            <img src="${H(h.qr)}" alt="Kode QR" style="display:block;margin:0 auto;max-width:100%;border:1px solid var(--border);border-radius:var(--radius)">
-            <p class="muted" style="margin-top:14px;font-size:11.5px">${H(h.keterangan || '')}</p>`);
-        } else {
-          toast(h.keterangan || `Status: ${h.status}`, 'sukses');
-        }
-        muatUlang();
-      } catch (e) { toast(e.message, 'galat'); }
-    });
+    $$('[data-sambung]', el).forEach((b) => b.onclick = () => bukaLayarQR(b.dataset.sambung, false));
+    $$('[data-gantinomor]', el).forEach((b) => b.onclick = () => konfirmasi(
+      'Ganti nomor WhatsApp?',
+      `Sesi nomor lama akan dikeluarkan dari perangkat "${b.dataset.nama}", lalu muncul QR untuk nomor baru. `
+      + 'Pesan yang masih antre tetap menunggu dan akan dikirim lewat nomor yang baru.',
+      async () => { await bukaLayarQR(b.dataset.gantinomor, true); }, 'Ya, ganti nomor'));
     $$('[data-putus]', el).forEach((b) => b.onclick = () => konfirmasi(
       'Putuskan perangkat?',
       'Pesan yang masih antre akan menunggu sampai perangkat tersambung kembali.',
