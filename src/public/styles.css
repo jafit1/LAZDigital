@@ -4335,3 +4335,67 @@ input[type="file"]::file-selector-button:hover{ border-color:var(--accent); colo
 /* Di layar sempit satu baris memaksa angkanya terpotong, jadi dipatahkan. */
 @media (max-width:1100px){ .ringkas{ grid-template-columns:repeat(3,1fr) } }
 @media (max-width:620px){ .ringkas{ grid-template-columns:repeat(2,1fr) } }
+
+/* ========================================================================
+   41. PEMILIH KONTAK & PEMILIH PENERIMA — dropdown dengan centang
+   Penerima dipilih dari daftar, bukan diketik sebagai nomor, supaya penanda
+   {{nama}} selalu punya nama untuk diisikan. Panelnya melayang di atas isi
+   halaman (position:absolute) alih-alih mendorongnya turun: formulir yang
+   melompat setiap kali dropdown dibuka membuat tombol kirim berpindah tempat
+   tepat saat hendak ditekan.
+   ======================================================================== */
+.pilih{ position:relative }
+/* Tombolnya memakai kelas .btn-dropdown.select-enhanced-btn yang sama dengan
+   seluruh LAZDigital, jadi bentuk, bayangan, dan cincin fokusnya ikut berubah
+   sendiri kalau tema aplikasi diubah — bukan salinan yang harus disamakan
+   manual tiap kali dan selalu ketinggalan satu langkah. */
+.pilih-tombol{ cursor:pointer }
+.pilih .sel-teks{ color:var(--muted) }
+.pilih.terisi .sel-teks{ color:var(--text); font-weight:600 }
+.pilih-panel{
+  position:absolute; z-index:40; left:0; right:0; top:100%; margin-top:4px;
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:0 12px 32px rgba(0,0,0,.16); overflow:hidden;
+}
+.pilih-atas{ padding:10px 12px; border-bottom:1px solid var(--border2) }
+.pilih-atas input[type="search"]{ width:100%; margin:0 }
+.pilih-isi{ max-height:16rem; overflow-y:auto; padding:4px 0 }
+.pilih-baris{
+  display:flex; align-items:center; gap:10px; margin:0;
+  padding:7px 12px; font-size:13px; font-weight:400; cursor:pointer;
+}
+.pilih-baris:hover{ background:var(--surface2) }
+.pilih-baris input[type="checkbox"]{ width:auto; flex-shrink:0; margin:0 }
+.pilih-nama{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.pilih-ket{ flex-shrink:0; font-size:11.5px; color:var(--muted) }
+/* Kontak yang diblokir tetap TERLIHAT, hanya tidak bisa dicentang. Menyembunyikannya
+   membuat petugas menyangka kontaknya belum ada, lalu membuat kembarannya. */
+.pilih-baris.mati{ opacity:.5; cursor:not-allowed }
+.pilih-baris.mati:hover{ background:transparent }
+
+.penerima{ border:1px solid var(--border); border-radius:var(--radius); overflow:hidden }
+.penerima-baris{
+  display:flex; align-items:center; gap:10px; margin:0;
+  padding:9px 12px; font-size:13px; font-weight:400; cursor:pointer;
+}
+.penerima-baris:hover{ background:var(--surface2) }
+.penerima-baris input{ width:auto; flex-shrink:0; margin:0 }
+.penerima-baris.semua{ border-bottom:1px solid var(--border2) }
+.penerima-daftar{ max-height:15rem; overflow-y:auto; background:var(--surface2) }
+.penerima-judul{
+  padding:8px 12px 4px; font-size:11px; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--muted);
+}
+
+/* Kolom tindakan pada tabel.
+   .actions-cell membuat selnya sendiri jadi display:flex — dan sel yang bukan
+   lagi table-cell keluar dari perhitungan lebar kolom. Dengan dua tombol
+   akibatnya belum terlihat; begitu ada tombol ketiga, seluruh kolom terdorong
+   melewati tepi kartu dan justru tombolnya yang hilang dari pandangan.
+   Di sini selnya dikembalikan jadi sel tabel biasa, dan tombol-tombolnya yang
+   berbaris — bukan selnya. */
+td.actions-cell{
+  display:table-cell; white-space:nowrap; text-align:right; width:1%;
+}
+td.actions-cell > .btn{ display:inline-flex; vertical-align:middle }
+td.actions-cell > .btn + .btn{ margin-left:6px }

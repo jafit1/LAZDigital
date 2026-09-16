@@ -73,7 +73,11 @@ function konfirmasi(judul, pesan, saatYa, labelYa = 'Ya, lanjutkan') {
 }
 
 const fmtAngka = (n) => Number(n || 0).toLocaleString('id-ID');
-const fmtRupiah = (n) => 'Rp ' + Math.round(Number(n) || 0).toLocaleString('id-ID');
+
+/* Harus sama dengan JEDA_MIN_DETIK di lib/blast/setelan.js. Yang menjaganya
+   tetap server; angka di sini hanya supaya kotak isiannya tidak mengizinkan
+   sesuatu yang akan ditolak diam-diam saat disimpan. */
+const JEDA_MIN = 30;
 function fmtWaktu(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -288,6 +292,205 @@ function pasangLampiran(el, idAwalan) {
   };
 }
 
+/* Templat boleh membawa lampirannya sendiri — brosur zakat fitrah, pamflet
+   qurban. Saat templat dipilih, lampirannya ikut terpasang tanpa perlu dicari
+   ulang di komputer; itulah gunanya menyimpannya di templat. Petugas tetap bisa
+   menggantinya dengan berkas lain atau melepasnya. */
+function pasangLampiranTemplat(el, idAwalan, templat) {
+  const simpan = $('#' + idAwalan + 'BerkasId', el);
+  const ket = $('#' + idAwalan + 'BerkasKet', el);
+  const pilih = $('#' + idAwalan + 'Berkas', el);
+  if (!simpan || !ket) return;
+  if (!templat || !templat.berkasId) return;
+  if (pilih) pilih.value = '';
+  simpan.value = templat.berkasId;
+  ket.innerHTML = `Lampiran bawaan templat: <strong>${H(templat.namaBerkas || 'berkas')}</strong>
+    &middot; <a href="#" data-lepas-lampiran style="color:var(--red)">lepas</a>`;
+  const lepas = $('[data-lepas-lampiran]', ket);
+  if (lepas) lepas.onclick = (ev) => {
+    ev.preventDefault();
+    simpan.value = '';
+    ket.textContent = 'Lampiran dilepas. Pesan dikirim tanpa berkas.';
+  };
+}
+
+/* ---------------------------------------------------------------- Pemilih kontak
+ *
+ * Penerima dipilih dari daftar kontak, bukan diketik sebagai nomor. Alasannya
+ * bukan kerapian: penanda {{nama}} hanya bisa terisi kalau namanya tersimpan di
+ * suatu tempat, dan satu-satunya tempat itu adalah kontak. Selama nomor boleh
+ * diketik bebas, sebagian kiriman diam-diam berakhir dengan sapaan "Bapak/Ibu"
+ * — penandanya kelihatan bekerja, hanya saja tidak ada nama untuk diisikan.
+ *
+ * Nomor yang belum tersimpan tidak ditolak mentah-mentah: ada "+ Kontak baru"
+ * di dalam pemilihnya, supaya menyimpan kontak tidak berarti keluar dari layar
+ * ini dan kehilangan pesan yang sedang disusun.
+ */
+const pemilihKontak = (idAwalan, { judul = 'Kontak penerima', catatan = '' } = {}) => `
+  <div class="field pilih" id="${idAwalan}Pilih">
+    <label>${judul}</label>
+    <button type="button" class="btn-dropdown select-enhanced-btn pilih-tombol" id="${idAwalan}PilihTombol"
+            aria-haspopup="listbox" aria-expanded="false">
+      <span class="sel-teks" id="${idAwalan}PilihRingkas">Belum ada kontak dipilih</span>
+      <span class="sel-chev" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>
+    </button>
+    <div class="pilih-panel" id="${idAwalan}PilihPanel" hidden>
+      <div class="pilih-atas">
+        <input type="search" id="${idAwalan}PilihCari" placeholder="Cari nama, nomor, atau kantor…" autocomplete="off">
+        <div class="row" style="gap:6px;margin-top:8px">
+          <button type="button" class="keping" data-pilih="tampil">Pilih yang tampil</button>
+          <button type="button" class="keping" data-pilih="kosong">Kosongkan</button>
+          <button type="button" class="keping" data-pilih="baru">+ Kontak baru</button>
+        </div>
+      </div>
+      <div class="pilih-isi" id="${idAwalan}PilihIsi"></div>
+    </div>
+    ${catatan ? `<div class="muted" style="font-size:11.5px;margin-top:6px">${catatan}</div>` : ''}
+  </div>`;
+
+/* Modal ringkas untuk menyimpan kontak tanpa meninggalkan layar kirim. Sengaja
+   hanya empat medan — sisanya bisa dilengkapi nanti di menu Kontak. */
+function modalKontakCepat(saatTersimpan) {
+  modal('Kontak baru', `
+    <form id="fkb">
+      <div class="grid-2">
+        <div class="field"><label>Nama</label><input name="nama" required placeholder="mis. Bapak Budi Santosa"></div>
+        <div class="field"><label>Nomor WhatsApp</label><input name="nomor" required inputmode="tel" placeholder="08xxxxxxxxxx"></div>
+      </div>
+      <div class="field"><label>Kantor layanan <span class="muted" style="font-weight:400">(opsional)</span></label><input name="kantor" placeholder="mis. KLL Sewon"></div>
+      <div class="field"><label>Grup <span class="muted" style="font-weight:400">(opsional, pisahkan dengan koma)</span></label><input name="grup" placeholder="mis. Pengurus, Panitia Qurban"></div>
+      <div class="muted" style="font-size:11.5px">Namanya inilah yang dipakai penanda <code>{{nama}}</code> saat pesan dikirim.</div>
+    </form>`, (wadah) => {
+    $('#fkbBatal').onclick = tutupModal;
+    $('#fkb', wadah).onsubmit = async (ev) => {
+      ev.preventDefault();
+      const f = new FormData(ev.target);
+      try {
+        const h = await rpc('kontak.simpan', {
+          nama: f.get('nama'), nomor: f.get('nomor'), kantor: f.get('kantor'),
+          label: String(f.get('grup') || '').split(',').map((s) => s.trim()).filter(Boolean),
+        });
+        tutupModal();
+        toast(h.baru ? 'Kontak tersimpan dan langsung terpilih.' : 'Nomor itu sudah tersimpan — kontaknya dipilihkan.', 'sukses');
+        if (saatTersimpan) await saatTersimpan(h.kontak);
+      } catch (e) { toast(e.message, 'galat'); }
+    };
+  }, `<button type="button" id="fkbBatal" class="btn">Batal</button>
+      <button type="submit" form="fkb" class="btn btn-primary">Simpan &amp; pilih</button>`);
+}
+
+function pasangPemilihKontak(el, idAwalan, opsi = {}) {
+  const akar = $('#' + idAwalan + 'Pilih', el);
+  if (!akar) return null;
+  const tombol = $('#' + idAwalan + 'PilihTombol', akar);
+  const panel = $('#' + idAwalan + 'PilihPanel', akar);
+  const cari = $('#' + idAwalan + 'PilihCari', akar);
+  const isi = $('#' + idAwalan + 'PilihIsi', akar);
+  const ringkas = $('#' + idAwalan + 'PilihRingkas', akar);
+
+  const terpilih = new Set();
+  let semua = [];
+
+  const pilihan = () => semua.filter((k) => terpilih.has(k.id));
+
+  const saring = () => {
+    const q = (cari.value || '').trim().toLowerCase();
+    if (!q) return semua;
+    const angka = q.replace(/\D/g, '');
+    return semua.filter((k) => String(k.nama).toLowerCase().includes(q)
+      || (angka.length >= 3 && String(k.nomor).includes(angka))
+      || String(k.kantor || '').toLowerCase().includes(q)
+      || (k.grup || []).some((g) => String(g).toLowerCase().includes(q)));
+  };
+
+  const gambarRingkas = () => {
+    const dipilih = pilihan();
+    const n = dipilih.length;
+    ringkas.textContent = !n ? 'Belum ada kontak dipilih'
+      : n === 1 ? dipilih[0].nama
+      : n === 2 ? `${dipilih[0].nama} dan ${dipilih[1].nama}`
+      : `${dipilih[0].nama}, ${dipilih[1].nama}, dan ${n - 2} lainnya`;
+    akar.classList.toggle('terisi', n > 0);
+    if (opsi.saatUbah) opsi.saatUbah(dipilih);
+  };
+
+  const gambarIsi = () => {
+    const daftar = saring();
+    isi.innerHTML = daftar.length ? daftar.map((k) => `
+      <label class="pilih-baris${k.diblokir ? ' mati' : ''}"${k.diblokir ? ' title="Kontak ini diblokir, jadi tidak bisa dikirimi"' : ''}>
+        <input type="checkbox" value="${k.id}" ${terpilih.has(k.id) ? 'checked' : ''} ${k.diblokir ? 'disabled' : ''}>
+        <span class="pilih-nama">${H(k.nama)}</span>
+        <span class="pilih-ket">${H(k.nomor)}${k.diblokir ? ' · diblokir' : k.kantor ? ' · ' + H(k.kantor) : ''}</span>
+      </label>`).join('')
+      : `<p class="muted" style="padding:14px 12px;font-size:12px;margin:0">Tidak ada kontak yang cocok.
+         Tekan <strong>+ Kontak baru</strong> di atas untuk menyimpannya lebih dulu.</p>`;
+    $$('input[type=checkbox]', isi).forEach((c) => {
+      c.onchange = () => {
+        if (c.checked) terpilih.add(c.value); else terpilih.delete(c.value);
+        gambarRingkas();
+      };
+    });
+  };
+
+  const muat = async (pilihkan) => {
+    isi.innerHTML = rangka(4);
+    try {
+      const d = await rpc('kontak.pilihan');
+      semua = d.baris || [];
+    } catch (e) {
+      isi.innerHTML = `<p style="padding:14px 12px;font-size:12px;margin:0;color:var(--red)">${H(e.message)}</p>`;
+      return;
+    }
+    /* Pilihan yang kontaknya sudah terhapus dibuang, supaya ringkasannya tidak
+       menghitung orang yang tidak ada lagi. */
+    const hidup = new Set(semua.map((k) => k.id));
+    Array.from(terpilih).forEach((i) => { if (!hidup.has(i)) terpilih.delete(i); });
+    if (pilihkan) terpilih.add(pilihkan);
+    gambarIsi();
+    gambarRingkas();
+  };
+
+  const buka = (ya) => {
+    panel.hidden = !ya;
+    tombol.setAttribute('aria-expanded', String(Boolean(ya)));
+    if (ya) { cari.value = ''; gambarIsi(); cari.focus(); }
+  };
+
+  tombol.onclick = () => buka(panel.hidden);
+  cari.oninput = gambarIsi;
+  /* Enter di kotak pencarian jangan sampai mengirimkan formulirnya. */
+  cari.onkeydown = (ev) => { if (ev.key === 'Enter') ev.preventDefault(); };
+
+  $$('[data-pilih]', panel).forEach((b) => {
+    b.onclick = () => {
+      if (b.dataset.pilih === 'tampil') {
+        saring().filter((k) => !k.diblokir).forEach((k) => terpilih.add(k.id));
+      } else if (b.dataset.pilih === 'kosong') {
+        terpilih.clear();
+      } else {
+        modalKontakCepat(async (kontak) => { await muat(kontak.id); });
+        return;
+      }
+      gambarIsi();
+      gambarRingkas();
+    };
+  });
+
+  /* Menutup panel saat menekan di luar. Tanpa ini panelnya menutupi tombol
+     kirim dan petugas mengira halamannya macet. */
+  const tutupDiLuar = (ev) => { if (!akar.contains(ev.target)) buka(false); };
+  document.addEventListener('click', tutupDiLuar);
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') buka(false); });
+
+  muat();
+  return {
+    id: () => Array.from(terpilih),
+    pilihan,
+    kosongkan: () => { terpilih.clear(); gambarIsi(); gambarRingkas(); },
+    muatUlang: muat,
+  };
+}
+
 /* Layar pemindaian QR.
  *
  * Sebelumnya layar ini sekali tembak: begitu tombol ditekan, ia menanyakan QR
@@ -423,11 +626,7 @@ halaman.dasbor = {
                 ${lencana(p.status)}
               </div>`).join('') : '<p class="muted">Belum ada perangkat.</p>'}
           </div>
-          <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <div class="muted" style="font-size:11.5px">Perkiraan biaya bulan ini</div>
-            <div style="font-size:17px;font-weight:700${d.biaya.peringatan ? ';color:var(--red)' : ''}">${fmtRupiah(d.biaya.perkiraanBulanIni)}</div>
-            ${d.biaya.peringatan ? '<div style="font-size:11.5px;color:var(--red);margin-top:4px">Saldo pengiriman menipis — segera isi ulang.</div>' : ''}
-          </div>`)}
+          `)}
       </div>
 
       ${kartu(`<div class="row" style="align-items:center;flex-wrap:nowrap">
@@ -611,7 +810,7 @@ halaman.perangkat = {
 // ---------------------------------------------------------------- Kirim pesan
 halaman.kirim = {
   judul: 'Kirim Pesan',
-  sub: 'Satu pesan ke satu nomor',
+  sub: 'Satu pesan ke kontak pilihan',
   async gambar(el) {
     el.innerHTML = rangka(3);
     let perangkat, templat;
@@ -623,18 +822,16 @@ halaman.kirim = {
       <div class="grid-2">
         ${kartu(`
           <form id="fk">
-            <div class="grid-2">
-              <div class="field">
-                <label>Perangkat pengirim</label>
-                <select name="perangkatId" required>
-                  ${perangkat.baris.map((p) => `<option value="${p.id}">${H(p.nama)} — ${H(p.status)}</option>`).join('')}
-                </select>
-              </div>
-              <div class="field">
-                <label>Nomor tujuan</label>
-                <input name="nomor" required placeholder="08xxxxxxxxxx" inputmode="tel">
-              </div>
+            <div class="field">
+              <label>Perangkat pengirim</label>
+              <select name="perangkatId" required>
+                ${perangkat.baris.map((p) => `<option value="${p.id}">${H(p.nama)} — ${H(p.status)}</option>`).join('')}
+              </select>
             </div>
+            ${pemilihKontak('fk', {
+              judul: 'Kontak penerima',
+              catatan: 'Boleh lebih dari satu. Tiap orang menerima pesannya sendiri dengan namanya sendiri — bukan satu grup berisi semua nomor.',
+            })}
             <div class="field">
               <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
                 <label style="margin-bottom:0;white-space:nowrap">Isi pesan</label>
@@ -647,7 +844,10 @@ halaman.kirim = {
               </div>
               <textarea name="teks" rows="9" required placeholder="Assalamu'alaikum {{nama}}, ..."></textarea>
               ${kepingPenanda()}
-              <div class="muted" style="font-size:11.5px;margin-top:4px">Penanda diganti sendiri dengan data kontak penerima. Kontak tanpa nama disapa &ldquo;Bapak/Ibu&rdquo;.</div>
+              <div class="muted" style="font-size:11.5px;margin-top:4px">
+                <code>{{nama}}</code> diganti nama kontak yang tersimpan, <code>{{kantor}}</code> diganti kantor layanannya.
+                Donatur yang minta anonim tetap disapa &ldquo;Bapak/Ibu&rdquo;.
+              </div>
             </div>
             ${kotakLampiran('fk')}
             <button class="btn btn-primary btn-block">Masukkan ke antrean kirim</button>
@@ -655,43 +855,73 @@ halaman.kirim = {
 
         ${kartu(`
           <h3>Pratinjau</h3>
+          <div class="desc" id="pratinjauUntuk">Pilih kontak dulu untuk melihat sapaan yang sebenarnya</div>
           <div style="margin-top:14px;border-radius:var(--radius);background:#e6ddd4;padding:14px">
             <div id="pratinjau" style="margin-left:auto;max-width:85%;border-radius:var(--radius);border-top-right-radius:4px;background:#d9fdd3;padding:10px 14px;font-size:13px;color:#1f2937;white-space:pre-wrap;overflow-wrap:break-word">Isi pesan akan tampil di sini…</div>
           </div>
           <div style="margin-top:16px;border-radius:var(--radius);background:var(--accent-soft);padding:14px;font-size:12px;color:var(--text2)">
             <div style="font-weight:700;color:var(--accent-d);margin-bottom:4px">Ingat</div>
-            Pesan dikirim dengan jeda aman dan hanya pada jam kirim yang diatur. Nomor di daftar hitam akan ditolak.
+            Pesan dikirim dengan jeda aman dan hanya pada jam kirim yang diatur. Kontak yang diblokir dilewati,
+            dan alasannya disebutkan sesudah tombol ditekan.
           </div>`)}
       </div>`;
 
     const area = $('[name=teks]', el);
     const pratinjau = $('#pratinjau', el);
-    /* Pratinjau memakai contoh nama sungguhan, bukan menampilkan {{nama}} mentah:
-       yang perlu dilihat petugas adalah kalimat yang AKAN diterima donatur. */
+    const kepalaPratinjau = $('#pratinjauUntuk', el);
+    let dipilih = [];
+
+    /* Pratinjau memakai nama kontak yang BENAR-BENAR terpilih, bukan "Bapak
+       Budi" karangan. Nama karangan membuat penanda terlihat berfungsi walau
+       kontaknya belum dipilih — dan itulah persisnya kekeliruan yang mahal:
+       pesannya baru ketahuan salah sapa setelah terkirim ke lima ratus orang. */
     const perbarui = () => {
+      const contoh = dipilih[0];
       const isi = area.value || '';
+      kepalaPratinjau.textContent = !contoh
+        ? 'Pilih kontak dulu untuk melihat sapaan yang sebenarnya'
+        : `Tampilan yang diterima ${contoh.nama}` + (dipilih.length > 1 ? ` (dan ${dipilih.length - 1} lainnya, masing-masing dengan namanya sendiri)` : '');
       pratinjau.textContent = isi
-        ? isi.replace(/\{\{\s*nama\s*\}\}/g, 'Bapak Budi').replace(/\{\{\s*kantor\s*\}\}/g, 'KLL Sewon')
+        ? isi
+          .replace(/\{\{\s*nama\s*\}\}/g, contoh ? contoh.nama : 'Bapak/Ibu')
+          .replace(/\{\{\s*kantor\s*\}\}/g, (contoh && contoh.kantor) || '—')
+          .replace(/\{\{\s*lembaga\s*\}\}/g, 'LAZISMU Bantul')
         : 'Isi pesan akan tampil di sini…';
     };
     area.addEventListener('input', perbarui);
     pasangKeping(el, area);
     pasangLampiran(el, 'fk');
 
+    const pilih = pasangPemilihKontak(el, 'fk', {
+      saatUbah: (daftar) => { dipilih = daftar; perbarui(); },
+    });
+
     $('#pilihTemplat', el).onchange = (ev) => {
       const t = templat.baris.find((x) => x.id === ev.target.value);
-      if (t) { area.value = t.isi; perbarui(); }
+      if (!t) return;
+      area.value = t.isi;
+      pasangLampiranTemplat(el, 'fk', t);
+      perbarui();
     };
 
     $('#fk', el).onsubmit = async (ev) => {
       ev.preventDefault();
-      const tombol = ev.target.querySelector('button');
+      const kontakId = pilih ? pilih.id() : [];
+      if (!kontakId.length) {
+        toast('Pilih dulu minimal satu kontak penerima.', 'galat');
+        return;
+      }
+      const tombol = ev.target.querySelector('button[type=submit], button:not([type])');
       tombol.disabled = true; tombol.textContent = 'Mengantre…';
       try {
         const data = Object.fromEntries(new FormData(ev.target).entries());
+        data.kontakId = kontakId;
         const h = await rpc('pesan.kirim', data);
-        toast(h.catatan, 'sukses');
-        ev.target.reset(); perbarui();
+        toast(h.catatan, h.dilewati && h.dilewati.length ? 'ingat' : 'sukses');
+        ev.target.reset();
+        if (pilih) pilih.kosongkan();
+        dipilih = [];
+        perbarui();
       } catch (e) { toast(e.message, 'galat'); }
       tombol.disabled = false; tombol.textContent = 'Masukkan ke antrean kirim';
     };
@@ -701,16 +931,19 @@ halaman.kirim = {
 // ---------------------------------------------------------------- Massal
 halaman.massal = {
   judul: 'Kiriman Massal',
-  sub: 'Kirim ke satu segmen kontak sekaligus',
+  sub: 'Kirim ke grup kontak sekaligus',
   async gambar(el) {
     el.innerHTML = rangka(4);
-    let perangkat, templat, kontak, daftar;
+    let perangkat, templat, pilihan, daftar;
     try {
-      [perangkat, templat, kontak, daftar] = await Promise.all([
+      [perangkat, templat, pilihan, daftar] = await Promise.all([
         rpc('perangkat.daftar'), rpc('templat.daftar'),
-        rpc('kontak.daftar', { perHalaman: 1 }), rpc('massal.daftar'),
+        rpc('kontak.pilihan'), rpc('massal.daftar'),
       ]);
     } catch (e) { el.innerHTML = galatKotak(e.message); return; }
+
+    const semuaKontak = pilihan.baris || [];
+    const bisaDikirimi = semuaKontak.filter((k) => !k.diblokir);
 
     el.innerHTML = `
       <div class="grid-2">
@@ -720,21 +953,52 @@ halaman.massal = {
               <label>Nama kiriman</label>
               <input name="nama" required placeholder="mis. Ajakan zakat Ramadan 1447">
             </div>
-            <div class="grid-2">
-              <div class="field">
-                <label>Perangkat pengirim</label>
-                <select name="perangkatId" required>
-                  ${perangkat.baris.map((p) => `<option value="${p.id}">${H(p.nama)}</option>`).join('')}
-                </select>
-              </div>
-              <div class="field">
-                <label>Segmen penerima</label>
-                <select name="segmen">
-                  <option value="">Semua kontak (${fmtAngka(kontak.total)})</option>
-                  ${kontak.segmen.map((s) => `<option value="${s.kode}">${H(s.label)}</option>`).join('')}
-                </select>
-              </div>
+            <div class="field">
+              <label>Perangkat pengirim</label>
+              <select name="perangkatId" required>
+                ${perangkat.baris.map((p) => `<option value="${p.id}">${H(p.nama)}</option>`).join('')}
+              </select>
             </div>
+
+            <div class="field">
+              <label>Penerima</label>
+              <div class="penerima">
+                <label class="penerima-baris semua">
+                  <input type="radio" name="carePenerima" value="semua" checked>
+                  <span class="pilih-nama">Semua kontak</span>
+                  <span class="pilih-ket">${fmtAngka(bisaDikirimi.length)} bisa dikirimi</span>
+                </label>
+                <label class="penerima-baris semua">
+                  <input type="radio" name="carePenerima" value="pilih">
+                  <span class="pilih-nama">Grup / segmen tertentu</span>
+                  <span class="pilih-ket">boleh centang lebih dari satu</span>
+                </label>
+                <div class="penerima-daftar" id="penerimaDaftar" hidden>
+                  ${pilihan.grup.length ? `
+                    <div class="penerima-judul">Grup buatan sendiri</div>
+                    ${pilihan.grup.map((g) => `
+                      <label class="penerima-baris">
+                        <input type="checkbox" data-grup value="${H(g.nama)}">
+                        <span class="pilih-nama">${H(g.nama)}</span>
+                        <span class="pilih-ket">${fmtAngka(g.jumlah)} kontak</span>
+                      </label>`).join('')}`
+                    : `<div class="penerima-judul">Grup buatan sendiri</div>
+                       <p class="muted" style="padding:8px 12px;margin:0;font-size:12px">Belum ada grup.
+                       Buat di menu <strong>Kontak &rarr; Kelola grup</strong>, lalu masukkan kontaknya.</p>`}
+                  <div class="penerima-judul">Segmen</div>
+                  ${pilihan.segmen.map((s) => {
+                    const n = semuaKontak.filter((k) => (k.segmen || []).includes(s.kode)).length;
+                    return `<label class="penerima-baris">
+                      <input type="checkbox" data-segmen value="${s.kode}">
+                      <span class="pilih-nama">${H(s.label)}</span>
+                      <span class="pilih-ket">${fmtAngka(n)} kontak</span>
+                    </label>`;
+                  }).join('')}
+                </div>
+              </div>
+              <div class="muted" style="font-size:11.5px;margin-top:6px" id="penerimaHitung"></div>
+            </div>
+
             <div class="field">
               <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
                 <label style="margin-bottom:0;white-space:nowrap">Isi pesan</label>
@@ -747,11 +1011,12 @@ halaman.massal = {
               </div>
               <textarea name="teks" rows="8" required placeholder="Assalamu'alaikum {{nama}}, ..."></textarea>
               ${kepingPenanda()}
-              <div class="muted" style="font-size:11.5px;margin-top:4px">Tiap penerima menerima namanya sendiri. Kontak tanpa nama disapa &ldquo;Bapak/Ibu&rdquo;.</div>
+              <div class="muted" style="font-size:11.5px;margin-top:4px">Tiap penerima dikirimi terpisah dengan namanya sendiri. Donatur anonim disapa &ldquo;Bapak/Ibu&rdquo;.</div>
             </div>
             ${kotakLampiran('fm')}
             <div style="border-radius:var(--radius);background:var(--accent-soft);padding:14px;font-size:12px;color:var(--text2);margin-bottom:12px">
-              Kontak yang sudah berhenti berlangganan atau masuk daftar hitam otomatis dilewati. Sertakan kalimat cara berhenti pada pesan ajakan.
+              Kontak yang diblokir otomatis dilewati. Sertakan kalimat cara berhenti pada pesan ajakan — balasan
+              &ldquo;BERHENTI&rdquo; langsung memblokir nomornya sendiri.
             </div>
             <button class="btn btn-primary btn-block">Jalankan kiriman</button>
           </form>`)}
@@ -765,7 +1030,7 @@ halaman.massal = {
                   <p style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${H(m.nama)}</p>
                   ${m.status === 'berjalan' ? `<button data-henti="${m.id}" class="btn btn-ghost btn-sm" style="flex-shrink:0;color:var(--red)">hentikan</button>` : ''}
                 </div>
-                <p class="muted" style="font-size:11.5px">${fmtJarak(m.dibuat)} · ${fmtAngka(m.jumlah)} penerima</p>
+                <p class="muted" style="font-size:11.5px">${fmtJarak(m.dibuat)} · ${fmtAngka(m.jumlah)} penerima${m.penerimaTertulis ? ' · ' + H(m.penerimaTertulis) : ''}</p>
                 <div class="row" style="gap:6px;margin-top:8px">
                   <span class="badge grey">antre ${m.statistik.antre}</span>
                   <span class="badge blue">terkirim ${m.statistik.terkirim}</span>
@@ -778,10 +1043,48 @@ halaman.massal = {
 
     $('#pilihTemplat2', el).onchange = (ev) => {
       const t = templat.baris.find((x) => x.id === ev.target.value);
-      if (t) $('[name=teks]', el).value = t.isi;
+      if (!t) return;
+      $('[name=teks]', el).value = t.isi;
+      pasangLampiranTemplat(el, 'fm', t);
     };
     pasangKeping(el, $('[name=teks]', el));
     pasangLampiran(el, 'fm');
+
+    /* Jumlah penerima dihitung di tampilan SEBELUM tombol ditekan. Angka yang
+       baru muncul sesudah kiriman berjalan datang terlambat: yang perlu
+       dipastikan petugas adalah "ini benar 240 orang, bukan 2.400", dan itu
+       harus terlihat sewaktu masih bisa dibatalkan. */
+    const daftarPenerima = $('#penerimaDaftar', el);
+    const hitungEl = $('#penerimaHitung', el);
+    const modePilih = () => ($('[name=carePenerima]:checked', el) || {}).value === 'pilih';
+    const grupTerpilih = () => $$('[data-grup]:checked', el).map((c) => c.value);
+    const segmenTerpilih = () => $$('[data-segmen]:checked', el).map((c) => c.value);
+
+    const hitungPenerima = () => {
+      if (!modePilih()) return bisaDikirimi;
+      const g = new Set(grupTerpilih());
+      const s = new Set(segmenTerpilih());
+      if (!g.size && !s.size) return [];
+      /* Gabungan, bukan irisan — mencentang dua grup berarti mengirimi
+         keduanya. Lihat catatan yang sama di massal.kirim (api/blast.js). */
+      return bisaDikirimi.filter((k) =>
+        (k.grup || []).some((x) => g.has(x)) || (k.segmen || []).some((x) => s.has(x)));
+    };
+
+    const perbaruiHitung = () => {
+      daftarPenerima.hidden = !modePilih();
+      const n = hitungPenerima().length;
+      const diblokir = semuaKontak.length - bisaDikirimi.length;
+      hitungEl.innerHTML = modePilih() && !grupTerpilih().length && !segmenTerpilih().length
+        ? '<span style="color:var(--red)">Belum ada grup atau segmen yang dicentang.</span>'
+        : `Akan dikirimi <strong>${fmtAngka(n)}</strong> kontak.`
+          + (diblokir ? ` ${fmtAngka(diblokir)} kontak diblokir dan tidak ikut dihitung.` : '');
+    };
+
+    $$('[name=carePenerima], [data-grup], [data-segmen]', el).forEach((c) => {
+      c.onchange = perbaruiHitung;
+    });
+    perbaruiHitung();
 
     $$('[data-henti]', el).forEach((b) => b.onclick = () => konfirmasi(
       'Hentikan kiriman?', 'Pesan yang belum terkirim akan dibatalkan. Yang sudah terkirim tidak dapat ditarik.',
@@ -793,8 +1096,23 @@ halaman.massal = {
     $('#fm', el).onsubmit = async (ev) => {
       ev.preventDefault();
       const data = Object.fromEntries(new FormData(ev.target).entries());
+      delete data.carePenerima;
+      if (modePilih()) {
+        data.grup = grupTerpilih();
+        data.segmen = segmenTerpilih();
+        if (!data.grup.length && !data.segmen.length) {
+          toast('Centang dulu grup atau segmen penerimanya.', 'galat');
+          return;
+        }
+      } else {
+        data.grup = [];
+        data.segmen = [];
+      }
+      const jumlah = hitungPenerima().length;
+      if (!jumlah) { toast('Tidak ada kontak yang bisa dikirimi pada pilihan itu.', 'galat'); return; }
       konfirmasi('Jalankan kiriman massal?',
-        'Pesan akan dikirim bertahap dengan jeda aman. Pastikan isi pesan sudah benar — pesan yang sudah terkirim tidak dapat ditarik.',
+        `${fmtAngka(jumlah)} kontak akan dikirimi bertahap dengan jeda aman. `
+        + 'Pesan yang sudah terkirim tidak dapat ditarik.',
         async () => {
           try {
             const h = await rpc('massal.kirim', data);
@@ -817,10 +1135,12 @@ halaman.antrean = {
       <div class="table-wrap">
         <div class="toolbar">
           <input id="cari" class="search" value="${H(s.cari)}" placeholder="Cari nomor, nama, atau isi pesan…">
-          <select id="status" style="width:auto">
+          <span style="width:190px;flex:none"><select id="status">
             ${['', 'antre', 'terkirim', 'sampai', 'dibaca', 'gagal', 'dibatalkan', 'masuk']
               .map((v) => `<option value="${v}" ${s.status === v ? 'selected' : ''}>${v || 'Semua status'}</option>`).join('')}
-          </select>
+          </select></span>
+          ${negara.pengguna && negara.pengguna.peran === 'superadmin'
+            ? '<button id="kosongkanRiwayat" class="btn btn-sm" style="color:var(--red)">Hapus semua riwayat</button>' : ''}
         </div>
         <div id="tabel">${rangka(6)}</div>
       </div>`;
@@ -863,8 +1183,9 @@ halaman.antrean = {
               <td>${lencana(p.status)}</td>
               <td class="muted" style="font-size:11.5px;white-space:nowrap">${fmtJarak(p.dibuat)}</td>
               <td class="actions-cell" style="justify-content:flex-end">
-                ${bolehUbah && p.status === 'antre' ? `<button data-batal="${p.id}" class="btn btn-ghost btn-sm" style="color:var(--red)">batalkan</button>` : ''}
+                ${bolehUbah && p.status === 'antre' ? `<button data-batal="${p.id}" class="btn btn-ghost btn-sm">batalkan</button>` : ''}
                 ${bolehUbah && ['gagal', 'dibatalkan'].includes(p.status) ? `<button data-ulang="${p.id}" class="btn btn-ghost btn-sm">ulangi</button>` : ''}
+                ${bolehUbah ? `<button data-hapusp="${p.id}" class="btn btn-ghost btn-sm" style="color:var(--red)">hapus</button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
@@ -886,6 +1207,50 @@ halaman.antrean = {
       try { await rpc('pesan.ulangi', { id: b.dataset.ulang }); toast('Pesan dimasukkan ke antrean lagi.', 'sukses'); halaman.antrean.gambar(el); }
       catch (e) { toast(e.message, 'galat'); }
     });
+
+    $$('[data-hapusp]', el).forEach((b) => {
+      const p = d.baris.find((x) => x.id === b.dataset.hapusp) || {};
+      b.onclick = () => konfirmasi('Hapus riwayat pesan ini?',
+        p.status === 'antre'
+          ? 'Pesan ini masih antre. Menghapusnya berarti ia tidak jadi dikirim, dan catatannya hilang.'
+          : 'Catatannya hilang dari daftar. Pesan yang sudah terkirim tetap ada di HP penerima — menghapus di sini tidak menariknya kembali.',
+        async () => {
+          try { await rpc('pesan.hapus', { id: b.dataset.hapusp }); toast('Riwayat pesan dihapus.', 'sukses'); halaman.antrean.gambar(el); }
+          catch (e) { toast(e.message, 'galat'); }
+        }, 'Ya, hapus');
+    });
+
+    /* Mengosongkan seluruh riwayat menuntut kata kunci diketik ulang. Dialog
+       "Ya / Batal" ditekan tanpa dibaca; mengetik HAPUS SEMUA tidak bisa
+       dilakukan tanpa sadar, dan tidak ada tombol urung untuk tindakan ini. */
+    const tk = $('#kosongkanRiwayat', el);
+    if (tk) tk.onclick = () => modal('Hapus seluruh riwayat pesan', `
+      <p>Seluruh pesan keluar dan masuk akan dihapus — termasuk yang masih antre.
+         <strong>Tidak bisa dibatalkan.</strong></p>
+      <ul class="muted" style="font-size:12px;margin:10px 0 0 18px;line-height:1.7">
+        <li>Kontak, templat, dan grup <strong>tidak</strong> disentuh.</li>
+        <li>Catatan audit <strong>tidak</strong> dihapus — termasuk catatan bahwa Anda melakukan ini.</li>
+        <li>Angka pada riwayat kiriman massal akan jadi nol, karena pesannya sudah tidak ada.</li>
+        <li>Pesan yang sudah sampai tetap ada di HP penerima.</li>
+      </ul>
+      <div class="field" style="margin-top:14px">
+        <label>Ketik <code>HAPUS SEMUA</code> untuk menegaskan</label>
+        <input id="tegaskanHapus" autocomplete="off" placeholder="HAPUS SEMUA">
+      </div>`, (wadah) => {
+      $('#fhBatal').onclick = tutupModal;
+      $('#fhJalan').onclick = async () => {
+        const tombol = $('#fhJalan');
+        tombol.disabled = true; tombol.textContent = 'Menghapus…';
+        try {
+          const h = await rpc('pesan.hapusSemua', { tegaskan: $('#tegaskanHapus', wadah).value });
+          tutupModal(); toast(h.catatan, 'sukses'); halaman.antrean.gambar(el);
+        } catch (e) {
+          toast(e.message, 'galat');
+          tombol.disabled = false; tombol.textContent = 'Hapus semua';
+        }
+      };
+    }, `<button type="button" id="fhBatal" class="btn">Batal</button>
+        <button type="button" id="fhJalan" class="btn btn-danger">Hapus semua</button>`);
   },
 };
 
@@ -893,7 +1258,7 @@ halaman.antrean = {
 halaman.kontak = {
   judul: 'Kontak',
   sub: 'Daftar kontak milik aplikasi ini',
-  saring: { cari: '', segmen: '', halaman: 1 },
+  saring: { cari: '', segmen: '', grup: '', halaman: 1 },
   async gambar(el) {
     const s = halaman.kontak.saring;
     const bolehUbah = bisa('kontak.ubah');
@@ -901,8 +1266,14 @@ halaman.kontak = {
       <div class="table-wrap">
         <div class="toolbar">
           <input id="cariK" class="search" value="${H(s.cari)}" placeholder="Cari nama, nomor, atau kantor…">
-          <select id="segmenK" style="width:auto"></select>
+          <!-- Lebarnya dikunci lewat pembungkus. Penyelaras dropdown LAZDigital
+               mengganti <select> dengan tombol selebar induknya, sehingga
+               style="width:auto" pada select-nya sendiri tidak berpengaruh dan
+               kedua saringan ini masing-masing memakan satu baris penuh. -->
+          <span style="width:190px;flex:none"><select id="grupK"></select></span>
+          <span style="width:190px;flex:none"><select id="segmenK"></select></span>
           ${bolehUbah ? `
+            <button id="kelolaG" class="btn">Kelola grup</button>
             <button id="imporK" class="btn">Impor</button>
             <button id="eksporK" class="btn">Ekspor</button>
             <button id="tambahK" class="btn btn-primary">+ Kontak</button>` : ''}
@@ -916,6 +1287,10 @@ halaman.kontak = {
     $('#segmenK', el).innerHTML = `<option value="">Semua segmen</option>` +
       d.segmen.map((x) => `<option value="${x.kode}" ${s.segmen === x.kode ? 'selected' : ''}>${H(x.label)}</option>`).join('');
     $('#segmenK', el).onchange = (ev) => { s.segmen = ev.target.value; s.halaman = 1; halaman.kontak.gambar(el); };
+
+    $('#grupK', el).innerHTML = `<option value="">Semua grup</option>` +
+      (d.grup || []).map((g) => `<option value="${H(g.nama)}" ${s.grup === g.nama ? 'selected' : ''}>${H(g.nama)} (${g.jumlah})</option>`).join('');
+    $('#grupK', el).onchange = (ev) => { s.grup = ev.target.value; s.halaman = 1; halaman.kontak.gambar(el); };
     let jeda;
     $('#cariK', el).oninput = (ev) => {
       clearTimeout(jeda);
@@ -931,29 +1306,38 @@ halaman.kontak = {
           <tr>
             <th>Nama</th>
             <th>Nomor</th>
-            <th>Segmen</th>
+            <!-- Grup dan segmen disatukan dalam satu kolom. Dipisah jadi dua,
+                 tabelnya melebihi lebar kartu dan kolom tindakan terdorong
+                 keluar — dan yang hilang dari pandangan justru tombolnya. -->
+            <th>Grup &amp; segmen</th>
             <th>Kantor</th>
             <th>Kiriman</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          ${d.baris.map((k) => `
+          ${d.baris.map((k) => {
+            const diblokir = k.daftarHitam || k.langganan === false;
+            return `
             <tr>
               <td style="font-weight:600">${H(k.nama)}${k.anonim ? ' <span class="muted" style="font-weight:400;font-size:11.5px">(anonim)</span>' : ''}</td>
               <td class="muted">${H(k.nomor)}</td>
-              <td><div class="row" style="gap:4px">${(k.segmen || []).map((x) =>
-                `<span class="badge grey">${H(labelSegmen(x))}</span>`).join('') || '<span class="muted">—</span>'}</div></td>
+              <td><div class="row" style="gap:4px;flex-wrap:wrap">${
+                (k.label || []).map((x) => `<span class="badge blue">${H(x)}</span>`).join('')
+                + (k.segmen || []).map((x) => `<span class="badge grey">${H(labelSegmen(x))}</span>`).join('')
+                || '<span class="muted">—</span>'}</div></td>
               <td class="muted" style="font-size:11.5px">${H(k.kantor || '—')}</td>
-              <td>${k.daftarHitam
-                ? '<span class="badge red">daftar hitam</span>'
-                : k.langganan ? '<span class="badge green">berlangganan</span>' : '<span class="badge grey">berhenti</span>'}</td>
+              <td>${diblokir
+                ? '<span class="badge red">diblokir</span>'
+                : '<span class="badge green">aktif</span>'}</td>
               <td class="actions-cell" style="justify-content:flex-end">
                 ${bolehUbah ? `
+                  <button data-blokir="${k.id}" data-kini="${diblokir ? '1' : '0'}" class="btn btn-ghost btn-sm">${diblokir ? 'buka blokir' : 'blokir'}</button>
                   <button data-ubahk="${k.id}" class="btn btn-ghost btn-sm">ubah</button>
                   <button data-hapusk="${k.id}" class="btn btn-ghost btn-sm" style="color:var(--red)">hapus</button>` : ''}
               </td>
-            </tr>`).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
       <div class="toolbar" style="border-bottom:none;border-top:1px solid var(--border)">
@@ -996,13 +1380,20 @@ halaman.kontak = {
           </div>
         </div>
         <div class="field">
+          <label>Grup</label>
+          <input name="grup" value="${H((k && k.label || []).join(', '))}" placeholder="mis. Pengurus, Panitia Qurban"
+                 list="daftarGrupAda" autocomplete="off">
+          <datalist id="daftarGrupAda">${(d.grup || []).map((g) => `<option value="${H(g.nama)}">`).join('')}</datalist>
+          <div class="muted" style="font-size:11.5px;margin-top:4px">Pisahkan dengan koma. Grup inilah yang dipilih saat kiriman massal.</div>
+        </div>
+        <div class="field">
           <label>Catatan</label>
           <textarea name="catatan" rows="2">${H(k ? k.catatan : '')}</textarea>
         </div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400">
             <input type="checkbox" name="anonim" ${k && k.anonim ? 'checked' : ''} style="width:auto">
-            Donatur ingin tetap anonim
+            Donatur ingin tetap anonim — disapa &ldquo;Bapak/Ibu&rdquo;, bukan namanya
           </label>
         </div>
       </form>`, (wadah) => {
@@ -1015,6 +1406,7 @@ halaman.kontak = {
           surel: f.get('surel'), catatan: f.get('catatan'),
           anonim: f.get('anonim') === 'on',
           segmen: f.getAll('segmen'),
+          label: String(f.get('grup') || '').split(',').map((x) => x.trim()).filter(Boolean),
         };
         if (k) data.id = k.id;
         try { await rpc('kontak.simpan', data); tutupModal(); toast('Kontak tersimpan.', 'sukses'); halaman.kontak.gambar(el); }
@@ -1032,12 +1424,82 @@ halaman.kontak = {
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus'));
 
+    $$('[data-blokir]', el).forEach((b) => {
+      const kini = b.dataset.kini === '1';
+      const k = d.baris.find((x) => x.id === b.dataset.blokir) || {};
+      b.onclick = () => konfirmasi(kini ? 'Buka blokir kontak ini?' : 'Blokir kontak ini?',
+        kini
+          ? `${k.nama} akan ikut lagi pada kiriman massal berikutnya.`
+          : `${k.nama} tidak akan dikirimi apa pun, termasuk kiriman massal. Kontaknya tetap tersimpan.`,
+        async () => {
+          try {
+            await rpc('kontak.ubahBlokir', { id: b.dataset.blokir, diblokir: !kini });
+            toast(kini ? 'Blokir dibuka.' : 'Kontak diblokir.', 'sukses');
+            halaman.kontak.gambar(el);
+          } catch (e) { toast(e.message, 'galat'); }
+        }, kini ? 'Ya, buka' : 'Ya, blokir');
+    });
+
+    /* Kelola grup: ubah nama dan bubarkan. Membuat grup baru TIDAK ada di sini —
+       grup lahir saat pertama kali diketikkan pada sebuah kontak, dan daftar ini
+       hanya cermin dari kontaknya. Tombol "buat grup" akan menghasilkan grup
+       kosong yang tidak berisi siapa-siapa dan tidak bisa dipakai. */
+    const tg = $('#kelolaG', el);
+    if (tg) tg.onclick = () => {
+      const isiGrup = (daftar) => daftar.length ? `
+        <table style="width:100%;font-size:13px">
+          <tbody>
+            ${daftar.map((g) => `
+              <tr>
+                <td style="font-weight:600;padding:8px 0">${H(g.nama)}</td>
+                <td class="muted" style="padding:8px 0;white-space:nowrap">${fmtAngka(g.jumlah)} kontak</td>
+                <td class="actions-cell" style="justify-content:flex-end;padding:8px 0">
+                  <button data-namaulang="${H(g.nama)}" class="btn btn-ghost btn-sm">ubah nama</button>
+                  <button data-bubar="${H(g.nama)}" class="btn btn-ghost btn-sm" style="color:var(--red)">bubarkan</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`
+        : '<p class="muted" style="font-size:12px;margin:0">Belum ada grup. Ketikkan nama grup pada salah satu kontak — grupnya langsung muncul di sini.</p>';
+
+      modal('Kelola grup', `
+        <p class="muted" style="font-size:12px;margin-bottom:12px">Grup dibuat dengan mengetikkan namanya pada kontak.
+           Membubarkan grup hanya melepas tandanya — kontaknya tetap ada.</p>
+        <div id="isiGrup">${isiGrup(d.grup || [])}</div>`, (wadah) => {
+        $('#fgrTutup').onclick = tutupModal;
+        const pasang = () => {
+          $$('[data-namaulang]', wadah).forEach((b) => b.onclick = async () => {
+            const baru = prompt(`Nama baru untuk grup "${b.dataset.namaulang}":`, b.dataset.namaulang);
+            if (baru === null || !baru.trim()) return;
+            try {
+              const h = await rpc('grup.ubahNama', { lama: b.dataset.namaulang, baru });
+              $('#isiGrup', wadah).innerHTML = isiGrup(h.baris);
+              pasang();
+              toast(`${h.kontak} kontak diperbarui.`, 'sukses');
+              halaman.kontak.gambar(el);
+            } catch (e) { toast(e.message, 'galat'); }
+          });
+          $$('[data-bubar]', wadah).forEach((b) => b.onclick = async () => {
+            try {
+              const h = await rpc('grup.hapus', { grup: b.dataset.bubar });
+              $('#isiGrup', wadah).innerHTML = isiGrup(h.baris);
+              pasang();
+              toast(`Grup dibubarkan. ${h.kontak} kontak tetap tersimpan.`, 'ingat');
+              halaman.kontak.gambar(el);
+            } catch (e) { toast(e.message, 'galat'); }
+          });
+        };
+        pasang();
+      }, '<button type="button" id="fgrTutup" class="btn btn-primary">Selesai</button>');
+    };
+
     const ti = $('#imporK', el);
     if (ti) ti.onclick = () => modal('Impor kontak', `
-      <p class="muted">Tempel isi berkas CSV, atau pilih berkasnya. Baris pertama sebaiknya berisi nama kolom: <code>nama, nomor, kantor, segmen</code>.</p>
+      <p class="muted">Tempel isi berkas CSV, atau pilih berkasnya. Baris pertama sebaiknya berisi nama kolom: <code>nama, nomor, kantor, grup</code>.
+         Satu kontak boleh masuk beberapa grup — pisahkan dengan tanda <code>|</code>.</p>
       <div class="field" style="margin-top:12px"><input type="file" id="berkasK" accept=".csv,.txt"></div>
       <div class="field">
-        <textarea id="teksK" rows="9" placeholder="nama,nomor,kantor&#10;Budi,081234567890,KLL Sewon" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"></textarea>
+        <textarea id="teksK" rows="9" placeholder="nama,nomor,kantor,grup&#10;Budi,081234567890,KLL Sewon,Pengurus|Panitia Qurban" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"></textarea>
       </div>`, (wadah) => {
       $('#fiBatal').onclick = tutupModal;
       $('#berkasK', wadah).onchange = (ev) => {
@@ -1093,6 +1555,7 @@ halaman.templat = {
         <section class="card" style="margin-bottom:0;display:flex;flex-direction:column">
           <div style="font-weight:700">${H(t.nama)}</div>
           <p class="muted" style="margin-top:8px;flex:1;white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical">${H(t.isi)}</p>
+          ${t.berkasId ? `<div class="badge blue" style="margin-top:10px;align-self:flex-start">📎 ${H(t.namaBerkas || 'lampiran')}</div>` : ''}
           ${bolehUbah ? `<div class="row" style="gap:8px;margin-top:14px">
             <button data-ubaht="${t.id}" class="btn btn-sm">Ubah</button>
             <button data-hapust="${t.id}" class="btn btn-sm btn-danger">Hapus</button>
@@ -1108,14 +1571,41 @@ halaman.templat = {
         <div class="field">
           <label>Isi</label>
           <textarea name="isi" rows="10" required>${H(t ? t.isi : '')}</textarea>
-          <div class="muted" style="font-size:11.5px;margin-top:4px">Variabel: <code>{{nama}}</code>, <code>{{kantor}}</code>, <code>{{lembaga}}</code></div>
+          ${kepingPenanda()}
+          <div class="muted" style="font-size:11.5px;margin-top:4px">
+            <code>{{nama}}</code> diganti nama kontak, <code>{{kantor}}</code> kantor layanannya,
+            <code>{{lembaga}}</code> nama lembaga.
+          </div>
         </div>
+        ${kotakLampiran('ft')}
+        ${t && t.berkasId ? `<div class="muted" style="font-size:11.5px;margin-top:-8px;margin-bottom:12px" id="ftLampiranLama">
+          Lampiran tersimpan: <strong>${H(t.namaBerkas || 'berkas')}</strong>
+          &middot; <a href="#" id="ftLepas" style="color:var(--red)">lepas</a>
+          &middot; pilih berkas di atas untuk menggantinya.
+        </div>` : ''}
       </form>`, (wadah) => {
       $('#ftBatal').onclick = tutupModal;
+      pasangKeping(wadah, $('[name=isi]', wadah));
+      pasangLampiran(wadah, 'ft');
+
+      /* Lampiran yang sudah tersimpan tidak ikut diunggah ulang tiap kali
+         templatnya disunting — hanya id-nya yang dibawa. Melepasnya ditandai
+         terpisah, supaya "tidak memilih berkas baru" tidak salah dibaca sebagai
+         "hapus lampirannya". */
+      let lepas = false;
+      const el2 = $('#ftLepas', wadah);
+      if (el2) el2.onclick = (ev) => {
+        ev.preventDefault();
+        lepas = true;
+        $('#ftLampiranLama', wadah).innerHTML = 'Lampiran akan dilepas saat disimpan.';
+      };
+
       $('#ft', wadah).onsubmit = async (ev) => {
         ev.preventDefault();
         const data = Object.fromEntries(new FormData(ev.target).entries());
         if (t) data.id = t.id;
+        if (lepas && !data.berkasId) data.hapusBerkas = true;
+        if (!data.berkasId && t && t.berkasId && !lepas) delete data.berkasId;
         try { await rpc('templat.simpan', data); tutupModal(); toast('Templat tersimpan.', 'sukses'); halaman.templat.gambar(el); }
         catch (e) { toast(e.message, 'galat'); }
       };
@@ -1328,10 +1818,12 @@ halaman.setelan = {
 
         ${kartu(`
           <h3>Pengaman pengiriman</h3>
-          <div class="desc">Jeda, jam kirim, dan batas harian menjaga nomor dari pemblokiran.</div>
+          <div class="desc">Jeda, jam kirim, dan batas harian menjaga nomor dari pemblokiran.
+            Jeda minimal tidak bisa kurang dari ${JEDA_MIN} detik — pengiriman beruntun adalah pola
+            yang dikenali WhatsApp, dan yang diblokir adalah nomornya, bukan aplikasi ini.</div>
           <div class="row-3">
-            <div class="field"><label>Jeda minimal (detik)</label><input ${mati} type="number" min="1" name="kirim.jedaMinDetik" value="${s.kirim.jedaMinDetik}"></div>
-            <div class="field"><label>Jeda maksimal (detik)</label><input ${mati} type="number" min="1" name="kirim.jedaMaksDetik" value="${s.kirim.jedaMaksDetik}"></div>
+            <div class="field"><label>Jeda minimal (detik)</label><input ${mati} type="number" min="${JEDA_MIN}" name="kirim.jedaMinDetik" value="${s.kirim.jedaMinDetik}"></div>
+            <div class="field"><label>Jeda maksimal (detik)</label><input ${mati} type="number" min="${JEDA_MIN}" name="kirim.jedaMaksDetik" value="${s.kirim.jedaMaksDetik}"></div>
             <div class="field"><label>Batas harian per perangkat</label><input ${mati} type="number" min="1" name="kirim.batasHarianPerangkat" value="${s.kirim.batasHarianPerangkat}"></div>
             <div class="field"><label>Jam mulai (WIB)</label><input ${mati} type="number" min="0" max="23" name="kirim.jamMulai" value="${s.kirim.jamMulai}"></div>
             <div class="field"><label>Jam selesai (WIB)</label><input ${mati} type="number" min="1" max="24" name="kirim.jamSelesai" value="${s.kirim.jamSelesai}"></div>
@@ -1349,15 +1841,6 @@ halaman.setelan = {
             <div class="field"><label>Rahasia tanda tangan</label><input ${mati} name="webhook.rahasia" type="password" value="${H(s.webhook.rahasia)}"></div>
             <div class="field" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;padding-bottom:9px;margin-bottom:0">
               <input ${mati} type="checkbox" name="webhook.aktif" ${s.webhook.aktif ? 'checked' : ''} style="width:auto">Aktifkan</label></div>
-          </div>`)}
-
-        ${kartu(`
-          <h3>Biaya pengiriman</h3>
-          <div class="desc">Dipakai untuk laporan biaya dan peringatan saldo menipis. Ini dana amil — layak dipantau.</div>
-          <div class="row-3">
-            <div class="field"><label>Biaya per pesan (Rp)</label><input ${mati} type="number" min="0" name="biaya.biayaPerPesan" value="${s.biaya.biayaPerPesan}"></div>
-            <div class="field"><label>Saldo tercatat (Rp)</label><input ${mati} type="number" min="0" name="biaya.saldoDicatat" value="${s.biaya.saldoDicatat}"></div>
-            <div class="field"><label>Peringatan bila di bawah (Rp)</label><input ${mati} type="number" min="0" name="biaya.peringatanSaldo" value="${s.biaya.peringatanSaldo}"></div>
           </div>`)}
 
         <div class="form-actions">

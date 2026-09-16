@@ -49,6 +49,18 @@ const PESAN = [
   { id: 'm2', nomor: '628444555666', nama: 'Siti', status: 'diserahkan', arah: 'keluar', isi: { teks: 'Halo' }, dibuat: new Date().toISOString() },
   { id: 'm3', nomor: '628777888999', nama: 'Ani', status: 'gagal', arah: 'keluar', isi: { teks: 'Coba' }, galatTerakhir: 'Nomor tidak terdaftar', dibuat: new Date().toISOString() },
 ];
+const SEGMEN = [
+  { kode: 'donatur-rutin', label: 'Donatur rutin' },
+  { kode: 'simpatisan', label: 'Simpatisan belum berdonasi' },
+  { kode: 'mustahik', label: 'Mustahik binaan' },
+];
+const GRUP = [{ nama: 'Panitia Qurban', jumlah: 2 }, { nama: 'Pengurus Harian', jumlah: 1 }];
+const KONTAK = [
+  { id: 'k1', nama: 'Budi Santosa', nomor: '628111222333', segmen: ['donatur-rutin'], label: ['Pengurus Harian', 'Panitia Qurban'], langganan: true, daftarHitam: false, kantor: 'KLL Sewon' },
+  { id: 'k2', nama: 'Siti Aminah', nomor: '628444555666', segmen: ['simpatisan'], label: ['Panitia Qurban'], langganan: true, daftarHitam: false, kantor: '' },
+  { id: 'k3', nama: 'Ani Diblokir', nomor: '628777888999', segmen: [], label: [], langganan: false, daftarHitam: true, kantor: '' },
+];
+
 const JAWABAN = {
   'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
   'sistem.kesiapan': {
@@ -69,7 +81,6 @@ const JAWABAN = {
     antrean: { antre: 7, gagal: 3, dalamJamKirim: true, jamKirim: '08:00\u201320:00 WIB' },
     kontak: { total: 540 },
     perangkat: PERANGKAT.map((d) => ({ id: d.id, nama: d.nama, nomor: d.nomor, status: d.status, driver: d.driver })),
-    biaya: { perPesan: 0, perkiraanBulanIni: 0, saldoDicatat: 0, peringatan: false },
   },
   'perangkat.daftar': {
     baris: PERANGKAT,
@@ -81,10 +92,17 @@ const JAWABAN = {
   },
   'pesan.daftar': { total: PESAN.length, halaman: 1, perHalaman: 25, baris: PESAN },
   'kontak.daftar': {
-    total: 1, halaman: 1, perHalaman: 25,
-    baris: [{ id: 'k1', nama: 'Budi', nomor: '628111222333', segmen: ['donatur'], langganan: true, kantor: '' }],
-    segmen: ['donatur', 'simpatisan', 'mustahik'],
+    total: 3, halaman: 1, perHalaman: 25,
+    baris: KONTAK,
+    segmen: SEGMEN,
+    grup: GRUP,
   },
+  'kontak.pilihan': { baris: KONTAK.map((k) => ({
+    id: k.id, nama: k.nama, nomor: k.nomor, kantor: k.kantor || '',
+    grup: k.label || [], segmen: k.segmen || [],
+    diblokir: Boolean(k.daftarHitam || k.langganan === false),
+  })), grup: GRUP, segmen: SEGMEN },
+  'grup.daftar': { baris: GRUP },
   'templat.daftar': { baris: [{ id: 't1', nama: 'Ucapan terima kasih', isi: 'Terima kasih {{nama}}', dibuat: new Date().toISOString() }] },
   'massal.daftar': {
     baris: [{
@@ -102,12 +120,17 @@ const JAWABAN = {
     setelan: {
       lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul', alamat: 'Bantul', telepon: '', surel: '', situs: '', penandatangan: '' },
       pengirim: { driver: 'mandiri', kodeNegara: '62', efekMengetik: true },
-      kirim: { jedaMinDetik: 10, jedaMaksDetik: 20, jamMulai: 8, jamSelesai: 20, batasHarianPerangkat: 800, kirimPerPutaran: 5, percobaanMaks: 3, hormatiJamKirim: true },
+      kirim: { jedaMinDetik: 30, jedaMaksDetik: 60, jamMulai: 8, jamSelesai: 20, batasHarianPerangkat: 800, kirimPerPutaran: 5, percobaanMaks: 3, hormatiJamKirim: true },
       webhook: { aktif: false, url: '', rahasia: '', kejadian: ['terkirim'] },
-      biaya: { biayaPerPesan: 0, saldoDicatat: 0, peringatanSaldo: 50000 },
       rekening: [], tampilan: { tema: 'terang', intervalPollingDetik: 10 },
     },
   },
+  'kontak.simpan': { kontak: { id: 'k9', nama: 'Kontak Baru', nomor: '628999000111' }, baru: true },
+  'templat.simpan': { baris: [] },
+  'pesan.hapus': { pesan: 'Riwayat pesan dihapus.' },
+  'pesan.hapusSemua': { terhapus: 3, diperiksa: 3, catatan: '3 riwayat pesan dihapus.' },
+  'grup.ubahNama': { grup: 'X', kontak: 1, baris: GRUP },
+  'grup.hapus': { grup: 'X', kontak: 1, baris: GRUP },
   'antrean.proses': { laporan: { diproses: 0, terkirim: 0, diserahkan: 0, gagal: 0, ditunda: 0, alasan: [] } },
   'berkas.unggah': { berkas: { id: 'f_uji1', nama: 'Panduan Zakat.pdf', tipe: 'application/pdf', jenis: 'dokumen', byte: 204800 } },
 };
@@ -313,11 +336,120 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     sisip.teks === 'Assalamualaikum {{nama}}, terima kasih.', sisip.teks);
   cek('kursor pindah ke belakang penanda', sisip.kursor === 'Assalamualaikum {{nama}}'.length, sisip.kursor);
 
-  const pratinjau = await p.evaluate(() => (document.getElementById('pratinjau') || {}).textContent || '');
-  cek('pratinjau memakai contoh nama sungguhan, bukan {{nama}} mentah',
-    /Bapak Budi/.test(pratinjau) && !/\{\{/.test(pratinjau), pratinjau);
+  /* Sebelum kontak dipilih, pratinjau TIDAK boleh mengarang nama. Nama karangan
+     membuat penandanya terlihat sudah berfungsi padahal belum ada penerimanya —
+     dan kekeliruan itu baru ketahuan sesudah pesannya terkirim. */
+  const pratinjauKosong = await p.evaluate(() => ({
+    isi: (document.getElementById('pratinjau') || {}).textContent || '',
+    kepala: (document.getElementById('pratinjauUntuk') || {}).textContent || '',
+  }));
+  cek('sebelum kontak dipilih, penanda diganti sapaan umum — bukan nama karangan',
+    /Bapak\/Ibu/.test(pratinjauKosong.isi) && !/\{\{/.test(pratinjauKosong.isi), pratinjauKosong.isi);
+  cek('dan disebutkan bahwa kontaknya belum dipilih',
+    /pilih kontak/i.test(pratinjauKosong.kepala), pratinjauKosong.kepala);
+
+  console.log('\n=== F0b. PENERIMA DIPILIH DARI KONTAK, BUKAN DIKETIK ===');
+  const adaKotakNomor = await p.evaluate(() =>
+    Boolean(document.querySelector('#isi [name=nomor]')));
+  cek('kotak isian nomor bebas sudah tidak ada', adaKotakNomor === false);
+
+  await p.click('#fkPilihTombol');
+  await p.waitForTimeout(400);
+  const isiPemilih = await p.evaluate(() => ({
+    terbuka: !document.getElementById('fkPilihPanel').hidden,
+    baris: Array.from(document.querySelectorAll('#fkPilihIsi .pilih-baris')).map((b) => ({
+      nama: (b.querySelector('.pilih-nama') || {}).textContent || '',
+      mati: b.classList.contains('mati'),
+    })),
+    adaTombolBaru: Array.from(document.querySelectorAll('#fkPilihPanel .keping'))
+      .some((k) => /kontak baru/i.test(k.textContent)),
+  }));
+  cek('panel pemilih terbuka saat ditekan', isiPemilih.terbuka === true);
+  cek('kontaknya tergambar', isiPemilih.baris.length === 3, isiPemilih.baris);
+  cek('kontak diblokir tetap terlihat tetapi tidak bisa dicentang',
+    (isiPemilih.baris.find((b) => /Ani/.test(b.nama)) || {}).mati === true, isiPemilih.baris);
+  cek('ada jalan menyimpan kontak baru tanpa meninggalkan layar ini',
+    isiPemilih.adaTombolBaru === true);
+
+  const sesudahCentang = await p.evaluate(() => {
+    const kotak = Array.from(document.querySelectorAll('#fkPilihIsi input[type=checkbox]'))
+      .filter((c) => !c.disabled);
+    kotak[0].checked = true; kotak[0].dispatchEvent(new Event('change', { bubbles: true }));
+    kotak[1].checked = true; kotak[1].dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      ringkas: document.getElementById('fkPilihRingkas').textContent,
+      pratinjau: (document.getElementById('pratinjau') || {}).textContent || '',
+      kepala: (document.getElementById('pratinjauUntuk') || {}).textContent || '',
+    };
+  });
+  cek('ringkasan menyebut siapa saja yang terpilih',
+    /Budi/.test(sesudahCentang.ringkas) && /Siti/.test(sesudahCentang.ringkas), sesudahCentang.ringkas);
+  cek('pratinjau memakai nama kontak yang BENAR-BENAR terpilih',
+    /Budi Santosa/.test(sesudahCentang.pratinjau), sesudahCentang.pratinjau);
+  cek('dan mengingatkan bahwa yang lain menerima namanya sendiri',
+    /namanya sendiri/i.test(sesudahCentang.kepala), sesudahCentang.kepala);
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(200);
+
+  console.log('\n=== F0c. HAPUS RIWAYAT ===');
+  await p.evaluate(() => { location.hash = '#antrean'; });
+  await p.waitForTimeout(700);
+  const hapusRiwayat = await p.evaluate(() => ({
+    tombolBaris: document.querySelectorAll('#isi [data-hapusp]').length,
+    tombolSemua: Boolean(document.getElementById('kosongkanRiwayat')),
+  }));
+  cek('tiap baris riwayat bisa dihapus', hapusRiwayat.tombolBaris === 3, hapusRiwayat);
+  cek('superadmin melihat tombol hapus semua', hapusRiwayat.tombolSemua === true, hapusRiwayat);
+
+  await p.click('#kosongkanRiwayat');
+  await p.waitForTimeout(400);
+  const dialogHapus = await p.evaluate(() => {
+    const m = document.querySelector('.modal, .modal-box, [class*=modal]');
+    return {
+      teks: m ? m.textContent : '',
+      adaKetik: Boolean(document.getElementById('tegaskanHapus')),
+    };
+  });
+  cek('menuntut kata kunci diketik ulang, bukan sekadar tombol Ya',
+    dialogHapus.adaKetik === true, dialogHapus.adaKetik);
+  cek('disebutkan apa yang TIDAK ikut terhapus', /audit/i.test(dialogHapus.teks), dialogHapus.teks.slice(0, 200));
+  cek('dan bahwa pesan yang sudah sampai tidak bisa ditarik',
+    /HP penerima/i.test(dialogHapus.teks), dialogHapus.teks.slice(0, 300));
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(300);
+
+  console.log('\n=== F0d. GRUP DI KIRIMAN MASSAL ===');
+  await p.evaluate(() => { location.hash = '#massal'; });
+  await p.waitForTimeout(800);
+  const layarMassal = await p.evaluate(() => ({
+    adaSegmenLama: Boolean(document.querySelector('#isi select[name=segmen]')),
+    grup: Array.from(document.querySelectorAll('#isi [data-grup]')).map((c) => c.value),
+    hitung: (document.getElementById('penerimaHitung') || {}).textContent || '',
+    daftarTersembunyi: (document.getElementById('penerimaDaftar') || {}).hidden,
+  }));
+  cek('dropdown segmen tunggal yang lama sudah tidak ada', layarMassal.adaSegmenLama === false);
+  cek('grup buatan sendiri bisa dicentang', layarMassal.grup.length === 2, layarMassal.grup);
+  cek('jumlah penerima terlihat SEBELUM tombol ditekan', /\d/.test(layarMassal.hitung), layarMassal.hitung);
+  cek('daftar grup tersembunyi selama memilih "semua kontak"',
+    layarMassal.daftarTersembunyi === true, layarMassal);
+
+  const sesudahPilihGrup = await p.evaluate(() => {
+    const radio = Array.from(document.querySelectorAll('[name=carePenerima]'))
+      .find((r) => r.value === 'pilih');
+    radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true }));
+    const g = document.querySelector('[data-grup]');
+    g.checked = true; g.dispatchEvent(new Event('change', { bubbles: true }));
+    return (document.getElementById('penerimaHitung') || {}).textContent || '';
+  });
+  cek('mencentang satu grup langsung memperbarui hitungannya',
+    /1|2/.test(sesudahPilihGrup) && /dikirimi/i.test(sesudahPilihGrup), sesudahPilihGrup);
 
   console.log('\n=== F1. LAMPIRAN BERKAS ===');
+  /* Bagian sebelumnya berpindah ke halaman lain, jadi halamannya dikembalikan
+     dulu. Uji yang bergantung pada sisa keadaan uji sebelumnya akan gagal
+     dengan sebab yang menyesatkan begitu urutannya berubah. */
+  await p.evaluate(() => { location.hash = '#kirim'; });
+  await p.waitForTimeout(800);
   const kotak = await p.evaluate(() => {
     const f = document.querySelector('#isi input[type=file]');
     return f ? { ada: true, terima: f.accept, ket: (document.getElementById('fkBerkasKet') || {}).textContent || '' } : { ada: false };

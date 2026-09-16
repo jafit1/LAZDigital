@@ -106,10 +106,14 @@ module.exports = async function penangan(req, res) {
     await db.tambahKeHimpunan(`percakapan:${masuk.nomor}`, pesan.id);
     await kirimKejadian('masuk', pesan, setelan);
 
-    // Berhenti berlangganan dihormati lebih dulu, sebelum aturan lain
+    /* Permintaan berhenti dihormati lebih dulu, sebelum aturan balasan lain.
+       Dua medan ditulis sekaligus karena tampilan sekarang hanya mengenal satu
+       saklar "diblokir"; kalau cuma `langganan` yang diturunkan, daftar kontak
+       akan menampilkannya sebagai aktif padahal ia tidak lagi dikirimi. */
     const teksBersih = masuk.teks.trim().toLowerCase();
     if (['berhenti', 'stop', 'unsubscribe'].includes(teksBersih)) {
       kontak.langganan = false;
+      kontak.daftarHitam = true;
       kontak.diubah = sekarang();
       await db.simpan(kontakLib.KUNCI(kontak.id), kontak);
     }

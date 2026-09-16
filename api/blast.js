@@ -126,13 +126,8 @@ tindakan['dasbor.ringkas'] = { izin: 'dasbor', async jalankan({ pengguna }) {
     perangkat: perangkat.map((d) => ({
       id: d.id, nama: d.nama, nomor: d.nomor, status: d.status, driver: d.driver,
     })),
-    biaya: {
-      perPesan: setelan.biaya.biayaPerPesan,
-      perkiraanBulanIni: setelan.biaya.biayaPerPesan * hitung(pesan.filter(
-        (p) => String(p.dibuat).slice(0, 7) === tanggal.slice(0, 7))).terkirim,
-      saldoDicatat: setelan.biaya.saldoDicatat,
-      peringatan: setelan.biaya.saldoDicatat > 0 && setelan.biaya.saldoDicatat <= setelan.biaya.peringatanSaldo,
-    },
+    /* Tidak ada lagi ringkasan biaya. Gateway sendiri tidak menagih per pesan,
+       jadi angkanya selalu nol dan hanya menyita satu kotak di dasbor. */
   };
 } };
 
@@ -261,12 +256,62 @@ tindakan['kontak.daftar'] = { izin: 'kontak.lihat', async jalankan({ data, pengg
   const hasil = await kontakLib.daftarKontak({
     cari: util.bersihkanTeks(data.cari, 80),
     segmen: util.bersihkanTeks(data.segmen, 40),
-    label: util.bersihkanTeks(data.label, 40),
+    grup: util.bersihkanTeks(data.grup || data.label, 40),
     halaman: Number(data.halaman) || 1,
     perHalaman: Math.min(100, Number(data.perHalaman) || 25),
     kantorTerkunci: kantorTerkunci(pengguna),
   });
-  return { ...hasil, segmen: kontakLib.SEGMEN };
+  return { ...hasil, segmen: kontakLib.SEGMEN, grup: await kontakLib.daftarGrup() };
+} };
+
+/* Dipakai pemilih penerima di halaman Kirim Pesan dan Kiriman Massal. Berbeda
+   dari kontak.daftar yang berhalaman: pemilih perlu SELURUH kontak sekaligus
+   supaya pencarian di dalam dropdown terasa seketika, jadi medannya dipangkas
+   seperlunya — daftar lengkap dengan catatan dan alamat bisa ratusan kilobita. */
+tindakan['kontak.pilihan'] = { izin: 'kontak.lihat', async jalankan({ pengguna }) {
+  const kunci = kantorTerkunci(pengguna);
+  let isi = await kontakLib.semuaKontak();
+  if (kunci) isi = isi.filter((k) => (k.kantor || '') === kunci);
+  isi.sort((a, b) => String(a.nama).localeCompare(String(b.nama), 'id'));
+  return {
+    baris: isi.map((k) => ({
+      id: k.id, nama: k.nama, nomor: k.nomor, kantor: k.kantor || '',
+      grup: k.label || [], segmen: k.segmen || [],
+      /* Kontak yang diblokir tetap DIKIRIM ke tampilan, tidak disembunyikan:
+         petugas yang mencari "Budi" dan tidak menemukannya akan menyangka
+         kontaknya belum ada lalu membuat kembarannya. Yang benar adalah ia
+         terlihat, tetapi tidak bisa dicentang, dengan alasannya tertulis. */
+      diblokir: kontakLib.diblokir(k),
+    })),
+    grup: await kontakLib.daftarGrup(),
+    segmen: kontakLib.SEGMEN,
+  };
+} };
+
+// --- Grup kontak ----------------------------------------------------------
+tindakan['grup.daftar'] = { izin: 'kontak.lihat', async jalankan() {
+  return { baris: await kontakLib.daftarGrup() };
+} };
+
+tindakan['grup.atur'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const hasil = await kontakLib.aturGrupKontak(
+    Array.isArray(data.kontakId) ? data.kontakId : [data.kontakId],
+    data.grup,
+    data.masuk !== false);
+  await auth.catatAudit(pengguna, 'grup.atur', hasil, req);
+  return { ...hasil, baris: await kontakLib.daftarGrup() };
+} };
+
+tindakan['grup.ubahNama'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const hasil = await kontakLib.ubahNamaGrup(data.lama, data.baru);
+  await auth.catatAudit(pengguna, 'grup.ubahNama', { ...hasil, dari: data.lama }, req);
+  return { ...hasil, baris: await kontakLib.daftarGrup() };
+} };
+
+tindakan['grup.hapus'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const hasil = await kontakLib.hapusGrup(data.grup);
+  await auth.catatAudit(pengguna, 'grup.hapus', hasil, req);
+  return { ...hasil, baris: await kontakLib.daftarGrup() };
 } };
 
 tindakan['kontak.simpan'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
@@ -287,16 +332,24 @@ tindakan['kontak.hapus'] = { izin: 'kontak.ubah', async jalankan({ data, penggun
   return { pesan: 'Kontak dihapus.' };
 } };
 
-tindakan['kontak.ubahLangganan'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+/* Satu saklar, bukan dua. "Berlangganan" dan "daftar hitam" dulu berdiri
+   sendiri-sendiri dan artinya bertumpang tindih; sekarang keduanya digerakkan
+   bersama supaya tidak mungkin lagi ada kontak yang aktif menurut saklar yang
+   satu dan diblokir menurut saklar yang lain. */
+tindakan['kontak.ubahBlokir'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
   const kontak = await db.ambil(kontakLib.KUNCI(data.id));
   if (!kontak) throw new GalatAplikasi('Kontak tidak ditemukan', 404);
-  if (data.langganan !== undefined) kontak.langganan = Boolean(data.langganan);
-  if (data.daftarHitam !== undefined) kontak.daftarHitam = Boolean(data.daftarHitam);
+  const blokir = data.diblokir !== undefined ? Boolean(data.diblokir)
+    : data.daftarHitam !== undefined ? Boolean(data.daftarHitam)
+    : !kontakLib.diblokir(kontak);
+  kontak.daftarHitam = blokir;
+  kontak.langganan = !blokir;
   kontak.diubah = sekarang();
   await db.simpan(kontakLib.KUNCI(kontak.id), kontak);
-  await auth.catatAudit(pengguna, 'kontak.langganan', { id: kontak.id, langganan: kontak.langganan, daftarHitam: kontak.daftarHitam }, req);
-  return { kontak };
+  await auth.catatAudit(pengguna, 'kontak.blokir', { id: kontak.id, diblokir: blokir }, req);
+  return { kontak, diblokir: blokir };
 } };
+tindakan['kontak.ubahLangganan'] = tindakan['kontak.ubahBlokir']; // nama lama
 
 tindakan['kontak.impor'] = { izin: 'kontak.impor', async jalankan({ data, pengguna, req }) {
   const teks = String(data.teks || '');
@@ -325,13 +378,35 @@ tindakan['templat.simpan'] = { izin: 'pesan.kirim', async jalankan({ data, pengg
     isi: { wajib: true, label: 'Isi pesan', maks: 4000 },
   });
   if (galat.length) throw new GalatAplikasi(galat.join('. '));
+
+  /* Lampiran templat dibebaskan dari umur tujuh hari. Templat dipanggil lagi
+     berbulan-bulan kemudian — brosur zakat fitrah tiap Ramadan — dan lampiran
+     yang diam-diam kedaluwarsa menghasilkan kegagalan yang paling sulit
+     dimengerti: templatnya ada, isinya benar, berkasnya tidak pernah sampai. */
+  let berkas = {};
+  if (data.berkasId) {
+    const abadi = await berkasLib.jadikanAbadi(data.berkasId);
+    if (!abadi) throw new GalatAplikasi('Lampirannya tidak ditemukan lagi. Unggah ulang berkasnya, lalu simpan.', 404);
+    berkas = await lampiran(data.berkasId);
+  }
+  const bersihkanBerkas = data.hapusBerkas === true || data.berkasId === '';
+
   const daftar = (await db.ambil('templat')) || [];
   if (data.id) {
     const i = daftar.findIndex((t) => t.id === data.id);
     if (i === -1) throw new GalatAplikasi('Templat tidak ditemukan', 404);
-    daftar[i] = { ...daftar[i], ...bersih, diubah: sekarang() };
+    /* Medannya harus ditulis KOSONG, bukan sekadar tidak disebut: templat yang
+       lama disalin utuh dengan sebaran di bawah, jadi medan yang dilewati akan
+       ikut terbawa dan lampiran yang "dilepas" tetap menempel. */
+    const lamaBerkas = bersihkanBerkas
+      ? { berkasId: '', namaBerkas: '', tipeBerkas: '', jenisBerkas: '' }
+      : {
+        berkasId: daftar[i].berkasId || '', namaBerkas: daftar[i].namaBerkas || '',
+        tipeBerkas: daftar[i].tipeBerkas || '', jenisBerkas: daftar[i].jenisBerkas || '',
+      };
+    daftar[i] = { ...daftar[i], ...bersih, ...lamaBerkas, ...berkas, diubah: sekarang() };
   } else {
-    daftar.unshift({ id: id('t_'), ...bersih, dibuat: sekarang() });
+    daftar.unshift({ id: id('t_'), ...bersih, ...berkas, dibuat: sekarang() });
   }
   await db.simpan('templat', daftar.slice(0, 200));
   await auth.catatAudit(pengguna, 'templat.simpan', { nama: bersih.nama }, req);
@@ -364,10 +439,20 @@ tindakan['berkas.unggah'] = { izin: 'pesan.kirim', async jalankan({ data }) {
   return { berkas };
 } };
 
+/* PENERIMA DISEBUT LEWAT kontakId, BUKAN NOMOR MENTAH.
+ *
+ * Penanda {{nama}} hanya bisa terisi kalau namanya ada di suatu tempat, dan
+ * satu-satunya tempat itu adalah kontak. Selama nomor boleh diketik bebas,
+ * separuh kiriman berakhir dengan sapaan "Bapak/Ibu" tanpa ada yang menyadari
+ * kenapa — penandanya terlihat bekerja, hanya saja datanya tidak ada.
+ *
+ * Boleh lebih dari satu penerima: satu pengumuman ke lima pengurus adalah
+ * pekerjaan sehari-hari, dan memaksanya lewat Kiriman Massal berarti membuat
+ * kampanye bernama untuk sesuatu yang bukan kampanye.
+ */
 tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
   const { bersih, galat } = util.periksaSkema(data, {
     perangkatId: { wajib: true, label: 'Perangkat pengirim', maks: 60 },
-    nomor: { wajib: true, label: 'Nomor tujuan', maks: 25 },
     teks: { wajib: true, label: 'Isi pesan', maks: 4000 },
     berkasUrl: { label: 'Tautan berkas', maks: 500 },
     namaBerkas: { label: 'Nama berkas', maks: 120 },
@@ -377,29 +462,66 @@ tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
 
   const perangkat = await db.ambil(`perangkat:${bersih.perangkatId}`);
   if (!perangkat) throw new GalatAplikasi('Perangkat pengirim tidak ditemukan', 404);
-  if (!util.nomorValid(bersih.nomor)) throw new GalatAplikasi('Nomor tujuan tidak sah');
 
-  const kontak = await kontakLib.cariLewatNomor(bersih.nomor);
-  if (kontak && kontak.daftarHitam) throw new GalatAplikasi('Nomor ini ada di daftar hitam');
+  const daftarId = Array.isArray(data.kontakId) ? data.kontakId
+    : data.kontakId ? [data.kontakId] : [];
+  const idUnik = Array.from(new Set(daftarId.map((i) => String(i || '').trim()).filter(Boolean)));
+  if (!idUnik.length) {
+    throw new GalatAplikasi('Pilih dulu minimal satu kontak penerima. Nomor yang belum tersimpan harus disimpan sebagai kontak lebih dulu, supaya namanya bisa dipakai di pesan.');
+  }
+  if (idUnik.length > 50) {
+    throw new GalatAplikasi('Lebih dari 50 penerima sebaiknya lewat Kiriman Massal, supaya jalannya bisa dipantau dan dihentikan.');
+  }
 
-  const pesan = await antreanLib.antrikan({
-    perangkatId: perangkat.id,
-    nomor: bersih.nomor,
-    nama: (kontak && kontak.nama) || '',
-    kontakId: kontak ? kontak.id : null,
-    isi: {
-      teks: isiPlaceholder(bersih.teks, { nama: (kontak && kontak.nama) || 'Bapak/Ibu', kantor: (kontak && kontak.kantor) || '' }),
-      berkasUrl: bersih.berkasUrl,
-      namaBerkas: bersih.namaBerkas,
-      ...(await lampiran(bersih.berkasId)),
-    },
-    prioritas: 2, // pesan tunggal didahulukan atas kiriman massal
-    jadwal: data.jadwal || undefined,
-    oleh: pengguna.id,
-  });
-  await auth.catatAudit(pengguna, 'pesan.kirim', { pesanId: pesan.id, nomor: pesan.nomor }, req);
+  const kunciKantor = kantorTerkunci(pengguna);
+  const berkasSatu = await lampiran(bersih.berkasId);
+  const terkirim = [];
+  const dilewati = [];
+
+  for (const kid of idUnik) {
+    const kontak = await db.ambil(kontakLib.KUNCI(kid));
+    if (!kontak) { dilewati.push('satu kontak sudah terhapus'); continue; }
+    if (kunciKantor && (kontak.kantor || '') !== kunciKantor) {
+      dilewati.push(`${kontak.nama} (bukan kantor Anda)`); continue;
+    }
+    if (kontakLib.diblokir(kontak)) { dilewati.push(`${kontak.nama} (diblokir)`); continue; }
+    if (!util.nomorValid(kontak.nomor)) { dilewati.push(`${kontak.nama} (nomornya tidak sah)`); continue; }
+
+    const pesan = await antreanLib.antrikan({
+      perangkatId: perangkat.id,
+      nomor: kontak.nomor,
+      nama: kontak.nama,
+      kontakId: kontak.id,
+      isi: {
+        teks: isiPlaceholder(bersih.teks, {
+          nama: kontak.anonim ? 'Bapak/Ibu' : (kontak.nama || 'Bapak/Ibu'),
+          kantor: kontak.kantor || '',
+          lembaga: 'LAZISMU Bantul',
+        }),
+        berkasUrl: bersih.berkasUrl,
+        namaBerkas: bersih.namaBerkas,
+        ...berkasSatu,
+      },
+      prioritas: 2, // pesan bernama penerima didahulukan atas kiriman massal
+      jadwal: data.jadwal || undefined,
+      oleh: pengguna.id,
+    });
+    terkirim.push(pesan);
+  }
+
+  if (!terkirim.length) {
+    throw new GalatAplikasi('Tidak ada penerima yang bisa dikirimi: ' + dilewati.join(', '));
+  }
+
+  await auth.catatAudit(pengguna, 'pesan.kirim', { jumlah: terkirim.length, pesanId: terkirim.map((p) => p.id).slice(0, 20) }, req);
   await dorongAntrean();
-  return { pesan, catatan: 'Pesan masuk antrean dan dikirim mengikuti jeda aman.' };
+
+  /* Yang dilewati disebut apa adanya. Melaporkan "5 pesan masuk antrean" saat
+     dua di antaranya diblokir akan membuat petugas menunggu balasan yang tidak
+     akan pernah datang. */
+  const catatan = `${terkirim.length} pesan masuk antrean dan dikirim mengikuti jeda aman.`
+    + (dilewati.length ? ` ${dilewati.length} dilewati: ${dilewati.join(', ')}.` : '');
+  return { pesan: terkirim[0], jumlah: terkirim.length, dilewati, catatan };
 } };
 
 tindakan['pesan.daftar'] = { izin: 'pesan.lihat', async jalankan({ data, pengguna }) {
@@ -438,6 +560,46 @@ tindakan['pesan.batal'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
   return { pesan };
 } };
 
+/* Menghapus riwayat satu pesan. Berbeda dari "batalkan": batalkan menghentikan
+   pengiriman tetapi catatannya tetap ada; hapus membuang catatannya. Pesan yang
+   masih antre ikut keluar dari antrean, kalau tidak ia akan tetap terkirim
+   setelah riwayatnya tidak ada lagi — dan tidak ada tempat untuk melihatnya. */
+tindakan['pesan.hapus'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const kunci = kantorTerkunci(pengguna);
+  if (kunci) {
+    const pesan = await db.ambil(antreanLib.KUNCI_PESAN(data.id));
+    const kontak = pesan ? await kontakLib.cariLewatNomor(pesan.nomor) : null;
+    if (!kontak || (kontak.kantor || '') !== kunci) {
+      throw new GalatAplikasi('Pesan ini bukan milik kantor Anda', 403);
+    }
+  }
+  const pesan = await antreanLib.hapusPesan(data.id);
+  await auth.catatAudit(pengguna, 'pesan.hapus', { pesanId: data.id, nomor: pesan.nomor }, req);
+  return { pesan: 'Riwayat pesan dihapus.' };
+} };
+
+/* Mengosongkan SELURUH riwayat pesan sekaligus — superadmin saja.
+   Bukan sekadar "tombol berbahaya": riwayat pesan adalah bukti apa yang sudah
+   dikirim lembaga kepada donatur, dan tidak ada tombol urung. Hak yang
+   diturunkan lewat centang modul broadcast tidak cukup untuk ini. */
+tindakan['pesan.hapusSemua'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  if (pengguna.peran !== 'superadmin') {
+    throw new GalatAplikasi('Hanya superadmin yang boleh mengosongkan seluruh riwayat pesan', 403);
+  }
+  /* Kata kunci diketik ulang, bukan sekadar menekan "Ya". Dialog konfirmasi
+     ditekan tanpa dibaca; mengetik ulang tidak bisa dilakukan tanpa sadar. */
+  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
+    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
+  }
+  const hasil = await antreanLib.hapusSemuaPesan();
+  await auth.catatAudit(pengguna, 'pesan.hapusSemua', hasil, req);
+  return {
+    ...hasil,
+    catatan: `${hasil.terhapus} riwayat pesan dihapus. Kontak, templat, dan catatan audit tidak disentuh.`
+      + ' Angka pada riwayat kiriman massal ikut jadi nol karena pesannya sudah tidak ada.',
+  };
+} };
+
 tindakan['pesan.ulangi'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
   const pesan = await antreanLib.ulangi(data.id);
   await auth.catatAudit(pengguna, 'pesan.ulangi', { pesanId: data.id }, req);
@@ -450,7 +612,7 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
     nama: { wajib: true, label: 'Nama kiriman', maks: 100 },
     perangkatId: { wajib: true, label: 'Perangkat pengirim', maks: 60 },
     teks: { wajib: true, label: 'Isi pesan', maks: 4000 },
-    segmen: { label: 'Segmen', maks: 40 },
+    segmen: { label: 'Segmen', maks: 40 },   // bentuk lama: satu segmen sebagai teks
     berkasId: { label: 'Lampiran', maks: 60 },
   });
   if (galat.length) throw new GalatAplikasi(galat.join('. '));
@@ -459,22 +621,54 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
   if (!perangkat) throw new GalatAplikasi('Perangkat pengirim tidak ditemukan', 404);
 
   let sasaran = await kontakLib.semuaKontak();
-  if (bersih.segmen) sasaran = sasaran.filter((k) => (k.segmen || []).includes(bersih.segmen));
+
+  /* Penerima dipilih dari GRUP dan/atau SEGMEN, keduanya boleh lebih dari satu,
+     dan hasilnya gabungan — bukan irisan. Petugas yang mencentang "Pengurus
+     KLL" dan "Panitia Qurban" bermaksud mengirimi keduanya; irisan akan
+     menghasilkan daftar kosong atau, lebih buruk, beberapa orang saja, tanpa
+     ada yang sadar bahwa mayoritasnya tidak ikut terkirimi. */
+  const grupPilih = (Array.isArray(data.grup) ? data.grup : data.grup ? [data.grup] : [])
+    .map(kontakLib.rapikanGrup).filter(Boolean);
+  const segmenPilih = (Array.isArray(data.segmen) ? data.segmen : bersih.segmen ? [bersih.segmen] : [])
+    .map((s) => util.bersihkanTeks(s, 40)).filter(Boolean);
+
+  if (grupPilih.length || segmenPilih.length) {
+    const setGrup = new Set(grupPilih);
+    const setSegmen = new Set(segmenPilih);
+    sasaran = sasaran.filter((k) =>
+      (k.label || []).some((g) => setGrup.has(kontakLib.rapikanGrup(g))) ||
+      (k.segmen || []).some((s) => setSegmen.has(s)));
+  }
   if (Array.isArray(data.kontakId) && data.kontakId.length) {
     const set = new Set(data.kontakId);
     sasaran = sasaran.filter((k) => set.has(k.id));
   }
+  const kunciKantorMassal = kantorTerkunci(pengguna);
+  if (kunciKantorMassal) sasaran = sasaran.filter((k) => (k.kantor || '') === kunciKantorMassal);
+
   const dilewati = sasaran.filter((k) => !kontakLib.bolehDikirimiMassal(k)).length;
   sasaran = sasaran.filter(kontakLib.bolehDikirimiMassal);
 
-  if (!sasaran.length) throw new GalatAplikasi('Tidak ada penerima yang memenuhi syarat (perhatikan daftar hitam dan berhenti berlangganan)');
+  if (!sasaran.length) {
+    throw new GalatAplikasi(grupPilih.length || segmenPilih.length
+      ? 'Tidak ada penerima pada grup/segmen yang dipilih — atau semuanya sedang diblokir.'
+      : 'Belum ada kontak yang bisa dikirimi. Tambahkan kontak dulu di menu Kontak.');
+  }
 
   const massal = {
     id: id('c_'),
     nama: bersih.nama,
     perangkatId: perangkat.id,
     teks: bersih.teks,
-    segmen: bersih.segmen || '',
+    grup: grupPilih,
+    segmen: segmenPilih,
+    /* Disimpan sebagai kalimat sekali jadi. Nama grup bisa diubah atau dibubarkan
+       bulan depan, dan riwayat kiriman harus tetap bisa menjawab "ini dikirim ke
+       siapa" — bukan menunjuk grup yang sudah tidak ada. */
+    penerimaTertulis: [
+      ...grupPilih,
+      ...segmenPilih.map((s) => (kontakLib.SEGMEN.find((x) => x.kode === s) || {}).label || s),
+    ].join(', ') || 'Semua kontak',
     jumlah: sasaran.length,
     dilewati,
     status: 'berjalan',
@@ -517,7 +711,9 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
 
   await auth.catatAudit(pengguna, 'massal.kirim', { id: massal.id, nama: massal.nama, jumlah: massal.jumlah }, req);
   await dorongAntrean();
-  return { massal, catatan: `${massal.jumlah} pesan masuk antrean. ${dilewati} kontak dilewati karena berhenti berlangganan atau masuk daftar hitam.` };
+  const ket = `${massal.jumlah} pesan masuk antrean untuk ${massal.penerimaTertulis}.`
+    + (dilewati ? ` ${dilewati} kontak dilewati karena diblokir.` : '');
+  return { massal, catatan: ket };
 } };
 
 tindakan['massal.daftar'] = { izin: 'pesan.lihat', async jalankan() {

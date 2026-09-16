@@ -48,6 +48,18 @@ const PESAN = [
   { id: 'm2', nomor: '628444555666', nama: 'Siti', status: 'diserahkan', arah: 'keluar', isi: { teks: 'Halo' }, dibuat: new Date().toISOString() },
   { id: 'm3', nomor: '628777888999', nama: 'Ani', status: 'gagal', arah: 'keluar', isi: { teks: 'Coba' }, galatTerakhir: 'Nomor tidak terdaftar', dibuat: new Date().toISOString() },
 ];
+const SEGMEN = [
+  { kode: 'donatur-rutin', label: 'Donatur rutin' },
+  { kode: 'simpatisan', label: 'Simpatisan belum berdonasi' },
+  { kode: 'mustahik', label: 'Mustahik binaan' },
+];
+const GRUP = [{ nama: 'Panitia Qurban', jumlah: 2 }, { nama: 'Pengurus Harian', jumlah: 1 }];
+const KONTAK = [
+  { id: 'k1', nama: 'Budi Santosa', nomor: '628111222333', segmen: ['donatur-rutin'], label: ['Pengurus Harian', 'Panitia Qurban'], langganan: true, daftarHitam: false, kantor: 'KLL Sewon' },
+  { id: 'k2', nama: 'Siti Aminah', nomor: '628444555666', segmen: ['simpatisan'], label: ['Panitia Qurban'], langganan: true, daftarHitam: false, kantor: '' },
+  { id: 'k3', nama: 'Ani Diblokir', nomor: '628777888999', segmen: [], label: [], langganan: false, daftarHitam: true, kantor: '' },
+];
+
 const JAWABAN = {
   'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
   'sistem.kesiapan': {
@@ -68,7 +80,6 @@ const JAWABAN = {
     antrean: { antre: 7, gagal: 3, dalamJamKirim: true, jamKirim: '08:00\u201320:00 WIB' },
     kontak: { total: 540 },
     perangkat: PERANGKAT.map((d) => ({ id: d.id, nama: d.nama, nomor: d.nomor, status: d.status, driver: d.driver })),
-    biaya: { perPesan: 0, perkiraanBulanIni: 0, saldoDicatat: 0, peringatan: false },
   },
   'perangkat.daftar': {
     baris: PERANGKAT,
@@ -80,10 +91,17 @@ const JAWABAN = {
   },
   'pesan.daftar': { total: PESAN.length, halaman: 1, perHalaman: 25, baris: PESAN },
   'kontak.daftar': {
-    total: 1, halaman: 1, perHalaman: 25,
-    baris: [{ id: 'k1', nama: 'Budi', nomor: '628111222333', segmen: ['donatur'], langganan: true, kantor: '' }],
-    segmen: ['donatur', 'simpatisan', 'mustahik'],
+    total: 3, halaman: 1, perHalaman: 25,
+    baris: KONTAK,
+    segmen: SEGMEN,
+    grup: GRUP,
   },
+  'kontak.pilihan': { baris: KONTAK.map((k) => ({
+    id: k.id, nama: k.nama, nomor: k.nomor, kantor: k.kantor || '',
+    grup: k.label || [], segmen: k.segmen || [],
+    diblokir: Boolean(k.daftarHitam || k.langganan === false),
+  })), grup: GRUP, segmen: SEGMEN },
+  'grup.daftar': { baris: GRUP },
   'templat.daftar': { baris: [{ id: 't1', nama: 'Ucapan terima kasih', isi: 'Terima kasih {{nama}}', dibuat: new Date().toISOString() }] },
   'massal.daftar': {
     baris: [{
@@ -101,12 +119,17 @@ const JAWABAN = {
     setelan: {
       lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul', alamat: 'Bantul', telepon: '', surel: '', situs: '', penandatangan: '' },
       pengirim: { driver: 'mandiri', kodeNegara: '62', efekMengetik: true },
-      kirim: { jedaMinDetik: 10, jedaMaksDetik: 20, jamMulai: 8, jamSelesai: 20, batasHarianPerangkat: 800, kirimPerPutaran: 5, percobaanMaks: 3, hormatiJamKirim: true },
+      kirim: { jedaMinDetik: 30, jedaMaksDetik: 60, jamMulai: 8, jamSelesai: 20, batasHarianPerangkat: 800, kirimPerPutaran: 5, percobaanMaks: 3, hormatiJamKirim: true },
       webhook: { aktif: false, url: '', rahasia: '', kejadian: ['terkirim'] },
-      biaya: { biayaPerPesan: 0, saldoDicatat: 0, peringatanSaldo: 50000 },
       rekening: [], tampilan: { tema: 'terang', intervalPollingDetik: 10 },
     },
   },
+  'kontak.simpan': { kontak: { id: 'k9', nama: 'Kontak Baru', nomor: '628999000111' }, baru: true },
+  'templat.simpan': { baris: [] },
+  'pesan.hapus': { pesan: 'Riwayat pesan dihapus.' },
+  'pesan.hapusSemua': { terhapus: 3, diperiksa: 3, catatan: '3 riwayat pesan dihapus.' },
+  'grup.ubahNama': { grup: 'X', kontak: 1, baris: GRUP },
+  'grup.hapus': { grup: 'X', kontak: 1, baris: GRUP },
   'antrean.proses': { laporan: { diproses: 0, terkirim: 0, diserahkan: 0, gagal: 0, ditunda: 0, alasan: [] } },
 };
 
