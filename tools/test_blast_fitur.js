@@ -45,6 +45,28 @@ async function tolak(nama, data, pengguna) {
   catch (e) { return e.message || String(e); }
 }
 
+/* Sebagian pagar hak akses ada di PENYALUR permintaan, bukan di dalam tiap
+   tindakan — supaya tindakan baru yang lupa memasangnya tertutup, bukan
+   terbuka diam-diam. Memanggil jalankan() langsung seperti jalan() di atas
+   justru melewati pagar itu, jadi yang menguji pagar harus lewat sini. */
+const penangan = require('../api/blast.js');
+const auth = require('../lib/blast/auth');
+const asliMasuk = auth.wajibMasuk;
+function balasan() {
+  const r = { statusCode: 200, tubuh: null, headers: {} };
+  r.setHeader = (k, v) => { r.headers[k] = v; };
+  r.end = (t) => { try { r.tubuh = JSON.parse(t); } catch (_) { r.tubuh = t; } r.writableEnded = true; return r; };
+  return r;
+}
+async function lewatPintu(nama, data, pengguna) {
+  auth.wajibMasuk = async () => pengguna;
+  const res = balasan();
+  await penangan({ method: 'POST', headers: { host: 'uji.test' }, socket: {},
+    body: { tindakan: nama, data: data || {} } }, res);
+  auth.wajibMasuk = asliMasuk;
+  return res;
+}
+
 /* Penyimpanan lokal ditulis dengan penundaan singkat supaya seratus perubahan
    berturut-turut tidak jadi seratus penulisan berkas. Uji ini membaca berkasnya
    langsung untuk memeriksa umur kunci, jadi ia harus menunggu tulisannya
@@ -257,9 +279,11 @@ async function buatPerangkat(id = 'p_uji') {
     /tidak ditemukan/i.test(tidakAda || ''), tidakAda);
 
   // Hapus semua — hanya superadmin, dan harus diketik ulang
-  const olehAdmin = await tolak('pesan.hapusSemua', { tegaskan: 'HAPUS SEMUA' }, ADMIN);
+  const olehAdmin = await lewatPintu('pesan.hapusSemua', { tegaskan: 'HAPUS SEMUA' }, ADMIN);
   cek('admin biasa TIDAK boleh mengosongkan seluruh riwayat',
-    /superadmin/i.test(olehAdmin || ''), olehAdmin);
+    olehAdmin.statusCode === 403, { kode: olehAdmin.statusCode, tubuh: olehAdmin.tubuh });
+  cek('dan pesannya menyebut superadmin, bukan galat samar',
+    /superadmin/i.test(JSON.stringify(olehAdmin.tubuh || '')), olehAdmin.tubuh);
 
   const tanpaKetik = await tolak('pesan.hapusSemua', { tegaskan: 'ya' });
   cek('tanpa mengetik HAPUS SEMUA pun ditolak', /HAPUS SEMUA/.test(tanpaKetik || ''), tanpaKetik);
@@ -282,6 +306,87 @@ async function buatPerangkat(id = 'p_uji') {
 
   const laporan = await antreanLib.prosesAntrean(2000);
   cek('putaran antrean sesudah pengosongan tidak melakukan apa-apa', laporan.diproses === 0, laporan);
+
+  // ======================================================================
+  console.log('\n=== H. WEBHOOK & AUDIT: SUPERADMIN SAJA ===');
+  const webhookLib = require('../lib/blast/webhook');
+
+  for (const nama of ['webhook.riwayat', 'webhook.uji', 'webhook.kirimUlang', 'webhook.hapus',
+    'webhook.kosongkan', 'audit.daftar', 'audit.hapus', 'audit.kosongkan']) {
+    cek(`${nama} bertanda superadmin`, tindakan[nama] && tindakan[nama].superadmin === true, nama);
+  }
+
+  const adminBuka = await lewatPintu('audit.daftar', {}, ADMIN);
+  cek('admin daerah ditolak membuka catatan audit',
+    adminBuka.statusCode === 403, { kode: adminBuka.statusCode, tubuh: adminBuka.tubuh });
+  const adminWebhook = await lewatPintu('webhook.riwayat', {}, ADMIN);
+  cek('admin daerah ditolak membuka riwayat webhook', adminWebhook.statusCode === 403, adminWebhook.statusCode);
+  const superBuka = await lewatPintu('audit.daftar', {}, SUPER);
+  cek('superadmin tetap bisa membukanya', superBuka.statusCode === 200, superBuka.statusCode);
+
+  /* Menutup menunya saja tidak cukup: kartu Webhook di Pengaturan memuat
+     alamat tujuan dan rahasia tanda tangannya. */
+  const setelanAdmin = await lewatPintu('setelan.ambil', {}, ADMIN);
+  cek('setelan yang dikirim ke admin daerah TIDAK memuat bagian webhook',
+    setelanAdmin.tubuh.setelan.webhook === undefined, Object.keys(setelanAdmin.tubuh.setelan));
+  const setelanSuper = await lewatPintu('setelan.ambil', {}, SUPER);
+  cek('superadmin tetap menerimanya', Boolean(setelanSuper.tubuh.setelan.webhook));
+
+  await lewatPintu('setelan.simpan', { setelan: { webhook: { url: 'https://jahat.example/ambil' } } }, ADMIN);
+  const sesudahCoba = await setelanLib.ambilSetelan();
+  cek('admin daerah tidak bisa mengubah alamat webhook walau permintaannya disusun sendiri',
+    sesudahCoba.webhook.url !== 'https://jahat.example/ambil', sesudahCoba.webhook.url);
+
+  // --- Menghapus ---
+  await auth.catatAudit(SUPER, 'uji.satu', {}, REQ);
+  await auth.catatAudit(SUPER, 'uji.dua', {}, REQ);
+  let audit = (await db.ambil('audit')) || [];
+  const sasaranAudit = audit.find((a) => a.tindakan === 'uji.satu');
+  await jalan('audit.hapus', { id: sasaranAudit.id });
+  audit = (await db.ambil('audit')) || [];
+  cek('satu catatan audit bisa dihapus', !audit.some((a) => a.id === sasaranAudit.id));
+  cek('penghapusannya sendiri ikut tercatat',
+    audit.some((a) => a.tindakan === 'audit.hapus'), audit.slice(0, 2).map((a) => a.tindakan));
+
+  const jumlahSebelum = audit.length;
+  const tolakKetik = await tolak('audit.kosongkan', { tegaskan: 'ya' });
+  cek('mengosongkan audit tanpa mengetik HAPUS SEMUA ditolak', /HAPUS SEMUA/.test(tolakKetik || ''), tolakKetik);
+  cek('dan datanya memang belum tersentuh', ((await db.ambil('audit')) || []).length === jumlahSebelum);
+
+  const hasilKosong = await jalan('audit.kosongkan', { tegaskan: 'HAPUS SEMUA' });
+  const auditBaru = (await db.ambil('audit')) || [];
+  cek('seluruh catatan lama hilang', auditBaru.length === 1, auditBaru.length);
+  cek('tetapi lognya tidak berpura-pura tidak pernah berisi',
+    auditBaru[0].tindakan === 'audit.kosongkan' && auditBaru[0].rincian.terhapus === jumlahSebelum,
+    auditBaru[0]);
+  cek('jumlah yang terhapus dilaporkan apa adanya', hasilKosong.terhapus === jumlahSebelum, hasilKosong);
+
+  // Riwayat webhook
+  await webhookLib.kirimKejadian('uji', { id: 'x1', nomor: '628000000001', status: 'uji' });
+  await webhookLib.kirimKejadian('uji', { id: 'x2', nomor: '628000000002', status: 'uji' });
+  let riwayat = await webhookLib.riwayat(50);
+  cek('riwayat webhook terisi untuk diuji', riwayat.length >= 2, riwayat.length);
+
+  await jalan('webhook.hapus', { id: riwayat[0].id });
+  const sesudahHapusW = await webhookLib.riwayat(50);
+  cek('satu baris riwayat webhook bisa dihapus',
+    sesudahHapusW.length === riwayat.length - 1, { sebelum: riwayat.length, sesudah: sesudahHapusW.length });
+
+  const tidakAdaW = await tolak('webhook.hapus', { id: 'w_tidakada' });
+  cek('baris yang tidak ada dijawab dengan penjelasan', /tidak ditemukan/i.test(tidakAdaW || ''), tidakAdaW);
+
+  /* Kejadian gagal terdaftar di kotak mati dan bisa dikirim ulang. Kalau
+     pengosongan hanya membuang riwayatnya, ia tetap menunggu di sana —
+     tidak terlihat di mana pun, tetapi masih bisa dijalankan. */
+  await db.tambahKeHimpunan('webhook:mati', 'w_matiuji');
+  await db.simpan('webhook:kejadian:w_matiuji', { id: 'w_matiuji', jenis: 'uji', data: {} });
+  const kosongW = await jalan('webhook.kosongkan', { tegaskan: 'HAPUS SEMUA' });
+  cek('mengosongkan riwayat webhook mengosongkan seluruhnya',
+    (await webhookLib.riwayat(50)).length === 0);
+  cek('kotak mati ikut dibersihkan, tidak ada yang tertinggal menunggu',
+    (await db.anggotaHimpunan('webhook:mati')).length === 0 && kosongW.mati >= 1, kosongW);
+  cek('dan dokumen kejadiannya ikut hilang',
+    (await db.ambil('webhook:kejadian:w_matiuji')) === null);
 
   console.log('\ntest_blast_fitur.js  ' + ok + '/' + (ok + g) + (g ? '  ADA GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);

@@ -111,7 +111,14 @@ const JAWABAN = {
     }],
   },
   'pengguna.daftar': { baris: [PENGGUNA], peran: ['superadmin', 'admin', 'penyelia', 'petugas', 'kll'] },
-  'audit.daftar': { baris: [{ id: 'a1', aksi: 'pesan.kirim', oleh: 'superadmin', waktu: new Date().toISOString(), rincian: { nomor: '628111222333' } }] },
+  'audit.daftar': { baris: [
+    { id: 'a1', tindakan: 'pesan.kirim', nama: 'Superadmin', peran: 'superadmin', waktu: new Date().toISOString(), rincian: { nomor: '628111222333' } },
+    { id: 'a2', tindakan: 'setelan.simpan', nama: 'Superadmin', peran: 'superadmin', waktu: new Date().toISOString(), rincian: {} },
+  ] },
+  'audit.hapus': { pesan: 'Satu catatan audit dihapus.' },
+  'audit.kosongkan': { terhapus: 2, catatan: '2 catatan audit dihapus.' },
+  'webhook.hapus': { terhapus: 1, sisa: 0, pesan: 'Satu baris riwayat webhook dihapus.' },
+  'webhook.kosongkan': { terhapus: 1, mati: 0, catatan: '1 baris riwayat webhook dihapus.' },
   'webhook.riwayat': {
     baris: [{ id: 'w1', jenis: 'terkirim', kode: 200, waktu: new Date().toISOString(), url: 'https://contoh.test/hook', isi: {} }],
     mati: [],
@@ -151,7 +158,24 @@ const server = http.createServer((req, res) => {
           periksa: hitungTindakan['perangkat.periksa'] || 0,
           unggah: hitungTindakan['berkas.unggah'] || 0 }));
       }
-      const khusus = dinamis[t] ? dinamis[t](hitungTindakan[t]) : null;
+      /* Peran akun bisa diganti di tengah uji lewat __peran, supaya halaman
+         yang sama bisa dilihat sebagai superadmin dan sebagai admin daerah
+         tanpa menyalakan server kedua. */
+      if (t === '__peran') { PERAN_SEKARANG = JSON.parse(b).data.peran; return res.end(JSON.stringify({ ok: true })); }
+      let khusus = dinamis[t] ? dinamis[t](hitungTindakan[t]) : null;
+      if (!khusus && PERAN_SEKARANG !== 'superadmin') {
+        if (t === 'sistem.status') {
+          khusus = Object.assign({}, JAWABAN[t], { pengguna: Object.assign({}, PENGGUNA, { peran: PERAN_SEKARANG }) });
+        } else if (t === 'setelan.ambil') {
+          /* Persis seperti servernya: bagian webhook dibuang, bukan dikosongkan. */
+          const st = JSON.parse(JSON.stringify(JAWABAN[t]));
+          delete st.setelan.webhook;
+          khusus = Object.assign(st, { bolehWebhook: false });
+        } else if (/^(audit|webhook)\./.test(t)) {
+          res.writeHead(403);
+          return res.end(JSON.stringify({ ok: false, pesan: 'Hanya superadmin yang boleh membuka bagian ini' }));
+        }
+      }
       res.end(JSON.stringify(Object.assign({ ok: true }, khusus || JAWABAN[t] || {})));
     });
     return;
@@ -167,6 +191,7 @@ const server = http.createServer((req, res) => {
    memberi jawaban yang berubah-ubah menurut urutan panggilan. */
 const hitungTindakan = {};
 const dinamis = {};
+let PERAN_SEKARANG = 'superadmin';
 
 const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 'templat', 'webhook', 'pengguna', 'audit', 'setelan'];
 
@@ -650,6 +675,99 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   cek('garisnya ikut berbalik jadi terang', (ggr + ggg + ggb) / 3 > 160, gelapLoader.garis);
 
   await p.unroute('**/api/blast').catch(() => {});
+
+  console.log('\n=== H. WEBHOOK & AUDIT HANYA UNTUK SUPERADMIN ===');
+  await p.unroute('**/api/blast').catch(() => {});
+  await p.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  await p.goto(A + '/blast.html');
+  await p.waitForTimeout(1200);
+
+  const menuSuper = await p.evaluate(() =>
+    Array.from(document.querySelectorAll('#nav .tn-item')).map((b) => b.id.replace('nav_', '')));
+  cek('superadmin melihat kesebelas menu', menuSuper.length === 11, menuSuper);
+  cek('termasuk Webhook dan Catatan Audit',
+    menuSuper.includes('webhook') && menuSuper.includes('audit'), menuSuper);
+
+  await p.evaluate(() => fetch('/api/blast', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tindakan: '__peran', data: { peran: 'admin' } }),
+  }));
+  await p.goto(A + '/blast.html');
+  await p.waitForTimeout(1200);
+
+  const menuAdmin = await p.evaluate(() =>
+    Array.from(document.querySelectorAll('#nav .tn-item')).map((b) => b.id.replace('nav_', '')));
+  cek('admin daerah tidak melihat menu Webhook', !menuAdmin.includes('webhook'), menuAdmin);
+  cek('dan tidak melihat menu Catatan Audit', !menuAdmin.includes('audit'), menuAdmin);
+  cek('menu lainnya tetap utuh', menuAdmin.length === 9, menuAdmin);
+
+  /* Menu yang disembunyikan tetap bisa dicapai dengan mengetik alamatnya. */
+  await p.evaluate(() => { location.hash = '#webhook'; });
+  await p.waitForTimeout(700);
+  const paksaWebhook = await p.evaluate(() => ({
+    isi: (document.getElementById('isi') || {}).textContent || '',
+    adaRahasia: Boolean(document.querySelector('[name="webhook.rahasia"]')),
+  }));
+  cek('mengetik #webhook langsung dijawab penjelasan, bukan halaman kosong',
+    /superadmin/i.test(paksaWebhook.isi), paksaWebhook.isi.slice(0, 160));
+  cek('dan rahasia tanda tangannya tidak ikut tergambar di mana pun',
+    paksaWebhook.adaRahasia === false);
+
+  await p.evaluate(() => { location.hash = '#audit'; });
+  await p.waitForTimeout(700);
+  const paksaAudit = await p.evaluate(() => (document.getElementById('isi') || {}).textContent || '');
+  cek('begitu juga #audit', /superadmin/i.test(paksaAudit), paksaAudit.slice(0, 160));
+
+  /* Mengunci menunya saja tidak cukup: kartu webhook ada di Pengaturan. */
+  await p.evaluate(() => { location.hash = '#setelan'; });
+  await p.waitForTimeout(900);
+  const setelanAdmin = await p.evaluate(() => ({
+    adaKartu: Array.from(document.querySelectorAll('#isi h3')).some((h) => /webhook/i.test(h.textContent)),
+    adaRahasia: Boolean(document.querySelector('[name="webhook.rahasia"]')),
+    adaJeda: Boolean(document.querySelector('[name="kirim.jedaMinDetik"]')),
+  }));
+  cek('kartu Webhook keluar hilang dari Pengaturan untuk admin daerah',
+    setelanAdmin.adaKartu === false && setelanAdmin.adaRahasia === false, setelanAdmin);
+  cek('sisa Pengaturan tetap bisa dipakai', setelanAdmin.adaJeda === true, setelanAdmin);
+
+  // kembalikan supaya bagian berikutnya tidak terpengaruh
+  await p.evaluate(() => fetch('/api/blast', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tindakan: '__peran', data: { peran: 'superadmin' } }),
+  }));
+  await p.goto(A + '/blast.html');
+  await p.waitForTimeout(1000);
+
+  console.log('\n=== H2. HAPUS DI WEBHOOK DAN AUDIT ===');
+  await p.evaluate(() => { location.hash = '#webhook'; });
+  await p.waitForTimeout(900);
+  const alatW = await p.evaluate(() => ({
+    perBaris: document.querySelectorAll('#isi [data-hapusw]').length,
+    kosongkan: Boolean(document.getElementById('kosongkanW')),
+  }));
+  cek('tiap baris riwayat webhook bisa dihapus', alatW.perBaris >= 1, alatW);
+  cek('ada tombol mengosongkan seluruhnya', alatW.kosongkan === true, alatW);
+
+  await p.evaluate(() => { location.hash = '#audit'; });
+  await p.waitForTimeout(900);
+  const alatA = await p.evaluate(() => ({
+    perBaris: document.querySelectorAll('#isi [data-hapusa]').length,
+    kosongkan: Boolean(document.getElementById('kosongkanA')),
+  }));
+  cek('tiap catatan audit bisa dihapus', alatA.perBaris >= 1, alatA);
+  cek('ada tombol mengosongkan seluruhnya', alatA.kosongkan === true, alatA);
+
+  await p.click('#kosongkanA');
+  await p.waitForTimeout(400);
+  const dialogA = await p.evaluate(() => ({
+    adaKetik: Boolean(document.getElementById('tegaskanA')),
+    teks: (document.querySelector('[class*=modal]') || {}).textContent || '',
+  }));
+  cek('mengosongkan audit menuntut kata kunci diketik ulang', dialogA.adaKetik === true, dialogA.adaKetik);
+  cek('dan menjelaskan bahwa pengosongannya sendiri ikut tercatat',
+    /tercatat/i.test(dialogA.teks), dialogA.teks.slice(0, 220));
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(300);
 
   console.log('\n=== G. TIDAK ADA GALAT ===');
   cek('tidak ada galat JavaScript sepanjang uji', galat.length === 0, galat.slice(0, 5));

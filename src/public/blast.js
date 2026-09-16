@@ -175,16 +175,24 @@ const MENU = [
   { kode: 'antrean', label: 'Pesan & Antrean', izin: 'pesan.lihat' },
   { kode: 'kontak', label: 'Kontak', izin: 'kontak.lihat' },
   { kode: 'templat', label: 'Templat Pesan', izin: 'pesan.lihat' },
-  { kode: 'webhook', label: 'Webhook', izin: 'setelan.lihat' },
+  /* Dua menu ini hanya untuk superadmin. Webhook memuat alamat tujuan dan
+     rahasia tanda tangannya; Catatan Audit memuat siapa mengirim apa ke nomor
+     siapa. Keduanya tidak dibutuhkan petugas harian, dan yang menegakkan
+     pembatasannya tetap server — penyembunyian menu di sini cuma supaya tidak
+     ada yang menekan pintu yang memang terkunci. */
+  { kode: 'webhook', label: 'Webhook', izin: 'setelan.lihat', superadmin: true },
   { kode: 'pengguna', label: 'Tim & Petugas', izin: 'pengguna.lihat' },
-  { kode: 'audit', label: 'Catatan Audit', izin: 'audit.lihat' },
+  { kode: 'audit', label: 'Catatan Audit', izin: 'audit.lihat', superadmin: true },
   { kode: 'setelan', label: 'Pengaturan', izin: 'setelan.lihat' },
 ];
+
+const superadmin = () => Boolean(negara.pengguna) && negara.pengguna.peran === 'superadmin';
+const menuBoleh = (m) => bisa(m.izin) && (!m.superadmin || superadmin());
 
 function gambarMenu() {
   const nav = $('#nav');
   nav.innerHTML = '';
-  MENU.filter((m) => bisa(m.izin)).forEach((m) => {
+  MENU.filter(menuBoleh).forEach((m) => {
     const b = document.createElement('button');
     b.className = 'tn-item';
     b.id = 'nav_' + m.kode;
@@ -1631,7 +1639,11 @@ halaman.webhook = {
     let d, s;
     try { [d, s] = await Promise.all([rpc('webhook.riwayat', { batas: 60 }), rpc('setelan.ambil')]); }
     catch (e) { el.innerHTML = galatKotak(e.message); return; }
-    const w = s.setelan.webhook;
+    /* Server membuang bagian webhook untuk yang bukan superadmin. Halaman ini
+       memang tidak akan terbuka untuk mereka, tetapi nilai cadangan di sini
+       menjaga agar yang muncul adalah halaman apa adanya, bukan galat
+       "cannot read properties of undefined" yang tidak menjelaskan apa pun. */
+    const w = s.setelan.webhook || { url: '', aktif: false, kejadian: [] };
 
     el.innerHTML = `
       <div class="grid-2">
@@ -1649,17 +1661,23 @@ halaman.webhook = {
           </div>`)}
 
         ${kartu(`
-          <h3>Riwayat kejadian</h3>
+          <div class="row" style="align-items:center;flex-wrap:nowrap">
+            <h3 style="flex:1;min-width:0">Riwayat kejadian</h3>
+            ${d.baris.length ? '<button id="kosongkanW" class="btn btn-sm" style="color:var(--red)">Kosongkan</button>' : ''}
+          </div>
           <div style="margin-top:14px;display:grid;gap:8px;max-height:30rem;overflow-y:auto">
             ${d.baris.length ? d.baris.map((k) => `
-              <button data-lihat='${H(JSON.stringify(k))}' style="width:100%;text-align:left;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);padding:10px 14px;cursor:pointer">
-                <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
-                  <span style="font-size:13px;font-weight:600">${H(k.jenis)}</span>
-                  <span class="badge${k.keadaan === 'gagal' ? ' red' : ' grey'}">${H(k.keadaan)}</span>
-                  <span class="muted" style="margin-left:auto;font-size:11px">${fmtJarak(k.waktu)}</span>
-                </div>
-                ${k.catatan ? `<div style="font-size:11.5px;color:var(--red);margin-top:4px">${H(k.catatan)}</div>` : ''}
-              </button>`).join('') : '<p class="muted">Belum ada kejadian.</p>'}
+              <div class="row" style="gap:6px;align-items:stretch;flex-wrap:nowrap">
+                <button data-lihat='${H(JSON.stringify(k))}' style="flex:1;min-width:0;text-align:left;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);padding:10px 14px;cursor:pointer">
+                  <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
+                    <span style="font-size:13px;font-weight:600">${H(k.jenis)}</span>
+                    <span class="badge${k.keadaan === 'gagal' ? ' red' : ' grey'}">${H(k.keadaan)}</span>
+                    <span class="muted" style="margin-left:auto;font-size:11px">${fmtJarak(k.waktu)}</span>
+                  </div>
+                  ${k.catatan ? `<div style="font-size:11.5px;color:var(--red);margin-top:4px">${H(k.catatan)}</div>` : ''}
+                </button>
+                <button data-hapusw="${H(k.id)}" class="btn btn-ghost btn-sm" style="flex:none;color:var(--red)" title="Hapus baris ini">hapus</button>
+              </div>`).join('') : '<p class="muted">Belum ada kejadian.</p>'}
           </div>`)}
       </div>`;
 
@@ -1672,6 +1690,35 @@ halaman.webhook = {
       const k = JSON.parse(b.dataset.lihat);
       modal('Isi kejadian', `<pre style="font-size:11.5px;background:var(--surface2);border-radius:var(--radius);padding:14px;overflow-x:auto">${H(JSON.stringify(k, null, 2))}</pre>`);
     });
+
+    $$('[data-hapusw]', el).forEach((b) => b.onclick = () => konfirmasi('Hapus baris riwayat ini?',
+      'Kalau kejadian ini gagal terkirim dan sedang menunggu dikirim ulang, antreannya ikut dibatalkan.',
+      async () => {
+        try { await rpc('webhook.hapus', { id: b.dataset.hapusw }); toast('Baris dihapus.', 'sukses'); halaman.webhook.gambar(el); }
+        catch (e) { toast(e.message, 'galat'); }
+      }, 'Ya, hapus'));
+
+    const kw = $('#kosongkanW', el);
+    if (kw) kw.onclick = () => modal('Kosongkan riwayat webhook', `
+      <p>Seluruh riwayat kejadian dihapus, termasuk kejadian gagal yang sedang menunggu
+         dikirim ulang. <strong>Tidak bisa dibatalkan.</strong></p>
+      <p class="muted" style="font-size:12px;margin-top:8px">Pengaturan webhook-nya sendiri tidak berubah —
+         kejadian baru tetap akan dicatat seperti biasa.</p>
+      <div class="field" style="margin-top:14px">
+        <label>Ketik <code>HAPUS SEMUA</code> untuk menegaskan</label>
+        <input id="tegaskanW" autocomplete="off" placeholder="HAPUS SEMUA">
+      </div>`, () => {
+      $('#fwBatal').onclick = tutupModal;
+      $('#fwJalan').onclick = async () => {
+        const t = $('#fwJalan');
+        t.disabled = true; t.textContent = 'Menghapus…';
+        try {
+          const h = await rpc('webhook.kosongkan', { tegaskan: $('#tegaskanW').value });
+          tutupModal(); toast(h.catatan, 'sukses'); halaman.webhook.gambar(el);
+        } catch (e) { toast(e.message, 'galat'); t.disabled = false; t.textContent = 'Kosongkan'; }
+      };
+    }, `<button type="button" id="fwBatal" class="btn">Batal</button>
+        <button type="button" id="fwJalan" class="btn btn-danger">Kosongkan</button>`);
   },
 };
 
@@ -1771,13 +1818,48 @@ halaman.audit = {
     let d;
     try { d = await rpc('audit.daftar', { batas: 200 }); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
     el.innerHTML = d.baris.length ? `<div class="table-wrap">
+      <div class="toolbar">
+        <p class="muted" style="flex:1;min-width:0;font-size:12px">${fmtAngka(d.baris.length)} catatan terakhir</p>
+        <button id="kosongkanA" class="btn btn-sm" style="color:var(--red)">Kosongkan</button>
+      </div>
       ${d.baris.map((a) => `
         <div style="padding:10px 14px;border-bottom:1px solid var(--border2);display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;font-size:13px">
           <span style="font-weight:600">${H(a.nama)}</span>
           <span class="badge grey">${H(a.tindakan)}</span>
-          <span class="muted" style="font-size:11.5px;margin-left:auto">${fmtWaktu(a.waktu)}</span>
+          <span class="muted" style="margin-left:auto;font-size:11.5px">${fmtWaktu(a.waktu)}</span>
+          <button data-hapusa="${H(a.id)}" class="btn btn-ghost btn-sm" style="color:var(--red)">hapus</button>
           ${Object.keys(a.rincian || {}).length ? `<div class="muted" style="width:100%;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${H(JSON.stringify(a.rincian))}</div>` : ''}
         </div>`).join('')}</div>` : kartu(kosong('Belum ada catatan audit.', '🛡️'));
+
+    $$('[data-hapusa]', el).forEach((b) => b.onclick = () => konfirmasi('Hapus catatan ini?',
+      'Catatan audit adalah bukti siapa melakukan apa. Menghapusnya sendiri ikut tercatat sebagai baris baru.',
+      async () => {
+        try { await rpc('audit.hapus', { id: b.dataset.hapusa }); toast('Catatan dihapus.', 'sukses'); halaman.audit.gambar(el); }
+        catch (e) { toast(e.message, 'galat'); }
+      }, 'Ya, hapus'));
+
+    const ka = $('#kosongkanA', el);
+    if (ka) ka.onclick = () => modal('Kosongkan catatan audit', `
+      <p>Seluruh catatan audit dihapus. <strong>Tidak bisa dibatalkan.</strong></p>
+      <p class="muted" style="font-size:12px;margin-top:8px">Catatan audit adalah satu-satunya tempat
+         yang menjawab &ldquo;siapa mengirim ini&rdquo; kalau suatu hari ada donatur bertanya.
+         Pengosongan ini sendiri akan tercatat sebagai baris pertama yang baru, lengkap dengan nama dan waktunya —
+         jadi lognya boleh kosong, tetapi tidak berpura-pura tidak pernah berisi.</p>
+      <div class="field" style="margin-top:14px">
+        <label>Ketik <code>HAPUS SEMUA</code> untuk menegaskan</label>
+        <input id="tegaskanA" autocomplete="off" placeholder="HAPUS SEMUA">
+      </div>`, () => {
+      $('#faBatal').onclick = tutupModal;
+      $('#faJalan').onclick = async () => {
+        const t = $('#faJalan');
+        t.disabled = true; t.textContent = 'Menghapus…';
+        try {
+          const h = await rpc('audit.kosongkan', { tegaskan: $('#tegaskanA').value });
+          tutupModal(); toast(h.catatan, 'sukses'); halaman.audit.gambar(el);
+        } catch (e) { toast(e.message, 'galat'); t.disabled = false; t.textContent = 'Kosongkan'; }
+      };
+    }, `<button type="button" id="faBatal" class="btn">Batal</button>
+        <button type="button" id="faJalan" class="btn btn-danger">Kosongkan</button>`);
   },
 };
 
@@ -1834,14 +1916,18 @@ halaman.setelan = {
             Hanya kirim pada jam kirim di atas
           </label>`)}
 
-        ${kartu(`
+        ${/* Hanya digambar untuk superadmin. Server juga membuang bagian
+              webhook dari jawabannya, jadi s.webhook memang tidak ada untuk
+              yang lain — kartunya tidak bisa muncul setengah terisi. */
+          s.webhook ? kartu(`
           <h3>Webhook keluar</h3>
+          <div class="desc">Khusus superadmin. Rahasia di bawah inilah yang membuat penerima percaya kiriman ini berasal dari sini.</div>
           <div class="field"><label>URL tujuan</label><input ${mati} name="webhook.url" value="${H(s.webhook.url)}" placeholder="https://lazdigital.my.id/api/blast-masuk"></div>
           <div class="grid-2">
             <div class="field"><label>Rahasia tanda tangan</label><input ${mati} name="webhook.rahasia" type="password" value="${H(s.webhook.rahasia)}"></div>
             <div class="field" style="display:flex;align-items:flex-end"><label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;padding-bottom:9px;margin-bottom:0">
               <input ${mati} type="checkbox" name="webhook.aktif" ${s.webhook.aktif ? 'checked' : ''} style="width:auto">Aktifkan</label></div>
-          </div>`)}
+          </div>`) : ''}
 
         <div class="form-actions">
           <button type="button" id="gantiSandi" class="btn">Ganti sandi saya</button>
@@ -1898,6 +1984,20 @@ function toggleSidebar() {
 window.toggleSidebar = toggleSidebar;
 
 async function buka(kode) {
+  /* Halaman yang menunya disembunyikan tetap bisa dicapai dengan mengetik
+     #webhook di bilah alamat. Di sini ia dijawab dengan penjelasan, bukan
+     halaman kosong — dan servernya toh menolak datanya. */
+  const butir = MENU.find((m) => m.kode === kode);
+  if (butir && butir.superadmin && !superadmin()) {
+    negara.halaman = kode;
+    tandaiMenu('');
+    $('#isi').innerHTML = kepalaHalaman(butir.label, 'Khusus superadmin')
+      + `<div id="isiHalaman">${kartu(kosong(
+        'Bagian ini hanya bisa dibuka superadmin. Kalau Anda memang perlu melihatnya, mintalah kepada yang memegang akun superadmin.',
+        '\u{1F512}'))}</div>`;
+    return;
+  }
+
   const h = halaman[kode] || halaman.dasbor;
   negara.halaman = halaman[kode] ? kode : 'dasbor';
   tandaiMenu(negara.halaman);

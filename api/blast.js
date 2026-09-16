@@ -582,10 +582,7 @@ tindakan['pesan.hapus'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
    Bukan sekadar "tombol berbahaya": riwayat pesan adalah bukti apa yang sudah
    dikirim lembaga kepada donatur, dan tidak ada tombol urung. Hak yang
    diturunkan lewat centang modul broadcast tidak cukup untuk ini. */
-tindakan['pesan.hapusSemua'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
-  if (pengguna.peran !== 'superadmin') {
-    throw new GalatAplikasi('Hanya superadmin yang boleh mengosongkan seluruh riwayat pesan', 403);
-  }
+tindakan['pesan.hapusSemua'] = { izin: 'pesan.kirim', superadmin: true, async jalankan({ data, pengguna, req }) {
   /* Kata kunci diketik ulang, bukan sekadar menekan "Ya". Dialog konfirmasi
      ditekan tanpa dibaca; mengetik ulang tidak bisa dilakukan tanpa sadar. */
   if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
@@ -767,18 +764,34 @@ tindakan['antrean.proses'] = { izin: 'pesan.kirim', async jalankan({ data, pengg
 } };
 
 // --- Setelan --------------------------------------------------------------
-tindakan['setelan.ambil'] = { izin: 'setelan.lihat', async jalankan() {
+/* Bagian webhook ikut dikunci superadmin — bukan cuma menunya.
+   Mengunci menu Webhook tetapi membiarkan kartu "Webhook keluar" di Pengaturan
+   sama saja dengan tidak mengunci apa pun: alamat tujuan dan rahasia tanda
+   tangannya tetap bisa dibaca dan diubah dari satu klik di sebelahnya. */
+function bolehWebhook(pengguna) {
+  return Boolean(pengguna) && pengguna.peran === 'superadmin';
+}
+
+tindakan['setelan.ambil'] = { izin: 'setelan.lihat', async jalankan({ pengguna }) {
   const setelan = await setelanLib.ambilSetelan();
-  return { setelan: setelanLib.setelanAman(setelan) };
+  const aman = setelanLib.setelanAman(setelan);
+  if (!bolehWebhook(pengguna)) delete aman.webhook;
+  return { setelan: aman, bolehWebhook: bolehWebhook(pengguna) };
 } };
 
 tindakan['setelan.simpan'] = { izin: 'setelan.ubah', async jalankan({ data, pengguna, req }) {
   const masuk = data.setelan || {};
+  /* Disaring di server, bukan sekadar tidak digambar di layar: kalau hanya
+     kartunya yang disembunyikan, permintaan yang disusun sendiri tetap bisa
+     mengubah alamat tujuan webhook dan rahasianya. */
+  if (!bolehWebhook(pengguna)) delete masuk.webhook;
   // Jangan timpa rahasia dengan tanda bintang dari tampilan
   if (masuk.webhook && /^•+$/.test(String(masuk.webhook.rahasia || ''))) delete masuk.webhook.rahasia;
   const setelan = await setelanLib.simpanSetelan(masuk);
   await auth.catatAudit(pengguna, 'setelan.simpan', {}, req);
-  return { setelan: setelanLib.setelanAman(setelan) };
+  const aman = setelanLib.setelanAman(setelan);
+  if (!bolehWebhook(pengguna)) delete aman.webhook;
+  return { setelan: aman, bolehWebhook: bolehWebhook(pengguna) };
 } };
 
 // --- Pengguna -------------------------------------------------------------
@@ -840,16 +853,53 @@ tindakan['pengguna.hapus'] = { izin: 'pengguna.ubah', async jalankan({ data, pen
 } };
 
 // --- Audit & webhook ------------------------------------------------------
-tindakan['audit.daftar'] = { izin: 'audit.lihat', async jalankan({ data }) {
+/* CATATAN AUDIT — SUPERADMIN SAJA.
+ *
+ * Isinya siapa mengirim apa ke nomor siapa, siapa menghapus riwayat, siapa
+ * mengubah pengaturan. Itu bukan sekadar catatan teknis: ia menjawab pertanyaan
+ * yang muncul kalau ada donatur protes atau ada nomor yang terkirimi sesuatu
+ * yang tidak seharusnya. Hanya yang bertanggung jawab atas seluruh sistem yang
+ * perlu — dan boleh — membacanya.
+ */
+tindakan['audit.daftar'] = { izin: 'audit.lihat', superadmin: true, async jalankan({ data }) {
   const daftar = (await db.ambil('audit')) || [];
   return { baris: daftar.slice(0, Math.min(500, Number(data.batas) || 100)) };
 } };
 
-tindakan['webhook.riwayat'] = { izin: 'setelan.lihat', async jalankan({ data }) {
+tindakan['audit.hapus'] = { izin: 'audit.lihat', superadmin: true, async jalankan({ data, pengguna, req }) {
+  const daftar = (await db.ambil('audit')) || [];
+  const sisa = daftar.filter((a) => a.id !== data.id);
+  if (sisa.length === daftar.length) throw new GalatAplikasi('Catatan itu tidak ditemukan', 404);
+  await db.simpan('audit', sisa);
+  /* Penghapusannya sendiri ikut dicatat. Kalau tidak, satu-satunya tindakan
+     yang bisa dilakukan tanpa meninggalkan jejak adalah menghapus jejak. */
+  await auth.catatAudit(pengguna, 'audit.hapus', { id: data.id }, req);
+  return { pesan: 'Satu catatan audit dihapus.' };
+} };
+
+tindakan['audit.kosongkan'] = { izin: 'audit.lihat', superadmin: true, async jalankan({ data, pengguna, req }) {
+  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
+    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
+  }
+  const jumlah = ((await db.ambil('audit')) || []).length;
+  await db.hapus('audit');
+  /* Dicatat SESUDAH dikosongkan, jadi catatan ini yang pertama di log baru:
+     logya boleh kosong, tetapi tidak boleh berpura-pura tidak pernah berisi. */
+  await auth.catatAudit(pengguna, 'audit.kosongkan', { terhapus: jumlah }, req);
+  return { terhapus: jumlah, catatan: `${jumlah} catatan audit dihapus. Tindakan ini sendiri tercatat sebagai baris pertama yang baru.` };
+} };
+
+/* WEBHOOK — SUPERADMIN SAJA.
+ *
+ * Riwayatnya memuat isi pesan yang diteruskan ke sistem lain, dan halaman ini
+ * bersebelahan dengan rahasia tanda tangan yang memungkinkan siapa pun memalsukan
+ * kiriman ke penerimanya. Bukan sesuatu yang perlu dibuka petugas harian.
+ */
+tindakan['webhook.riwayat'] = { izin: 'setelan.lihat', superadmin: true, async jalankan({ data }) {
   return { baris: await webhookLib.riwayat(Number(data.batas) || 50), mati: await webhookLib.kotakMati() };
 } };
 
-tindakan['webhook.uji'] = { izin: 'setelan.ubah', async jalankan({ pengguna, req }) {
+tindakan['webhook.uji'] = { izin: 'setelan.ubah', superadmin: true, async jalankan({ pengguna, req }) {
   const kejadian = await webhookLib.kirimKejadian('uji', {
     id: 'uji', nomor: '628000000000', status: 'uji', perangkatId: 'uji',
   });
@@ -857,9 +907,24 @@ tindakan['webhook.uji'] = { izin: 'setelan.ubah', async jalankan({ pengguna, req
   return { kejadian, catatan: 'Kejadian uji dikirim. Periksa riwayat untuk hasilnya.' };
 } };
 
-tindakan['webhook.kirimUlang'] = { izin: 'setelan.ubah', async jalankan({ data }) {
+tindakan['webhook.kirimUlang'] = { izin: 'setelan.ubah', superadmin: true, async jalankan({ data }) {
   const kejadian = await webhookLib.kirimUlangMati(data.id);
   return { kejadian };
+} };
+
+tindakan['webhook.hapus'] = { izin: 'setelan.ubah', superadmin: true, async jalankan({ data, pengguna, req }) {
+  const hasil = await webhookLib.hapusRiwayat(data.id);
+  await auth.catatAudit(pengguna, 'webhook.hapus', { id: data.id }, req);
+  return { ...hasil, pesan: 'Satu baris riwayat webhook dihapus.' };
+} };
+
+tindakan['webhook.kosongkan'] = { izin: 'setelan.ubah', superadmin: true, async jalankan({ data, pengguna, req }) {
+  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
+    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
+  }
+  const hasil = await webhookLib.kosongkanRiwayat();
+  await auth.catatAudit(pengguna, 'webhook.kosongkan', hasil, req);
+  return { ...hasil, catatan: `${hasil.terhapus} baris riwayat webhook dihapus, termasuk ${hasil.mati} yang menunggu kiriman ulang.` };
 } };
 
 // --- Kesiapan deploy ------------------------------------------------------
@@ -970,6 +1035,13 @@ module.exports = async function penangan(req, res) {
     if (!pintu.publik) {
       pengguna = await auth.wajibMasuk(req);
       if (pintu.izin) auth.wajibIzin(pengguna, pintu.izin);
+      /* Pagar superadmin ditegakkan di SATU tempat, bukan di dalam tiap
+         tindakan. Kalau disebar, tindakan baru yang lupa memasangnya akan
+         terbuka diam-diam — dan yang terbuka diam-diam justru tidak terlihat
+         oleh siapa pun sampai ada yang memakainya. */
+      if (pintu.superadmin && pengguna.peran !== 'superadmin') {
+        throw new GalatAplikasi('Hanya superadmin yang boleh membuka bagian ini', 403);
+      }
     }
 
     const hasil = await pintu.jalankan({ data, pengguna, req, res });
