@@ -26,6 +26,7 @@ set GAGAL=0
 
 call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
 call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
+call :jalankan "Apa yang sudah sampai di server" tools\uji_cek_deploy.js
 
 echo.
 echo ==================================================
