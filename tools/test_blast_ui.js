@@ -276,6 +276,66 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   }
   cek('tidak ada halaman yang melebar di layar HP', luberDi.length === 0, luberDi);
 
+  console.log('\n=== G. LAYAR PEMUATAN MENYATU DENGAN HALAMAN ===');
+  /* Layar pembuka harus diperiksa SELAGI terlihat, jadi jawaban status
+     ditahan sebentar supaya ia tidak keburu hilang. */
+  await p.setViewportSize({ width: 1280, height: 900 });
+  await p.route('**/api/blast', async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    try { await route.continue(); } catch (_) { /* halaman sudah pindah */ }
+  });
+  await p.goto(A + '/blast.html');
+  await p.waitForSelector('#boot', { state: 'visible', timeout: 5000 });
+
+  /* Peramban mengembalikan dua bentuk: "rgb(247, 244, 242)" dengan angka
+     0-255, dan "color(srgb 0.96 0.95 0.94 / 0.88)" dengan angka 0-1. Keduanya
+     disamakan ke 0-255 supaya perbandingannya tidak salah baca. */
+  const uraiRgb = (v) => {
+    const t = String(v);
+    const angka = (t.match(/[\d.]+/g) || []).map(Number);
+    if (/^color\(/.test(t)) {
+      const [r, g, b, a = 1] = angka.slice(-4).length === 4 ? angka.slice(-4) : [...angka, 1];
+      return [r * 255, g * 255, b * 255, a];
+    }
+    return angka;
+  };
+  const pemuatan = await p.evaluate(() => {
+    const boot = document.getElementById('boot');
+    const cs = getComputedStyle(boot);
+    return {
+      latar: cs.backgroundColor,
+      latarBadan: getComputedStyle(document.body).backgroundColor,
+      garis: getComputedStyle(boot.querySelector('.lz-line')).backgroundColor,
+      teks: getComputedStyle(boot.querySelector('.lz-lama')).color,
+    };
+  });
+  const [lr, lg, lb, la = 1] = uraiRgb(pemuatan.latar);
+  cek('latarnya tidak lagi hitam', (lr + lg + lb) / 3 > 120, pemuatan.latar);
+  cek('warnanya mengikuti latar aplikasi, bukan warna sendiri',
+    Math.abs(lr - uraiRgb(pemuatan.latarBadan)[0]) < 12, pemuatan);
+  cek('agak tembus supaya gradasi di belakangnya terlihat', la < 1, pemuatan.latar);
+
+  const [gr, gg, gb] = uraiRgb(pemuatan.garis);
+  cek('garis pemuatan gelap supaya terlihat di latar terang', (gr + gg + gb) / 3 < 120, pemuatan.garis);
+  const [tr, tg, tb] = uraiRgb(pemuatan.teks);
+  cek('teks keterangannya juga terbaca di latar terang', (tr + tg + tb) / 3 < 200, pemuatan.teks);
+
+  await p.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await p.waitForTimeout(250);
+  const gelapLoader = await p.evaluate(() => {
+    const boot = document.getElementById('boot');
+    return {
+      latar: getComputedStyle(boot).backgroundColor,
+      garis: getComputedStyle(boot.querySelector('.lz-line')).backgroundColor,
+    };
+  });
+  const [dr, dg, db] = uraiRgb(gelapLoader.latar);
+  cek('di tema gelap ikut menggelap sendiri', (dr + dg + db) / 3 < 120, gelapLoader.latar);
+  const [ggr, ggg, ggb] = uraiRgb(gelapLoader.garis);
+  cek('garisnya ikut berbalik jadi terang', (ggr + ggg + ggb) / 3 > 160, gelapLoader.garis);
+
+  await p.unroute('**/api/blast').catch(() => {});
+
   console.log('\n=== G. TIDAK ADA GALAT ===');
   cek('tidak ada galat JavaScript sepanjang uji', galat.length === 0, galat.slice(0, 5));
 

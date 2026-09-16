@@ -138,7 +138,23 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   const b = await chromium.launch(CHROMIUM);
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
   const p = await ctx.newPage();
+  /* Potret layar pemuatan: jawabannya ditahan sebentar supaya sempat terekam. */
+  const luarAwal = path.join(__dirname, '..', 'potret');
+  fs.mkdirSync(luarAwal, { recursive: true });
+  await p.route('**/api/blast', async (route) => {
+    await new Promise((r) => setTimeout(r, 2500));
+    try { await route.continue(); } catch (_) { /* halaman sudah pindah */ }
+  });
   await p.goto(A + '/blast.html');
+  await p.waitForSelector('#boot', { state: 'visible', timeout: 5000 });
+  await p.waitForTimeout(400);
+  await p.screenshot({ path: path.join(luarAwal, 'blast-memuat.png') });
+  await p.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  await p.waitForTimeout(400);
+  await p.screenshot({ path: path.join(luarAwal, 'blast-memuat-gelap.png') });
+  await p.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+  await p.unroute('**/api/blast').catch(() => {});
+
   await p.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
   const luar = path.join(__dirname, '..', 'potret');
   fs.mkdirSync(luar, { recursive: true });
