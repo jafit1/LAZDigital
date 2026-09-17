@@ -28,15 +28,24 @@
   </script>
 
   <!-- ============ LOADING ============ -->
-  <!-- Ditulis langsung di HTML, bukan dibuat app.js, supaya sudah terlihat
-       sebelum berkas JS yang besar selesai diunduh. Animasinya berulang tanpa
-       batas waktu; yang menghentikannya adalah datanya siap, bukan hitungan
-       detik. Kelas lz-tanpa-word dilepas begitu berkas wordmark dipasang. -->
-  <div id="boot" class="lz lz--full lz-tanpa-word" data-anim="denyut" role="status" aria-live="polite" aria-label="Memuat">
-    <div class="lz-mark">
-      <div class="lz-flower" role="img" aria-label="Lazismu"></div>
-      <div class="lz-word" aria-hidden="true"></div>
-      <div class="lz-bantul" role="img" aria-label="Bantul"></div>
+  <!-- Ditulis langsung di HTML, bukan dibuat JS, supaya sudah terlihat
+       sebelum berkas JS yang besar selesai diunduh. Sembilan lapis kata yang
+       sama, masing-masing hanya memperlihatkan satu pita mendatar (lihat
+       bagian 37 styles.css) — jadi yang terbaca tetap satu kata. Karena isinya
+       teks dan bukan gambar, tidak ada berkas yang perlu menunggu diunduh.
+       Animasinya berulang tanpa batas waktu; yang menghentikannya adalah
+       datanya siap, bukan hitungan detik. -->
+  <div id="boot" class="lz lz--full" role="status" aria-live="polite" aria-label="Memuat">
+    <div class="lz-mark" role="img" aria-label="Lazismu">
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
     </div>
     <div class="lz-line"><i></i></div>
     <div class="lz-lama" id="bootLama"></div>

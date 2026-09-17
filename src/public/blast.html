@@ -28,25 +28,42 @@
   </script>
 
   <!-- ============ LOADING ============ -->
-  <!-- Tulisannya delapan keping karena hurufnya datang berurutan; kepingnya
-       hanya jendela ke satu masker yang sama, bukan delapan gambar. -->
+  <!-- Ditulis langsung di HTML, bukan dibuat JS, supaya sudah terlihat
+       sebelum berkas JS yang besar selesai diunduh. Sembilan lapis kata yang
+       sama, masing-masing hanya memperlihatkan satu pita mendatar (lihat
+       bagian 37 styles.css) — jadi yang terbaca tetap satu kata. Karena isinya
+       teks dan bukan gambar, tidak ada berkas yang perlu menunggu diunduh. -->
   <div id="boot" class="lz lz--full" role="status" aria-live="polite" aria-label="Memuat">
-    <div class="lz-mark">
-      <div class="lz-flower" role="img" aria-label="Lazismu"></div>
-      <div class="lz-word" role="img" aria-label="lazismu">
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
-      <div class="lz-bantul" role="img" aria-label="Bantul"></div>
+    <div class="lz-mark" role="img" aria-label="Lazismu">
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
     </div>
     <div class="lz-line"><i></i></div>
     <div class="lz-lama" id="bootLama"></div>
   </div>
 
-  <!-- Selubung saat berpindah halaman. Hanya bunganya — penanda sedang sibuk
-       tidak perlu lambang lengkap, dan lambang lengkap yang berkedip tiap kali
-       pindah menu justru melelahkan. -->
+  <!-- Selubung saat berpindah halaman. Katanya sama, hanya jauh lebih kecil:
+       lambang sebesar layar pembuka yang berkedip tiap kali pindah menu justru
+       melelahkan. -->
   <div id="sibuk" class="lz lz--sibuk" aria-hidden="true">
-    <div class="lz-mark"><div class="lz-flower"></div></div>
+    <div class="lz-mark" aria-hidden="true">
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    </div>
     <div class="lz-line"><i></i></div>
   </div>
 

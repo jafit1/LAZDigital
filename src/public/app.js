@@ -326,6 +326,107 @@ function resetDashFilter(){
   window.DASH_RENTANG = null;
   viewDashboard();
 }
+/* ===== SATU CHIP UNTUK SELURUH PERIODE =====
+   Sebelumnya tiga kendali berjajar: bulan, pekan, dan rentang tanggal. Di HP
+   ketiganya jatuh ke baris sendiri-sendiri dan mendorong angka dasbor ke bawah
+   layar. Sekarang ketiganya tetap ada, hanya dilipat ke dalam satu chip —
+   tertutup satu tombol, terbuka satu bar. */
+
+function dashPeriodeLabel(d) {
+  var r = d.selectedRentang;
+  /* Rentang tanggal mengesampingkan bulan & pekan, jadi kalau ia aktif dialah
+     yang disebut. Menyebut keduanya akan menunjukkan dua periode berbeda
+     untuk satu angka yang sama. */
+  if (r && r.dari && r.sampai) {
+    return (typeof rtLabel === 'function') ? rtLabel(r.dari, r.sampai) : 'Rentang tanggal';
+  }
+  var bulan = d.selectedMonth && d.selectedMonth !== 'Semua'
+    ? formatMonthYear(d.selectedMonth) : 'Semua Waktu';
+  var pekan = d.selectedPekan && d.selectedPekan !== 'Semua' ? ' \u00B7 Pekan ' + d.selectedPekan : '';
+  return bulan + pekan;
+}
+
+/* Yang tertulis di chip cuma angka bulannya. Keterangan lengkapnya tetap ada
+   — di atribut title, dan terutama di dalam panel begitu chip diklik.
+
+   TAHUNNYA DITULIS KALAU BUKAN TAHUN BERJALAN.
+   "9" di tahun ini tidak perlu dijelaskan. "9" yang ternyata September tahun
+   lalu wajib dijelaskan, dan itu justru keadaan yang paling berbahaya: angka
+   dasbor terbaca sebagai angka bulan ini padahal bukan. */
+function dashPeriodeAngka(d) {
+  var r = d.selectedRentang;
+  if (r && r.dari && r.sampai) return 'Rentang';
+  if (!d.selectedMonth || d.selectedMonth === 'Semua') return 'Semua';
+  var bagian = String(d.selectedMonth).split('-');
+  var angka = String(Number(bagian[1]));
+  if (bagian[0] !== String(new Date().getFullYear())) angka += '/' + bagian[0].slice(2);
+  return angka + (d.selectedPekan && d.selectedPekan !== 'Semua' ? ' \u00B7 P' + d.selectedPekan : '');
+}
+
+function dashPeriodePanel(d, opsiBulan, rentangAktif) {
+  var terbuka = window.DASH_PERIODE_BUKA === true;
+  var pilihBulan = d.selectedMonth || 'Semua';
+  var pilihPekan = d.selectedPekan || 'Semua';
+  var adaRentang = !!rentangAktif;
+
+  var chipBulan = opsiBulan.map(function (o) {
+    var aktif = !adaRentang && pilihBulan === o.value;
+    return '<button type="button" class="pr-chip' + (aktif ? ' aktif' : '') + '"'
+      + ' onclick="handleMonthClick(\'' + esc(o.value) + '\')">' + esc(o.label) + '</button>';
+  }).join('');
+
+  var chipPekan = '';
+  if (pilihBulan !== 'Semua') {
+    var rentangHari = ['', ' (1\u20137)', ' (8\u201314)', ' (15\u201321)', ' (22\u201328)', ' (29\u201331)'];
+    chipPekan = '<button type="button" class="pr-chip' + (!adaRentang && pilihPekan === 'Semua' ? ' aktif' : '') + '"'
+      + ' onclick="handlePekanClick(\'Semua\')">Semua Pekan</button>';
+    for (var w = 1; w <= 5; w++) {
+      chipPekan += '<button type="button" class="pr-chip' + (!adaRentang && pilihPekan === String(w) ? ' aktif' : '') + '"'
+        + ' onclick="handlePekanClick(\'' + w + '\')" title="Pekan ' + w + rentangHari[w] + '">' + w + '</button>';
+    }
+  }
+
+  return '<div class="dh-periode-panel' + (terbuka ? ' buka' : '') + '" id="dashPeriodePanel">'
+    + '<div class="pr-baris"><span class="pr-label">Bulan</span><div class="pr-chips">' + chipBulan + '</div></div>'
+    + (chipPekan ? '<div class="pr-baris"><span class="pr-label">Pekan</span><div class="pr-chips">' + chipPekan + '</div></div>' : '')
+    + '<div class="pr-baris"><span class="pr-label">Rentang</span>'
+      + '<div class="pr-chips pr-rentang">'
+        + '<div class="dash-rt">' + rentangHTML('dash_rt', adaRentang ? rentangAktif.dari : '', adaRentang ? rentangAktif.sampai : '', { rapat: true, kosong: 'Pilih Tanggal' }) + '</div>'
+        + (adaRentang ? '<button type="button" class="pr-chip pr-hapus" onclick="dashHapusRentang()">Hapus rentang</button>' : '')
+      + '</div></div>'
+    /* Dikatakan, bukan dibiarkan ditebak: begitu rentang dipilih, chip bulan
+       dan pekan di atas tidak lagi berpengaruh, dan itu tidak terlihat dari
+       mana pun kecuali ditulis. */
+    + (adaRentang ? '<div class="pr-catatan">Rentang tanggal sedang dipakai \u2014 pilihan bulan dan pekan dikesampingkan.</div>' : '')
+    + '</div>';
+}
+
+/* Dikosongkan jadi null, bukan { dari:'', sampai:'' }. Objek kosong lolos dari
+   sebagian pemeriksaan dan menyisakan keadaan "ada rentang tapi tidak ada
+   tanggalnya" — keadaan yang tidak pernah dimaksudkan ada. */
+function dashHapusRentang() {
+  if (typeof event !== 'undefined' && event) event.stopPropagation();
+  window.DASH_RENTANG = null;
+  viewDashboard();
+}
+
+function toggleDashPeriode() {
+  if (typeof event !== 'undefined' && event) event.stopPropagation();
+  window.DASH_PERIODE_BUKA = !window.DASH_PERIODE_BUKA;
+  var panel = el('dashPeriodePanel');
+  var btn = el('dashPeriodeBtn');
+  if (panel) panel.classList.toggle('buka', window.DASH_PERIODE_BUKA);
+  if (btn) btn.setAttribute('aria-expanded', String(!!window.DASH_PERIODE_BUKA));
+}
+
+/* Menu "lainnya": tutup dulu, baru jalankan. Kalau terbalik, menunya masih
+   menggantung di atas layar yang sudah berganti isi. */
+function dashMenuPilih(fn) {
+  if (typeof event !== 'undefined' && event) event.stopPropagation();
+  document.querySelectorAll('.dropdown-popover').forEach(function (p) { p.classList.add('hidden'); });
+  if (typeof fn === 'function') fn();
+}
+
 function renderDashboard(d){
   window.DASH=d;
   var pubBtn=canDo('dashboard','view')?'<button class="btn btn-ghost" onclick="openPublicLink()">\uD83D\uDD17 Link Publik</button>':'';
@@ -2071,15 +2172,13 @@ var LZ = (function(){
     sibuk=document.createElement('div');
     sibuk.id='lzSibuk';
     sibuk.className='lz lz--full lz--sibuk';
-    sibuk.setAttribute('data-anim','denyut');
     sibuk.setAttribute('role','status');
     sibuk.setAttribute('aria-live','polite');
-    /* Lambangnya disalin dari #boot supaya gambarnya tidak dimuat dua kali. */
+    /* Isinya disalin dari #boot supaya kata dan jumlah pitanya tidak ditulis
+       di dua tempat yang bisa berbeda diam-diam. */
     sibuk.innerHTML='<div class="lz-mark">'+(mb?mb.innerHTML:'')+'</div>'
       + '<div class="lz-line"><i></i></div>'
       + '<div class="lz-lama" id="lzSibukLama"></div>';
-    var b=document.getElementById('boot');
-    if(b && b.classList.contains('lz-tanpa-word')) sibuk.classList.add('lz-tanpa-word');
     document.body.appendChild(sibuk);
     return sibuk;
   }
@@ -3577,64 +3676,6 @@ function handleDropdownBack() {
   event.stopPropagation();
 }
 
-function renderMonthDropdownContent() {
-  var pop = el('dashMonth_popover');
-  if (!pop || !CACHE.dash) return;
-  
-  var d = CACHE.dash;
-  var checkIcon = '<svg height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);margin-right:8px;fill:currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
-  var h = '<div class="dropdown-section">';
-  
-  h += '<div class="dropdown-header">Pilih Bulan</div>';
-  var isSelAll = d.selectedMonth === 'Semua';
-  h += '<div class="dropdown-item" onclick="handleMonthClick(\'Semua\')">' +
-    '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelAll ? checkIcon : '') + '</span>' +
-    '<span>Semua Waktu</span>' +
-  '</div>';
-  
-  if (d.availableMonths && d.availableMonths.length) {
-    d.availableMonths.forEach(function(m) {
-      var isSel = d.selectedMonth === m;
-      h += '<div class="dropdown-item" onclick="handleMonthClick(\'' + esc(m) + '\')">' +
-        '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSel ? checkIcon : '') + '</span>' +
-        '<span>' + esc(formatMonthYear(m)) + '</span>' +
-      '</div>';
-    });
-  }
-  
-  h += '</div>';
-  pop.innerHTML = h;
-}
-
-function renderPekanDropdownContent() {
-  var pop = el('dashPekan_popover');
-  if (!pop || !CACHE.dash) return;
-  
-  var d = CACHE.dash;
-  var checkIcon = '<svg height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);margin-right:8px;fill:currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
-  var h = '<div class="dropdown-section">';
-  
-  h += '<div class="dropdown-header">Pilih Pekan</div>';
-  var isSelSemua = d.selectedPekan === 'Semua' || !d.selectedPekan;
-  h += '<div class="dropdown-item" onclick="handlePekanClick(\'Semua\')">' +
-    '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSelSemua ? checkIcon : '') + '</span>' +
-    '<span>Semua Pekan</span>' +
-  '</div>';
-  
-  for (var w = 1; w <= 5; w++) {
-    var wStr = String(w);
-    var isSel = d.selectedPekan === wStr;
-    var desc = w === 1 ? ' (1-7)' : w === 2 ? ' (8-14)' : w === 3 ? ' (15-21)' : w === 4 ? ' (22-28)' : ' (29-31)';
-    h += '<div class="dropdown-item" onclick="handlePekanClick(\'' + wStr + '\')">' +
-      '<span style="width:20px;display:inline-flex;align-items:center;justify-content:center">' + (isSel ? checkIcon : '') + '</span>' +
-      '<span>Pekan ' + wStr + desc + '</span>' +
-    '</div>';
-  }
-  
-  h += '</div>';
-  pop.innerHTML = h;
-}
-
 function toggleCustomDropdown(popId) {
   event.stopPropagation();
   var pop = el(popId);
@@ -3643,14 +3684,7 @@ function toggleCustomDropdown(popId) {
     document.querySelectorAll('.dropdown-popover').forEach(function(p) {
       p.classList.add('hidden');
     });
-    if (wasHidden) {
-      pop.classList.remove('hidden');
-      if (popId === 'dashMonth_popover') {
-        renderMonthDropdownContent();
-      } else if (popId === 'dashPekan_popover') {
-        renderPekanDropdownContent();
-      }
-    }
+    if (wasHidden) pop.classList.remove('hidden');
   }
 }
 
@@ -3701,11 +3735,33 @@ function renderDashboard(d){
   window.DASH=d;
   var lay=getDashLayout();
   var canView=(typeof canDo!=='function')||canDo('dashboard','view');
-  var pubBtn=canView?'<button class="dh-quick-btn" onclick="openPublicLink()">' + SVG_ICONS.link + ' <span>Link Publik</span></button>':'';
-  var addHimpunBtn=canDo('penghimpunan','add')?'<button class="dh-quick-btn primary" onclick="go(\'penghimpunan\');setTimeout(openModalAddPenghimpunan,200)">' + SVG_ICONS.plus + ' <span>Penghimpunan</span></button>':'';
-  var addSalurBtn=canDo('pentasyarufan','add')?'<button class="dh-quick-btn" onclick="go(\'pentasyarufan\');setTimeout(openModalAddPentasyarufan,200)">' + SVG_ICONS.plus + ' <span>Penyaluran</span></button>':'';
-  var edClass=window.DASH_EDIT?'primary':'';
-  var editBtn='<button class="dh-quick-btn '+edClass+'" id="dashEditBtn" onclick="toggleDashEdit()">' + SVG_ICONS.sliders + ' <span>' + (window.DASH_EDIT ? 'Selesai' : 'Atur Layout') + '</span></button>';
+  /* DUA AKSI, SATU CHIP, SATU IKON.
+     Sebelumnya ada tujuh kendali dalam dua baris. Di layar HP keduanya memakan
+     hampir sepertiga layar sebelum satu angka pun terlihat — padahal yang
+     dicari orang saat membuka dasbor adalah angkanya, bukan tombolnya.
+     Yang tinggal: mencatat penghimpunan dan penyaluran (dipakai tiap hari),
+     satu chip periode, dan satu ikon untuk sisanya. */
+  /* Ikon tanpa label — tapi bukan dua tanda + yang kembar: panah naik dan
+     panah turun, pasangan yang sama persis dengan dua kartu KPI tepat di
+     bawahnya. title dan aria-label tetap menyebutkan namanya, jadi yang
+     hilang cuma tulisannya, bukan keterangannya. */
+  var addHimpunBtn=canDo('penghimpunan','add')?'<button class="dh-quick-btn dh-ikon primary" onclick="go(\'penghimpunan\');setTimeout(openModalAddPenghimpunan,200)" title="Catat Penghimpunan" aria-label="Catat Penghimpunan">' + SVG_ICONS.arrowUp + '</button>':'';
+  var addSalurBtn=canDo('pentasyarufan','add')?'<button class="dh-quick-btn dh-ikon dh-tasyaruf" onclick="go(\'pentasyarufan\');setTimeout(openModalAddPentasyarufan,200)" title="Catat Pentasyarufan" aria-label="Catat Pentasyarufan">' + SVG_ICONS.arrowDown + '</button>':'';
+
+  /* Link Publik dan Atur Layout dipakai sesekali, bukan tiap hari. Keduanya
+     masuk ke satu ikon — dan kalau tidak ada yang boleh dipakai, ikonnya pun
+     tidak digambar, bukan digambar lalu membuka menu kosong. */
+  var menuItems='';
+  if(canView) menuItems+='<div class="dropdown-item" onclick="dashMenuPilih(openPublicLink)">'+SVG_ICONS.link+'<span>Link Publik</span></div>';
+  menuItems+='<div class="dropdown-item" onclick="dashMenuPilih(toggleDashEdit)">'+SVG_ICONS.sliders+'<span>'+(window.DASH_EDIT?'Selesai atur layout':'Atur Layout')+'</span></div>';
+  var menuBtn=menuItems?('<div class="custom-dropdown dh-menu">'
+    + '<button class="dh-quick-btn dh-ikon'+(window.DASH_EDIT?' primary':'')+'" id="dashMenu_trigger" aria-haspopup="menu"'
+    + ' title="Menu lainnya" aria-label="Menu lainnya" onclick="toggleCustomDropdown(\'dashMenu_popover\')">'
+    + '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">'
+    + '<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>'
+    + '</button>'
+    + '<div id="dashMenu_popover" class="dropdown-popover hidden"><div class="dropdown-section">'+menuItems+'</div></div>'
+    + '</div>'):'';
   var nm=(typeof ME!=='undefined'&&ME&&ME.nama)?ME.nama:'Admin';
   var today=new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
@@ -3716,40 +3772,26 @@ function renderDashboard(d){
     });
   }
   
-  var selectedVal = d.selectedMonth || 'Semua';
-  var selectedOpt = dropdownOptions.find(function(o) { return o.value === selectedVal; }) || dropdownOptions[0];
-  
-  var monthDropdown = '<div class="custom-dropdown">' +
-    '<button id="dashMonth_trigger" class="btn-dropdown" onclick="toggleCustomDropdown(\'dashMonth_popover\')">' +
-      '<span>' + esc(selectedOpt.label) + '</span>' +
-      '<svg height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg" style="fill:currentColor"><path d="M4.5 6l3.5 3.5L11.5 6H4.5z"/></svg>' +
-    '</button>' +
-    '<div id="dashMonth_popover" class="dropdown-popover hidden"></div>' +
-  '</div>';
 
-  var checkIcon = '<svg height="14" viewBox="0 0 16 16" width="14" xmlns="http://www.w3.org/2000/svg" style="color:var(--accent);margin-right:8px;fill:currentColor"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>';
+  /* Satu chip menggantikan tiga dropdown. Isinya tetap ketiganya, hanya
+     dilipat: tertutup ia satu tombol, terbuka ia satu bar di bawah header —
+     bar, bukan popover melayang, supaya kalender rentang di dalamnya tidak
+     berebut dengan popover induknya dan tidak terpotong di layar sempit. */
+  var periodeLengkap = dashPeriodeLabel(d);
+  var periodeChip = '<button type="button" class="dh-quick-btn dh-periode" id="dashPeriodeBtn"'
+    + ' aria-expanded="false" aria-controls="dashPeriodePanel"'
+    + ' title="Periode: ' + esc(periodeLengkap) + '" aria-label="Periode: ' + esc(periodeLengkap) + '"'
+    + ' onclick="toggleDashPeriode()">'
+    + SVG_ICONS.kalender
+    + '<span class="dh-periode-teks" aria-hidden="true">' + esc(dashPeriodeAngka(d)) + '</span>'
+    + '<span class="dh-car" aria-hidden="true">\u25BE</span>'
+    + '</button>';
 
-  var pekanDropdown = '';
-  if (selectedVal !== 'Semua') {
-    var selPekan = d.selectedPekan || 'Semua';
-    var pekanLabel = selPekan === 'Semua' ? 'Semua Pekan' : 'Pekan ' + selPekan;
-    pekanDropdown = '<div class="custom-dropdown" style="margin-left:4px">' +
-      '<button id="dashPekan_trigger" class="btn-dropdown" onclick="toggleCustomDropdown(\'dashPekan_popover\')">' +
-        '<span>' + esc(pekanLabel) + '</span>' +
-        '<svg height="16" viewBox="0 0 16 16" width="16" xmlns="http://www.w3.org/2000/svg" style="fill:currentColor"><path d="M4.5 6l3.5 3.5L11.5 6H4.5z"/></svg>' +
-      '</button>' +
-      '<div id="dashPekan_popover" class="dropdown-popover hidden"></div>' +
-    '</div>';
-  }
-
-  /* Pilih tanggal kini memakai kalender rentang: klik tanggal awal lalu akhir.
+  /* Pilih tanggal memakai kalender rentang: klik tanggal awal lalu akhir.
      Berdiri sendiri — begitu rentang dipilih, saringan bulan & pekan
      dikesampingkan (lihat dashSetRentang). Kosong = ikut bulan/pekan. */
   var _dr = (d.selectedRentang && d.selectedRentang.dari && d.selectedRentang.sampai) ? d.selectedRentang : null;
-  var dayDropdown = '<div class="dash-rt" style="margin-left:4px;width:172px">'
-    + rentangHTML('dash_rt', _dr ? _dr.dari : '', _dr ? _dr.sampai : '',
-        { rapat:true, kosong:'Pilih Tanggal' })
-    + '</div>';
+  var periodePanel = dashPeriodePanel(d, dropdownOptions, _dr);
 
   // Clean minimal header replacing heavy orange hero
   var hero='<div class="dh">' +
@@ -3758,10 +3800,10 @@ function renderDashboard(d){
         '<div class="dh-greeting"><div class="dh-hi">'+esc(salamRender((SETTINGS&&SETTINGS.salamJudul)||SALAM_DEFAULT,{nama:nm}))+'</div>'+
         '<div class="dh-sub">'+esc(salamSub(today))+'</div></div>'+
         '<div class="dh-acts">' +
-          '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + pubBtn + editBtn + '</div>' +
-          '<div class="dh-act-row">' + monthDropdown + pekanDropdown + dayDropdown + '</div>' +
+          '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + periodeChip + menuBtn + '</div>' +
         '</div>' +
       '</div>' +
+      periodePanel +
     '</div>' +
   '</div>';
 
@@ -3823,6 +3865,13 @@ function renderDashboard(d){
       dari: _dr ? _dr.dari : '', sampai: _dr ? _dr.sampai : '',
       bolehKosong: true, kosong: 'Pilih Tanggal', onTerap: dashSetRentang
     });
+  }
+  /* Panel periode digambar ulang tiap kali dasbor dimuat ulang. Kalau
+     keterbukaannya tidak dikembalikan, memilih bulan akan menutup panel tepat
+     saat orang hendak memilih pekannya juga. */
+  if (window.DASH_PERIODE_BUKA) {
+    var _pp = el('dashPeriodePanel'); if (_pp) _pp.classList.add('buka');
+    var _pb = el('dashPeriodeBtn'); if (_pb) _pb.setAttribute('aria-expanded', 'true');
   }
   if(window.DASH_EDIT){wireDashDrag();wireDashResize();}
   else { playAsymmetricalAnimation(); }
