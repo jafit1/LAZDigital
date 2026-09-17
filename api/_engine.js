@@ -64,7 +64,7 @@ var SHEETS = {
    pantas dilihat semua orang, sementara saldo KLL/ULL boleh. Dipisahkan
    sebagai modul supaya diaturnya lewat mekanisme izin yang sama dengan
    fitur lain, bukan lewat saklar tersembunyi. */
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast'];
+var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -72,7 +72,8 @@ var MODUL_LABEL = {
   dashboard:'Dashboard & Saldo', penghimpunan:'Penghimpunan', pentasyarufan:'Pentasyarufan',
   laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
-  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp'
+  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
+  fundraising:'Fundraising (Penghimpunan Lapangan)'
 };
 var MODUL_KET = {
   dashboard:'Dashboard, menu Saldo Kas & Bank, dan Saldo KLL & ULL',
@@ -86,7 +87,8 @@ var MODUL_KET = {
   donatur:'Basis data donatur',
   log:'Riwayat siapa mengubah apa',
   saldodaerah:'Melihat angka Penghimpunan Daerah di menu Saldo KLL & ULL. Hanya "view" yang dipakai.',
-  broadcast:'Mengirim pesan WhatsApp massal ke buku kontak broadcast'
+  broadcast:'Mengirim pesan WhatsApp massal ke buku kontak broadcast',
+  fundraising:'Modul fundraiser lapangan: database donatur, jadwal pengambilan, pencatatan, dan pencocokan dengan buku utama. Centang "hapus" menjadikannya koordinator yang melihat data semua fundraiser.'
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
@@ -492,19 +494,9 @@ function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); var l
   audit(u.id,u.username,'delete_layanan',(lm&&lm.nama)||id,{modul:'layanan',entitasId:id,ringkas:lm?_layLabel(lm):''}); return {ok:true}; }
 
 /* ===== USER MGMT ===== */
-/* sanitizeUser sengaja membuang kolom sensitif (hash, salt) dan TIDAK membawa
-   'aktif'. Dulu daftar user memakainya apa adanya, sehingga u.aktif selalu
-   undefined: semua akun tampil "Nonaktif", dan menyimpan dari dialog Edit
-   menuliskan aktif='false' — akunnya benar-benar terkunci. */
-function apiListUsers(t){ _requirePerm(t,'users','view');
-  return readAll(SHEETS.USERS).map(function(u){
-    return Object.assign(sanitizeUser(u), { aktif: String(u.aktif) !== 'false', dibuat: u.dibuat || '' });
-  }); }
+function apiListUsers(t){ _requirePerm(t,'users','view'); return readAll(SHEETS.USERS).map(sanitizeUser); }
 function apiSaveUser(t,d){ var a=_requirePerm(t,'users',d.id?'edit':'create');
-  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{})};
-    /* hanya disentuh kalau pemanggil memang mengirimkannya — supaya penyimpanan
-       dari formulir yang tidak memuat kolom ini tidak diam-diam mengunci akun */
-    if(d.aktif!==undefined) up.aktif=(d.aktif===true||String(d.aktif)==='true')?'true':'false'; if(d.layanan!==undefined) up.layanan=(d.role==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
+  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.layanan!==undefined) up.layanan=(d.role==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
     audit(a.id,a.username,'edit_user',d.username||d.id,{modul:'users',entitasId:d.id,
       ringkas:ringkasPerubahan(lamaU,up)+(d.password?(ringkasPerubahan(lamaU,up)?' | ':'')+'password diganti':'')}); }
   else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString(),layanan:(d.role==='superadmin')?'':String(d.layanan||'').trim()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }

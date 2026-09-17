@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F2704F">
+  <title>Fundraising — LAZ Digital</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <!-- Gaya yang sama persis dengan halaman utama dan Broadcast: satu berkas
+       untuk semua, jadi perubahan tema berlaku di mana-mana tanpa diingat. -->
+  <link rel="stylesheet" href="/styles.css">
+  <!-- Peta: Leaflet + ubin OpenStreetMap. Ringan (~40 KB), sumber terbuka, dan
+       tidak butuh kunci API mana pun. Dimuat dari CDN; kalau CDN tak terjangkau,
+       pemilih lokasi jatuh ke isian koordinat manual (lihat fund.js). -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+  <script>
+    /* Tema dibaca dari kunci yang sama dengan halaman utama, supaya berpindah
+       halaman tidak menyalakan lampu terang di tengah malam. */
+    document.documentElement.setAttribute('data-theme', localStorage.getItem('laz_theme') || 'light');
+  </script>
+</head>
+<body>
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+
+  <!-- ============ LOADING ============ -->
+  <!-- Ditulis langsung di HTML, bukan dibuat JS, supaya sudah terlihat sebelum
+       berkas JS besar selesai diunduh. Sembilan lapis kata yang sama, tiap
+       lapis satu pita mendatar (bagian 37 styles.css) — terbaca satu kata. -->
+  <div id="boot" class="lz lz--full" role="status" aria-live="polite" aria-label="Memuat">
+    <div class="lz-mark" role="img" aria-label="Lazismu">
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    </div>
+    <div class="lz-line"><i></i></div>
+    <div class="lz-lama" id="bootLama"></div>
+  </div>
+
+  <div id="sibuk" class="lz lz--sibuk" aria-hidden="true">
+    <div class="lz-mark" aria-hidden="true">
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    <div class="lz-teks">Lazismu</div>
+    </div>
+    <div class="lz-line"><i></i></div>
+  </div>
+
+  <!-- ============ APP ============ -->
+  <div id="appView" class="app hidden">
+    <header class="topnav" id="topnav">
+      <div class="tn-brand" id="brandBox">
+        <button class="tn-brand-id" type="button" onclick="toggleSidebar()" title="Buka / tutup menu" aria-label="Buka atau tutup menu">
+          <span class="logo">LZ</span>
+        </button>
+      </div>
+      <nav class="tn-nav" id="nav"></nav>
+      <div class="tn-right">
+        <span class="badge" id="lencanaLingkup" title="Cakupan data"></span>
+        <button class="user-chip" id="chipPengguna" type="button" title="Pengaturan akun" aria-label="Pengaturan akun">
+          <div class="avatar" id="uAvatar">A</div>
+          <div class="uc-meta">
+            <div id="uName" class="uc-name"></div>
+            <div id="uRole" class="muted uc-role"></div>
+          </div>
+        </button>
+        <button class="tn-icon" id="tombolKembali" type="button" title="Kembali ke LAZDigital" aria-label="Kembali ke LAZDigital">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19 3.5 12 10 5"/><path d="M3.5 12H20"/></svg>
+          <span>Kembali ke LAZDigital</span>
+        </button>
+      </div>
+    </header>
+    <main class="main"><div id="isi"></div></main>
+  </div>
+
+  <!-- ============ MODAL ROOT ============ -->
+  <div class="modal-bg" id="modalBg">
+    <div class="modal" id="modalCard">
+      <div class="modal-head"><h3 id="modalTitle"></h3><button class="close-x" onclick="tutupModal()">&times;</button></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/js/lz-ui.js" defer></script>
+  <script src="/fund.js" defer></script>
+</body>
+</html>

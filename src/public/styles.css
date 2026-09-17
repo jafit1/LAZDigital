@@ -4644,3 +4644,128 @@ input.tandai, #tandaiSemua{ width:16px; height:16px; cursor:pointer; accent-colo
   .strip-tandai > *{ flex:1 1 auto; }
   .bilah-tandai{ width:100%; justify-content:space-between; }
 }
+
+/* ========================================================================
+   45. PEMILIH LOKASI (modul Fundraising)
+   Peta Leaflet di dalam modal donatur, plus daftar saran alamat Nominatim.
+   Warna & radius mengikuti token tema supaya peta tidak terasa tempelan.
+   ======================================================================== */
+.peta-alat{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+.peta-kotak{
+  height:280px; border-radius:14px; overflow:hidden; margin-top:4px;
+  border:1px solid var(--border); background:var(--surface2);
+}
+/* Leaflet menyuntik ubin & kontrolnya sendiri; hanya perlu memastikan ia tidak
+   menembus radius kartu dan warnanya tidak silau di mode gelap. */
+.peta-kotak .leaflet-container{ height:100%; width:100%; font:inherit; background:var(--surface2); }
+.peta-kotak .leaflet-control-attribution{ font-size:9px; background:rgba(255,255,255,.7); }
+:root:not([data-theme="light"]) .peta-kotak .leaflet-tile,
+:root[data-theme="dark"] .peta-kotak .leaflet-tile{ filter:brightness(.85) contrast(1.05); }
+
+.lok-saran{
+  border:1px solid var(--border); border-radius:12px; margin-top:6px; overflow:hidden;
+  background:var(--surface); max-height:190px; overflow-y:auto;
+}
+.lok-saran-baris{
+  display:block; width:100%; text-align:left; padding:9px 12px; cursor:pointer;
+  font-size:12.5px; line-height:1.4; color:var(--text); background:transparent;
+  border:none; border-bottom:1px solid var(--border2);
+}
+.lok-saran-baris:last-child{ border-bottom:none; }
+.lok-saran-baris:hover{ background:var(--accent-soft); color:var(--accent-d); }
+
+/* Leaflet memakai z-index tinggi untuk pin & popup; modal harus tetap di atas
+   peta, kalau tidak kontrol peta menembus tombol "Simpan". */
+.modal-bg{ z-index:10000; }
+
+/* ========================================================================
+   46. MODUL FUNDRAISING — kartu ringkas & daftar jadwal
+   Memakai kartu .kpi-v2 yang SAMA dengan dasbor LAZDigital, bukan kotak buatan
+   sendiri yang mirip. Sebelumnya jumlah kolomnya dipaksa lewat style inline
+   (repeat(4,1fr)) — dan style inline mengalahkan seluruh media query, sehingga
+   di layar 390px empat kartu berdesakan dan angkanya terpotong di tengah.
+   Sekarang jumlah kolom diatur di sini, jadi ia bisa menyusut sendiri.
+   ======================================================================== */
+.fund-kpi{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
+@media (max-width:1100px){ .fund-kpi{ grid-template-columns:repeat(2,1fr); } }
+/* Di HP tetap DUA kolom, bukan satu. Empat kartu bertumpuk satu per satu
+   mendorong jadwal — yang justru dicari orang saat membuka aplikasi — sampai
+   jauh di bawah lipatan layar. */
+@media (max-width:600px){
+  .fund-kpi{ grid-template-columns:repeat(2,1fr); gap:10px; }
+  .fund-kpi .kpi-v2{ padding:14px 13px; border-radius:14px; }
+  .fund-kpi .kpi-v2-label{ font-size:10.5px; letter-spacing:.2px; }
+  .fund-kpi .kpi-v2-icon{ width:28px; height:28px; border-radius:8px; }
+  .fund-kpi .kpi-v2-icon svg{ width:15px; height:15px; }
+  .fund-kpi .kpi-v2-value{ font-size:17px; margin-bottom:0; }
+  .fund-kpi .kpi-v2-top{ margin-bottom:8px; }
+}
+/* Kartu ringkas di sini tidak bisa diklik, jadi ia tidak boleh berlagak bisa:
+   tanpa telunjuk, tanpa terangkat saat disentuh. */
+.kpi-v2.kpi-diam{ cursor:default; }
+.kpi-v2.kpi-diam:hover{ transform:none; box-shadow:0 1px 3px 0 rgba(0,0,0,.03); border-color:var(--border); }
+.kpi-v2.kpi-diam:hover::before{ width:4px; }
+.kpi-v2-nilai-kecil{ font-size:12px; font-weight:600; color:var(--muted); margin-top:2px; }
+/* Kartu pertama berlatar oranye penuh (aturan .kpi-v2:first-child milik dasbor
+   utama), jadi teks kecilnya harus ikut memutih — var(--muted) di atas oranye
+   nyaris tak terbaca. Mengikuti pola yang sudah ada untuk .muted di kartu itu. */
+.kpi-v2:first-child .kpi-v2-nilai-kecil{ color:rgba(255,255,255,.82); }
+
+/* Lencana cakupan data memakan tiga baris di layar HP dan mendorong tombol
+   "kembali" ke luar layar. Di layar sempit ia disembunyikan — keterangannya
+   tetap ada di bawah nama pengguna pada kartu akun. */
+@media (max-width:760px){ #lencanaLingkup{ display:none; } }
+
+/* Lencana status jadwal tidak boleh patah jadi dua baris lalu mendorong nama
+   donatur; ia memendek sendiri dan namanya yang mengalah. */
+.jw-kepala .badge, .jw-status-desk .badge{ white-space:nowrap; }
+.jw-kepala > div{ flex:1 1 auto; min-width:0; }
+.jw-kepala .jw-status-hp{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }
+/* Tautan peta untuk baris yang sudah beres: di layar lebar ia tetap di kolom
+   aksi, di HP ia ikut naik ke sebelah lencana (lihat fund.js). */
+@media (max-width:720px){ .jw-peta-desk{ display:none; } .jw-untuk{ display:none; } }
+@media (min-width:721px){ .jw-kepala .jw-status-hp .jw-peta{ display:none; } }
+
+/* ─── daftar jadwal pengambilan ───
+   Bukan <table>. Tabel dengan tiga tombol di kolom terakhir selalu meluber di
+   layar HP, dan yang pertama hilang ke luar layar justru tombolnya. Baris ini
+   memakai grid yang menumpuk sendiri. */
+.jw-daftar{ display:grid; gap:10px; }
+.jw-baris{
+  display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center;
+  padding:12px 14px; border:1px solid var(--border); border-radius:14px;
+  background:var(--surface); transition:border-color .16s ease;
+}
+.jw-baris:hover{ border-color:var(--accent-soft2, var(--accent)); }
+.jw-baris.jw-beres{ background:var(--surface2); }
+.jw-nama{ font-weight:700; font-size:14px; line-height:1.3; }
+.jw-sub{ font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.45;
+  overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.jw-aksi{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+
+@media (max-width:720px){
+  .jw-baris{ grid-template-columns:1fr; gap:10px; }
+  /* Status naik ke sebelah nama supaya tidak memakan satu baris sendiri. */
+  .jw-kepala{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .jw-aksi{ justify-content:stretch; }
+  /* Tombol dibuat melebar dan cukup tinggi untuk ibu jari — tombol 28px di
+     layar HP adalah sumber salah tekan, dan salah tekan di sini berarti donasi
+     tercatat pada donatur yang keliru. */
+  /* Lebar sama rata: tiga tombol dengan lebar berbeda-beda terbaca sebagai
+     tiga hal yang berbeda pentingnya, padahal ketiganya sejajar. */
+  .jw-aksi .btn{ flex:1 1 0; min-width:0; min-height:42px; justify-content:center; padding-left:6px; padding-right:6px; }
+  .jw-aksi .btn.jw-peta{ flex:0 0 auto; min-width:58px; }
+}
+/* Kekhususan selektornya HARUS menandingi ".jw-kepala .jw-status-hp" di bawah,
+   yang menyetel display:flex. Ditulis sebagai ".jw-status-hp" saja, aturan itu
+   kalah dan lencananya tergambar DUA KALI di layar lebar — sekali di kepala,
+   sekali di kolomnya sendiri. */
+@media (min-width:721px){ .jw-baris .jw-kepala .jw-status-hp{ display:none; } }
+@media (max-width:720px){ .jw-baris .jw-status-desk{ display:none; } }
+
+/* Bilah alat halaman fund: di HP isian tanggal & pencarian melebar penuh,
+   bukan berdesakan jadi tiga kolom sempit yang tidak terbaca. */
+@media (max-width:640px){
+  .fund-alat{ flex-direction:column; align-items:stretch; }
+  .fund-alat > *{ width:100% !important; }
+}
