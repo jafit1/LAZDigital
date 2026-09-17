@@ -72,6 +72,174 @@ function konfirmasi(judul, pesan, saatYa, labelYa = 'Ya, lanjutkan') {
       <button class="btn btn-danger" id="kYa" type="button">${H(labelYa)}</button>`);
 }
 
+/* ============================================================
+   TANDAI & HAPUS — satu pembantu untuk delapan halaman
+
+   Dua jalan yang sengaja dibedakan:
+   - menandai beberapa baris lalu menghapusnya (izinnya sama dengan menekan
+     "hapus" satu per satu, karena memang tidak lebih berbahaya);
+   - "Hapus semua", yang mengosongkan seluruh yang cocok dengan saringan yang
+     sedang aktif — superadmin saja, dan kata kuncinya diketik ulang.
+
+   TANDAAN DILUPAKAN SETIAP KALI DAFTARNYA DIGAMBAR ULANG.
+   Tandaan yang bertahan melewati pencarian dan pindah halaman adalah jebakan:
+   petugas menandai lima baris, mencari sesuatu yang lain, menekan hapus — dan
+   yang terhapus adalah lima baris yang sudah tidak terlihat di layar. Hanya
+   yang sedang terlihat yang bisa ikut terhapus.
+   ============================================================ */
+function tandai(kode, boleh) {
+  const dipilih = new Set();
+  return {
+    kode, boleh, dipilih,
+    /* Kolom centang hanya digambar kalau memang ada yang boleh dilakukan
+       dengannya. Kotak centang yang tidak menuju ke mana-mana cuma menambah
+       satu kolom kosong di layar sempit. */
+    th: boleh ? '<th class="kol-tandai"><input type="checkbox" id="tandaiSemua"'
+      + ' aria-label="Tandai semua baris di halaman ini"></th>' : '',
+    td: (id) => (boleh ? `<td class="kol-tandai"><input type="checkbox" class="tandai"`
+      + ` value="${H(id)}" aria-label="Tandai baris ini"></td>` : ''),
+    /* Halaman berbentuk kartu tidak punya kepala tabel untuk menaruh centang
+       "semua", jadi disediakan sebagai label tersendiri. Tanpa ini, menandai
+       empat puluh perangkat berarti empat puluh klik — dan "Hapus semua" tidak
+       menolong karena itu hanya untuk superadmin. */
+    kotakSemua: boleh ? '<label class="tandai-semua-label">'
+      + '<input type="checkbox" id="tandaiSemua"><span>Tandai semua</span></label>' : '',
+    bilah: boleh ? '<div class="bilah-tandai" id="bilahTandai" hidden>'
+      + '<span class="bt-jumlah" id="btJumlah"></span>'
+      + '<button type="button" class="btn btn-sm" id="btBatal">Batal</button>'
+      + '<button type="button" class="btn btn-sm btn-danger" id="btHapus">Hapus yang ditandai</button>'
+      + '</div>' : '',
+  };
+}
+
+/* Tombol "Hapus semua" menyebutkan ANGKANYA, bukan sekadar kata "semua".
+   Yang ditekan orang adalah "Hapus 412 kontak", dan angka itu datang dari
+   penghitung daftar yang sama — jadi tidak mungkin tombolnya menghapus lebih
+   banyak daripada yang tertulis padanya. */
+function tombolHapusSemua(jumlah, satuan, tersaring) {
+  if (!superadmin() || !jumlah) return '';
+  return `<button type="button" class="btn btn-sm tombol-bahaya" id="hapusSemua">`
+    + `Hapus ${tersaring ? '' : 'semua '}${fmtAngka(jumlah)} ${H(satuan)}${tersaring ? ' hasil' : ''}</button>`;
+}
+
+/* Dialognya menuntut kata kunci diketik ulang — sama seperti yang diminta
+   server. Ditegakkan di kedua tempat dengan alasan berbeda: di server supaya
+   tidak bisa dilewati lewat panggilan langsung, di sini supaya orang tidak
+   menekan tombol lalu menerima pesan galat yang tidak ia mengerti. */
+function tanyaHapusSemua({ judul, jumlah, satuan, catatan, rincian, saatYa }) {
+  const KUNCI = 'HAPUS SEMUA';
+  modal(judul,
+    `<p style="font-size:13.5px;line-height:1.55"><b>${fmtAngka(jumlah)} ${H(satuan)}</b> akan dihapus.`
+    + ' Tidak ada tombol untuk mengembalikannya.</p>'
+    + (catatan ? `<p class="muted" style="font-size:12.5px;line-height:1.5">${H(catatan)}</p>` : '')
+    /* Akibat sampingan ditulis satu per satu, bukan diringkas jadi satu
+       kalimat panjang. Yang perlu diketahui orang sebelum menekan ini bukan
+       "ini berbahaya" — itu sudah jelas — melainkan APA saja yang ikut
+       berubah di tempat lain, dan mana yang justru tidak. */
+    + (rincian && rincian.length
+        ? '<ul class="muted" style="font-size:12px;margin:10px 0 0 18px;line-height:1.7">'
+          + rincian.map((x) => `<li>${x}</li>`).join('') + '</ul>' : '')
+    + `<div class="field" style="margin-top:12px"><label>Ketik <b>${KUNCI}</b> untuk menegaskan</label>`
+    + `<input id="hsTegaskan" autocomplete="off" spellcheck="false" placeholder="${KUNCI}"></div>`,
+    (m) => {
+      const isian = $('#hsTegaskan', m);
+      const ya = $('#hsYa');
+      const periksa = () => { ya.disabled = isian.value.trim().toUpperCase() !== KUNCI; };
+      isian.oninput = periksa;
+      isian.onkeydown = (ev) => { if (ev.key === 'Enter' && !ya.disabled) { ev.preventDefault(); ya.click(); } };
+      periksa();
+      $('#hsBatal').onclick = tutupModal;
+      ya.onclick = async () => {
+        const kunci = isian.value.trim().toUpperCase();
+        tutupModal();
+        await saatYa(kunci);
+      };
+    },
+    `<button class="btn" id="hsBatal" type="button">Batal</button>`
+    + `<button class="btn btn-danger" id="hsYa" type="button" disabled>Hapus ${fmtAngka(jumlah)} ${H(satuan)}</button>`);
+}
+
+/* Bilah tandaan dan tombol hapus-semua tinggal di satu jalur, DI ATAS tabel
+   dan di dalam bagian yang digambar setelah datanya tiba — karena angka pada
+   tombolnya berasal dari data itu. Digambar di bilah alat yang muncul lebih
+   dulu, tombolnya akan sempat menuliskan angka yang belum diketahui. */
+function stripTandai(t, tombolSemua) {
+  const isi = (tombolSemua || '') + (t && t.bilah ? t.bilah : '');
+  return isi ? `<div class="strip-tandai">${isi}</div>` : '';
+}
+
+/* Dipanggil sekali per halaman sesudah tabelnya digambar. Semua kabelnya di
+   satu tempat supaya tidak ada halaman yang lupa memasang salah satunya —
+   misalnya memasang tombol hapus tetapi tidak memasang "tandai semua", yang
+   hasilnya adalah kotak centang di kepala tabel yang tidak melakukan apa pun. */
+function pasangTandai(el, t, { satuan, tindakanBanyak, muat, semua }) {
+  if (!t.boleh) return;
+  const kotak = $$('.tandai', el);
+  const semuaKotak = $('#tandaiSemua', el);
+  const bilah = $('#bilahTandai', el);
+
+  const segarkan = () => {
+    if (!bilah) return;
+    const n = t.dipilih.size;
+    bilah.hidden = n === 0;
+    const label = $('#btJumlah', el);
+    if (label) label.textContent = `${fmtAngka(n)} ${satuan} ditandai`;
+    if (semuaKotak) {
+      semuaKotak.checked = kotak.length > 0 && n === kotak.length;
+      /* Keadaan setengah: sebagian ditandai. Tanpa ini kotak kepala terlihat
+         kosong padahal ada yang ditandai, dan satu klik akan menandai semuanya
+         padahal maksud orang biasanya justru membatalkan. */
+      semuaKotak.indeterminate = n > 0 && n < kotak.length;
+    }
+  };
+
+  kotak.forEach((k) => {
+    k.checked = t.dipilih.has(k.value);
+    k.onchange = () => { if (k.checked) t.dipilih.add(k.value); else t.dipilih.delete(k.value); segarkan(); };
+  });
+  if (semuaKotak) semuaKotak.onchange = () => {
+    kotak.forEach((k) => { k.checked = semuaKotak.checked; if (k.checked) t.dipilih.add(k.value); else t.dipilih.delete(k.value); });
+    segarkan();
+  };
+  const batal = $('#btBatal', el);
+  if (batal) batal.onclick = () => { t.dipilih.clear(); kotak.forEach((k) => { k.checked = false; }); segarkan(); };
+
+  const hapus = $('#btHapus', el);
+  if (hapus) hapus.onclick = () => {
+    const id = Array.from(t.dipilih);
+    if (!id.length) return;
+    konfirmasi(`Hapus ${fmtAngka(id.length)} ${satuan}?`,
+      'Yang ditandai akan dihapus dan tidak bisa dikembalikan.',
+      async () => {
+        try {
+          const hasil = await rpc(tindakanBanyak, { id });
+          t.dipilih.clear();
+          toast(hasil.pesan || `${id.length} ${satuan} dihapus.`, hasil.gagal && hasil.gagal.length ? 'galat' : 'info');
+          await muat();
+        } catch (e) { toast(e.message, 'galat'); }
+      }, `Hapus ${fmtAngka(id.length)} ${satuan}`);
+  };
+
+  const tHapusSemua = $('#hapusSemua', el);
+  if (tHapusSemua && semua) tHapusSemua.onclick = () => tanyaHapusSemua({
+    judul: semua.judul || `Hapus semua ${satuan}`,
+    jumlah: semua.jumlah,
+    satuan,
+    catatan: semua.catatan,
+    rincian: semua.rincian,
+    saatYa: async (tegaskan) => {
+      try {
+        const hasil = await rpc(semua.tindakan, { ...(semua.data || {}), tegaskan });
+        t.dipilih.clear();
+        toast(hasil.pesan || hasil.catatan || 'Selesai.');
+        await muat();
+      } catch (e) { toast(e.message, 'galat'); }
+    },
+  });
+
+  segarkan();
+}
+
 const fmtAngka = (n) => Number(n || 0).toLocaleString('id-ID');
 
 /* Harus sama dengan JEDA_MIN_DETIK di lib/blast/setelan.js. Yang menjaganya
@@ -782,15 +950,20 @@ halaman.perangkat = {
     let d;
     try { d = await rpc('perangkat.daftar'); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
     const bolehUbah = bisa('perangkat.ubah');
+    const tp = tandai('perangkat', bolehUbah);
 
     el.innerHTML = `
-      <div class="row" style="align-items:center;margin-bottom:16px;flex-wrap:nowrap">
+      <div class="row" style="align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <p class="muted" style="flex:1;min-width:0">${d.baris.length} perangkat terdaftar</p>
+        ${tp.kotakSemua}
+        ${tombolHapusSemua(d.baris.length, 'perangkat', false)}
         ${bolehUbah ? '<button id="tambahPerangkat" class="btn btn-primary">+ Tambah perangkat</button>' : ''}
       </div>
+      ${tp.bilah}
       ${d.baris.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">${d.baris.map((p) => `
         <section class="card" style="margin-bottom:0">
           <div style="display:flex;align-items:flex-start;gap:10px">
+            ${tp.boleh ? `<input type="checkbox" class="tandai" value="${H(p.id)}" aria-label="Tandai ${H(p.nama)}" style="margin-top:12px;flex:none">` : ''}
             <div style="width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:var(--accent-soft);font-size:17px;flex-shrink:0">📱</div>
             <div style="min-width:0;flex:1">
               <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${H(p.nama)}</div>
@@ -892,6 +1065,22 @@ halaman.perangkat = {
         try { const h = await rpc('perangkat.hapus', { id: b.dataset.hapus }); toast(h.pesan, 'sukses'); muatUlang(); }
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus'));
+
+    pasangTandai(el, tp, {
+      satuan: 'perangkat',
+      tindakanBanyak: 'perangkat.hapusBanyak',
+      muat: muatUlang,
+      semua: {
+        tindakan: 'perangkat.hapusSemua',
+        jumlah: d.baris.length,
+        judul: 'Hapus seluruh perangkat',
+        rincian: [
+          '<strong>Semua sesi WhatsApp ikut putus.</strong> Tidak ada nomor yang bisa mengirim apa pun sampai ada yang dipindai ulang dari tempat gateway berjalan.',
+          'Pesan yang masih antre akan menumpuk tanpa pengirim — bukan gagal, hanya tidak jalan sampai ada perangkat lagi.',
+          'Riwayat pesan dan kontak <strong>tidak</strong> disentuh.',
+        ],
+      },
+    });
   },
 };
 
@@ -1032,6 +1221,7 @@ halaman.massal = {
 
     const semuaKontak = pilihan.baris || [];
     const bisaDikirimi = semuaKontak.filter((k) => !k.diblokir);
+    const tm = tandai('massal', bisa('massal.kelola'));
 
     el.innerHTML = `
       <div class="grid-2">
@@ -1110,11 +1300,17 @@ halaman.massal = {
           </form>`)}
 
         ${kartu(`
-          <h3>Riwayat kiriman</h3>
+          <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap">
+            <h3 style="flex:1;min-width:0">Riwayat kiriman</h3>
+            ${tm.kotakSemua}
+            ${tombolHapusSemua(daftar.baris.length, 'kiriman massal', false)}
+          </div>
+          ${tm.bilah}
           <div style="margin-top:14px;display:grid;gap:12px;max-height:28rem;overflow-y:auto">
             ${daftar.baris.length ? daftar.baris.map((m) => `
               <div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
                 <div style="display:flex;align-items:flex-start;gap:8px">
+                  ${tm.boleh ? `<input type="checkbox" class="tandai" value="${H(m.id)}" aria-label="Tandai ${H(m.nama)}" style="margin-top:2px;flex:none">` : ''}
                   <p style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${H(m.nama)}</p>
                   ${m.status === 'berjalan' ? `<button data-henti="${m.id}" class="btn btn-ghost btn-sm" style="flex-shrink:0;color:var(--red)">hentikan</button>` : ''}
                 </div>
@@ -1182,6 +1378,22 @@ halaman.massal = {
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hentikan'));
 
+    pasangTandai(el, tm, {
+      satuan: 'kiriman massal',
+      tindakanBanyak: 'massal.hapusBanyak',
+      muat: () => halaman.massal.gambar(el),
+      semua: {
+        tindakan: 'massal.hapusSemua',
+        jumlah: daftar.baris.length,
+        judul: 'Hapus seluruh riwayat kiriman massal',
+        rincian: [
+          'Pesan yang masih <strong>antre</strong> di bawah kiriman itu ikut dibatalkan — kalau tidak, ia tetap terkirim sementara catatan asalnya sudah hilang.',
+          'Riwayat pesan yang sudah terkirim <strong>tidak</strong> dihapus; yang hilang hanya pengelompokannya per kiriman.',
+          'Kontak dan template <strong>tidak</strong> disentuh.',
+        ],
+      },
+    });
+
     $('#fm', el).onsubmit = async (ev) => {
       ev.preventDefault();
       const data = Object.fromEntries(new FormData(ev.target).entries());
@@ -1228,8 +1440,6 @@ halaman.antrean = {
             ${['', 'antre', 'terkirim', 'sampai', 'dibaca', 'gagal', 'dibatalkan', 'masuk']
               .map((v) => `<option value="${v}" ${s.status === v ? 'selected' : ''}>${v || 'Semua status'}</option>`).join('')}
           </select></span>
-          ${negara.pengguna && negara.pengguna.peran === 'superadmin'
-            ? '<button id="kosongkanRiwayat" class="btn btn-sm" style="color:var(--red)">Hapus semua riwayat</button>' : ''}
         </div>
         <div id="tabel">${rangka(6)}</div>
       </div>`;
@@ -1245,12 +1455,15 @@ halaman.antrean = {
     try { d = await rpc('pesan.daftar', s); } catch (e) { $('#tabel', el).innerHTML = galatKotak(e.message); return; }
 
     const bolehUbah = bisa('pesan.kirim');
+    const t = tandai('antrean', bolehUbah);
+    const tersaring = Boolean(s.status || s.cari);
     const halamanTotal = Math.max(1, Math.ceil(d.total / d.perHalaman));
 
-    $('#tabel', el).innerHTML = d.baris.length ? `
+    $('#tabel', el).innerHTML = d.baris.length ? stripTandai(t, tombolHapusSemua(d.total, 'riwayat pesan', tersaring)) + `
       <table>
         <thead>
           <tr>
+            ${t.th}
             <th>Penerima</th>
             <th>Isi</th>
             <th>Status</th>
@@ -1261,6 +1474,7 @@ halaman.antrean = {
         <tbody>
           ${d.baris.map((p) => `
             <tr>
+              ${t.td(p.id)}
               <td>
                 <div style="font-weight:600">${H(p.nama || p.nomor)}</div>
                 <div class="muted" style="font-size:11.5px">${H(p.nomor)} ${p.arah === 'masuk' ? '· masuk' : ''}</div>
@@ -1309,37 +1523,26 @@ halaman.antrean = {
         }, 'Ya, hapus');
     });
 
-    /* Mengosongkan seluruh riwayat menuntut kata kunci diketik ulang. Dialog
-       "Ya / Batal" ditekan tanpa dibaca; mengetik HAPUS SEMUA tidak bisa
-       dilakukan tanpa sadar, dan tidak ada tombol urung untuk tindakan ini. */
-    const tk = $('#kosongkanRiwayat', el);
-    if (tk) tk.onclick = () => modal('Hapus seluruh riwayat pesan', `
-      <p>Seluruh pesan keluar dan masuk akan dihapus — termasuk yang masih antre.
-         <strong>Tidak bisa dibatalkan.</strong></p>
-      <ul class="muted" style="font-size:12px;margin:10px 0 0 18px;line-height:1.7">
-        <li>Kontak, templat, dan grup <strong>tidak</strong> disentuh.</li>
-        <li>Catatan audit <strong>tidak</strong> dihapus — termasuk catatan bahwa Anda melakukan ini.</li>
-        <li>Angka pada riwayat kiriman massal akan jadi nol, karena pesannya sudah tidak ada.</li>
-        <li>Pesan yang sudah sampai tetap ada di HP penerima.</li>
-      </ul>
-      <div class="field" style="margin-top:14px">
-        <label>Ketik <code>HAPUS SEMUA</code> untuk menegaskan</label>
-        <input id="tegaskanHapus" autocomplete="off" placeholder="HAPUS SEMUA">
-      </div>`, (wadah) => {
-      $('#fhBatal').onclick = tutupModal;
-      $('#fhJalan').onclick = async () => {
-        const tombol = $('#fhJalan');
-        tombol.disabled = true; tombol.textContent = 'Menghapus…';
-        try {
-          const h = await rpc('pesan.hapusSemua', { tegaskan: $('#tegaskanHapus', wadah).value });
-          tutupModal(); toast(h.catatan, 'sukses'); halaman.antrean.gambar(el);
-        } catch (e) {
-          toast(e.message, 'galat');
-          tombol.disabled = false; tombol.textContent = 'Hapus semua';
-        }
-      };
-    }, `<button type="button" id="fhBatal" class="btn">Batal</button>
-        <button type="button" id="fhJalan" class="btn btn-danger">Hapus semua</button>`);
+    pasangTandai(el, t, {
+      satuan: 'riwayat pesan',
+      tindakanBanyak: 'pesan.hapusBanyak',
+      muat: () => halaman.antrean.gambar(el),
+      semua: {
+        tindakan: 'pesan.hapusSemua',
+        jumlah: d.total,
+        data: { status: s.status, cari: s.cari },
+        judul: tersaring ? 'Hapus semua hasil saringan ini' : 'Hapus seluruh riwayat pesan',
+        catatan: tersaring
+          ? 'Hanya pesan yang cocok dengan saringan yang sedang aktif.'
+          : 'Seluruh pesan keluar dan masuk — termasuk yang masih antre, jadi yang belum terkirim tidak jadi dikirim.',
+        rincian: [
+          'Kontak, templat, dan grup <strong>tidak</strong> disentuh.',
+          'Catatan audit <strong>tidak</strong> dihapus — termasuk catatan bahwa Anda melakukan ini.',
+          'Angka pada riwayat kiriman massal ikut berkurang, karena pesannya sudah tidak ada.',
+          'Pesan yang sudah sampai tetap ada di HP penerima — menghapus di sini tidak menariknya kembali.',
+        ],
+      },
+    });
   },
 };
 
@@ -1351,6 +1554,8 @@ halaman.kontak = {
   async gambar(el) {
     const s = halaman.kontak.saring;
     const bolehUbah = bisa('kontak.ubah');
+    const t = tandai('kontak', bolehUbah);
+    const tersaring = Boolean(s.cari || s.segmen || s.grup);
     el.innerHTML = `
       <div class="table-wrap">
         <div class="toolbar">
@@ -1389,10 +1594,11 @@ halaman.kontak = {
     const halamanTotal = Math.max(1, Math.ceil(d.total / d.perHalaman));
     const labelSegmen = (kode) => (d.segmen.find((x) => x.kode === kode) || {}).label || kode;
 
-    $('#tabelK', el).innerHTML = d.baris.length ? `
+    $('#tabelK', el).innerHTML = d.baris.length ? stripTandai(t, tombolHapusSemua(d.total, 'kontak', tersaring)) + `
       <table>
         <thead>
           <tr>
+            ${t.th}
             <th>Nama</th>
             <th>Nomor</th>
             <!-- Grup dan segmen disatukan dalam satu kolom. Dipisah jadi dua,
@@ -1409,6 +1615,7 @@ halaman.kontak = {
             const diblokir = k.daftarHitam || k.langganan === false;
             return `
             <tr>
+              ${t.td(k.id)}
               <td style="font-weight:600">${H(k.nama)}${k.anonim ? ' <span class="muted" style="font-weight:400;font-size:11.5px">(anonim)</span>' : ''}</td>
               <td class="muted">${H(k.nomor)}</td>
               <td><div class="row" style="gap:4px;flex-wrap:wrap">${
@@ -1434,6 +1641,23 @@ halaman.kontak = {
         <button id="sebelumK" ${d.halaman <= 1 ? 'disabled' : ''} class="btn btn-sm">Sebelumnya</button>
         <button id="sesudahK" ${d.halaman >= halamanTotal ? 'disabled' : ''} class="btn btn-sm">Berikutnya</button>
       </div>` : kosong('Belum ada kontak. Tambahkan satu per satu atau impor dari CSV.', '👥');
+
+    pasangTandai(el, t, {
+      satuan: 'kontak',
+      tindakanBanyak: 'kontak.hapusBanyak',
+      muat: () => halaman.kontak.gambar(el),
+      semua: {
+        tindakan: 'kontak.hapusSemua',
+        jumlah: d.total,
+        /* Saringan yang dikirim sama persis dengan yang dipakai daftar ini,
+           jadi yang terhapus tidak mungkin berbeda dari yang dihitung. */
+        data: { cari: s.cari, segmen: s.segmen, grup: s.grup },
+        judul: tersaring ? 'Hapus semua hasil pencarian ini' : 'Hapus seluruh kontak',
+        catatan: tersaring
+          ? 'Hanya kontak yang cocok dengan pencarian dan saringan yang sedang aktif. Riwayat pesan kepada mereka tidak ikut terhapus.'
+          : 'Seluruh kontak, termasuk yang tidak terlihat di halaman ini. Riwayat pesan kepada mereka tidak ikut terhapus.',
+      },
+    });
 
     const sb = $('#sebelumK', el); if (sb) sb.onclick = () => { s.halaman--; halaman.kontak.gambar(el); };
     const ss = $('#sesudahK', el); if (ss) ss.onclick = () => { s.halaman++; halaman.kontak.gambar(el); };
@@ -1634,15 +1858,22 @@ halaman.templat = {
     let d;
     try { d = await rpc('templat.daftar'); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
     const bolehUbah = bisa('pesan.kirim');
+    const tnd = tandai('templat', bolehUbah);
 
     el.innerHTML = `
       <div class="row" style="align-items:center;margin-bottom:16px;flex-wrap:nowrap">
         <p class="muted" style="flex:1;min-width:0">${d.baris.length} templat</p>
+        ${tnd.kotakSemua}
+        ${tombolHapusSemua(d.baris.length, 'template', false)}
         ${bolehUbah ? '<button id="tambahT" class="btn btn-primary">+ Templat</button>' : ''}
       </div>
+      ${tnd.bilah}
       ${d.baris.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">${d.baris.map((t) => `
         <section class="card" style="margin-bottom:0;display:flex;flex-direction:column">
-          <div style="font-weight:700">${H(t.nama)}</div>
+          <div class="row" style="gap:8px;align-items:flex-start">
+            ${bolehUbah ? `<input type="checkbox" class="tandai" value="${H(t.id)}" aria-label="Tandai ${H(t.nama)}" style="margin-top:3px;flex:none">` : ''}
+            <div style="font-weight:700;flex:1;min-width:0">${H(t.nama)}</div>
+          </div>
           <p class="muted" style="margin-top:8px;flex:1;white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical">${H(t.isi)}</p>
           ${t.berkasId ? `<div class="badge blue" style="margin-top:10px;align-self:flex-start">📎 ${H(t.namaBerkas || 'lampiran')}</div>` : ''}
           ${bolehUbah ? `<div class="row" style="gap:8px;margin-top:14px">
@@ -1708,6 +1939,18 @@ halaman.templat = {
         try { await rpc('templat.hapus', { id: b.dataset.hapust }); toast('Templat dihapus.', 'sukses'); halaman.templat.gambar(el); }
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus'));
+
+    pasangTandai(el, tnd, {
+      satuan: 'template',
+      tindakanBanyak: 'templat.hapusBanyak',
+      muat: () => halaman.templat.gambar(el),
+      semua: {
+        tindakan: 'templat.hapusSemua',
+        jumlah: d.baris.length,
+        judul: 'Hapus seluruh template',
+        catatan: 'Pesan yang sudah terlanjur antre memakai template ini tetap terkirim — yang dihapus naskahnya, bukan kiriman yang sedang berjalan.',
+      },
+    });
   },
 };
 
@@ -1725,6 +1968,7 @@ halaman.webhook = {
        menjaga agar yang muncul adalah halaman apa adanya, bukan galat
        "cannot read properties of undefined" yang tidak menjelaskan apa pun. */
     const w = s.setelan.webhook || { url: '', aktif: false, kejadian: [] };
+    const tw = tandai('webhook', bisa('setelan.ubah'));
 
     el.innerHTML = `
       <div class="grid-2">
@@ -1744,11 +1988,14 @@ halaman.webhook = {
         ${kartu(`
           <div class="row" style="align-items:center;flex-wrap:nowrap">
             <h3 style="flex:1;min-width:0">Riwayat kejadian</h3>
-            ${d.baris.length ? '<button id="kosongkanW" class="btn btn-sm" style="color:var(--red)">Kosongkan</button>' : ''}
+            ${tw.kotakSemua}
+            ${tombolHapusSemua(d.baris.length, 'baris riwayat', false)}
           </div>
+          ${tw.bilah}
           <div style="margin-top:14px;display:grid;gap:8px;max-height:30rem;overflow-y:auto">
             ${d.baris.length ? d.baris.map((k) => `
               <div class="row" style="gap:6px;align-items:stretch;flex-wrap:nowrap">
+                ${tw.boleh ? `<label style="display:flex;align-items:center;flex:none"><input type="checkbox" class="tandai" value="${H(k.id)}" aria-label="Tandai kejadian ${H(k.jenis)}"></label>` : ''}
                 <button data-lihat='${H(JSON.stringify(k))}' style="flex:1;min-width:0;text-align:left;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);padding:10px 14px;cursor:pointer">
                   <div class="row" style="align-items:center;gap:8px;flex-wrap:nowrap">
                     <span style="font-size:13px;font-weight:600">${H(k.jenis)}</span>
@@ -1779,27 +2026,20 @@ halaman.webhook = {
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus'));
 
-    const kw = $('#kosongkanW', el);
-    if (kw) kw.onclick = () => modal('Kosongkan riwayat webhook', `
-      <p>Seluruh riwayat kejadian dihapus, termasuk kejadian gagal yang sedang menunggu
-         dikirim ulang. <strong>Tidak bisa dibatalkan.</strong></p>
-      <p class="muted" style="font-size:12px;margin-top:8px">Pengaturan webhook-nya sendiri tidak berubah —
-         kejadian baru tetap akan dicatat seperti biasa.</p>
-      <div class="field" style="margin-top:14px">
-        <label>Ketik <code>HAPUS SEMUA</code> untuk menegaskan</label>
-        <input id="tegaskanW" autocomplete="off" placeholder="HAPUS SEMUA">
-      </div>`, () => {
-      $('#fwBatal').onclick = tutupModal;
-      $('#fwJalan').onclick = async () => {
-        const t = $('#fwJalan');
-        t.disabled = true; t.textContent = 'Menghapus…';
-        try {
-          const h = await rpc('webhook.kosongkan', { tegaskan: $('#tegaskanW').value });
-          tutupModal(); toast(h.catatan, 'sukses'); halaman.webhook.gambar(el);
-        } catch (e) { toast(e.message, 'galat'); t.disabled = false; t.textContent = 'Kosongkan'; }
-      };
-    }, `<button type="button" id="fwBatal" class="btn">Batal</button>
-        <button type="button" id="fwJalan" class="btn btn-danger">Kosongkan</button>`);
+    pasangTandai(el, tw, {
+      satuan: 'baris riwayat',
+      tindakanBanyak: 'webhook.hapusBanyak',
+      muat: () => halaman.webhook.gambar(el),
+      semua: {
+        tindakan: 'webhook.kosongkan',
+        jumlah: d.baris.length,
+        judul: 'Kosongkan riwayat webhook',
+        rincian: [
+          'Kejadian gagal yang sedang <strong>menunggu dikirim ulang</strong> ikut dibatalkan.',
+          'Pengaturan webhook-nya sendiri <strong>tidak</strong> berubah — kejadian baru tetap dicatat seperti biasa.',
+        ],
+      },
+    });
   },
 };
 
@@ -1817,23 +2057,35 @@ halaman.pengguna = {
       if (superadmin()) akses = await rpc('akses.daftar');
     } catch (e) { el.innerHTML = galatKotak(e.message); return; }
     const bolehUbah = bisa('pengguna.ubah');
+    const tu = tandai('pengguna', bolehUbah);
     const punya = (bagian, id) => Boolean(akses && (akses[bagian] || []).map(String).includes(String(id)));
+    /* Akun sendiri tidak diberi kotak centang sama sekali. Memberi kotaknya
+       lalu menolaknya di server berarti petugas menandai lima baris dan
+       menerima "4 terhapus, 1 dilewati" — kegagalan yang sebenarnya bukan
+       kegagalan, dan yang lebih baik tidak pernah bisa ditandai sejak awal. */
+    const akuSendiri = negara.pengguna ? String(negara.pengguna.id) : '';
+    const bisaDihapus = d.baris.filter((p) => String(p.id) !== akuSendiri).length;
 
     el.innerHTML = `
       <div class="table-wrap" style="margin-bottom:16px">
         <div class="toolbar">
           <p class="muted" style="flex:1;min-width:0">${d.baris.length} akun</p>
+          ${tombolHapusSemua(bisaDihapus, 'akun', false)}
           ${bolehUbah ? '<button id="tambahU" class="btn btn-primary">+ Akun</button>' : ''}
         </div>
+        ${tu.bilah}
         <table>
           <thead>
-            <tr><th>Nama</th><th>Pengguna</th><th>Peran</th><th>Kantor</th>
+            <tr>${tu.th}<th>Nama</th><th>Pengguna</th><th>Peran</th><th>Kantor</th>
               ${akses ? '<th title="Boleh membuka menu Webhook">Webhook</th><th title="Boleh membuka Catatan Audit">Audit</th>' : ''}
               <th>Terakhir masuk</th><th></th></tr>
           </thead>
           <tbody>
             ${d.baris.map((p) => `
               <tr${p.aktif ? '' : ' style="opacity:.5"'}>
+                ${String(p.id) === akuSendiri
+                  ? (tu.boleh ? '<td class="kol-tandai"><span class="muted" style="font-size:11px" title="Akun Anda sendiri tidak bisa dihapus">—</span></td>' : '')
+                  : tu.td(p.id)}
                 <td style="font-weight:600">${H(p.nama)}</td>
                 <td class="muted">${H(p.username)}</td>
                 <td>${H((d.peran[p.peran] || {}).label || p.peran)}</td>
@@ -1921,6 +2173,22 @@ halaman.pengguna = {
         try { const h = await rpc('pengguna.hapus', { id: b.dataset.hapusu }); toast(h.pesan, 'sukses'); halaman.pengguna.gambar(el); }
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus'));
+
+    pasangTandai(el, tu, {
+      satuan: 'akun',
+      tindakanBanyak: 'pengguna.hapusBanyak',
+      muat: () => halaman.pengguna.gambar(el),
+      semua: {
+        tindakan: 'pengguna.hapusSemua',
+        jumlah: bisaDihapus,
+        judul: 'Hapus semua akun lain',
+        rincian: [
+          '<strong>Akun Anda sendiri tetap ada</strong> — kalau tidak, tidak akan ada lagi yang bisa masuk ke sistem ini.',
+          'Sesi yang sedang berjalan milik akun-akun itu langsung dikeluarkan.',
+          'Kontak, riwayat pesan, dan catatan audit <strong>tidak</strong> disentuh — termasuk catatan siapa melakukan apa.',
+        ],
+      },
+    });
   },
 };
 
@@ -1932,13 +2200,17 @@ halaman.audit = {
     el.innerHTML = rangka(8);
     let d;
     try { d = await rpc('audit.daftar', { batas: 200 }); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
+    const ta = tandai('audit', true);
     el.innerHTML = d.baris.length ? `<div class="table-wrap">
       <div class="toolbar">
         <p class="muted" style="flex:1;min-width:0;font-size:12px">${fmtAngka(d.baris.length)} catatan terakhir</p>
-        <button id="kosongkanA" class="btn btn-sm" style="color:var(--red)">Kosongkan</button>
+        ${ta.kotakSemua}
+        ${tombolHapusSemua(d.baris.length, 'catatan audit', false)}
       </div>
+      ${ta.bilah}
       ${d.baris.map((a) => `
         <div style="padding:10px 14px;border-bottom:1px solid var(--border2);display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;font-size:13px">
+          <input type="checkbox" class="tandai" value="${H(a.id)}" aria-label="Tandai catatan ${H(a.tindakan)}" style="flex:none">
           <span style="font-weight:600">${H(a.nama)}</span>
           <span class="badge grey">${H(a.tindakan)}</span>
           <span class="muted" style="margin-left:auto;font-size:11.5px">${fmtWaktu(a.waktu)}</span>
@@ -1953,28 +2225,21 @@ halaman.audit = {
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus'));
 
-    const ka = $('#kosongkanA', el);
-    if (ka) ka.onclick = () => modal('Kosongkan catatan audit', `
-      <p>Seluruh catatan audit dihapus. <strong>Tidak bisa dibatalkan.</strong></p>
-      <p class="muted" style="font-size:12px;margin-top:8px">Catatan audit adalah satu-satunya tempat
-         yang menjawab &ldquo;siapa mengirim ini&rdquo; kalau suatu hari ada donatur bertanya.
-         Pengosongan ini sendiri akan tercatat sebagai baris pertama yang baru, lengkap dengan nama dan waktunya —
-         jadi lognya boleh kosong, tetapi tidak berpura-pura tidak pernah berisi.</p>
-      <div class="field" style="margin-top:14px">
-        <label>Ketik <code>HAPUS SEMUA</code> untuk menegaskan</label>
-        <input id="tegaskanA" autocomplete="off" placeholder="HAPUS SEMUA">
-      </div>`, () => {
-      $('#faBatal').onclick = tutupModal;
-      $('#faJalan').onclick = async () => {
-        const t = $('#faJalan');
-        t.disabled = true; t.textContent = 'Menghapus…';
-        try {
-          const h = await rpc('audit.kosongkan', { tegaskan: $('#tegaskanA').value });
-          tutupModal(); toast(h.catatan, 'sukses'); halaman.audit.gambar(el);
-        } catch (e) { toast(e.message, 'galat'); t.disabled = false; t.textContent = 'Kosongkan'; }
-      };
-    }, `<button type="button" id="faBatal" class="btn">Batal</button>
-        <button type="button" id="faJalan" class="btn btn-danger">Kosongkan</button>`);
+    pasangTandai(el, ta, {
+      satuan: 'catatan audit',
+      tindakanBanyak: 'audit.hapusBanyak',
+      muat: () => halaman.audit.gambar(el),
+      semua: {
+        tindakan: 'audit.kosongkan',
+        jumlah: d.baris.length,
+        judul: 'Kosongkan catatan audit',
+        catatan: 'Catatan audit adalah satu-satunya tempat yang menjawab "siapa mengirim ini" kalau suatu hari ada donatur bertanya.',
+        rincian: [
+          'Pengosongan ini sendiri tercatat sebagai baris pertama yang baru, lengkap dengan nama dan waktunya — jadi lognya boleh kosong, tetapi tidak berpura-pura tidak pernah berisi.',
+          'Riwayat pesan, kontak, dan pengaturan <strong>tidak</strong> disentuh.',
+        ],
+      },
+    });
   },
 };
 

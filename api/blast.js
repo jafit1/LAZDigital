@@ -214,6 +214,81 @@ function hitungBalasan(pesan) {
 }
 
 // --- Perangkat ------------------------------------------------------------
+/* ============================================================
+   HAPUS BANYAK & HAPUS SEMUA
+
+   Dua bentuk, dan bedanya disengaja:
+
+   - <bagian>.hapusBanyak — baris yang DITANDAI sendiri oleh petugas. Izinnya
+     sama dengan hapus satuan, karena menandai lima baris lalu menekan hapus
+     tidak lebih berbahaya daripada menekan "hapus" lima kali berturut-turut.
+
+   - <bagian>.hapusSemua — SELURUH yang cocok dengan saringan yang sedang
+     aktif. Superadmin saja, dan kata kuncinya diketik ulang: dialog "Anda
+     yakin?" ditekan tanpa dibaca, sedangkan mengetik ulang tidak bisa
+     dilakukan tanpa sadar.
+
+   Yang gagal selalu DILAPORKAN, tidak didiamkan. "20 terhapus" padahal tiga di
+   antaranya ditolak karena bukan kantornya adalah laporan yang berbohong, dan
+   yang percaya laporan itu tidak akan pernah memeriksa ketiganya lagi.
+   ============================================================ */
+const BATAS_HAPUS_SEKALI = 500;    /* untuk baris yang ditandai sendiri */
+const BATAS_HAPUS_SEMUA = 1000;    /* per satu panggilan; sisanya dilaporkan */
+
+function idBanyak(data) {
+  const kasar = []
+    .concat(Array.isArray(data.id) ? data.id : (data.id ? [data.id] : []))
+    .concat(Array.isArray(data.ids) ? data.ids : []);
+  const unik = Array.from(new Set(kasar.map((i) => String(i || '').trim()).filter(Boolean)));
+  if (!unik.length) throw new GalatAplikasi('Tidak ada baris yang ditandai.', 400);
+  if (unik.length > BATAS_HAPUS_SEKALI) {
+    throw new GalatAplikasi(
+      `Terlalu banyak sekaligus (${unik.length}). Maksimal ${BATAS_HAPUS_SEKALI} baris per sekali hapus.`, 400);
+  }
+  return unik;
+}
+
+/* Berurutan, bukan Promise.all. Satu baris yang gagal tidak boleh membatalkan
+   yang lain, dan penyimpanannya bukan basis data bertransaksi: dua penghapusan
+   yang menulis daftar yang sama pada saat bersamaan bisa saling menimpa dan
+   menghidupkan kembali baris yang sudah dihapus. */
+async function hapusBerurutan(daftar, hapusSatu) {
+  let terhapus = 0;
+  const gagal = [];
+  for (const i of daftar) {
+    try { await hapusSatu(i); terhapus++; }
+    catch (e) { gagal.push({ id: i, alasan: e.message || 'gagal dihapus' }); }
+  }
+  return { terhapus, gagal };
+}
+
+function ringkasHapus({ terhapus, gagal }, satuan, tambahan = '') {
+  const inti = gagal.length
+    ? `${terhapus} ${satuan} dihapus, ${gagal.length} dilewati: `
+      + gagal.slice(0, 3).map((g) => g.alasan).join('; ') + (gagal.length > 3 ? ' …' : '')
+    : `${terhapus} ${satuan} dihapus.`;
+  return { terhapus, gagal, pesan: (inti + ' ' + tambahan).trim() };
+}
+
+function tegaskanHapusSemua(data) {
+  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
+    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
+  }
+}
+
+/* Dipotong per panggilan supaya penghapusan besar tidak mati di tengah karena
+   batas waktu serverless — dan kalau terpotong, sisanya DIKATAKAN, bukan
+   ditinggalkan diam-diam seolah semuanya sudah bersih. */
+function potongHapusSemua(daftar) {
+  return {
+    ambil: daftar.slice(0, BATAS_HAPUS_SEMUA),
+    sisa: Math.max(0, daftar.length - BATAS_HAPUS_SEMUA),
+  };
+}
+function catatanSisa(sisa) {
+  return sisa ? `Masih ada ${sisa} yang belum terhapus — tekan sekali lagi untuk melanjutkan.` : '';
+}
+
 tindakan['perangkat.daftar'] = { izin: 'perangkat.lihat', async jalankan({ pengguna }) {
   const idDaftar = await db.anggotaHimpunan('perangkat:daftar');
   const isi = (await db.ambilBanyak(idDaftar.map((i) => `perangkat:${i}`))).filter(Boolean);
@@ -271,6 +346,35 @@ tindakan['perangkat.hapus'] = { izin: 'perangkat.ubah', async jalankan({ data, p
   await db.keluarDariHimpunan('perangkat:daftar', data.id);
   await auth.catatAudit(pengguna, 'perangkat.hapus', { id: data.id, nama: perangkat.nama }, req);
   return { pesan: `Perangkat "${perangkat.nama}" dihapus.` };
+} };
+
+/* MENGHAPUS PERANGKAT = MEMUTUS SESI WHATSAPP-NYA.
+   Nomor itu berhenti mengirim sampai ada yang memindai QR-nya lagi dari
+   tempat gateway berjalan. Itu bukan sesuatu yang boleh hanya tertulis di
+   kepala orang yang menekan tombolnya, jadi ikut dikatakan di jawabannya. */
+const CATATAN_PERANGKAT = 'Sesi WhatsApp-nya ikut putus — perangkat itu harus dipindai ulang sebelum bisa mengirim lagi.';
+
+async function hapusSatuPerangkat(perangkatId) {
+  const perangkat = await db.ambil(`perangkat:${perangkatId}`);
+  if (!perangkat) throw new Error('perangkat itu sudah tidak ada');
+  await db.hapus(`perangkat:${perangkatId}`);
+  await db.keluarDariHimpunan('perangkat:daftar', perangkatId);
+  return perangkat;
+}
+
+tindakan['perangkat.hapusBanyak'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
+  const hasil = await hapusBerurutan(idBanyak(data), (i) => hapusSatuPerangkat(i));
+  await auth.catatAudit(pengguna, 'perangkat.hapusBanyak', { terhapus: hasil.terhapus }, req);
+  return ringkasHapus(hasil, 'perangkat', hasil.terhapus ? CATATAN_PERANGKAT : '');
+} };
+
+tindakan['perangkat.hapusSemua'] = { izin: 'perangkat.ubah', superadmin: true, async jalankan({ data, pengguna, req }) {
+  tegaskanHapusSemua(data);
+  const semua = await db.anggotaHimpunan('perangkat:daftar');
+  const hasil = await hapusBerurutan(semua, (i) => hapusSatuPerangkat(i));
+  await auth.catatAudit(pengguna, 'perangkat.hapusSemua', { terhapus: hasil.terhapus }, req);
+  return ringkasHapus(hasil, 'perangkat',
+    hasil.terhapus ? 'Semua sesi WhatsApp ikut putus — tidak ada nomor yang bisa mengirim sampai ada yang dipindai ulang.' : '');
 } };
 
 tindakan['perangkat.sambung'] = { izin: 'perangkat.ubah', async jalankan({ data, pengguna, req }) {
@@ -418,6 +522,40 @@ tindakan['kontak.hapus'] = { izin: 'kontak.ubah', async jalankan({ data, penggun
    sendiri-sendiri dan artinya bertumpang tindih; sekarang keduanya digerakkan
    bersama supaya tidak mungkin lagi ada kontak yang aktif menurut saklar yang
    satu dan diblokir menurut saklar yang lain. */
+tindakan['kontak.hapusBanyak'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
+  const kunci = kantorTerkunci(pengguna);
+  const hasil = await hapusBerurutan(idBanyak(data), async (i) => {
+    const kontak = await db.ambil(kontakLib.KUNCI(i));
+    if (!kontak) throw new Error('kontak itu sudah tidak ada');
+    /* Penjagaan kantor diperiksa PER BARIS, bukan sekali di depan. Sekali di
+       depan berarti satu kontak milik kantor sendiri di dalam tandaan cukup
+       untuk meloloskan sisanya. */
+    if (kunci && (kontak.kantor || '') !== kunci) throw new Error(`${kontak.nama}: bukan kantor Anda`);
+    await kontakLib.hapusKontak(i);
+  });
+  await auth.catatAudit(pengguna, 'kontak.hapusBanyak', { terhapus: hasil.terhapus, ditolak: hasil.gagal.length }, req);
+  return ringkasHapus(hasil, 'kontak');
+} };
+
+/* Mengosongkan kontak yang COCOK DENGAN SARINGAN, bukan selalu seluruhnya.
+   Saringannya diambil dari kontakLib.saringKontak — fungsi yang sama persis
+   yang dipakai daftar untuk menghitung angka di layar, jadi "Hapus 24 hasil"
+   tidak mungkin menghapus baris ke-25 yang tidak pernah terlihat. */
+tindakan['kontak.hapusSemua'] = { izin: 'kontak.ubah', superadmin: true, async jalankan({ data, pengguna, req }) {
+  tegaskanHapusSemua(data);
+  const saringan = {
+    cari: util.bersihkanTeks(data.cari, 80),
+    segmen: util.bersihkanTeks(data.segmen, 40),
+    grup: util.bersihkanTeks(data.grup || data.label, 40),
+    kantorTerkunci: kantorTerkunci(pengguna),
+  };
+  const cocok = await kontakLib.saringKontak(saringan);
+  const { ambil, sisa } = potongHapusSemua(cocok);
+  const hasil = await hapusBerurutan(ambil.map((k) => k.id), (i) => kontakLib.hapusKontak(i));
+  await auth.catatAudit(pengguna, 'kontak.hapusSemua', { terhapus: hasil.terhapus, saringan, sisa }, req);
+  return ringkasHapus(hasil, 'kontak', catatanSisa(sisa));
+} };
+
 tindakan['kontak.ubahBlokir'] = { izin: 'kontak.ubah', async jalankan({ data, pengguna, req }) {
   const kontak = await db.ambil(kontakLib.KUNCI(data.id));
   if (!kontak) throw new GalatAplikasi('Kontak tidak ditemukan', 404);
@@ -495,10 +633,34 @@ tindakan['templat.simpan'] = { izin: 'pesan.kirim', async jalankan({ data, pengg
   return { baris: daftar };
 } };
 
-tindakan['templat.hapus'] = { izin: 'pesan.kirim', async jalankan({ data }) {
+tindakan['templat.hapus'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
   const daftar = ((await db.ambil('templat')) || []).filter((t) => t.id !== data.id);
   await db.simpan('templat', daftar);
+  await auth.catatAudit(pengguna, 'templat.hapus', { id: data.id }, req);
   return { baris: daftar };
+} };
+
+tindakan['templat.hapusBanyak'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const ditandai = new Set(idBanyak(data));
+  const daftar = (await db.ambil('templat')) || [];
+  const sisa = daftar.filter((t) => !ditandai.has(t.id));
+  const terhapus = daftar.length - sisa.length;
+  if (!terhapus) throw new GalatAplikasi('Template yang ditandai sudah tidak ada.', 404);
+  await db.simpan('templat', sisa);
+  await auth.catatAudit(pengguna, 'templat.hapusBanyak', { terhapus }, req);
+  return { baris: sisa, terhapus, gagal: [], pesan: `${terhapus} template dihapus.` };
+} };
+
+/* Templat tidak bersaringan di layar, jadi "semua" di sini memang seluruhnya.
+   Lampiran yang menempel padanya tidak ikut dihapus dari penyimpanan berkas:
+   berkas yang sama bisa dipakai kiriman yang sudah terlanjur antre, dan
+   membuangnya akan membuat pesan itu gagal di tengah jalan. */
+tindakan['templat.hapusSemua'] = { izin: 'pesan.kirim', superadmin: true, async jalankan({ data, pengguna, req }) {
+  tegaskanHapusSemua(data);
+  const jumlah = ((await db.ambil('templat')) || []).length;
+  await db.simpan('templat', []);
+  await auth.catatAudit(pengguna, 'templat.hapusSemua', { terhapus: jumlah }, req);
+  return { baris: [], terhapus: jumlah, gagal: [], pesan: `${jumlah} template dihapus.` };
 } };
 
 // --- Pesan ----------------------------------------------------------------
@@ -606,7 +768,9 @@ tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
   return { pesan: terkirim[0], jumlah: terkirim.length, dilewati, catatan };
 } };
 
-tindakan['pesan.daftar'] = { izin: 'pesan.lihat', async jalankan({ data, pengguna }) {
+/* Sama alasannya dengan saringKontak: daftar yang menghitung dan hapus-semua
+   yang menghapus wajib memakai saringan yang SATU, bukan dua yang mirip. */
+async function saringPesan(data, pengguna) {
   const idDaftar = ((await db.ambil('pesan:baru')) || []).slice(0, 1000);
   let isi = (await db.ambilBanyak(idDaftar.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
 
@@ -625,7 +789,14 @@ tindakan['pesan.daftar'] = { izin: 'pesan.lihat', async jalankan({ data, penggun
       String(p.nama).toLowerCase().includes(q) ||
       String(p.isi.teks).toLowerCase().includes(q));
   }
+  return isi;
+}
+function adaSaringanPesan(data) {
+  return Boolean(data.status || data.perangkatId || String(data.cari || '').trim());
+}
 
+tindakan['pesan.daftar'] = { izin: 'pesan.lihat', async jalankan({ data, pengguna }) {
+  const isi = await saringPesan(data, pengguna);
   const perHalaman = Math.min(100, Number(data.perHalaman) || 25);
   const halaman = Math.max(1, Number(data.halaman) || 1);
   return {
@@ -665,18 +836,49 @@ tindakan['pesan.hapus'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
    dikirim lembaga kepada donatur, dan tidak ada tombol urung. Hak yang
    diturunkan lewat centang modul broadcast tidak cukup untuk ini. */
 tindakan['pesan.hapusSemua'] = { izin: 'pesan.kirim', superadmin: true, async jalankan({ data, pengguna, req }) {
-  /* Kata kunci diketik ulang, bukan sekadar menekan "Ya". Dialog konfirmasi
-     ditekan tanpa dibaca; mengetik ulang tidak bisa dilakukan tanpa sadar. */
-  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
-    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
+  tegaskanHapusSemua(data);
+
+  /* JALUR CEPAT vs JALUR SARINGAN.
+     Tanpa saringan apa pun, yang dipakai tetap hapusSemuaPesan(): ia juga
+     menyapu pesan yang sudah lepas dari daftar "pesan:baru" tetapi masih
+     tertinggal di himpunan antrean, serahan, atau gagal — sisa yang tidak
+     akan pernah terlihat di layar dan karenanya tidak akan pernah ikut
+     tersaring. Begitu ada saringan, yang boleh terhapus hanyalah yang
+     benar-benar dihitung di layar. */
+  if (!adaSaringanPesan(data) && !kantorTerkunci(pengguna)) {
+    const hasil = await antreanLib.hapusSemuaPesan();
+    await auth.catatAudit(pengguna, 'pesan.hapusSemua', hasil, req);
+    return {
+      ...hasil,
+      gagal: [],
+      pesan: `${hasil.terhapus} riwayat pesan dihapus.`,
+      catatan: 'Kontak, templat, dan catatan audit tidak disentuh.'
+        + ' Angka pada riwayat kiriman massal ikut jadi nol karena pesannya sudah tidak ada.',
+    };
   }
-  const hasil = await antreanLib.hapusSemuaPesan();
-  await auth.catatAudit(pengguna, 'pesan.hapusSemua', hasil, req);
-  return {
-    ...hasil,
-    catatan: `${hasil.terhapus} riwayat pesan dihapus. Kontak, templat, dan catatan audit tidak disentuh.`
-      + ' Angka pada riwayat kiriman massal ikut jadi nol karena pesannya sudah tidak ada.',
-  };
+
+  const cocok = await saringPesan(data, pengguna);
+  const { ambil, sisa } = potongHapusSemua(cocok);
+  const hasil = await hapusBerurutan(ambil.map((p) => p.id), (i) => antreanLib.hapusPesan(i));
+  await auth.catatAudit(pengguna, 'pesan.hapusSemua', {
+    terhapus: hasil.terhapus, sisa,
+    saringan: { status: data.status || '', perangkatId: data.perangkatId || '', cari: data.cari || '' },
+  }, req);
+  return ringkasHapus(hasil, 'riwayat pesan', catatanSisa(sisa));
+} };
+
+tindakan['pesan.hapusBanyak'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
+  const kunci = kantorTerkunci(pengguna);
+  const hasil = await hapusBerurutan(idBanyak(data), async (i) => {
+    if (kunci) {
+      const pesan = await db.ambil(antreanLib.KUNCI_PESAN(i));
+      const kontak = pesan ? await kontakLib.cariLewatNomor(pesan.nomor) : null;
+      if (!kontak || (kontak.kantor || '') !== kunci) throw new Error('ada pesan yang bukan milik kantor Anda');
+    }
+    await antreanLib.hapusPesan(i);
+  });
+  await auth.catatAudit(pengguna, 'pesan.hapusBanyak', { terhapus: hasil.terhapus, ditolak: hasil.gagal.length }, req);
+  return ringkasHapus(hasil, 'riwayat pesan');
 } };
 
 tindakan['pesan.ulangi'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna, req }) {
@@ -850,6 +1052,59 @@ tindakan['massal.hentikan'] = { izin: 'massal.kelola', async jalankan({ data, pe
   return { pesan: `${n} pesan yang belum terkirim dibatalkan.` };
 } };
 
+/* Menghapus catatan kiriman massal, bukan sekadar membuang barisnya.
+   Pesan yang masih antre di bawahnya DIBATALKAN lebih dulu: kalau tidak, ia
+   tetap terkirim ke donatur sementara satu-satunya tempat untuk melihat
+   kiriman mana ia berasal sudah tidak ada lagi. Riwayat pesan yang sudah
+   terkirim sengaja dibiarkan — itu bukti apa yang sudah diterima orang, dan
+   membuangnya bukan urusan tombol yang bertuliskan "hapus kiriman". */
+async function hapusSatuMassal(massalId, antre) {
+  const massal = await db.ambil(`massal:${massalId}`);
+  if (!massal) throw new Error('kiriman itu sudah tidak ada');
+  let dibatalkan = 0;
+  for (const pesan of antre) {
+    if (pesan.massalId !== massalId || pesan.status !== 'antre') continue;
+    try { await antreanLib.batalkan(pesan.id); dibatalkan++; } catch (_) { /* sudah berubah duluan */ }
+  }
+  await db.hapus(`massal:${massalId}`);
+  await db.keluarDariHimpunan('massal:daftar', massalId);
+  return dibatalkan;
+}
+
+/* Antrean dibaca SEKALI lalu dipakai untuk semua kiriman yang dihapus.
+   Membacanya ulang per kiriman berarti seluruh antrean dipindai berkali-kali,
+   dan menghapus dua puluh kiriman jadi dua puluh kali pekerjaan yang sama. */
+async function pesanYangMasihAntre() {
+  const idAntre = await db.anggotaHimpunan(antreanLib.KUNCI_ANTREAN);
+  return (await db.ambilBanyak(idAntre.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+}
+
+tindakan['massal.hapusBanyak'] = { izin: 'massal.kelola', async jalankan({ data, pengguna, req }) {
+  const antre = await pesanYangMasihAntre();
+  let dibatalkan = 0;
+  const hasil = await hapusBerurutan(idBanyak(data), async (i) => {
+    dibatalkan += await hapusSatuMassal(i, antre);
+  });
+  await auth.catatAudit(pengguna, 'massal.hapusBanyak', { terhapus: hasil.terhapus, dibatalkan }, req);
+  return ringkasHapus(hasil, 'kiriman massal',
+    dibatalkan ? `${dibatalkan} pesan yang belum terkirim ikut dibatalkan.` : '');
+} };
+
+tindakan['massal.hapusSemua'] = { izin: 'massal.kelola', superadmin: true, async jalankan({ data, pengguna, req }) {
+  tegaskanHapusSemua(data);
+  const antre = await pesanYangMasihAntre();
+  const semua = await db.anggotaHimpunan('massal:daftar');
+  const { ambil, sisa } = potongHapusSemua(semua);
+  let dibatalkan = 0;
+  const hasil = await hapusBerurutan(ambil, async (i) => {
+    dibatalkan += await hapusSatuMassal(i, antre);
+  });
+  await auth.catatAudit(pengguna, 'massal.hapusSemua', { terhapus: hasil.terhapus, dibatalkan, sisa }, req);
+  return ringkasHapus(hasil, 'kiriman massal',
+    (dibatalkan ? `${dibatalkan} pesan yang belum terkirim ikut dibatalkan. ` : '')
+    + 'Riwayat pesan yang sudah terkirim tidak disentuh. ' + catatanSisa(sisa));
+} };
+
 // --- Antrean --------------------------------------------------------------
 tindakan['antrean.ringkas'] = { izin: 'dasbor', async jalankan() {
   return antreanLib.ringkasAntrean();
@@ -965,13 +1220,21 @@ tindakan['pengguna.simpan'] = { izin: 'pengguna.ubah', async jalankan({ data, pe
   return { pengguna: auth.pengunaTampil(baru) };
 } };
 
-tindakan['pengguna.hapus'] = { izin: 'pengguna.ubah', async jalankan({ data, pengguna, req }) {
-  if (data.id === pengguna.id) throw new GalatAplikasi('Anda tidak dapat menghapus akun sendiri');
-  const sasaran = await db.ambil(auth.KUNCI_PENGGUNA(data.id));
-  if (!sasaran) throw new GalatAplikasi('Pengguna tidak ditemukan', 404);
+/* AKUN SENDIRI TIDAK PERNAH BISA IKUT TERHAPUS.
+   Itu bukan sekadar kenyamanan: selama yang menekan tombolnya pasti tersisa,
+   sistem ini tidak mungkin kehilangan superadmin terakhirnya — karena hanya
+   superadmin yang boleh menekan "hapus semua" di halaman ini. Jadi satu
+   penjagaan sederhana menutup dua lubang sekaligus, dan tidak ada aturan
+   "sisakan minimal satu" yang harus dijaga terpisah lalu terlupa. */
+async function hapusSatuPengguna(sasaranId, pengguna, req) {
+  if (sasaranId === pengguna.id) throw new Error('akun Anda sendiri tidak bisa dihapus');
+  const sasaran = await db.ambil(auth.KUNCI_PENGGUNA(sasaranId));
+  if (!sasaran) throw new Error('akun itu sudah tidak ada');
   if (sasaran.peran === 'superadmin' && pengguna.peran !== 'superadmin') {
-    throw new GalatAplikasi('Hanya superadmin yang boleh menghapus akun superadmin', 403);
+    throw new Error(`${sasaran.username}: hanya superadmin yang boleh menghapus akun superadmin`);
   }
+  /* Sesinya dicabut lebih dulu. Akun yang dihapus sementara sesinya dibiarkan
+     hidup tetap bisa dipakai sampai sesi itu kedaluwarsa sendiri. */
   await auth.hapusSemuaSesi(sasaran.id);
   await db.hapus(auth.KUNCI_PENGGUNA(sasaran.id));
   await db.keluarDariHimpunan('pengguna:daftar', sasaran.id);
@@ -979,7 +1242,30 @@ tindakan['pengguna.hapus'] = { izin: 'pengguna.ubah', async jalankan({ data, pen
   delete peta[sasaran.username];
   await db.simpan('idx:username', peta);
   await auth.catatAudit(pengguna, 'pengguna.hapus', { username: sasaran.username }, req);
+  return sasaran;
+}
+
+tindakan['pengguna.hapus'] = { izin: 'pengguna.ubah', async jalankan({ data, pengguna, req }) {
+  let sasaran;
+  try { sasaran = await hapusSatuPengguna(data.id, pengguna, req); }
+  catch (e) { throw new GalatAplikasi(e.message, /sudah tidak ada/.test(e.message) ? 404 : 403); }
   return { pesan: `Akun ${sasaran.username} dihapus.` };
+} };
+
+tindakan['pengguna.hapusBanyak'] = { izin: 'pengguna.ubah', async jalankan({ data, pengguna, req }) {
+  const hasil = await hapusBerurutan(idBanyak(data), (i) => hapusSatuPengguna(i, pengguna, req));
+  return ringkasHapus(hasil, 'akun');
+} };
+
+tindakan['pengguna.hapusSemua'] = { izin: 'pengguna.ubah', superadmin: true, async jalankan({ data, pengguna, req }) {
+  tegaskanHapusSemua(data);
+  /* Akun sendiri dikeluarkan dari daftar SEBELUM dihapus, bukan dibiarkan
+     gagal lalu dilaporkan sebagai "1 dilewati". Menyisakan akun Anda memang
+     yang dimaksudkan di sini, jadi ia bukan kegagalan. */
+  const semua = (await db.anggotaHimpunan('pengguna:daftar')).filter((i) => i !== pengguna.id);
+  const hasil = await hapusBerurutan(semua, (i) => hapusSatuPengguna(i, pengguna, req));
+  await auth.catatAudit(pengguna, 'pengguna.hapusSemua', { terhapus: hasil.terhapus }, req);
+  return ringkasHapus(hasil, 'akun', 'Akun Anda sendiri tetap ada — kalau tidak, tidak ada lagi yang bisa masuk.');
 } };
 
 // --- Audit & webhook ------------------------------------------------------
@@ -1007,10 +1293,22 @@ tindakan['audit.hapus'] = { izin: 'audit.lihat', khusus: 'audit', async jalankan
   return { pesan: 'Satu catatan audit dihapus.' };
 } };
 
+tindakan['audit.hapusBanyak'] = { izin: 'audit.lihat', khusus: 'audit', async jalankan({ data, pengguna, req }) {
+  const ditandai = new Set(idBanyak(data));
+  const daftar = (await db.ambil('audit')) || [];
+  const sisa = daftar.filter((a) => !ditandai.has(a.id));
+  const terhapus = daftar.length - sisa.length;
+  if (!terhapus) throw new GalatAplikasi('Catatan yang ditandai sudah tidak ada.', 404);
+  await db.simpan('audit', sisa);
+  /* Penghapusannya sendiri ikut dicatat — sama seperti audit.hapus. Kalau
+     tidak, satu-satunya tindakan yang bisa dilakukan tanpa meninggalkan jejak
+     adalah menghapus jejak. */
+  await auth.catatAudit(pengguna, 'audit.hapusBanyak', { terhapus }, req);
+  return { terhapus, gagal: [], pesan: `${terhapus} catatan audit dihapus. Penghapusan ini sendiri ikut tercatat.` };
+} };
+
 tindakan['audit.kosongkan'] = { izin: 'audit.lihat', khusus: 'audit', async jalankan({ data, pengguna, req }) {
-  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
-    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
-  }
+  tegaskanHapusSemua(data);
   const jumlah = ((await db.ambil('audit')) || []).length;
   await db.hapus('audit');
   /* Dicatat SESUDAH dikosongkan, jadi catatan ini yang pertama di log baru:
@@ -1048,10 +1346,14 @@ tindakan['webhook.hapus'] = { izin: 'setelan.ubah', khusus: 'webhook', async jal
   return { ...hasil, pesan: 'Satu baris riwayat webhook dihapus.' };
 } };
 
+tindakan['webhook.hapusBanyak'] = { izin: 'setelan.ubah', khusus: 'webhook', async jalankan({ data, pengguna, req }) {
+  const hasil = await hapusBerurutan(idBanyak(data), (i) => webhookLib.hapusRiwayat(i));
+  await auth.catatAudit(pengguna, 'webhook.hapusBanyak', { terhapus: hasil.terhapus }, req);
+  return ringkasHapus(hasil, 'baris riwayat webhook');
+} };
+
 tindakan['webhook.kosongkan'] = { izin: 'setelan.ubah', khusus: 'webhook', async jalankan({ data, pengguna, req }) {
-  if (String(data.tegaskan || '').trim().toUpperCase() !== 'HAPUS SEMUA') {
-    throw new GalatAplikasi('Ketik HAPUS SEMUA untuk menegaskan.', 400);
-  }
+  tegaskanHapusSemua(data);
   const hasil = await webhookLib.kosongkanRiwayat();
   await auth.catatAudit(pengguna, 'webhook.kosongkan', hasil, req);
   return { ...hasil, catatan: `${hasil.terhapus} baris riwayat webhook dihapus, termasuk ${hasil.mati} yang menunggu kiriman ulang.` };

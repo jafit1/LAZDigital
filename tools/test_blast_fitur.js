@@ -465,6 +465,146 @@ async function buatPerangkat(id = 'p_uji') {
     dasbor2.balasan.dikirimi === 3, dasbor2.balasan);
   cek('persentasenya terhadap yang dikirimi', dasbor2.balasan.persen === 33, dasbor2.balasan);
 
+  console.log('\n=== K. TANDAI & HAPUS BANYAK ===');
+  /* Dikurung supaya namanya tidak berebut dengan bagian sebelumnya —
+     seluruh berkas ini satu fungsi, jadi tiap const di sini hidup sampai
+     akhir kalau tidak dibatasi. */
+  {
+    /* Semuanya dijalankan di data yang dibuat sendiri di sini, supaya angka yang
+       diperiksa tidak bergantung pada urutan bagian sebelumnya. */
+    await db.hapus('kontak:daftar');
+    for (const i of await db.anggotaHimpunan('kontak:daftar')) await db.keluarDariHimpunan('kontak:daftar', i);
+    const buatKontak = async (nama, nomor, kantor) =>
+      (await kontakLib.simpanKontak({ nama, nomor, kantor }, SUPER)).kontak;
+    const kA = await buatKontak('Andi Bantul', '628110000001', 'KLL Sewon');
+    const kB = await buatKontak('Budi Bantul', '628110000002', 'KLL Sewon');
+    const kC = await buatKontak('Citra Kasihan', '628110000003', 'KLL Kasihan');
+    const kD = await buatKontak('Dewi Kasihan', '628110000004', 'KLL Kasihan');
+
+    const semuaKontakAwal = await jalan('kontak.daftar', {});
+    cek('empat kontak siap diuji', semuaKontakAwal.total === 4, semuaKontakAwal.total);
+
+    // --- menandai beberapa baris
+    const hb = await jalan('kontak.hapusBanyak', { id: [kA.id, kB.id] });
+    cek('dua kontak yang ditandai terhapus', hb.terhapus === 2, hb);
+    cek('sisanya masih ada', (await jalan('kontak.daftar', {})).total === 2);
+
+    const tanpaTandaan = await tolak('kontak.hapusBanyak', { id: [] });
+    cek('menandai nol baris ditolak, bukan diam-diam menghapus semuanya',
+      /tidak ada baris/i.test(tanpaTandaan || ''), tanpaTandaan);
+
+    /* Id yang sudah tidak ada DILAPORKAN, bukan dihitung sebagai berhasil.
+       "2 terhapus" untuk dua id yang salah adalah laporan yang berbohong. */
+    const sebagian = await jalan('kontak.hapusBanyak', { id: [kC.id, 'k_tidak_ada'] });
+    cek('yang gagal dilaporkan, tidak didiamkan',
+      sebagian.terhapus === 1 && sebagian.gagal.length === 1, sebagian);
+    cek('dan alasannya ikut disebut di pesannya',
+      /dilewati/i.test(sebagian.pesan), sebagian.pesan);
+
+    // --- hapus semua mengikuti saringan
+    const kE = await buatKontak('Eka Sewon', '628110000005', 'KLL Sewon');
+    const kF = await buatKontak('Fajar Sewon', '628110000006', 'KLL Sewon');
+    const tersaring = await jalan('kontak.daftar', { cari: 'Sewon' });
+    const semuaKini = await jalan('kontak.daftar', {});
+    cek('saringan menemukan lebih sedikit daripada seluruhnya',
+      tersaring.total === 2 && semuaKini.total === 3, { tersaring: tersaring.total, semua: semuaKini.total });
+
+    const hsSaring = await jalan('kontak.hapusSemua', { cari: 'Sewon', tegaskan: 'HAPUS SEMUA' });
+    cek('hapus-semua bersaringan menghapus PERSIS sebanyak yang dihitung daftar',
+      hsSaring.terhapus === tersaring.total, { hapus: hsSaring.terhapus, daftar: tersaring.total });
+    const sisaSesudah = await jalan('kontak.daftar', {});
+    cek('yang di luar saringan tidak ikut terhapus', sisaSesudah.total === 1, sisaSesudah.total);
+    cek('yang tersisa memang Dewi', sisaSesudah.baris[0].id === kD.id, sisaSesudah.baris[0].nama);
+
+    // --- pagar hak akses
+    /* HANYA lewat pintu depan. Pagar superadmin duduk di penyalur permintaan,
+       bukan di dalam tindakannya — memanggil jalankan() langsung memang
+       melewatinya, jadi menguji penolakan lewat jalan() akan menguji pagar di
+       tempat yang memang tidak ada pagarnya, lalu benar-benar menghapus
+       datanya. */
+    const lewat = await lewatPintu('kontak.hapusSemua', { tegaskan: 'HAPUS SEMUA' }, ADMIN);
+    cek('admin daerah ditolak saat lewat pintu depan',
+      lewat.statusCode === 403 || /superadmin/i.test(JSON.stringify(lewat.tubuh || '')), lewat.tubuh);
+    cek('dan kontak terakhir tetap ada — penolakannya sungguhan, bukan cuma pesan',
+      (await jalan('kontak.daftar', {})).total === 1);
+
+    const tanpaKunci = await tolak('kontak.hapusSemua', {});
+    cek('tanpa mengetik kata kuncinya, hapus-semua ditolak',
+      /HAPUS SEMUA/i.test(tanpaKunci || ''), tanpaKunci);
+    const kunciSalah = await tolak('kontak.hapusSemua', { tegaskan: 'hapus' });
+    cek('kata kunci setengah benar juga ditolak', Boolean(kunciSalah), kunciSalah);
+
+    // --- template
+    await db.simpan('templat', [
+      { id: 't1', nama: 'Satu', isi: 'a' }, { id: 't2', nama: 'Dua', isi: 'b' }, { id: 't3', nama: 'Tiga', isi: 'c' },
+    ]);
+    const thb = await jalan('templat.hapusBanyak', { id: ['t1', 't3'] });
+    cek('template yang ditandai terhapus', thb.terhapus === 2 && thb.baris.length === 1, thb.terhapus);
+    const ths = await jalan('templat.hapusSemua', { tegaskan: 'HAPUS SEMUA' });
+    cek('sisa template bisa dikosongkan', ths.terhapus === 1 && ths.baris.length === 0, ths);
+
+    // --- pengguna: akun sendiri tidak pernah ikut
+    for (const i of await db.anggotaHimpunan('pengguna:daftar')) await db.keluarDariHimpunan('pengguna:daftar', i);
+    const buatAkun = async (id, nama, peran) => {
+      await db.simpan(auth.KUNCI_PENGGUNA(id), { id, nama, username: id, peran, aktif: true });
+      await db.tambahKeHimpunan('pengguna:daftar', id);
+    };
+    await buatAkun(SUPER.id, 'Superadmin', 'superadmin');
+    await buatAkun('u_a', 'Petugas A', 'admin');
+    await buatAkun('u_b', 'Petugas B', 'admin');
+
+    const tolakDiri = await tolak('pengguna.hapus', { id: SUPER.id });
+    cek('menghapus akun sendiri satuan tetap ditolak', /sendiri/i.test(tolakDiri || ''), tolakDiri);
+
+    const phs = await jalan('pengguna.hapusSemua', { tegaskan: 'HAPUS SEMUA' });
+    const sisaAkun = await db.anggotaHimpunan('pengguna:daftar');
+    cek('hapus semua akun menyisakan akun sendiri — bukan mengunci semua orang keluar',
+      sisaAkun.length === 1 && sisaAkun[0] === SUPER.id, sisaAkun);
+    cek('dan itu dikatakan, bukan dibiarkan ditebak', /Akun Anda sendiri/i.test(phs.pesan), phs.pesan);
+    /* Akun sendiri tidak boleh muncul sebagai "1 dilewati": ia memang
+       dimaksudkan tersisa, jadi ia bukan kegagalan. */
+    cek('akun sendiri tidak dilaporkan sebagai kegagalan', phs.gagal.length === 0, phs.gagal);
+
+    // --- kiriman massal: yang masih antre ikut dibatalkan
+    await db.simpan('massal:cm1', { id: 'cm1', nama: 'Kiriman uji', dibuat: new Date().toISOString(), jumlah: 2 });
+    await db.tambahKeHimpunan('massal:daftar', 'cm1');
+    await db.simpan(antreanLib.KUNCI_PESAN('pm1'), {
+      id: 'pm1', nomor: '628110000009', arah: 'keluar', massalId: 'cm1', status: 'antre',
+      isi: { teks: 'x' }, dibuat: new Date().toISOString(), jadwal: new Date().toISOString(),
+    });
+    await antreanLib.catatKeDaftar('pm1');
+    await db.tambahKeHimpunan(antreanLib.KUNCI_ANTREAN, 'pm1');
+
+    const mhb = await jalan('massal.hapusBanyak', { id: ['cm1'] });
+    const pesanSesudah = await db.ambil(antreanLib.KUNCI_PESAN('pm1'));
+    cek('menghapus kiriman massal ikut membatalkan pesannya yang masih antre',
+      pesanSesudah && pesanSesudah.status === 'dibatalkan', pesanSesudah && pesanSesudah.status);
+    cek('dan jumlah yang dibatalkan ikut dikatakan', /dibatalkan/i.test(mhb.pesan), mhb.pesan);
+    cek('catatan kirimannya sendiri hilang', (await db.ambil('massal:cm1')) === null || (await db.ambil('massal:cm1')) === undefined);
+
+    // --- audit: menghapus jejak meninggalkan jejak
+    await db.simpan('audit', [
+      { id: 'a1', nama: 'X', tindakan: 'uji', waktu: new Date().toISOString(), rincian: {} },
+      { id: 'a2', nama: 'Y', tindakan: 'uji', waktu: new Date().toISOString(), rincian: {} },
+      { id: 'a3', nama: 'Z', tindakan: 'uji', waktu: new Date().toISOString(), rincian: {} },
+    ]);
+    const ahb = await jalan('audit.hapusBanyak', { id: ['a1', 'a2'] });
+    const auditSesudah = (await db.ambil('audit')) || [];
+    cek('dua catatan audit yang ditandai terhapus', ahb.terhapus === 2, ahb);
+    cek('penghapusannya sendiri ikut tercatat',
+      auditSesudah.some((a) => a.tindakan === 'audit.hapusBanyak'), auditSesudah.map((a) => a.tindakan));
+
+    const auditAdmin = await lewatPintu('audit.hapusBanyak', { id: ['a3'] }, ADMIN);
+    cek('admin daerah tidak bisa menghapus catatan audit',
+      auditAdmin.statusCode !== 200, { kode: auditAdmin.statusCode });
+
+    // --- batas sekali hapus
+    const kebanyakan = await tolak('kontak.hapusBanyak', { id: Array.from({ length: 501 }, (_, i) => 'k' + i) });
+    cek('permintaan hapus yang kelewat besar ditolak dengan angkanya',
+      /501/.test(kebanyakan || '') && /aksimal/.test(kebanyakan || ''), kebanyakan);
+
+  }
+
   console.log('\ntest_blast_fitur.js  ' + ok + '/' + (ok + g) + (g ? '  ADA GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);
 })().catch((e) => { console.error('ERROR', e); process.exit(1); });

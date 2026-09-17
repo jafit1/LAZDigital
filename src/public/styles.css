@@ -4575,3 +4575,72 @@ td.actions-cell > .btn + .btn{ margin-left:6px }
   .dh-periode-panel{ transition:none; }
   .dh-car{ transition:none; }
 }
+
+/* ========================================================================
+   44. TANDAI & HAPUS — kolom centang, bilah pilihan, tombol hapus-semua
+   Dipakai delapan halaman Broadcast. Semua ukurannya ditulis sekali di sini:
+   kotak centang yang berbeda-beda besarnya antar halaman terlihat seperti
+   tiga orang yang mengerjakan tiga halaman tanpa saling bicara.
+   ======================================================================== */
+.kol-tandai{ width:1%; white-space:nowrap; padding-right:0 !important; text-align:center; }
+.kol-tandai input[type="checkbox"]{ width:16px; height:16px; margin:0; cursor:pointer; accent-color:var(--accent); }
+input.tandai, #tandaiSemua{ width:16px; height:16px; cursor:pointer; accent-color:var(--accent); }
+
+.tandai-semua-label{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  font-size:12px; font-weight:600; color:var(--text2);
+  padding:5px 10px; border-radius:99px; border:1px solid var(--border);
+  background:var(--surface); white-space:nowrap;
+}
+.tandai-semua-label:hover{ border-color:var(--accent); color:var(--accent-d); }
+
+/* Bilah pilihan muncul DI ATAS daftarnya, bukan melayang di bawah layar.
+   Melayang di bawah, ia menutupi baris terakhir — baris yang justru sedang
+   dilihat orang ketika ia menandai sesuatu di ujung daftar. */
+.strip-tandai{
+  display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap;
+  padding:10px 14px; border-bottom:1px solid var(--border);
+}
+.bilah-tandai{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:7px 12px; border-radius:10px;
+  background:rgba(var(--accent-rgb),.10);
+  border:1px solid rgba(var(--accent-rgb),.28);
+}
+.bilah-tandai[hidden]{ display:none; }
+.bt-jumlah{ font-size:12.5px; font-weight:700; color:var(--accent-d); white-space:nowrap; }
+
+/* Tombol hapus-semua sengaja TIDAK merah pekat seperti tombol hapus biasa.
+   Merah pekat di bilah alat menarik mata dan jari ke arahnya sepanjang hari;
+   yang dibutuhkan adalah tombol yang terbaca berbahaya begitu diperhatikan,
+   bukan yang berteriak terus-menerus. Merahnya penuh nanti di dalam dialog,
+   saat orangnya memang sedang memutuskan. */
+.tombol-bahaya{
+  color:var(--red); border-color:color-mix(in srgb, var(--red) 34%, var(--border));
+  background:var(--surface);
+}
+.tombol-bahaya:hover{
+  color:#fff; background:var(--red); border-color:var(--red);
+}
+@supports not (border-color: color-mix(in srgb, red 50%, blue)) {
+  .tombol-bahaya{ border-color:var(--border); }
+}
+
+/* TOMBOL MATI HARUS TERLIHAT MATI.
+   Sebelumnya tidak ada aturan :disabled sama sekali, jadi "Hapus 3 kontak"
+   yang masih terkunci tetap tergambar merah menyala seperti tombol yang siap
+   ditekan — dan orang yang menekannya menyangka aplikasinya macet. Berlaku
+   untuk semua .btn, termasuk "Sebelumnya/Berikutnya" di ujung tabel yang
+   selama ini juga terlihat hidup padahal sudah di halaman pertama. */
+.btn:disabled,
+.btn[disabled]{
+  opacity:.45; cursor:not-allowed; box-shadow:none; transform:none;
+}
+.btn:disabled:hover,
+.btn[disabled]:hover{ transform:none; box-shadow:none; }
+
+@media (max-width:640px){
+  .strip-tandai{ justify-content:stretch; padding:10px; }
+  .strip-tandai > *{ flex:1 1 auto; }
+  .bilah-tandai{ width:100%; justify-content:space-between; }
+}

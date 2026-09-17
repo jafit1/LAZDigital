@@ -189,6 +189,22 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     await p.waitForTimeout(700);
     await p.screenshot({ path: path.join(luar, 'blast-' + k + '.png') });
   }
+  /* Bilah tandaan dan dialog hapus-semua hanya muncul sesudah ditekan, jadi
+     keduanya tidak akan pernah ikut terpotret kalau tidak sengaja dibuka. */
+  await p.evaluate(() => { location.hash = '#kontak'; });
+  await p.waitForTimeout(800);
+  await p.evaluate(() => {
+    const kotak = Array.from(document.querySelectorAll('#isi input.tandai'));
+    kotak.slice(0, 2).forEach((k) => k.click());
+  });
+  await p.waitForTimeout(250);
+  await p.screenshot({ path: path.join(luar, 'blast-kontak-tandai.png') });
+  await p.click('#hapusSemua');
+  await p.waitForTimeout(400);
+  await p.screenshot({ path: path.join(luar, 'blast-hapus-semua.png') });
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(300);
+
   await p.evaluate(() => { location.hash = '#dasbor'; });
   await p.click('#tombolTema');
   await p.waitForTimeout(800);

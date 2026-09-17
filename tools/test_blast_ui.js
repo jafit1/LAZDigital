@@ -427,27 +427,95 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   await p.waitForTimeout(700);
   const hapusRiwayat = await p.evaluate(() => ({
     tombolBaris: document.querySelectorAll('#isi [data-hapusp]').length,
-    tombolSemua: Boolean(document.getElementById('kosongkanRiwayat')),
+    tombolSemua: (document.getElementById('hapusSemua') || {}).textContent || '',
+    kotakTandai: document.querySelectorAll('#isi input.tandai').length,
   }));
   cek('tiap baris riwayat bisa dihapus', hapusRiwayat.tombolBaris === 3, hapusRiwayat);
-  cek('superadmin melihat tombol hapus semua', hapusRiwayat.tombolSemua === true, hapusRiwayat);
+  cek('superadmin melihat tombol hapus semua', Boolean(hapusRiwayat.tombolSemua), hapusRiwayat);
+  /* Angka pada tombol datang dari penghitung daftar yang sama. Kalau suatu
+     saat keduanya dihitung terpisah, uji inilah yang lebih dulu berteriak. */
+  cek('tombolnya menyebut BERAPA yang akan terhapus, bukan cuma kata "semua"',
+    /\b3\b/.test(hapusRiwayat.tombolSemua), hapusRiwayat.tombolSemua);
+  cek('tiap baris punya kotak tandai', hapusRiwayat.kotakTandai === 3, hapusRiwayat);
 
-  await p.click('#kosongkanRiwayat');
+  await p.click('#hapusSemua');
   await p.waitForTimeout(400);
   const dialogHapus = await p.evaluate(() => {
     const m = document.querySelector('.modal, .modal-box, [class*=modal]');
+    const ya = document.getElementById('hsYa');
     return {
       teks: m ? m.textContent : '',
-      adaKetik: Boolean(document.getElementById('tegaskanHapus')),
+      adaKetik: Boolean(document.getElementById('hsTegaskan')),
+      yaMati: ya ? ya.disabled : null,
     };
   });
   cek('menuntut kata kunci diketik ulang, bukan sekadar tombol Ya',
     dialogHapus.adaKetik === true, dialogHapus.adaKetik);
+  /* Tombolnya mati sampai kata kuncinya benar. Kalau hidup sejak awal, yang
+     menekannya akan menerima galat dari server — galat yang benar, tapi yang
+     tidak menjelaskan apa pun kepada orang yang tidak membaca dialognya. */
+  cek('tombol hapus mati sampai kata kuncinya diketik benar',
+    dialogHapus.yaMati === true, dialogHapus.yaMati);
   cek('disebutkan apa yang TIDAK ikut terhapus', /audit/i.test(dialogHapus.teks), dialogHapus.teks.slice(0, 200));
   cek('dan bahwa pesan yang sudah sampai tidak bisa ditarik',
     /HP penerima/i.test(dialogHapus.teks), dialogHapus.teks.slice(0, 300));
+
+  await p.fill('#hsTegaskan', 'HAPUS SEMUA');
+  await p.waitForTimeout(150);
+  cek('sesudah diketik benar, tombolnya hidup',
+    (await p.evaluate(() => document.getElementById('hsYa').disabled)) === false);
   await p.keyboard.press('Escape');
   await p.waitForTimeout(300);
+
+  console.log('\n=== F0c2. TANDAI LALU HAPUS ===');
+  const tandaan = await p.evaluate(() => {
+    const kotak = Array.from(document.querySelectorAll('#isi input.tandai'));
+    kotak[0].click(); kotak[1].click();
+    const bilah = document.getElementById('bilahTandai');
+    return { tersembunyi: bilah.hidden, jumlah: (document.getElementById('btJumlah') || {}).textContent || '' };
+  });
+  cek('bilah pilihan muncul begitu ada yang ditandai', tandaan.tersembunyi === false, tandaan);
+  cek('dan menyebut berapa yang ditandai', /\b2\b/.test(tandaan.jumlah), tandaan.jumlah);
+
+  /* Menandai semua lalu membatalkan satu harus menyisakan kepala tabel dalam
+     keadaan setengah — kalau ia terlihat kosong, satu klik berikutnya akan
+     menandai semuanya padahal maksud orang justru sebaliknya. */
+  const setengah = await p.evaluate(() => {
+    const semua = document.getElementById('tandaiSemua');
+    semua.click();  semua.dispatchEvent(new Event('change', { bubbles: true }));
+    const satu = document.querySelector('#isi input.tandai');
+    satu.click();
+    return { semuaTercentang: semua.checked, setengah: semua.indeterminate };
+  });
+  cek('centang kepala jadi keadaan setengah saat sebagian dibatalkan',
+    setengah.setengah === true && setengah.semuaTercentang === false, setengah);
+
+  const sesudahBatal = await p.evaluate(() => {
+    document.getElementById('btBatal').click();
+    return {
+      tersembunyi: document.getElementById('bilahTandai').hidden,
+      tercentang: document.querySelectorAll('#isi input.tandai:checked').length,
+    };
+  });
+  cek('"Batal" melepas semua tandaan dan menyembunyikan bilahnya',
+    sesudahBatal.tersembunyi === true && sesudahBatal.tercentang === 0, sesudahBatal);
+
+  /* Tandaan TIDAK boleh bertahan melewati penggambaran ulang: kalau bertahan,
+     petugas bisa menghapus baris yang sudah tidak terlihat di layarnya. */
+  const sesudahGambarUlang = await p.evaluate(async () => {
+    const kotak = Array.from(document.querySelectorAll('#isi input.tandai'));
+    kotak[0].click();
+    location.hash = '#kontak';
+    await new Promise((r) => setTimeout(r, 700));
+    location.hash = '#antrean';
+    await new Promise((r) => setTimeout(r, 900));
+    return {
+      tercentang: document.querySelectorAll('#isi input.tandai:checked').length,
+      bilahTersembunyi: (document.getElementById('bilahTandai') || {}).hidden,
+    };
+  });
+  cek('tandaan dilupakan saat daftarnya digambar ulang',
+    sesudahGambarUlang.tercentang === 0 && sesudahGambarUlang.bilahTersembunyi === true, sesudahGambarUlang);
 
   console.log('\n=== F0d. GRUP DI KIRIMAN MASSAL ===');
   await p.evaluate(() => { location.hash = '#massal'; });
@@ -755,24 +823,30 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   await p.waitForTimeout(900);
   const alatW = await p.evaluate(() => ({
     perBaris: document.querySelectorAll('#isi [data-hapusw]').length,
-    kosongkan: Boolean(document.getElementById('kosongkanW')),
+    kosongkan: Boolean(document.getElementById('hapusSemua')),
+    kotakTandai: document.querySelectorAll('#isi input.tandai').length,
+    tandaiSemua: Boolean(document.getElementById('tandaiSemua')),
   }));
   cek('tiap baris riwayat webhook bisa dihapus', alatW.perBaris >= 1, alatW);
   cek('ada tombol mengosongkan seluruhnya', alatW.kosongkan === true, alatW);
+  cek('tiap baris webhook bisa ditandai', alatW.kotakTandai >= 1, alatW);
+  cek('halaman berbentuk kartu tetap punya "tandai semua"', alatW.tandaiSemua === true, alatW);
 
   await p.evaluate(() => { location.hash = '#audit'; });
   await p.waitForTimeout(900);
   const alatA = await p.evaluate(() => ({
     perBaris: document.querySelectorAll('#isi [data-hapusa]').length,
-    kosongkan: Boolean(document.getElementById('kosongkanA')),
+    kosongkan: Boolean(document.getElementById('hapusSemua')),
+    kotakTandai: document.querySelectorAll('#isi input.tandai').length,
   }));
   cek('tiap catatan audit bisa dihapus', alatA.perBaris >= 1, alatA);
   cek('ada tombol mengosongkan seluruhnya', alatA.kosongkan === true, alatA);
+  cek('tiap catatan audit bisa ditandai', alatA.kotakTandai >= 1, alatA);
 
-  await p.click('#kosongkanA');
+  await p.click('#hapusSemua');
   await p.waitForTimeout(400);
   const dialogA = await p.evaluate(() => ({
-    adaKetik: Boolean(document.getElementById('tegaskanA')),
+    adaKetik: Boolean(document.getElementById('hsTegaskan')),
     teks: (document.querySelector('[class*=modal]') || {}).textContent || '',
   }));
   cek('mengosongkan audit menuntut kata kunci diketik ulang', dialogA.adaKetik === true, dialogA.adaKetik);
