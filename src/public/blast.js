@@ -9,7 +9,7 @@ const $$ = (s, induk = document) => Array.from(induk.querySelectorAll(s));
 const H = (teks) => String(teks === undefined || teks === null ? '' : teks)
   .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const negara = { pengguna: null, izin: [], setelan: null, status: null, halaman: 'dasbor' };
+const negara = { pengguna: null, izin: [], akses: {}, setelan: null, status: null, halaman: 'dasbor' };
 
 /* Token LAZDigital. Blast menumpang sesi yang sama, jadi petugas cukup
    masuk sekali di LAZDigital dan halaman ini ikut terbuka. Kalau tokennya
@@ -141,8 +141,20 @@ const rangka = (n = 5) => `<div style="display:grid;gap:8px;padding:4px 0">${Arr
 
 /* Judul halaman memakai .page-head, bentuk yang sama dengan seluruh halaman
    LAZDigital, supaya tinggi dan jaraknya tidak meleset saat berpindah. */
+/* Tombol tema dulu tinggal di dasar sidebar, berdampingan dengan "Kembali ke
+   LAZDigital" — dua tombol yang tidak ada hubungannya, dan yang satu jauh
+   lebih sering ditekan daripada yang lain. Sekarang ia sebaris dengan judul
+   halaman di pojok kanan atas: tempat yang lazim, dan tidak lagi ikut
+   terpotong saat sidebar diciutkan. */
+const tombolTema = () => `
+  <button class="tn-icon kepala-tema" id="tombolTema" type="button"
+          title="Ganti tema terang / gelap" aria-label="Ganti tema terang atau gelap">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></svg>
+  </button>`;
+
 const kepalaHalaman = (judul, keterangan, aksi = '') =>
-  `<div class="page-head"><div><h2>${H(judul)}</h2>${keterangan ? `<div class="desc">${H(keterangan)}</div>` : ''}</div>${aksi}</div>`;
+  `<div class="page-head"><div><h2>${H(judul)}</h2>${keterangan ? `<div class="desc">${H(keterangan)}</div>` : ''}</div>`
+  + `<div class="page-head-aksi">${aksi}${tombolTema()}</div></div>`;
 
 // ============================================================ menu & kerangka
 /* Ikon satu keluarga SVG garis (stroke currentColor), sama seperti menu
@@ -168,26 +180,32 @@ const IKON = {
 };
 
 const MENU = [
-  { kode: 'dasbor', label: 'Dasbor', izin: 'dasbor' },
+  { kode: 'dasbor', label: 'Dashboard', izin: 'dasbor' },
   { kode: 'perangkat', label: 'Perangkat', izin: 'perangkat.lihat' },
   { kode: 'kirim', label: 'Kirim Pesan', izin: 'pesan.kirim' },
   { kode: 'massal', label: 'Kiriman Massal', izin: 'massal.kelola' },
   { kode: 'antrean', label: 'Pesan & Antrean', izin: 'pesan.lihat' },
   { kode: 'kontak', label: 'Kontak', izin: 'kontak.lihat' },
-  { kode: 'templat', label: 'Templat Pesan', izin: 'pesan.lihat' },
+  { kode: 'templat', label: 'Template', izin: 'pesan.lihat' },
   /* Dua menu ini hanya untuk superadmin. Webhook memuat alamat tujuan dan
      rahasia tanda tangannya; Catatan Audit memuat siapa mengirim apa ke nomor
      siapa. Keduanya tidak dibutuhkan petugas harian, dan yang menegakkan
      pembatasannya tetap server — penyembunyian menu di sini cuma supaya tidak
      ada yang menekan pintu yang memang terkunci. */
-  { kode: 'webhook', label: 'Webhook', izin: 'setelan.lihat', superadmin: true },
+  { kode: 'webhook', label: 'Webhook', izin: 'setelan.lihat', khusus: 'webhook' },
   { kode: 'pengguna', label: 'Tim & Petugas', izin: 'pengguna.lihat' },
-  { kode: 'audit', label: 'Catatan Audit', izin: 'audit.lihat', superadmin: true },
+  { kode: 'audit', label: 'Catatan Audit', izin: 'audit.lihat', khusus: 'audit' },
   { kode: 'setelan', label: 'Pengaturan', izin: 'setelan.lihat' },
 ];
 
 const superadmin = () => Boolean(negara.pengguna) && negara.pengguna.peran === 'superadmin';
-const menuBoleh = (m) => bisa(m.izin) && (!m.superadmin || superadmin());
+/* Akses khusus datang dari server (sistem.status.akses), bukan ditebak dari
+   peran di sini. Kalau ditebak, tampilan dan server bisa berbeda pendapat —
+   dan yang terlihat petugas adalah menu yang selalu menolak saat dibuka. */
+const bolehKhusus = (bagian) => Boolean((negara.akses || {})[bagian]);
+const menuBoleh = (m) => bisa(m.izin)
+  && (!m.superadmin || superadmin())
+  && (!m.khusus || bolehKhusus(m.khusus));
 
 function gambarMenu() {
   const nav = $('#nav');
@@ -320,6 +338,63 @@ function pasangLampiranTemplat(el, idAwalan, templat) {
     simpan.value = '';
     ket.textContent = 'Lampiran dilepas. Pesan dikirim tanpa berkas.';
   };
+}
+
+/* Pengaturan akun, dibuka dari kartu nama di dasar sidebar.
+ *
+ * Sebelumnya menekan kartu itu MELEMPAR petugas keluar ke halaman utama
+ * LAZDigital — pesan yang sedang disusun hilang, dan jalan kembalinya harus
+ * dicari sendiri. Sekarang yang bisa diurus di sini diurus di sini.
+ *
+ * Yang tidak bisa: ganti sandi dan ubah hak akses. Keduanya milik LAZDigital,
+ * dan menyalinnya ke sini berarti dua tempat yang bisa berbeda isinya. Jadi
+ * ditunjukkan apa adanya sebagai tautan, bukan dipura-purakan ada di sini.
+ */
+function bukaAkun() {
+  const p = negara.pengguna || {};
+  const izin = negara.izin || [];
+  const jml = izin.includes('*') ? 'seluruh' : izin.length;
+  modal('Pengaturan akun', `
+    <div class="row" style="gap:14px;align-items:center;margin-bottom:18px">
+      <div class="avatar" style="width:46px;height:46px;font-size:18px;flex:none">${H((p.nama || 'A').trim().charAt(0).toUpperCase())}</div>
+      <div style="min-width:0">
+        <div style="font-weight:700;font-size:15px">${H(p.nama || '—')}</div>
+        <div class="muted" style="font-size:12px">${H(p.username || '')}${p.kantor ? ' · ' + H(p.kantor) : ''}</div>
+      </div>
+      <span class="badge ${p.peran === 'superadmin' ? 'purple' : 'grey'}" style="margin-left:auto">${H(p.peran || '')}</span>
+    </div>
+
+    <div class="field">
+      <label>Tampilan</label>
+      <div class="row" style="gap:8px">
+        <button type="button" class="btn btn-sm" data-tema="light">Terang</button>
+        <button type="button" class="btn btn-sm" data-tema="dark">Gelap</button>
+      </div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">Pilihan ini ikut terpakai di LAZDigital.</div>
+    </div>
+
+    <div class="field">
+      <label>Akses Anda di Broadcast</label>
+      <div class="muted" style="font-size:12px">${jml === 'seluruh'
+        ? 'Superadmin — seluruh menu terbuka, termasuk Webhook dan Catatan Audit.'
+        : `${jml} izin aktif. Menu yang tidak terlihat berarti belum dicentang untuk akun ini.`}</div>
+    </div>
+
+    <div style="border-radius:var(--radius);background:var(--surface2);padding:12px 14px;font-size:12px;color:var(--text2)">
+      Ganti sandi dan perubahan hak akses dilakukan di LAZDigital, bukan di sini —
+      supaya tidak ada dua tempat yang bisa berbeda isinya.
+      <a href="/index.html" style="color:var(--accent-d);font-weight:600">Buka LAZDigital</a>
+    </div>`, (wadah) => {
+    $('#fakTutup').onclick = tutupModal;
+    const tandai = () => $$('[data-tema]', wadah).forEach((b) => {
+      const aktif = (b.dataset.tema === 'dark') === temaGelap();
+      b.classList.toggle('btn-primary', aktif);
+    });
+    $$('[data-tema]', wadah).forEach((b) => {
+      b.onclick = () => { terapkanTema(b.dataset.tema === 'dark'); tandai(); };
+    });
+    tandai();
+  }, '<button type="button" id="fakTutup" class="btn btn-primary">Selesai</button>');
 }
 
 /* ---------------------------------------------------------------- Pemilih kontak
@@ -578,7 +653,7 @@ const halaman = {};
 
 // ---------------------------------------------------------------- Dasbor
 halaman.dasbor = {
-  judul: 'Dasbor',
+  judul: 'Dashboard',
   sub: 'Ringkasan kegiatan komunikasi hari ini',
   async gambar(el) {
     el.innerHTML = rangka(4);
@@ -610,9 +685,14 @@ halaman.dasbor = {
         ${tile('Terkirim hari ini', fmtAngka(d.hariIni.terkirim), `dari ${fmtAngka(d.hariIni.total)} pesan`)}
         ${tile(`${CENTANG.sampai} Sampai di HP`, fmtAngka(d.hariIni.sampai), `${persen(d.hariIni.sampai, d.hariIni.terkirim)} dari terkirim`)}
         ${tile(`${CENTANG.dibaca} Dibaca`, fmtAngka(d.hariIni.dibaca), `${persen(d.hariIni.dibaca, d.hariIni.terkirim)} dari terkirim`, d.hariIni.dibaca ? 'var(--green)' : '')}
-        ${tile('Menunggu antrean', fmtAngka(d.antrean.antre), d.antrean.dalamJamKirim ? d.antrean.jamKirim : `di luar jam kirim`, d.antrean.antre ? 'var(--accent)' : '')}
+        ${tile('Menunggu', fmtAngka(d.antrean.antre), d.antrean.dalamJamKirim ? d.antrean.jamKirim : `di luar jam kirim`, d.antrean.antre ? 'var(--accent)' : '')}
         ${tile('Gagal kirim', fmtAngka(d.keseluruhan.gagal), 'perlu ditinjau', d.keseluruhan.gagal ? 'var(--red)' : '')}
-        ${tile('Kontak', fmtAngka(d.kontak.total), 'penerima terdaftar')}
+        ${tile('\u{1F4AC} Dibalas', fmtAngka((d.balasan || {}).membalas || 0),
+          (d.balasan || {}).dikirimi
+            ? `${(d.balasan || {}).persen}% dari ${fmtAngka(d.balasan.dikirimi)}`
+            : 'belum ada kiriman',
+          (d.balasan || {}).membalas ? 'var(--green)' : '')}
+        ${tile('Kontak', fmtAngka(d.kontak.total), 'terdaftar')}
       </div>
 
       <div class="grid-2">
@@ -1039,10 +1119,11 @@ halaman.massal = {
                   ${m.status === 'berjalan' ? `<button data-henti="${m.id}" class="btn btn-ghost btn-sm" style="flex-shrink:0;color:var(--red)">hentikan</button>` : ''}
                 </div>
                 <p class="muted" style="font-size:11.5px">${fmtJarak(m.dibuat)} · ${fmtAngka(m.jumlah)} penerima${m.penerimaTertulis ? ' · ' + H(m.penerimaTertulis) : ''}</p>
-                <div class="row" style="gap:6px;margin-top:8px">
+                <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
                   <span class="badge grey">antre ${m.statistik.antre}</span>
                   <span class="badge blue">terkirim ${m.statistik.terkirim}</span>
                   <span class="badge green">dibaca ${m.statistik.dibaca}</span>
+                  ${m.dibalas ? `<span class="badge purple">dibalas ${m.dibalas}</span>` : ''}
                   ${m.statistik.gagal ? `<span class="badge red">gagal ${m.statistik.gagal}</span>` : ''}
                 </div>
               </div>`).join('') : '<p class="muted">Belum ada kiriman massal.</p>'}
@@ -1546,7 +1627,7 @@ halaman.kontak = {
 
 // ---------------------------------------------------------------- Templat
 halaman.templat = {
-  judul: 'Templat Pesan',
+  judul: 'Template',
   sub: 'Naskah siap pakai untuk kiriman berulang',
   async gambar(el) {
     el.innerHTML = rangka(4);
@@ -1728,9 +1809,15 @@ halaman.pengguna = {
   sub: 'Akun dan hak aksesnya',
   async gambar(el) {
     el.innerHTML = rangka(5);
-    let d;
-    try { d = await rpc('pengguna.daftar'); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
+    let d, akses = null;
+    try {
+      d = await rpc('pengguna.daftar');
+      /* Hanya superadmin yang boleh melihat daftar ini — daftarnya sendiri
+         sudah memberi tahu siapa yang memegang kunci ke rahasia webhook. */
+      if (superadmin()) akses = await rpc('akses.daftar');
+    } catch (e) { el.innerHTML = galatKotak(e.message); return; }
     const bolehUbah = bisa('pengguna.ubah');
+    const punya = (bagian, id) => Boolean(akses && (akses[bagian] || []).map(String).includes(String(id)));
 
     el.innerHTML = `
       <div class="table-wrap" style="margin-bottom:16px">
@@ -1740,7 +1827,9 @@ halaman.pengguna = {
         </div>
         <table>
           <thead>
-            <tr><th>Nama</th><th>Pengguna</th><th>Peran</th><th>Kantor</th><th>Terakhir masuk</th><th></th></tr>
+            <tr><th>Nama</th><th>Pengguna</th><th>Peran</th><th>Kantor</th>
+              ${akses ? '<th title="Boleh membuka menu Webhook">Webhook</th><th title="Boleh membuka Catatan Audit">Audit</th>' : ''}
+              <th>Terakhir masuk</th><th></th></tr>
           </thead>
           <tbody>
             ${d.baris.map((p) => `
@@ -1749,6 +1838,12 @@ halaman.pengguna = {
                 <td class="muted">${H(p.username)}</td>
                 <td>${H((d.peran[p.peran] || {}).label || p.peran)}</td>
                 <td class="muted" style="font-size:11.5px">${H(p.kantor || '—')}</td>
+                ${akses ? ['webhook', 'audit'].map((bagian) => `
+                  <td style="text-align:center">${p.peran === 'superadmin'
+                    ? '<span class="muted" title="Superadmin selalu boleh" style="font-size:11.5px">selalu</span>'
+                    : `<input type="checkbox" data-akses="${bagian}" data-akun="${p.id}"
+                         ${punya(bagian, p.id) ? 'checked' : ''} ${bolehUbah ? '' : 'disabled'}
+                         style="width:auto" aria-label="${bagian} untuk ${H(p.nama)}">`}</td>`).join('') : ''}
                 <td class="muted" style="font-size:11.5px">${fmtJarak(p.masukTerakhir)}</td>
                 <td class="actions-cell" style="justify-content:flex-end">
                   ${bolehUbah ? `<button data-ubahu="${p.id}" class="btn btn-ghost btn-sm">ubah</button>
@@ -1763,6 +1858,26 @@ halaman.pengguna = {
         <ul class="muted" style="list-style:none;display:grid;gap:4px;font-size:12px">
           ${Object.entries(d.peran).map(([k, v]) => `<li><strong>${H(v.label)}</strong> — ${H(v.keterangan)}</li>`).join('')}
         </ul>`)}`;
+
+    /* Centangnya berlaku seketika, tanpa tombol simpan terpisah: satu saklar
+       dengan satu akibat, dan tidak ada keadaan "sudah dicentang tapi belum
+       tersimpan" yang bisa ditinggalkan begitu saja. */
+    $$('[data-akses]', el).forEach((c) => {
+      c.onchange = async () => {
+        const bagian = c.dataset.akses;
+        const boleh = c.checked;
+        c.disabled = true;
+        try {
+          const h = await rpc('akses.atur', { bagian, penggunaId: c.dataset.akun, boleh });
+          if (akses) akses[bagian] = h.daftar;
+          toast(boleh ? `Akses ${bagian} dibuka.` : `Akses ${bagian} dicabut.`, 'sukses');
+        } catch (e) {
+          c.checked = !boleh;      // kembalikan supaya layar tidak berbohong
+          toast(e.message, 'galat');
+        }
+        c.disabled = false;
+      };
+    });
 
     const formU = (p = null) => modal(p ? 'Ubah akun' : 'Akun baru', `
       <form id="fu">
@@ -1988,13 +2103,18 @@ async function buka(kode) {
      #webhook di bilah alamat. Di sini ia dijawab dengan penjelasan, bukan
      halaman kosong — dan servernya toh menolak datanya. */
   const butir = MENU.find((m) => m.kode === kode);
-  if (butir && butir.superadmin && !superadmin()) {
+  if (butir && !menuBoleh(butir) && (butir.superadmin || butir.khusus)) {
     negara.halaman = kode;
     tandaiMenu('');
-    $('#isi').innerHTML = kepalaHalaman(butir.label, 'Khusus superadmin')
+    selesaiSibuk();
+    $('#isi').innerHTML = kepalaHalaman(butir.label, 'Akses terbatas')
       + `<div id="isiHalaman">${kartu(kosong(
-        'Bagian ini hanya bisa dibuka superadmin. Kalau Anda memang perlu melihatnya, mintalah kepada yang memegang akun superadmin.',
+        butir.khusus
+          ? 'Akun Anda belum diberi akses ke bagian ini. Superadmin bisa membukanya di menu Tim & Petugas.'
+          : 'Bagian ini hanya bisa dibuka superadmin.',
         '\u{1F512}'))}</div>`;
+    const ttKunci = $('#tombolTema');
+    if (ttKunci) ttKunci.onclick = () => terapkanTema(!temaGelap());
     return;
   }
 
@@ -2008,7 +2128,18 @@ async function buka(kode) {
      dirender ke wadah terpisah supaya halaman tetap bebas menimpa innerHTML
      miliknya sendiri tanpa menghapus judulnya. */
   $('#isi').innerHTML = kepalaHalaman(h.judul, h.sub) + '<div id="isiHalaman"></div>';
-  await h.gambar($('#isiHalaman'));
+  const tt = $('#tombolTema');
+  if (tt) tt.onclick = () => terapkanTema(!temaGelap());
+
+  /* Selubung dipasang sebelum menggambar dan dilepas SETELAHNYA — termasuk
+     kalau penggambarannya melempar galat. Selubung yang tertinggal menutupi
+     halaman yang sebenarnya sudah siap, dan itu tidak bisa ditutup petugas. */
+  mulaiSibuk();
+  try {
+    await h.gambar($('#isiHalaman'));
+  } finally {
+    selesaiSibuk();
+  }
   if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
 }
 
@@ -2024,8 +2155,34 @@ function temaGelap() { return document.documentElement.getAttribute('data-theme'
 
 function selesaiMemuat() {
   const boot = $('#boot');
-  if (boot) boot.style.display = 'none';
   $('#appView').classList.remove('hidden');
+  if (!boot) return;
+  /* Dipudarkan, bukan dihilangkan seketika. display:none memotong layar muat
+     di tengah animasinya — terlihat seperti halaman yang tersentak, padahal
+     tidak ada yang salah. Baru dilepas dari alur setelah pudarnya selesai,
+     supaya ia tidak menahan klik di halaman yang sudah terlihat. */
+  boot.classList.add('lz-pergi');
+  setTimeout(() => { boot.style.display = 'none'; }, 500);
+}
+
+/* Selubung tipis saat berpindah halaman.
+   Baru muncul kalau halamannya benar-benar lama digambar. Halaman yang siap
+   dalam sekejap justru terlihat buruk kalau diselubungi: yang tampak cuma
+   kedipan, dan kedipan tiap kali menekan menu lebih melelahkan daripada
+   menunggu. */
+const JEDA_SIBUK_MS = 260;
+let jamSibuk = null;
+function mulaiSibuk() {
+  clearTimeout(jamSibuk);
+  jamSibuk = setTimeout(() => {
+    const el = $('#sibuk');
+    if (el) el.classList.add('tampil');
+  }, JEDA_SIBUK_MS);
+}
+function selesaiSibuk() {
+  clearTimeout(jamSibuk);
+  const el = $('#sibuk');
+  if (el) el.classList.remove('tampil');
 }
 
 async function mulaiStatus() {
@@ -2057,9 +2214,14 @@ async function mulaiStatus() {
     if (localStorage.getItem('sidebar_collapsed') === 'true') $('#appView').classList.add('collapsed');
   } catch (_) { /* abaikan */ }
 
-  $('#tombolTema').onclick = () => terapkanTema(!temaGelap());
   $('#tombolKembali').onclick = () => { location.href = '/index.html'; };
-  $('#chipPengguna').onclick = () => { location.href = '/index.html'; };
+  $('#chipPengguna').onclick = () => bukaAkun();
+  /* Tab yang tidak dilihat tidak perlu membakar baterai menjalankan animasi
+     yang tidak dilihat siapa pun. */
+  document.addEventListener('visibilitychange', () => {
+    $$('.lz').forEach((el) => el.classList.toggle('lz-jeda', document.hidden));
+  });
+
   $('#modalBg').onclick = (e) => { if (e.target.id === 'modalBg') tutupModal(); };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tutupModal(); });
 
@@ -2069,6 +2231,7 @@ async function mulaiStatus() {
 
   negara.pengguna = s.pengguna;
   negara.izin = s.izin;
+  negara.akses = s.akses || {};
   $('#uName').textContent = s.pengguna.nama;
   $('#uRole').textContent = s.pengguna.peran + (s.pengguna.kantor ? ` \u00B7 ${s.pengguna.kantor}` : '');
   $('#uAvatar').textContent = (s.pengguna.nama || 'A').trim().charAt(0).toUpperCase();

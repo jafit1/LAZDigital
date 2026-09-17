@@ -28,14 +28,26 @@
   </script>
 
   <!-- ============ LOADING ============ -->
-  <div id="boot" class="lz lz--full lz-tanpa-word" data-anim="denyut" role="status" aria-live="polite" aria-label="Memuat">
+  <!-- Tulisannya delapan keping karena hurufnya datang berurutan; kepingnya
+       hanya jendela ke satu masker yang sama, bukan delapan gambar. -->
+  <div id="boot" class="lz lz--full" role="status" aria-live="polite" aria-label="Memuat">
     <div class="lz-mark">
       <div class="lz-flower" role="img" aria-label="Lazismu"></div>
-      <div class="lz-word" aria-hidden="true"></div>
+      <div class="lz-word" role="img" aria-label="lazismu">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
       <div class="lz-bantul" role="img" aria-label="Bantul"></div>
     </div>
     <div class="lz-line"><i></i></div>
     <div class="lz-lama" id="bootLama"></div>
+  </div>
+
+  <!-- Selubung saat berpindah halaman. Hanya bunganya — penanda sedang sibuk
+       tidak perlu lambang lengkap, dan lambang lengkap yang berkedip tiap kali
+       pindah menu justru melelahkan. -->
+  <div id="sibuk" class="lz lz--sibuk" aria-hidden="true">
+    <div class="lz-mark"><div class="lz-flower"></div></div>
+    <div class="lz-line"><i></i></div>
   </div>
 
   <!-- ============ APP ============ -->
@@ -49,19 +61,19 @@
       <nav class="tn-nav" id="nav"></nav>
       <div class="tn-right">
         <span class="badge" id="lencanaDriver" title="Cara pesan dikirim"></span>
-        <div class="user-chip" id="chipPengguna" title="Akun LAZDigital">
+        <!-- Kartu akun bisa ditekan: pengaturan akun dibuka di sini, tanpa
+             harus kembali dulu ke LAZDigital lalu mencari jalan balik. -->
+        <button class="user-chip" id="chipPengguna" type="button" title="Pengaturan akun" aria-label="Pengaturan akun">
           <div class="avatar" id="uAvatar">A</div>
           <div class="uc-meta">
             <div id="uName" class="uc-name"></div>
             <div id="uRole" class="muted uc-role"></div>
           </div>
-        </div>
-        <!-- Ikon + label, pola yang sama dengan sidebar LAZDigital: labelnya
-             disembunyikan sendiri oleh styles.css saat menu diciutkan. -->
-        <button class="tn-icon" id="tombolTema" type="button" title="Ganti tema" aria-label="Ganti tema">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></svg>
-          <span>Ganti tema</span>
         </button>
+        <!-- Ikon + label, pola yang sama dengan sidebar LAZDigital: labelnya
+             disembunyikan sendiri oleh styles.css saat menu diciutkan.
+             Tombol tema TIDAK lagi di sini — ia pindah ke pojok kanan atas,
+             sebaris dengan judul halaman. -->
         <button class="tn-icon" id="tombolKembali" type="button" title="Kembali ke LAZDigital" aria-label="Kembali ke LAZDigital">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19 3.5 12 10 5"/><path d="M3.5 12H20"/></svg>
           <span>Kembali ke LAZDigital</span>

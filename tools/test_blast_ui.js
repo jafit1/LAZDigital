@@ -62,7 +62,7 @@ const KONTAK = [
 ];
 
 const JAWABAN = {
-  'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
+  'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, akses: { webhook: true, audit: true }, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
   'sistem.kesiapan': {
     siapDeploy: true, diVercel: false,
     butir: [
@@ -79,6 +79,7 @@ const JAWABAN = {
       { tanggal: '2026-09-11', total: 22, terkirim: 22, gagal: 0 },
     ],
     antrean: { antre: 7, gagal: 3, dalamJamKirim: true, jamKirim: '08:00\u201320:00 WIB' },
+    balasan: { dikirimi: 120, membalas: 18, persen: 15, dikirimiMassal: 100, membalasMassal: 12, persenMassal: 12 },
     kontak: { total: 540 },
     perangkat: PERANGKAT.map((d) => ({ id: d.id, nama: d.nama, nomor: d.nomor, status: d.status, driver: d.driver })),
   },
@@ -110,6 +111,8 @@ const JAWABAN = {
       statistik: { antre: 59, terkirim: 40, sampai: 30, dibaca: 12, gagal: 1 },
     }],
   },
+  'akses.daftar': { webhook: [], audit: [] },
+  'akses.atur': { bagian: 'audit', daftar: [] },
   'pengguna.daftar': { baris: [PENGGUNA], peran: ['superadmin', 'admin', 'penyelia', 'petugas', 'kll'] },
   'audit.daftar': { baris: [
     { id: 'a1', tindakan: 'pesan.kirim', nama: 'Superadmin', peran: 'superadmin', waktu: new Date().toISOString(), rincian: { nomor: '628111222333' } },
@@ -165,7 +168,10 @@ const server = http.createServer((req, res) => {
       let khusus = dinamis[t] ? dinamis[t](hitungTindakan[t]) : null;
       if (!khusus && PERAN_SEKARANG !== 'superadmin') {
         if (t === 'sistem.status') {
-          khusus = Object.assign({}, JAWABAN[t], { pengguna: Object.assign({}, PENGGUNA, { peran: PERAN_SEKARANG }) });
+          khusus = Object.assign({}, JAWABAN[t], {
+            pengguna: Object.assign({}, PENGGUNA, { peran: PERAN_SEKARANG }),
+            akses: { webhook: false, audit: false },
+          });
         } else if (t === 'setelan.ambil') {
           /* Persis seperti servernya: bagian webhook dibuang, bukan dikosongkan. */
           const st = JSON.parse(JSON.stringify(JAWABAN[t]));
@@ -550,6 +556,10 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
         nilai: u.querySelector('.val').textContent.trim(),
         catatan: (u.querySelector('.ket') || {}).textContent || '',
         terpotong: u.querySelector('.ket').scrollWidth > u.querySelector('.ket').clientWidth + 1,
+        /* Judulnya juga. Sebelumnya hanya keterangan yang diperiksa, sehingga
+           "Menunggu antrean" terpotong jadi "Menunggu antr..." tanpa satu pun
+           uji yang merah. */
+        judulTerpotong: u.querySelector('.lbl').scrollWidth > u.querySelector('.lbl').clientWidth + 1,
       })),
     };
   });
@@ -559,9 +569,11 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   cek('dan berapa yang sudah dibaca', !!uDibaca && uDibaca.nilai === '9', uDibaca);
   cek('keduanya memakai gambar centang, bukan kata saja', !!(uSampai && uSampai.svg && uDibaca && uDibaca.svg), { uSampai, uDibaca });
   cek('disertai persentasenya terhadap yang terkirim', /83%/.test(uSampai.catatan) && /50%/.test(uDibaca.catatan), { s: uSampai.catatan, d: uDibaca.catatan });
-  cek('keenam angka muat dalam SATU baris', dasbor.jumlah === 6 && dasbor.barisAtas === 1, dasbor);
+  cek('ketujuh angka muat dalam SATU baris', dasbor.jumlah === 7 && dasbor.barisAtas === 1, dasbor);
   cek('tanpa garis aksen di tepi kiri kotak', dasbor.garisAksen === 0, dasbor.garisAksen);
   cek('tidak ada keterangan yang terpotong', dasbor.isi.every((u) => !u.terpotong), dasbor.isi.filter((u) => u.terpotong));
+  cek('dan tidak ada judul ubin yang terpotong',
+    dasbor.isi.every((u) => !u.judulTerpotong), dasbor.isi.filter((u) => u.judulTerpotong));
 
   console.log('\n=== F2. LAYAR QR MENUNGGU, TIDAK MENYURUH ULANG ===');
   /* Ini bug yang paling memakan waktu di lapangan: QR belum ada saat tombol

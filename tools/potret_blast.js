@@ -61,7 +61,7 @@ const KONTAK = [
 ];
 
 const JAWABAN = {
-  'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
+  'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, akses: { webhook: true, audit: true }, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
   'sistem.kesiapan': {
     siapDeploy: true, diVercel: false,
     butir: [
@@ -78,6 +78,7 @@ const JAWABAN = {
       { tanggal: '2026-09-11', total: 22, terkirim: 22, gagal: 0 },
     ],
     antrean: { antre: 7, gagal: 3, dalamJamKirim: true, jamKirim: '08:00\u201320:00 WIB' },
+    balasan: { dikirimi: 120, membalas: 18, persen: 15, dikirimiMassal: 100, membalasMassal: 12, persenMassal: 12 },
     kontak: { total: 540 },
     perangkat: PERANGKAT.map((d) => ({ id: d.id, nama: d.nama, nomor: d.nomor, status: d.status, driver: d.driver })),
   },
@@ -109,6 +110,8 @@ const JAWABAN = {
       statistik: { antre: 59, terkirim: 40, sampai: 30, dibaca: 12, gagal: 1 },
     }],
   },
+  'akses.daftar': { webhook: [], audit: [] },
+  'akses.atur': { bagian: 'audit', daftar: [] },
   'pengguna.daftar': { baris: [PENGGUNA], peran: ['superadmin', 'admin', 'penyelia', 'petugas', 'kll'] },
   'audit.daftar': { baris: [{ id: 'a1', aksi: 'pesan.kirim', oleh: 'superadmin', waktu: new Date().toISOString(), rincian: { nomor: '628111222333' } }] },
   'webhook.riwayat': {

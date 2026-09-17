@@ -311,10 +311,16 @@ async function buatPerangkat(id = 'p_uji') {
   console.log('\n=== H. WEBHOOK & AUDIT: SUPERADMIN SAJA ===');
   const webhookLib = require('../lib/blast/webhook');
 
-  for (const nama of ['webhook.riwayat', 'webhook.uji', 'webhook.kirimUlang', 'webhook.hapus',
-    'webhook.kosongkan', 'audit.daftar', 'audit.hapus', 'audit.kosongkan']) {
-    cek(`${nama} bertanda superadmin`, tindakan[nama] && tindakan[nama].superadmin === true, nama);
+  for (const [nama, bagian] of [
+    ['webhook.riwayat', 'webhook'], ['webhook.uji', 'webhook'], ['webhook.kirimUlang', 'webhook'],
+    ['webhook.hapus', 'webhook'], ['webhook.kosongkan', 'webhook'],
+    ['audit.daftar', 'audit'], ['audit.hapus', 'audit'], ['audit.kosongkan', 'audit'],
+  ]) {
+    cek(`${nama} dijaga akses "${bagian}"`,
+      tindakan[nama] && tindakan[nama].khusus === bagian, [nama, tindakan[nama] && tindakan[nama].khusus]);
   }
+  cek('mengatur siapa yang boleh tetap superadmin saja',
+    tindakan['akses.atur'].superadmin === true && tindakan['akses.daftar'].superadmin === true);
 
   const adminBuka = await lewatPintu('audit.daftar', {}, ADMIN);
   cek('admin daerah ditolak membuka catatan audit',
@@ -387,6 +393,77 @@ async function buatPerangkat(id = 'p_uji') {
     (await db.anggotaHimpunan('webhook:mati')).length === 0 && kosongW.mati >= 1, kosongW);
   cek('dan dokumen kejadiannya ikut hilang',
     (await db.ambil('webhook:kejadian:w_matiuji')) === null);
+
+  console.log('\n=== I. AKSES KHUSUS PER PENGGUNA ===');
+  const adminBiasa = await lewatPintu('audit.daftar', {}, ADMIN);
+  cek('sebelum diberi akses, admin daerah ditolak', adminBiasa.statusCode === 403, adminBiasa.statusCode);
+  cek('penolakannya menunjukkan jalan keluar, bukan sekadar "tidak boleh"',
+    /Tim & Petugas/.test(JSON.stringify(adminBiasa.tubuh || '')), adminBiasa.tubuh);
+
+  const tolakSendiri = await lewatPintu('akses.atur',
+    { bagian: 'audit', penggunaId: ADMIN.id, boleh: true }, ADMIN);
+  cek('admin daerah TIDAK bisa memberi akses kepada dirinya sendiri',
+    tolakSendiri.statusCode === 403, tolakSendiri.statusCode);
+
+  await jalan('akses.atur', { bagian: 'audit', penggunaId: ADMIN.id, boleh: true });
+  const sesudahDiberi = await lewatPintu('audit.daftar', {}, ADMIN);
+  cek('sesudah superadmin membukanya, admin daerah boleh masuk',
+    sesudahDiberi.statusCode === 200, sesudahDiberi.statusCode);
+
+  const webhookMasih = await lewatPintu('webhook.riwayat', {}, ADMIN);
+  cek('akses audit TIDAK ikut membuka webhook — keduanya terpisah',
+    webhookMasih.statusCode === 403, webhookMasih.statusCode);
+
+  const setelanAdmin2 = await lewatPintu('setelan.ambil', {}, ADMIN);
+  cek('dan bagian webhook di Pengaturan tetap disembunyikan darinya',
+    setelanAdmin2.tubuh.setelan.webhook === undefined, Object.keys(setelanAdmin2.tubuh.setelan));
+
+  /* Yang paling mudah terlewat: memberi akses lewat pintu yang salah. */
+  await lewatPintu('setelan.simpan',
+    { setelan: { aksesKhusus: { webhook: [ADMIN.id], audit: [ADMIN.id] } } }, ADMIN);
+  const lewatSetelan = await lewatPintu('webhook.riwayat', {}, ADMIN);
+  cek('akses tidak bisa diselundupkan lewat setelan.simpan',
+    lewatSetelan.statusCode === 403, lewatSetelan.statusCode);
+
+  await jalan('akses.atur', { bagian: 'audit', penggunaId: ADMIN.id, boleh: false });
+  const dicabut = await lewatPintu('audit.daftar', {}, ADMIN);
+  cek('akses bisa dicabut lagi', dicabut.statusCode === 403, dicabut.statusCode);
+
+  const statusSuper = await lewatPintu('auth.saya', {}, SUPER);
+  cek('superadmin selalu dilaporkan boleh keduanya',
+    statusSuper.tubuh.akses.webhook === true && statusSuper.tubuh.akses.audit === true, statusSuper.tubuh.akses);
+  const statusAdmin = await lewatPintu('auth.saya', {}, ADMIN);
+  cek('admin daerah dilaporkan tidak boleh — tampilan menyembunyikan menunya',
+    statusAdmin.tubuh.akses.webhook === false && statusAdmin.tubuh.akses.audit === false, statusAdmin.tubuh.akses);
+
+  console.log('\n=== J. BERAPA YANG MEMBALAS ===');
+  await db.hapus('pesan:baru');
+  const t0 = Date.now();
+  const buatPesan = async (id, nomor, arah, geserDetik, massalId) => {
+    await db.simpan(antreanLib.KUNCI_PESAN(id), {
+      id, nomor, arah, massalId: massalId || null, status: arah === 'masuk' ? 'masuk' : 'terkirim',
+      isi: { teks: 'x' },
+      dibuat: new Date(t0 + geserDetik * 1000).toISOString(),
+      dikirim: new Date(t0 + geserDetik * 1000).toISOString(),
+    });
+    await antreanLib.catatKeDaftar(id);
+  };
+  await buatPesan('m_k1', '6281000000001', 'keluar', 0, 'c_uji');
+  await buatPesan('m_k2', '6281000000002', 'keluar', 0, 'c_uji');
+  await buatPesan('m_k3', '6281000000003', 'keluar', 0, 'c_uji');
+  await buatPesan('m_b1', '6281000000001', 'masuk', 60);       // membalas
+  await buatPesan('m_b1b', '6281000000001', 'masuk', 120);     // membalas lagi
+  await buatPesan('m_b2', '6281000000002', 'masuk', -600);     // SEBELUM dikirimi
+  await buatPesan('m_b9', '6289999999999', 'masuk', 60);       // tidak pernah dikirimi
+
+  const dasbor2 = await jalan('dasbor.ringkas');
+  cek('yang membalas dihitung', dasbor2.balasan.membalas === 1, dasbor2.balasan);
+  cek('membalas dua kali tetap dihitung satu orang', dasbor2.balasan.membalas === 1, dasbor2.balasan);
+  cek('pesan masuk SEBELUM dikirimi tidak dihitung sebagai balasan',
+    dasbor2.balasan.membalas === 1, dasbor2.balasan);
+  cek('nomor yang tidak pernah dikirimi tidak ikut dihitung',
+    dasbor2.balasan.dikirimi === 3, dasbor2.balasan);
+  cek('persentasenya terhadap yang dikirimi', dasbor2.balasan.persen === 33, dasbor2.balasan);
 
   console.log('\ntest_blast_fitur.js  ' + ok + '/' + (ok + g) + (g ? '  ADA GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);
