@@ -73,7 +73,8 @@ var NAV_ICONS={
 ,
   kll:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>',
   broadcast: navIcon('<path d="M4 11.5a7.5 7.5 0 1 1 3.2 6.15L3.5 20l1-3.4A7.4 7.4 0 0 1 4 11.5z"/><path d="M8.5 10.5h7"/><path d="M8.5 13.5h4.5"/>'),
-  fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>')};
+  fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>'),
+  ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>')};
 var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
   {id:'penghimpunan',label:'Penghimpunan',ic:NAV_ICONS.penghimpunan,mod:'penghimpunan'},
@@ -86,6 +87,7 @@ var MENU=[
   {id:'settings',label:'Pengaturan',ic:NAV_ICONS.settings,mod:'settings'},
   {id:'broadcast',label:'Broadcast',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/blast.html'},
   {id:'fundraising',label:'Fundraising',ic:NAV_ICONS.fundraising,mod:'fundraising',url:'/fund.html'},
+  {id:'ai',label:'AI Asisten',ic:NAV_ICONS.ai,mod:'ai',url:'/ai.html'},
   {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
 function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }

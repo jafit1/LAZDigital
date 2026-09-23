@@ -4769,3 +4769,264 @@ input.tandai, #tandaiSemua{ width:16px; height:16px; cursor:pointer; accent-colo
   .fund-alat{ flex-direction:column; align-items:stretch; }
   .fund-alat > *{ width:100% !important; }
 }
+
+/* ================================================================
+   47. AI ASISTEN — halaman /ai.html
+   ================================================================
+   Tata letaknya berbeda dari halaman lain: percakapan memakai SELURUH tinggi
+   layar dan mengatur gulirnya sendiri, supaya kotak isian selalu berada di
+   tempat yang sama dan tidak ikut naik-turun bersama isi. Di HP inilah bedanya
+   paling terasa — kotak isian yang ikut menggulir berarti harus menggulir dulu
+   setiap kali mau mengetik. */
+.ta-c{ text-align:center; }
+.ta-r{ text-align:right; }
+
+/* Tingginya diikat di AKAR aplikasi, lalu diwariskan ke bawah. Menyetel
+   .main setinggi 100vh langsung itulah yang salah di layar HP: di sana .topnav
+   adalah bilah atas setinggi ~80px yang ikut menumpuk, sehingga 80px + 100vh
+   mendorong kotak isian ke bawah garis layar dan ia baru terlihat setelah
+   digulir — persis hal yang paling sering dipakai jadi yang paling sulit
+   diraih. */
+.app.ai-penuh{ height:100vh; min-height:0; overflow:hidden; }
+/* Rantainya harus utuh dari akar sampai .ai-wrap. Satu saja simpul di
+   tengah yang tingginya "auto" membuat tinggi persen di bawahnya kembali jadi
+   auto tanpa peringatan apa pun — karena itu .main dan #isi ikut jadi kotak
+   flex, bukan cuma diberi height:100%. */
+.app.ai-penuh .main{
+  padding:0 !important; flex:1; min-height:0; height:auto; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+.app.ai-penuh .main > #isi{ flex:1; min-height:0; display:flex; flex-direction:column; }
+.ai-wrap{
+  display:grid; grid-template-columns:268px minmax(0,1fr);
+  flex:1; height:100%; min-height:0; background:var(--bg);
+}
+
+/* ---------- daftar percakapan (rail) ---------- */
+.ai-rail{
+  display:flex; flex-direction:column; min-height:0;
+  background:var(--surface); border-right:1px solid var(--border);
+}
+.ai-rail-atas{ padding:14px 12px 10px; display:grid; gap:8px; flex-shrink:0; }
+.ai-baru{ width:100%; justify-content:center; gap:7px; }
+.ai-cari{
+  width:100%; padding:8px 11px; border:1px solid var(--border); border-radius:10px;
+  background:var(--surface2); color:var(--text); font-size:12.5px; font-family:inherit;
+}
+.ai-cari:focus{ outline:none; border-color:var(--accent); background:var(--surface); }
+.ai-rail-daftar{ flex:1; min-height:0; overflow-y:auto; padding:2px 8px 8px; display:grid; gap:3px; align-content:start; }
+.ai-rail-item{
+  display:block; width:100%; text-align:left; padding:9px 11px; border-radius:10px;
+  border:1px solid transparent; background:transparent; cursor:pointer;
+  color:var(--text2); transition:background .14s,border-color .14s;
+}
+.ai-rail-item:hover{ background:var(--surface2); color:var(--text); }
+.ai-rail-item.aktif{ background:var(--accent-soft); border-color:var(--accent-soft2); color:var(--accent-d); }
+html[data-theme="dark"] .ai-rail-item.aktif{ color:var(--accent2); }
+.ai-rail-judul{ font-size:13px; font-weight:600; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.ai-rail-meta{ font-size:11px; color:var(--muted); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ai-rail-kaki{ padding:10px 14px; border-top:1px solid var(--border); font-size:11px; line-height:1.5; flex-shrink:0; }
+.ai-rail-tirai{ display:none; }
+.ai-rail-tombol{ display:none; }
+
+/* ---------- kolom utama ---------- */
+.ai-utama{ display:flex; flex-direction:column; min-width:0; min-height:0; }
+.ai-kepala{
+  display:flex; align-items:center; gap:10px; padding:11px 18px; flex-shrink:0;
+  border-bottom:1px solid var(--border); background:var(--surface);
+}
+.ai-kepala-judul{
+  flex:1; min-width:0; font-family:var(--head); font-weight:700; font-size:15px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.ai-kepala-aksi{ display:flex; align-items:center; gap:4px; flex-shrink:0; }
+
+.ai-thread{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+/* Lebar baca dibatasi. Baris sepanjang layar 27 inci tidak terbaca — mata
+   kehilangan barisnya saat kembali ke kiri. */
+.ai-thread-dalam{ max-width:820px; margin:0 auto; padding:22px 20px 10px; display:grid; gap:20px; }
+
+/* ---------- gelembung ---------- */
+.ai-pesan{ display:grid; grid-template-columns:32px minmax(0,1fr); gap:12px; align-items:start; }
+.ai-avatar{
+  width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color:#fff; background:var(--text2); flex-shrink:0;
+}
+.ai-avatar-ai{ background:linear-gradient(135deg,var(--accent),var(--accent2)); font-size:15px; }
+.ai-isi-bungkus{ min-width:0; }
+.ai-pesan-kepala{ display:flex; align-items:baseline; gap:8px; margin-bottom:3px; flex-wrap:wrap; }
+.ai-nama{ font-size:12.5px; font-weight:700; color:var(--text); }
+.ai-pesan-meta{ font-size:11px; color:var(--muted); }
+.ai-isi{ font-size:14px; line-height:1.68; color:var(--text); word-wrap:break-word; overflow-wrap:anywhere; }
+.ai-isi p{ margin:0 0 9px; }
+.ai-isi p:last-child{ margin-bottom:0; }
+.ai-isi h4,.ai-isi h5,.ai-isi h6{ font-family:var(--head); margin:14px 0 6px; line-height:1.35; }
+.ai-isi h4{ font-size:16px; } .ai-isi h5{ font-size:14.5px; } .ai-isi h6{ font-size:13.5px; }
+.ai-isi ul,.ai-isi ol{ margin:0 0 9px; padding-left:22px; }
+.ai-isi li{ margin:3px 0; }
+.ai-isi a{ color:var(--accent-d); text-decoration:underline; }
+html[data-theme="dark"] .ai-isi a{ color:var(--accent2); }
+.ai-isi blockquote{ margin:0 0 9px; padding:2px 0 2px 12px; border-left:3px solid var(--accent-soft2); color:var(--text2); }
+.ai-isi hr{ border:none; border-top:1px solid var(--border); margin:14px 0; }
+.ai-isi code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
+  background:var(--surface2); border:1px solid var(--border2); border-radius:5px; padding:1px 5px;
+}
+/* Gelembung pertanyaan dibedakan dengan latar lembut, bukan warna oranye penuh:
+   yang perlu paling terbaca adalah JAWABAN, bukan pertanyaan yang sudah diketik
+   sendiri oleh orangnya. */
+.ai-pesan.dari-orang .ai-isi{
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:10px 13px; box-shadow:var(--shadow);
+}
+.ai-pesan-aksi{ display:flex; gap:6px; margin-top:7px; opacity:0; transition:opacity .16s; }
+.ai-pesan:hover .ai-pesan-aksi,.ai-pesan:focus-within .ai-pesan-aksi{ opacity:1; }
+.ai-aksi-kecil{
+  border:1px solid var(--border); background:var(--surface); color:var(--text2);
+  border-radius:8px; padding:3px 9px; font-size:11.5px; font-weight:600; cursor:pointer;
+  font-family:inherit; transition:.14s;
+}
+.ai-aksi-kecil:hover{ border-color:var(--accent); color:var(--accent-d); }
+.ai-galat{
+  margin-top:8px; border:1px solid var(--red); background:var(--red-bg); color:var(--red);
+  border-radius:10px; padding:9px 12px; font-size:12.5px; line-height:1.55;
+}
+
+/* ---------- blok kode ---------- */
+.ai-kode{ border:1px solid var(--border); border-radius:10px; overflow:hidden; margin:0 0 10px; background:var(--surface2); }
+.ai-kode-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:5px 10px; background:var(--surface3); border-bottom:1px solid var(--border);
+  font-size:11px; color:var(--muted); font-weight:600;
+}
+.ai-salin{ border:none; background:transparent; color:var(--accent-d); font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
+html[data-theme="dark"] .ai-salin{ color:var(--accent2); }
+.ai-kode pre{ margin:0; padding:11px 12px; overflow-x:auto; }
+.ai-kode code{ background:none; border:none; padding:0; font-size:12.5px; line-height:1.55; }
+
+/* ---------- tanda sedang mengetik ---------- */
+.ai-kursor{
+  display:inline-block; width:7px; height:15px; margin-left:2px; vertical-align:-2px;
+  background:var(--accent); border-radius:2px; animation:aiKedip 1s steps(2,start) infinite;
+}
+@keyframes aiKedip{ 50%{ opacity:0 } }
+.ai-denyut{ display:flex; gap:5px; padding:6px 0; }
+.ai-denyut i{ width:7px; height:7px; border-radius:50%; background:var(--accent); opacity:.35; animation:aiDenyut 1.1s ease-in-out infinite; }
+.ai-denyut i:nth-child(2){ animation-delay:.15s } .ai-denyut i:nth-child(3){ animation-delay:.3s }
+@keyframes aiDenyut{ 0%,100%{ opacity:.25; transform:translateY(0) } 50%{ opacity:1; transform:translateY(-3px) } }
+@media (prefers-reduced-motion:reduce){
+  .ai-kursor,.ai-denyut i{ animation:none !important; opacity:1 }
+}
+
+/* ---------- kotak isian ---------- */
+.ai-komposer-bungkus{ flex-shrink:0; padding:10px 20px 14px; background:linear-gradient(to top,var(--bg) 70%,transparent); }
+.ai-komposer{
+  max-width:820px; margin:0 auto; background:var(--surface);
+  border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-lg);
+  padding:10px 12px 8px; transition:border-color .16s;
+}
+.ai-komposer:focus-within{ border-color:var(--accent); }
+.ai-komposer textarea{
+  width:100%; border:none; background:transparent; resize:none; outline:none;
+  font-family:inherit; font-size:14px; line-height:1.6; color:var(--text);
+  max-height:200px; overflow-y:auto; padding:2px 2px 4px;
+}
+.ai-komposer-kaki{ display:flex; align-items:center; gap:10px; margin-top:4px; }
+.ai-komposer-kiri{ display:flex; align-items:center; gap:6px; min-width:0; flex:1; }
+.ai-komposer-kanan{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.ai-persona-label{ font-size:11.5px; color:var(--muted); font-weight:600; }
+.ai-persona{
+  border:1px solid var(--border); background:var(--surface2); color:var(--text);
+  border-radius:9px; padding:4px 8px; font-size:12px; font-family:inherit; max-width:210px;
+}
+.ai-kirim{ width:36px; height:36px; padding:0; justify-content:center; border-radius:11px; }
+/* .btn menyetel display:inline-flex, dan itu MENGALAHKAN aturan bawaan
+   peramban untuk atribut [hidden]. Akibatnya tombol "Hentikan" yang
+   disembunyikan lewat el.hidden = true tetap tergambar — terlihat seolah
+   jawaban masih berjalan padahal sudah selesai. */
+.ai-komposer-kanan .btn[hidden]{ display:none !important; }
+.ai-catatan-kecil{ max-width:820px; margin:7px auto 0; font-size:11px; text-align:center; line-height:1.5; }
+
+/* ---------- layar sambutan ---------- */
+.ai-sambut{ padding:30px 4px 10px; text-align:center; }
+.ai-sambut-tanda{
+  width:52px; height:52px; margin:0 auto 14px; border-radius:15px; color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-lg);
+}
+.ai-sambut h2{ font-family:var(--head); font-size:23px; font-weight:700; margin-bottom:7px; }
+.ai-sambut p{ font-size:13.5px; line-height:1.65; max-width:520px; margin:0 auto; }
+.ai-contoh{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:22px; text-align:left; }
+.ai-contoh-item{
+  display:flex; align-items:flex-start; gap:10px; padding:12px 13px; cursor:pointer;
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  font-family:inherit; font-size:12.5px; line-height:1.55; color:var(--text2); transition:.16s;
+}
+.ai-contoh-item:hover{ border-color:var(--accent); color:var(--text); transform:translateY(-2px); box-shadow:var(--shadow); }
+.ai-contoh-ikon{ font-size:16px; line-height:1.2; flex-shrink:0; }
+
+/* ---------- kartu pengetahuan / persona / provider ---------- */
+.ai-kartu-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+.ai-kartu{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:8px;
+}
+.ai-kartu.mati{ opacity:.6; }
+.ai-kartu.pilih{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
+.ai-kartu-kepala{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.ai-kartu-judul{ font-family:var(--head); font-weight:700; font-size:14px; min-width:0; }
+.ai-kartu-isi{ font-size:12.5px; line-height:1.6; color:var(--text2); margin:0; word-break:break-word; }
+.ai-kartu-kaki{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-top:auto; padding-top:6px; border-top:1px solid var(--border2); }
+.ai-kartu-kaki .muted{ font-size:11px; }
+.ai-kartu-aksi{ display:flex; gap:5px; flex-wrap:wrap; }
+
+.ai-info{
+  background:var(--accent-soft); border:1px solid var(--accent-soft2); color:var(--text2);
+  border-radius:10px; padding:10px 12px; font-size:12.5px; line-height:1.6;
+}
+html[data-theme="dark"] .ai-info{ background:rgba(234,106,30,.12); border-color:rgba(234,106,30,.3); }
+.ai-pra{
+  margin-top:12px; background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+  padding:12px 14px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto;
+}
+.ai-field-baris{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+
+/* ---------- HP & tablet ----------
+   Di bawah 900px rail berubah jadi laci yang menutupi, bukan kolom tetap:
+   268px dari 390px lebar layar berarti percakapannya sendiri tinggal 120px. */
+@media (max-width:900px){
+  .ai-wrap{ grid-template-columns:minmax(0,1fr); }
+  .ai-rail{
+    position:fixed; top:0; bottom:0; left:0; width:280px; max-width:86vw; z-index:70;
+    transform:translateX(-102%); transition:transform .24s cubic-bezier(.4,0,.2,1);
+    box-shadow:var(--shadow-lg);
+  }
+  .ai-wrap.rail-buka .ai-rail{ transform:none; }
+  .ai-rail-tirai{ display:block; position:fixed; inset:0; z-index:69; background:rgba(0,0,0,.4);
+    opacity:0; pointer-events:none; transition:opacity .24s; }
+  .ai-wrap.rail-buka .ai-rail-tirai{ opacity:1; pointer-events:auto; }
+  .ai-rail-tombol{ display:inline-flex; }
+  .ai-contoh{ grid-template-columns:minmax(0,1fr); }
+}
+@media (max-width:640px){
+  /* 100vh di browser HP memasukkan bilah alamat yang datang-pergi, sehingga
+     kotak isian sesekali tersembunyi di balik bilah itu. 100dvh mengikuti
+     tinggi yang benar-benar terlihat. */
+  .app.ai-penuh{ height:100dvh; }
+  .ai-thread-dalam{ padding:16px 13px 6px; gap:16px; }
+  .ai-komposer-bungkus{ padding:8px 12px calc(10px + env(safe-area-inset-bottom)); }
+  .ai-kepala{ padding:9px 12px; }
+  .ai-pesan{ grid-template-columns:26px minmax(0,1fr); gap:9px; }
+  .ai-avatar{ width:26px; height:26px; border-radius:8px; font-size:12px; }
+  .ai-avatar-ai{ font-size:13px; }
+  .ai-isi{ font-size:14px; }
+  /* Di layar sentuh tidak ada "hover", jadi tombol Salin / Minta ulang harus
+     selalu terlihat — kalau tidak, di HP ia tidak pernah bisa ditemukan. */
+  .ai-pesan-aksi{ opacity:1; }
+  .ai-persona{ max-width:150px; }
+  .ai-sambut{ padding:18px 2px 6px; }
+  .ai-sambut h2{ font-size:20px; }
+  .ai-kartu-grid{ grid-template-columns:minmax(0,1fr); }
+}

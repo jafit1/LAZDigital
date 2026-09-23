@@ -64,7 +64,7 @@ var SHEETS = {
    pantas dilihat semua orang, sementara saldo KLL/ULL boleh. Dipisahkan
    sebagai modul supaya diaturnya lewat mekanisme izin yang sama dengan
    fitur lain, bukan lewat saklar tersembunyi. */
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising'];
+var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -73,7 +73,7 @@ var MODUL_LABEL = {
   laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
   log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
-  fundraising:'Fundraising (Penghimpunan Lapangan)'
+  fundraising:'Fundraising (Penghimpunan Lapangan)', ai:'AI Asisten'
 };
 var MODUL_KET = {
   dashboard:'Dashboard, menu Saldo Kas & Bank, dan Saldo KLL & ULL',
@@ -88,7 +88,8 @@ var MODUL_KET = {
   log:'Riwayat siapa mengubah apa',
   saldodaerah:'Melihat angka Penghimpunan Daerah di menu Saldo KLL & ULL. Hanya "view" yang dipakai.',
   broadcast:'Mengirim pesan WhatsApp massal ke buku kontak broadcast',
-  fundraising:'Modul fundraiser lapangan: database donatur, jadwal pengambilan, pencatatan, dan pencocokan dengan buku utama. Centang "hapus" menjadikannya koordinator yang melihat data semua fundraiser.'
+  fundraising:'Modul fundraiser lapangan: database donatur, jadwal pengambilan, pencatatan, dan pencocokan dengan buku utama. Centang "hapus" menjadikannya koordinator yang melihat data semua fundraiser.',
+  ai:'AI Asisten: "lihat" membaca percakapan, "tambah" boleh bertanya, "ubah" boleh menyunting pengetahuan & persona, "hapus" boleh menghapus percakapan (percakapan dipakai bersama seluruh tim). Pengaturan provider dan kunci API tetap khusus superadmin.'
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
