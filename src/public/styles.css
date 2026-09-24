@@ -5188,3 +5188,153 @@ html[data-theme="dark"] .ai-lp-ext{ background:rgba(234,106,30,.16); color:var(-
    flex — ia memakan seluruh baris dan mendorong judul percakapan keluar
    sampai tidak terlihat sama sekali. Ukurannya dipatok di sini. */
 .ai-rail-tombol{ flex:0 0 auto; width:34px; height:34px; padding:0; }
+
+/* ================================================================
+   50. FUNDRAISING — lencana cakupan data & tombol rute
+   ================================================================
+   Lencana cakupan dulu memakai .badge di dalam .tn-right, yang kolomnya
+   align-items:stretch. Hasilnya: pil selebar bilah menu dengan teks menempel
+   di kiri dan tinggi beberapa piksel saja — terbaca seperti sisa elemen yang
+   lupa dirapikan. Dan saat bilah menu dikuncupkan jadi 78 px, tulisannya
+   terpotong di tengah kata. */
+.lingkup{
+  display:flex; align-items:center; gap:9px; width:100%; box-sizing:border-box;
+  padding:8px 11px; border-radius:11px; font-size:11.5px; font-weight:600;
+  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+  min-width:0;
+}
+.lingkup svg{ flex-shrink:0; opacity:.8; }
+.lingkup-teks{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lingkup-luas{ background:var(--blue-bg); border-color:transparent; color:var(--blue); }
+html[data-theme="dark"] .lingkup-luas{ background:rgba(59,130,246,.16); }
+/* Dikuncupkan: ikonnya tetap, labelnya menyingkir — persis perlakuan butir
+   menu lain, jadi tidak ada satu pun teks yang terpotong di tengah kata. */
+.app.collapsed .lingkup{ justify-content:center; padding:8px 0; gap:0; }
+.app.collapsed .lingkup-teks{ display:none; }
+
+/* Tombol rute: ikon panah + label, bukan tulisan "peta" telanjang.
+   text-decoration dimatikan karena ia sebuah <a>: tanpa ini ia tergambar
+   bergaris bawah di antara tombol-tombol yang tidak, dan terbaca seperti
+   tautan nyasar alih-alih tombol sebaris. */
+.jw-peta{ display:inline-flex; align-items:center; gap:5px; text-decoration:none !important; }
+.jw-peta svg{ flex-shrink:0; }
+
+/* ================================================================
+   51. SKALA & KERAPATAN — satu ukuran per perangkat
+   ================================================================
+   Masalahnya bukan "tidak responsif" — tata letaknya memang sudah menumpuk
+   rapi di layar sempit. Masalahnya UKURAN: judul 24 px, angka KPI 26 px,
+   bilah menu 240 px, dan padding 24/30 px dirancang sambil melihat monitor
+   besar. Di laptop 1366 px semuanya terasa satu nomor kebesaran, dan yang
+   hilang justru yang dicari: jumlah baris yang terlihat sekali pandang.
+
+   Semua ukuran itu dikumpulkan jadi beberapa variabel di sini, lalu
+   variabelnya yang dikecilkan per lebar layar. Aturan aslinya di atas tidak
+   diubah — bagian ini hanya menimpanya, jadi kalau suatu saat dianggap
+   salah, cukup hapus bagian ini dan semuanya kembali seperti semula.
+
+   BATAS BAWAHNYA DIJAGA. Mengecilkan terus bukan jawaban: teks isi tidak
+   pernah di bawah 12,5 px dan judul halaman tidak pernah di bawah 19 px.
+   Nyaman berarti muat DAN terbaca, bukan sekadar muat. */
+:root{
+  --u-sisi:226px;        /* lebar bilah menu */
+  --u-sisi-kuncup:76px;
+  --u-pad-y:20px;        /* padding isi halaman */
+  --u-pad-x:26px;
+  --u-kartu-y:14px;      /* padding kartu */
+  --u-kartu-x:17px;
+  --u-judul:21px;        /* judul halaman */
+  --u-kartu-judul:15px;
+  --u-nilai:22px;        /* angka besar di kartu ringkas */
+  --u-nav:13.5px;        /* teks butir menu */
+  --u-nav-tinggi:42px;
+  --u-tabel:13px;        /* teks tabel */
+  --u-isian:13.5px;      /* teks kotak isian */
+  --u-tombol:12.5px;
+}
+@media (max-width:1440px){
+  :root{
+    --u-sisi:212px; --u-pad-y:18px; --u-pad-x:22px;
+    --u-kartu-y:13px; --u-kartu-x:15px;
+    --u-judul:20px; --u-nilai:21px; --u-nav:13px; --u-nav-tinggi:40px;
+  }
+}
+@media (max-width:1200px){
+  :root{ --u-sisi:200px; --u-pad-x:18px; --u-judul:19px; --u-nilai:20px; --u-kartu-judul:14.5px; }
+}
+
+/* ---------- penerapan ----------
+   Ukuran bilah menu di layar lebar dipasang dengan !important, dan itu bukan
+   kemalasan: aturan aslinya (bagian 21 dan 32) sudah memakai !important untuk
+   lebar, margin, DAN padding sekaligus. Tanpa penanda yang sama, yang di sini
+   kalah diam-diam — dan gejalanya cuma "kok tidak berubah".
+   Lebar bilah, margin isi, dan lebar isi diambil dari SATU variabel. Dulu
+   ketiganya angka terpisah (250 / 280 / 294) yang harus diingat bersamaan;
+   begitu satu diubah tanpa yang lain, isinya berjarak aneh dari bilahnya. */
+@media (min-width:1024px){
+  .app .topnav{ width:var(--u-sisi) !important; padding:18px 12px !important; }
+  .app .main{
+    padding:var(--u-pad-y) var(--u-pad-x) calc(var(--u-pad-y) + 14px) !important;
+  }
+  .app:not(.collapsed) .main{
+    margin-left:var(--u-sisi) !important;
+    width:calc(100% - var(--u-sisi)) !important;
+  }
+  .app.collapsed .topnav{ width:var(--u-sisi-kuncup) !important; padding:18px 10px !important; }
+  .app.collapsed .main{
+    margin-left:var(--u-sisi-kuncup) !important;
+    width:calc(100% - var(--u-sisi-kuncup)) !important;
+  }
+  /* Melebar sementara saat kursor menyentuhnya — lebarnya harus sama dengan
+     lebar terbukanya, bukan angka lain yang kebetulan mirip. */
+  .app.collapsed .topnav:hover{ width:var(--u-sisi) !important; padding:18px 12px !important; }
+  .tn-item{ height:var(--u-nav-tinggi) !important; }
+}
+.sidebar{ width:var(--u-sisi); }
+
+.page-head h2{ font-size:var(--u-judul); }
+.page-head .desc{ font-size:13px; }
+
+.card{ padding:var(--u-kartu-y) var(--u-kartu-x); }
+.card h3{ font-size:var(--u-kartu-judul); }
+
+.stat .val,.kpi-v2-value{ font-size:var(--u-nilai); }
+.stat{ padding:15px; }
+.kpi-v2{ padding:14px 15px; }
+
+.tn-item{ height:var(--u-nav-tinggi) !important; font-size:var(--u-nav); }
+.nav-item{ padding:9px 12px; font-size:var(--u-nav); }
+
+/* Tabel dan isian dipisah: tabel padat isinya dan tetap 13 px, sedangkan
+   kotak isian sedikit lebih besar karena di situ orang MENGETIK lalu membaca
+   ulang apa yang diketiknya. Disamakan, salah satunya pasti salah. */
+table{ font-size:var(--u-tabel); }
+input,select,textarea{ font-size:var(--u-isian); }
+.btn{ font-size:var(--u-tombol); }
+
+/* ---------- disentuh jari ----------
+   Kebalikannya: di sini kendali justru DIBESARKAN. Ukuran yang pas untuk
+   penunjuk tetikus (beberapa piksel) tidak bisa dikenai ujung jari, dan salah
+   tekan di modul ini berarti donasi tercatat pada donatur yang keliru.
+   Kotak centang dikecualikan — membesarkannya hanya merusak baris tabel,
+   sementara daerah tekannya sudah cukup lewat labelnya. */
+html[data-sentuh="ya"] .btn{ min-height:38px; }
+html[data-sentuh="ya"] .btn-sm{ min-height:34px; }
+html[data-sentuh="ya"] .icon-btn{ width:34px; height:34px; }
+html[data-sentuh="ya"] .ai-alat,
+html[data-sentuh="ya"] .ai-chip-model{ min-height:36px; }
+html[data-sentuh="ya"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-sentuh="ya"] select{ min-height:40px; }
+
+/* ---------- HP ----------
+   Di bawah 1024 px, aturan tata letak lama sudah menimpa padding .main dengan
+   !important. Yang disetel di sini tinggal ukuran hurufnya, supaya layar kecil
+   tidak ikut mengecil dua kali: ia sudah sempit, teksnya tidak boleh ikut
+   menyusut atau malah jadi tidak terbaca. */
+@media (max-width:640px){
+  :root{
+    --u-judul:19px; --u-nilai:20px; --u-tabel:13px; --u-isian:13.5px; --u-tombol:12.5px;
+    --u-kartu-y:13px; --u-kartu-x:14px;
+  }
+  .page-head .desc{ font-size:12.5px; }
+}

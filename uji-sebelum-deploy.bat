@@ -34,6 +34,7 @@ call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
 call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
 call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
 call :jalankan "Tampilan halaman AI Asisten"    tools\test_ai_ui.js
+call :jalankan "Skala tampilan di semua perangkat" tools\test_skala_ui.js
 call :jalankan "Apa yang sudah sampai di server" tools\uji_cek_deploy.js
 
 echo.

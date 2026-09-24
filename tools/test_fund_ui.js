@@ -150,6 +150,62 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
   const lenc = await p.$eval('#lencanaLingkup', (e) => ({ teks: e.textContent, judul: e.title }));
   cek('lencana cakupan data tampil & ringkas', /Semua fundraiser/i.test(lenc.teks) && lenc.teks.length < 20, lenc);
   cek('keterangan panjangnya tetap ada di title', /Koordinator/i.test(lenc.judul), lenc.judul);
+  /* Lencana ini dulu .badge polos di kolom yang meregang: pil selebar bilah
+     menu, teks menempel di kiri, tinggi beberapa piksel. Yang diperiksa di
+     sini bukan warnanya, melainkan bahwa ia punya tinggi yang wajar dan
+     teksnya tidak terpotong. */
+  const bentukLenc = await p.evaluate(() => {
+    const e = document.getElementById('lencanaLingkup');
+    const t = e.querySelector('.lingkup-teks');
+    return {
+      tinggi: Math.round(e.getBoundingClientRect().height),
+      adaIkon: !!e.querySelector('svg'),
+      terpotong: t ? t.scrollWidth > t.clientWidth + 1 : true,
+      keluar: e.getBoundingClientRect().right > document.querySelector('.topnav').getBoundingClientRect().right + 1,
+    };
+  });
+  cek('lencana cakupan punya tinggi yang wajar', bentukLenc.tinggi >= 28, bentukLenc.tinggi);
+  cek('lencana cakupan berikon', bentukLenc.adaIkon);
+  cek('teks lencana tidak terpotong', !bentukLenc.terpotong, bentukLenc);
+  cek('lencana tidak melewati tepi bilah menu', !bentukLenc.keluar, bentukLenc);
+
+  /* Dikuncupkan, ikonnya harus tetap terlihat dan labelnya menyingkir — bukan
+     tulisan yang terpotong di tengah kata. */
+  await p.evaluate(() => document.getElementById('appView').classList.add('collapsed'));
+  await p.waitForTimeout(350);
+  const lencKuncup = await p.evaluate(() => {
+    const e = document.getElementById('lencanaLingkup');
+    const t = e.querySelector('.lingkup-teks');
+    return {
+      ikonTampil: !!e.querySelector('svg') && e.getBoundingClientRect().width > 10,
+      teksSembunyi: t ? getComputedStyle(t).display === 'none' : false,
+      keluar: e.getBoundingClientRect().right > document.querySelector('.topnav').getBoundingClientRect().right + 1,
+    };
+  });
+  cek('saat bilah menu dikuncupkan, ikon lencana tetap ada', lencKuncup.ikonTampil, lencKuncup);
+  cek('labelnya menyingkir, bukan terpotong di tengah kata', lencKuncup.teksSembunyi, lencKuncup);
+  cek('lencana tetap di dalam bilah saat dikuncupkan', !lencKuncup.keluar, lencKuncup);
+  await p.evaluate(() => document.getElementById('appView').classList.remove('collapsed'));
+  await p.waitForTimeout(300);
+
+  /* Tombol tema: ikon lama (lingkaran separuh terisi) berwarna var(--text2) di
+     atas putih — nyaris tak terlihat dan tidak memberi tahu apa-apa. */
+  const tema = await p.evaluate(() => {
+    const b = document.getElementById('tombolTema');
+    return { ada: !!b, garis: b.querySelectorAll('svg path, svg circle').length, judul: b.title };
+  });
+  cek('tombol tema menjelaskan tema tujuannya', /Ganti ke tema gelap/i.test(tema.judul), tema.judul);
+  await p.click('#tombolTema');
+  await p.waitForTimeout(250);
+  const temaSesudah = await p.evaluate(() => ({
+    tema: document.documentElement.getAttribute('data-theme'),
+    judul: document.getElementById('tombolTema').title,
+  }));
+  cek('menekan tombol tema benar-benar mengganti tema', temaSesudah.tema === 'dark', temaSesudah);
+  cek('ikon & keterangannya ikut berganti saat itu juga',
+    /Ganti ke tema terang/i.test(temaSesudah.judul), temaSesudah.judul);
+  await p.click('#tombolTema');
+  await p.waitForTimeout(250);
 
   console.log('\n=== B. DASHBOARD: JADWAL & TOMBOL ALUR ===');
   const dash = await p.evaluate(() => ({
@@ -178,6 +234,20 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
       .filter((x) => x.getClientRects().length > 0).length > 1).length);
   cek('status tidak tergambar dua kali di layar lebar', lencanaGanda === 0, lencanaGanda);
   cek('donatur belum dikunjungi punya tombol Diambil/Reschedule/Kosong', dash.diambil === 1 && dash.reschedule === 1 && dash.kosong === 1, dash);
+  /* Yang dibutuhkan petugas di lapangan adalah BELOKAN, bukan gambar peta.
+     Tautannya harus ke rute Google Maps, bukan ke OpenStreetMap. */
+  const rute = await p.evaluate(() => {
+    const a = document.querySelector('.jw-peta');
+    return a ? { url: a.href, teks: a.textContent.trim(), ikon: !!a.querySelector('svg') } : null;
+  });
+  cek('tautan lokasi membuka rute Google Maps',
+    rute && /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1/.test(rute.url), rute);
+  cek('koordinat donatur ikut sebagai tujuan',
+    rute && rute.url.includes(encodeURIComponent('-7.8879,110.3288')), rute && rute.url);
+  cek('labelnya "Rute", bukan "peta"', rute && rute.teks === 'Rute', rute && rute.teks);
+  cek('ikonnya panah arah, bukan lembaran peta', rute && rute.ikon, rute);
+  cek('tidak tergambar bergaris bawah di antara tombol lain',
+    (await p.$eval('.jw-peta', (e) => getComputedStyle(e).textDecorationLine)) === 'none');
   cek('yang sudah diambil tampil bertanda nominal (bukan lenyap)', dash.sudahBadge, dash.sudahBadge);
   await p.screenshot({ path: path.join(LUAR, 'fund-dasbor.png') });
 
@@ -224,6 +294,35 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
     const manual = await p.evaluate(() => !!document.getElementById('lokLat') && !!document.getElementById('lokLng'));
     cek('tanpa Leaflet, jatuh ke isian koordinat manual (jalur cadangan)', manual, { form, manual });
   }
+  /* Jembatan Google Maps -> pemilih lokasi. Nominatim kalah jauh untuk NAMA
+     TEMPAT (masjid, warung, sekolah), dan patokan itulah yang dipakai petugas.
+     Jadi tempatnya dicari di Google Maps, koordinatnya disalin, ditempel ke
+     sini. Tiga bentuk tempelan harus dimengerti. */
+  const bentukTempelan = [
+    { nama: 'koordinat polos', teks: '-7.85001, 110.40002', lat: '-7.85001' },
+    { nama: 'tautan Google Maps (@lat,lng)', teks: 'https://www.google.com/maps/place/Masjid/@-7.86003,110.41004,18z', lat: '-7.86003' },
+    { nama: 'tautan berbagi (?q=lat,lng)', teks: 'https://maps.google.com/?q=-7.87005,110.42006', lat: '-7.87005' },
+  ];
+  for (const b of bentukTempelan) {
+    await p.fill('#lokCari', '');
+    await p.fill('#lokCari', b.teks);
+    await p.waitForTimeout(350);
+    const hasil = await p.evaluate(() => ({
+      koor: document.getElementById('lokKoor').textContent,
+      kotakCari: document.getElementById('lokCari').value,
+      gmaps: (document.getElementById('lokGmaps') || {}).href || '',
+    }));
+    cek(`titik dari ${b.nama} langsung dipakai`, hasil.koor.includes(b.lat), hasil);
+    cek(`kotak pencarian dikosongkan setelah ${b.nama} dipakai`, hasil.kotakCari === '', hasil.kotakCari);
+    cek(`tautan Google Maps ikut menunjuk titik ${b.nama}`, hasil.gmaps.includes(b.lat), hasil.gmaps);
+  }
+  /* Teks biasa TIDAK boleh disalahartikan sebagai koordinat. */
+  await p.fill('#lokCari', 'Masjid Agung Bantul');
+  await p.waitForTimeout(250);
+  cek('nama tempat tetap diperlakukan sebagai pencarian, bukan koordinat',
+    (await p.$eval('#lokCari', (e) => e.value)) === 'Masjid Agung Bantul');
+  await p.fill('#lokCari', '');
+
   await p.waitForTimeout(300);
   await p.screenshot({ path: path.join(LUAR, 'fund-donatur-form.png') });
 

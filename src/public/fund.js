@@ -98,10 +98,30 @@ function kosong(pesan, ikon = '\u{1F4C2}') {
 const galatKotak = (pesan) => `<div class="card" style="border-color:var(--red);color:var(--red)">
   <strong>Gagal memuat.</strong> <span style="color:var(--text2)">${H(pesan)}</span></div>`;
 
+const IKON_MATAHARI = '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2"/><path d="M12 19.3v2.2"/><path d="M4.2 4.2l1.6 1.6"/><path d="M18.2 18.2l1.6 1.6"/><path d="M2.5 12h2.2"/><path d="M19.3 12h2.2"/><path d="M4.2 19.8l1.6-1.6"/><path d="M18.2 5.8l1.6-1.6"/>';
+const IKON_BULAN = '<path d="M20 14.5A8.2 8.2 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>';
+/* Yang digambar adalah tema YANG AKAN DIDAPAT, bukan tema yang sedang berlaku:
+   tombol bergambar bulan berarti "klik untuk gelap". Ikon lama — lingkaran
+   dengan separuh terisi — tidak mengatakan keduanya, dan warnanya var(--text2)
+   di atas latar putih membuatnya nyaris tak terlihat. */
 const tombolTema = () => `
-  <button class="tn-icon kepala-tema" id="tombolTema" type="button" title="Ganti tema terang / gelap" aria-label="Ganti tema">
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></svg>
+  <button class="tn-icon kepala-tema" id="tombolTema" type="button"
+          title="${temaGelap() ? 'Ganti ke tema terang' : 'Ganti ke tema gelap'}"
+          aria-label="${temaGelap() ? 'Ganti ke tema terang' : 'Ganti ke tema gelap'}">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${temaGelap() ? IKON_MATAHARI : IKON_BULAN}</svg>
   </button>`;
+/* Ikonnya harus ikut berganti SAAT DITEKAN. Tanpa ini ia baru berubah pada
+   penggambaran halaman berikutnya, sehingga tombol yang baru saja dipakai
+   masih menggambarkan tema lama — dan terbaca seperti tidak berfungsi. */
+function segarTema(b) {
+  if (!b) return;
+  const gelap = temaGelap();
+  b.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+    stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${gelap ? IKON_MATAHARI : IKON_BULAN}</svg>`;
+  b.title = gelap ? 'Ganti ke tema terang' : 'Ganti ke tema gelap';
+  b.setAttribute('aria-label', b.title);
+}
 const kepalaHalaman = (judul, keterangan, aksi = '') =>
   `<div class="page-head"><div><h2>${H(judul)}</h2>${keterangan ? `<div class="desc">${H(keterangan)}</div>` : ''}</div>`
   + `<div class="page-head-aksi">${aksi}${tombolTema()}</div></div>`;
@@ -252,6 +272,32 @@ function pasangTandai(el, t, { satuan, tindakanBanyak, muat, semua }) {
   segarkan();
 }
 
+// ============================================================ rute ke lokasi
+/* MEMBUKA lokasi memakai Google Maps, bukan OpenStreetMap.
+   Ini bukan soal selera peta: yang dibutuhkan petugas di lapangan adalah
+   BELOKAN — arah jalan, satu arah, kemacetan, dan nama toko/masjid sebagai
+   patokan. Di situ Google Maps jauh di depan, dan tautan seperti ini gratis:
+   tidak perlu kunci API, tidak ada tagihan, dan di HP ia langsung membuka
+   aplikasi Google Maps yang sudah terpasang.
+   (Pemilih lokasi saat MENDAFTARKAN donatur tetap memakai peta terbuka —
+   menanam peta Google di dalam halaman butuh kunci API berbayar.) */
+function tautanRute(lokasi) {
+  if (!lokasi || !Number.isFinite(Number(lokasi.lat))) return '';
+  const titik = `${Number(lokasi.lat)},${Number(lokasi.lng)}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(titik)}&travelmode=driving`;
+}
+/* Panah arah, bukan lembaran peta: yang ditawarkan tombol ini adalah "antar
+   saya ke sana", bukan "lihat gambar peta". */
+const IKON_RUTE = '<path d="M3.4 11.2 20.5 3.5 12.8 20.6l-1.9-6.6z"/>';
+function tombolRute(lokasi, { kelas = 'btn btn-sm btn-ghost', label = 'Rute' } = {}) {
+  const url = tautanRute(lokasi);
+  if (!url) return '';
+  return `<a class="${kelas} jw-peta" href="${H(url)}" target="_blank" rel="noopener"
+     title="Buka rute ke lokasi ini di Google Maps">
+     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round">${IKON_RUTE}</svg>
+     <span>${H(label)}</span></a>`;
+}
+
 // ============================================================ pemilih lokasi
 /* Peta OpenStreetMap + Leaflet. Kalau Leaflet tak termuat (CDN diblokir), jatuh
    ke isian koordinat manual + tombol GPS — lokasi tetap wajib, hanya caranya
@@ -280,7 +326,9 @@ function pemilihLokasi(el, awal) {
     <div class="field"><label>Lokasi rumah donatur <span style="color:var(--red)">*</span></label>
       <div class="peta-alat">
         <button type="button" class="btn btn-sm" id="lokSaya">${IKON.peta} Lokasi saya</button>
-        <input id="lokCari" class="search" placeholder="Cari alamat / tempat…" style="flex:1;min-width:120px" autocomplete="off">
+        <input id="lokCari" class="search" placeholder="Cari tempat, atau tempel koordinat / tautan Google Maps…" style="flex:1;min-width:140px" autocomplete="off">
+        <a class="btn btn-sm btn-ghost" id="lokGmaps" href="#" target="_blank" rel="noopener"
+           title="Cari tempatnya di Google Maps, lalu salin koordinatnya ke sini">Google Maps</a>
       </div>
       <div id="lokSaran" class="lok-saran" hidden></div>
       ${punyaLeaflet
@@ -293,10 +341,26 @@ function pemilihLokasi(el, awal) {
       <div class="field" style="margin-top:8px"><label>Alamat (boleh diperbaiki manual)</label>
         <input id="lokAlamat" value="${H(state.alamat)}" placeholder="Alamat terisi otomatis dari titik peta"></div>
       <div class="muted" id="lokKoor" style="font-size:11.5px">${state.lat != null ? `Titik: ${state.lat.toFixed(5)}, ${state.lng.toFixed(5)}` : 'Belum ada titik dipilih.'}</div>
+      <div class="muted" style="font-size:11.5px;line-height:1.55;margin-top:4px">
+        Tidak ketemu di pencarian? Buka Google Maps, tahan titiknya sampai muncul koordinat,
+        salin, lalu tempel ke kotak pencarian di atas.
+      </div>
     </div>`;
 
   const koorEl = $('#lokKoor', el);
   const alamatEl = $('#lokAlamat', el);
+
+  /* Deklarasi fungsi, bukan const panah, dan elemennya dicari di dalam.
+     pindah() memanggilnya saat peta baru dipasang — sebelum baris-baris di
+     bawah dijalankan. Dengan const, pemanggilan itu jatuh ke temporal dead
+     zone dan seluruh pemilih lokasi mati dengan ReferenceError. */
+  function segarkanGmaps() {
+    const g = $('#lokGmaps', el);
+    if (!g) return;
+    g.href = state.lat != null
+      ? `https://www.google.com/maps/search/?api=1&query=${state.lat},${state.lng}`
+      : 'https://www.google.com/maps/search/?api=1&query=Bantul';
+  }
   let peta = null; let penanda = null;
 
   function setKoor() {
@@ -310,6 +374,7 @@ function pemilihLokasi(el, awal) {
     state.lat = Number(lat); state.lng = Number(lng);
     setKoor();
     if (peta && penanda) { penanda.setLatLng([lat, lng]); }
+    segarkanGmaps();
     if (isiAlamat) {
       clearTimeout(jamRev);
       jamRev = setTimeout(async () => {
@@ -357,10 +422,47 @@ function pemilihLokasi(el, awal) {
 
   const cari = $('#lokCari', el);
   const saran = $('#lokSaran', el);
+
+  /* Jembatan dari Google Maps ke sini. Nominatim bagus untuk alamat, tetapi
+     kalah jauh untuk nama tempat ("Masjid Al Hikmah", warung, sekolah) — dan
+     patokan itulah yang dipakai orang di lapangan. Daripada memaksakan
+     pencarian yang tidak akan menang, tempat dicari di Google Maps lalu
+     TITIKNYA dibawa ke sini. Diterima tiga bentuk sekaligus: "-7.88, 110.33",
+     tautan ".../@-7.88,110.33,17z", dan "?q=-7.88,110.33". */
+  function koordinatDari(teks) {
+    const t = String(teks || '');
+    const pola = [
+      /@(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+      /[?&](?:q|query|destination|ll)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+      /^\s*(-?\d{1,3}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)\s*$/,
+    ];
+    for (const p of pola) {
+      const c = t.match(p);
+      if (!c) continue;
+      const la = parseFloat(c[1]); const lo = parseFloat(c[2]);
+      if (Number.isFinite(la) && Number.isFinite(lo)
+        && Math.abs(la) <= 90 && Math.abs(lo) <= 180) return { lat: la, lng: lo };
+    }
+    return null;
+  }
+
+  segarkanGmaps();
+
   let jamCari;
   cari.oninput = () => {
     clearTimeout(jamCari);
     const q = cari.value.trim();
+
+    const titik = koordinatDari(q);
+    if (titik) {
+      saran.hidden = true;
+      if (peta) peta.setView([titik.lat, titik.lng], 18);
+      pindah(titik.lat, titik.lng);
+      cari.value = '';
+      toast('Titik dari Google Maps dipakai.');
+      return;
+    }
+
     if (q.length < 3) { saran.hidden = true; return; }
     jamCari = setTimeout(async () => {
       const hasil = await cariAlamat(q);
@@ -421,14 +523,12 @@ halaman.dasbor = {
         : '<span class="badge grey">kosong</span>';
     };
     const barisJadwal = jadwal.map((j) => {
-      const petaUrl = j.lokasi ? `https://www.openstreetmap.org/?mlat=${j.lokasi.lat}&mlon=${j.lokasi.lng}#map=17/${j.lokasi.lat}/${j.lokasi.lng}` : '';
+      const petaBtnAda = Boolean(tautanRute(j.lokasi));
       const aksi = (j.sudahDikunjungi || !boleh) ? '' : `
         <button class="btn btn-sm btn-primary" data-ambil="${j.id}">Diambil</button>
         <button class="btn btn-sm" data-reschedule="${j.id}" title="Pindah ke hari kerja berikutnya">Reschedule</button>
         <button class="btn btn-sm" data-kosong="${j.id}">Kosong</button>`;
-      const petaBtn = petaUrl
-        ? `<a class="btn btn-sm btn-ghost jw-peta" href="${petaUrl}" target="_blank" rel="noopener" title="Buka lokasi di peta">peta</a>`
-        : '';
+      const petaBtn = petaBtnAda ? tombolRute(j.lokasi) : '';
       /* Donatur yang sudah dikunjungi tidak punya tombol aksi lagi. Kalau baris
          aksinya tetap digambar hanya untuk menampung satu tautan "peta", yang
          muncul adalah satu baris kosong melompong di tiap baris yang sudah
@@ -565,7 +665,7 @@ halaman.donatur = {
           <td><div class="row" style="gap:4px;flex-wrap:wrap">${(k.grup || []).map((g) => `<span class="badge blue">${H(g)}</span>`).join('') || '<span class="muted">—</span>'}</div></td>
           <td style="font-size:12px">${jadwalTxt}</td>
           <td class="actions-cell" style="white-space:nowrap;text-align:right">
-            ${k.lokasi ? `<a class="btn btn-ghost btn-sm" href="https://www.openstreetmap.org/?mlat=${k.lokasi.lat}&mlon=${k.lokasi.lng}#map=17/${k.lokasi.lat}/${k.lokasi.lng}" target="_blank" rel="noopener">peta</a>` : ''}
+            ${tombolRute(k.lokasi, { kelas: 'btn btn-ghost btn-sm' })}
             ${bolehUbah ? `<button data-jadwal="${k.id}" class="btn btn-ghost btn-sm">jadwal</button>
             <button data-ubahd="${k.id}" class="btn btn-ghost btn-sm">ubah</button>` : ''}
             ${bisa('donatur.hapus') ? `<button data-hapusd="${k.id}" class="btn btn-ghost btn-sm" style="color:var(--red)">hapus</button>` : ''}
@@ -979,7 +1079,7 @@ async function buka(kode) {
   window.scrollTo({ top: 0 });
   $('#isi').innerHTML = kepalaHalaman(h.judul, h.sub) + '<div id="isiHalaman"></div>';
   const tt = $('#tombolTema');
-  if (tt) tt.onclick = () => terapkanTema(!temaGelap());
+  if (tt) tt.onclick = () => { terapkanTema(!temaGelap()); segarTema(tt); };
   mulaiSibuk();
   try { await h.gambar($('#isiHalaman')); }
   finally { selesaiSibuk(); }
@@ -1011,13 +1111,28 @@ async function buka(kode) {
   const av = $('#uAvatar');
   if (s.akun && s.akun.foto) { av.style.backgroundImage = `url("${s.akun.foto}")`; av.style.backgroundSize = 'cover'; av.textContent = ''; }
   else av.textContent = (nama || 'F').trim().charAt(0).toUpperCase();
+  /* Lencana cakupan data. Dulu sebuah .badge polos di dalam .tn-right yang
+     lebarnya meregang penuh: teksnya menempel di kiri, tingginya cuma beberapa
+     piksel, dan saat bilah menu dikuncupkan jadi 78 px ia terpotong di tengah
+     kata. Sekarang ia baris berikon — ikonnya tetap terlihat saat dikuncupkan,
+     labelnya yang menyingkir, sama seperti butir menu lainnya. */
   const ll = $('#lencanaLingkup');
   if (ll) {
-    ll.textContent = s.lihatSemua ? 'Semua fundraiser' : 'Data Anda';
-    ll.title = s.lihatSemua ? 'Koordinator — melihat data seluruh fundraiser' : 'Hanya donatur dan catatan milik akun Anda';
-    ll.className = 'badge ' + (s.lihatSemua ? 'blue' : 'grey');
+    const semua = !!s.lihatSemua;
+    const label = (semua ? 'Semua fundraiser' : 'Data Anda')
+      + (s.upstash ? '' : ' · penyimpanan lokal');
+    const ikon = semua
+      ? '<circle cx="9" cy="8" r="3"/><path d="M3.5 18.5a5.5 5.5 0 0 1 11 0"/><path d="M16 5.4a3 3 0 0 1 0 5.2"/><path d="M17.5 13.6a5.5 5.5 0 0 1 3 4.9"/>'
+      : '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 19a6.5 6.5 0 0 1 13 0"/>';
+    ll.className = 'lingkup' + (semua ? ' lingkup-luas' : '');
+    ll.title = semua
+      ? 'Koordinator — melihat data seluruh fundraiser'
+      : 'Hanya donatur dan catatan milik akun Anda';
+    if (!s.upstash) ll.title += ' · data tersimpan di berkas lokal, bukan Upstash';
+    ll.innerHTML = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ikon}</svg>`
+      + `<span class="lingkup-teks">${H(label)}</span>`;
   }
-  if (!s.upstash) { const b = $('#lencanaLingkup'); if (b) { b.textContent += ' · penyimpanan lokal'; } }
 
   document.title = 'Fundraising — LAZ Digital';
   gambarMenu();
