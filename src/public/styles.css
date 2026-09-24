@@ -5030,3 +5030,161 @@ html[data-theme="dark"] .ai-info{ background:rgba(234,106,30,.12); border-color:
   .ai-sambut h2{ font-size:20px; }
   .ai-kartu-grid{ grid-template-columns:minmax(0,1fr); }
 }
+
+/* ================================================================
+   48. AI ASISTEN — alat di kotak chat: lampiran, suara, pemilih model
+   ================================================================
+   Nama model dulu tinggal di bilah kiri. Di sana ia terpotong jadi dua baris,
+   lenyap saat bilahnya dikuncupkan, dan berada sejauh mungkin dari tempat
+   orang benar-benar memikirkannya — yaitu saat hendak bertanya. Sekarang ia
+   tombol di kotak chat. */
+.ai-alat{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:34px; height:34px; flex-shrink:0; cursor:pointer;
+  border:1px solid var(--border); background:var(--surface); color:var(--text2);
+  border-radius:10px; transition:.14s;
+}
+.ai-alat:hover{ border-color:var(--accent); color:var(--accent-d); background:var(--accent-soft); }
+html[data-theme="dark"] .ai-alat:hover{ color:var(--accent2); background:rgba(234,106,30,.14); }
+/* Sedang merekam harus terlihat TANPA harus membaca apa pun: mikrofon yang
+   diam-diam masih menyala adalah masalah, bukan sekadar tampilan. */
+.ai-alat.merekam{
+  border-color:var(--red); color:#fff; background:var(--red);
+  animation:aiRekam 1.2s ease-in-out infinite;
+}
+@keyframes aiRekam{ 0%,100%{ box-shadow:0 0 0 0 rgba(229,72,77,.5) } 50%{ box-shadow:0 0 0 7px rgba(229,72,77,0) } }
+@media (prefers-reduced-motion:reduce){ .ai-alat.merekam{ animation:none } }
+
+.ai-chip-model{
+  display:inline-flex; align-items:center; gap:5px; min-width:0; cursor:pointer;
+  border:1px solid var(--border); background:var(--surface2); color:var(--text2);
+  border-radius:10px; padding:0 9px; height:34px; font-family:inherit;
+  font-size:12px; font-weight:600; transition:.14s;
+}
+.ai-chip-model:hover{ border-color:var(--accent); color:var(--accent-d); }
+.ai-chip-model.ada-peran{ border-color:var(--accent-soft2); background:var(--accent-soft); color:var(--accent-d); }
+html[data-theme="dark"] .ai-chip-model.ada-peran{ background:rgba(234,106,30,.14); color:var(--accent2); }
+#aiModelNama{ max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ---------- daftar pilihan model & peran ---------- */
+.ai-menu-bg{ position:fixed; inset:0; z-index:80; background:transparent; }
+.ai-menu{
+  position:fixed; width:296px; max-height:min(62vh,460px); overflow-y:auto;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  box-shadow:var(--shadow-lg); padding:6px;
+}
+.ai-menu-judul{
+  font-family:var(--head); font-weight:700; font-size:11px; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--muted); padding:9px 10px 5px;
+}
+.ai-menu-grup{ font-size:11px; font-weight:700; color:var(--text2); padding:7px 10px 3px; }
+.ai-menu-item{
+  display:block; width:100%; text-align:left; cursor:pointer;
+  border:1px solid transparent; background:transparent; border-radius:9px;
+  padding:7px 10px; font-family:inherit; transition:.13s;
+}
+.ai-menu-item:hover:not(:disabled){ background:var(--surface2); }
+.ai-menu-item.pilih{ background:var(--accent-soft); border-color:var(--accent-soft2); }
+.ai-menu-item:disabled{ opacity:.5; cursor:not-allowed; }
+.ai-menu-utama{ display:block; font-size:13px; font-weight:600; color:var(--text); }
+.ai-menu-item.pilih .ai-menu-utama{ color:var(--accent-d); }
+html[data-theme="dark"] .ai-menu-item.pilih .ai-menu-utama{ color:var(--accent2); }
+.ai-menu-ket{ display:block; font-size:11px; color:var(--muted); margin-top:1px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-menu-kosong{ padding:10px; font-size:12.5px; color:var(--muted); line-height:1.55; }
+
+/* ---------- berkas yang sedang dilampirkan ---------- */
+.ai-lampiran{ display:flex; flex-wrap:wrap; gap:6px; padding:2px 0 8px; }
+.ai-lp-chip{
+  display:flex; align-items:center; gap:8px; max-width:250px;
+  border:1px solid var(--border); background:var(--surface2); border-radius:10px;
+  padding:5px 7px;
+}
+.ai-lp-chip.memuat{ opacity:.65; }
+.ai-lp-chip.tenang{ background:var(--surface); max-width:100%; }
+.ai-lp-thumb{ width:30px; height:30px; object-fit:cover; border-radius:6px; flex-shrink:0; }
+.ai-lp-ext{
+  width:30px; height:30px; flex-shrink:0; border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--accent-soft); color:var(--accent-d);
+  font-size:9px; font-weight:800; letter-spacing:.02em;
+}
+html[data-theme="dark"] .ai-lp-ext{ background:rgba(234,106,30,.16); color:var(--accent2); }
+.ai-lp-teks{ min-width:0; display:flex; flex-direction:column; }
+.ai-lp-nama{ font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-lp-ket{ font-size:10.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-lp-x{
+  border:none; background:transparent; color:var(--muted); cursor:pointer;
+  font-size:17px; line-height:1; padding:0 2px; flex-shrink:0;
+}
+.ai-lp-x:hover{ color:var(--red); }
+
+/* ---------- lampiran di dalam gelembung pesan ---------- */
+.ai-lp-pesan{ display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; }
+.ai-lp-gambar{ margin:0; max-width:260px; }
+.ai-lp-gambar img{
+  display:block; max-width:100%; max-height:300px; border-radius:10px;
+  border:1px solid var(--border); cursor:zoom-in;
+}
+.ai-lp-kosong{
+  display:flex; align-items:center; justify-content:center; min-height:86px; padding:12px;
+  border:1px dashed var(--border); border-radius:10px;
+  font-size:11.5px; color:var(--muted); text-align:center;
+}
+.ai-lp-gambar figcaption{
+  font-size:10.5px; color:var(--muted); margin-top:4px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* Seret-lepas berkas ke mana saja di area percakapan. */
+.ai-wrap.seret .ai-utama{ outline:2px dashed var(--accent); outline-offset:-10px; }
+
+@media (max-width:640px){
+  /* Di layar sempit daftar pilihan melebar penuh dan menempel di bawah, jadi
+     tidak ada yang tertimpa tepi layar. */
+  .ai-menu{
+    left:8px !important; right:8px; width:auto;
+    bottom:8px !important; max-height:68vh;
+  }
+  .ai-menu-bg{ background:rgba(0,0,0,.35); }
+  #aiModelNama{ max-width:88px; }
+  .ai-lp-chip{ max-width:100%; }
+  .ai-lp-gambar{ max-width:100%; }
+}
+
+/* ================================================================
+   49. AI ASISTEN — daftar percakapan bisa disembunyikan, chip model lebih kecil
+   ================================================================
+   Di layar 1200-an px, bilah menu 240 px + daftar percakapan 268 px menyisakan
+   ruang baca yang sempit — dan percakapan panjang justru yang paling butuh
+   lebar. Daftarnya sekarang bisa ditutup, dan pilihannya diingat. */
+.ai-rail-kepala{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.ai-rail-judul{
+  font-family:var(--head); font-weight:700; font-size:11px; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--muted);
+}
+.ai-alat-kecil{ width:28px; height:28px; border-radius:8px; }
+
+.ai-wrap.rail-tutup{ grid-template-columns:0 minmax(0,1fr); }
+.ai-wrap.rail-tutup .ai-rail{
+  /* visibility, bukan display:none — supaya isinya tetap ada di pohon dokumen
+     dan pembaca layar bisa menemukannya lagi setelah dibuka, tanpa digambar
+     ulang dari nol. */
+  width:0; min-width:0; overflow:hidden; visibility:hidden; border-right:none;
+}
+/* Tombol pemanggilnya muncul di kepala percakapan saat daftarnya tersembunyi —
+   satu-satunya jalan kembali, jadi ia tidak boleh ikut hilang. */
+.ai-wrap.rail-tutup .ai-rail-tombol{ display:inline-flex; }
+
+/* Nama model: penanda, bukan judul. Sebelumnya setebal dan sebesar teks
+   percakapan sehingga ikut menarik mata setiap kali orang membaca jawaban. */
+.ai-chip-model{ font-size:11px; font-weight:600; height:32px; padding:0 8px; gap:4px; color:var(--muted); }
+.ai-chip-model:hover{ color:var(--accent-d); }
+#aiModelNama{ max-width:118px; }
+@media (max-width:640px){ #aiModelNama{ max-width:76px; } }
+
+/* Tombol pemanggil daftar memakai kelas .tn-icon, dan .tn-icon dirancang untuk
+   bilah menu kiri: lebarnya 100%. Di kepala percakapan — yang sebuah kotak
+   flex — ia memakan seluruh baris dan mendorong judul percakapan keluar
+   sampai tidak terlihat sama sekali. Ukurannya dipatok di sini. */
+.ai-rail-tombol{ flex:0 0 auto; width:34px; height:34px; padding:0; }

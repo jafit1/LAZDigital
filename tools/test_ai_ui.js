@@ -49,6 +49,14 @@ const SESI_ISI = {
   pesan: [
     { id: 'm1', peran: 'user', isi: 'Ringkas penghimpunan bulan ini', olehNama: 'Ahmad Maruf', waktu: new Date().toISOString() },
     { id: 'm2', peran: 'assistant', isi: JAWAB_UTUH, model: 'model-uji', penyedia: 'Tiruan', terpotong: false, waktu: new Date().toISOString() },
+    {
+      id: 'm3', peran: 'user', isi: 'Ini berkasnya', olehNama: 'Sherli', waktu: new Date().toISOString(),
+      lampiran: [
+        { id: 'lp1', nama: 'kwitansi.jpg', mime: 'image/jpeg', jenis: 'gambar', ukuran: 51200, adaBerkas: true, kedaluwarsa: '' },
+        { id: 'lp2', nama: 'rekap.xlsx', mime: 'application/vnd.ms-excel', jenis: 'teks', ukuran: 9000, panjangTeks: 1234, halaman: 0, terpotong: false, adaBerkas: false },
+        { id: 'lp3', nama: 'lama.png', mime: 'image/png', jenis: 'gambar', ukuran: 4000, adaBerkas: false, kedaluwarsa: '' },
+      ],
+    },
   ],
 };
 
@@ -62,6 +70,12 @@ const JAWABAN = {
     adaPenyedia: true,
     persona: [{ id: 'pr1', judul: 'Penulis Surat', jenis: 'prompt', ikon: '\u{1F4DD}', isi: 'Tulis surat resmi.' }],
     pengetahuan: { jumlah: 2, terpotong: false },
+    model: [
+      { penyediaId: 'pv1', penyediaNama: 'Tiruan', bentuk: 'openai', model: 'model-uji', utama: true, dukungGambar: true, siap: true, baku: true },
+      { penyediaId: 'pv1', penyediaNama: 'Tiruan', bentuk: 'openai', model: 'model-cepat', utama: false, dukungGambar: true, siap: true, baku: false },
+      { penyediaId: 'pv2', penyediaNama: 'Cadangan', bentuk: 'anthropic', model: 'claude-uji', utama: true, dukungGambar: false, siap: false, baku: false },
+    ],
+    lampiran: { simpanHari: 30, maksPerPesan: 4, gambarBoleh: ['image/jpeg', 'image/png'] },
     upstash: true,
   },
   'sesi.daftar': {
@@ -83,14 +97,15 @@ const JAWABAN = {
   'prompt.daftar': {
     baris: [{ id: 'pr1', judul: 'Penulis Surat', isi: 'Tulis surat resmi.', ikon: '\u{1F4DD}', aktif: true, urutan: 10, olehNama: 'Ahmad', diubah: new Date().toISOString() }],
   },
+  'lampiran.ambil': { ada: true, mime: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' },
   'penyedia.daftar': {
     /* Yang dikirim server memang SUDAH disamarkan — kalau suatu saat kunci
        aslinya ikut terkirim, uji "kunci tidak ada di DOM" di bawah harus
        gagal, jadi di sini sengaja ditaruh juga kunci palsu yang utuh untuk
        memastikan tampilan tidak menampilkan medan tak terduga. */
     baris: [
-      { id: 'pv1', nama: 'Tiruan', bentuk: 'openai', url: 'https://contoh.test/v1', model: 'model-uji', suhu: 0.4, maksToken: 2048, catatan: 'utama', kunciTerpasang: true, kunciEkor: '9931' },
-      { id: 'pv2', nama: 'Cadangan', bentuk: 'anthropic', url: 'https://api.anthropic.com', model: 'claude-uji', suhu: 0.3, maksToken: 1024, catatan: '', kunciTerpasang: false, kunciEkor: '' },
+      { id: 'pv1', nama: 'Tiruan', bentuk: 'openai', url: 'https://contoh.test/v1', model: 'model-uji', modelLain: ['model-cepat'], dukungGambar: true, suhu: 0.4, maksToken: 2048, catatan: 'utama', kunciTerpasang: true, kunciEkor: '9931' },
+      { id: 'pv2', nama: 'Cadangan', bentuk: 'anthropic', url: 'https://api.anthropic.com', model: 'claude-uji', modelLain: [], dukungGambar: false, suhu: 0.3, maksToken: 1024, catatan: '', kunciTerpasang: false, kunciEkor: '' },
     ],
     aktif: 'pv1',
     bentuk: {
@@ -122,7 +137,9 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     for await (const c of req) body += c;
     let t = '';
-    try { t = JSON.parse(body).tindakan; } catch (_) {}
+    let badan = {};
+    try { badan = JSON.parse(body); t = badan.tindakan; } catch (_) {}
+    if (t === 'chat.alir') server.badanTerakhir = badan;
     if (t !== 'chat.alir') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, ...(JAWABAN[t] || {}) }));
@@ -179,16 +196,18 @@ const server = http.createServer(async (req, res) => {
   cek('tujuh menu tergambar untuk superadmin', menu.length === 7, menu);
   cek('menu inti ada',
     ['Percakapan', 'Riwayat Bersama', 'Pengetahuan', 'Persona', 'Data yang Diketahui', 'Penggunaan', 'Provider AI'].every((m) => menu.includes(m)), menu);
-  const lenc = await p.$eval('#lencanaLingkup', (e) => ({ teks: e.textContent, judul: e.title }));
-  cek('lencana menyebut model aktif', /model-uji/.test(lenc.teks), lenc);
-  cek('nama provider ada di title', /Tiruan/.test(lenc.judul), lenc.judul);
+  /* Nama model TIDAK boleh lagi ada di bilah kiri — di situ ia terpotong saat
+     bilahnya lebar dan hilang saat dikuncupkan. */
+  const lencTampil = await p.$eval('#lencanaLingkup', (e) => getComputedStyle(e).display !== 'none' && e.textContent.trim());
+  cek('bilah kiri tidak lagi menampilkan nama model', !lencTampil, lencTampil);
 
   console.log('\n=== B. LAYAR SAMBUTAN & RAIL ===');
   const awal = await p.evaluate(() => ({
     sambut: !!document.querySelector('.ai-sambut'),
     contoh: document.querySelectorAll('.ai-contoh-item').length,
     railItem: document.querySelectorAll('.ai-rail-item').length,
-    persona: !!document.querySelector('#aiPersona'),
+    chipModel: (document.querySelector('#aiModelNama') || {}).textContent,
+    tombolLampir: !!document.querySelector('#aiLampirTombol'),
     komposer: !!document.querySelector('#aiIsian'),
     // Halaman percakapan memakai seluruh tinggi layar, bukan tata letak biasa.
     penuh: document.getElementById('appView').classList.contains('ai-penuh'),
@@ -197,7 +216,17 @@ const server = http.createServer(async (req, res) => {
   cek('layar sambutan tampil saat belum ada percakapan', awal.sambut);
   cek('empat contoh pertanyaan', awal.contoh === 4, awal.contoh);
   cek('daftar percakapan bersama terisi', awal.railItem === 2, awal.railItem);
-  cek('pemilih peran/persona ada', awal.persona);
+  cek('nama model tampil sebagai tombol di kotak chat', awal.chipModel === 'model-uji', awal.chipModel);
+  /* Nama model itu penanda, bukan judul: ia tidak boleh setara ukurannya
+     dengan teks percakapan (14px), atau ia ikut menarik mata terus-menerus. */
+  const ukuranChip = await p.evaluate(() => {
+    const c = getComputedStyle(document.getElementById('aiModelTombol'));
+    const isi = getComputedStyle(document.querySelector('.ai-komposer textarea'));
+    return { chip: parseFloat(c.fontSize), isi: parseFloat(isi.fontSize) };
+  });
+  cek('nama model lebih kecil daripada teks pertanyaan',
+    ukuranChip.chip <= 11.5 && ukuranChip.chip < ukuranChip.isi - 2, ukuranChip);
+  cek('tombol lampirkan berkas ada', awal.tombolLampir);
   cek('halaman percakapan memakai tinggi penuh', awal.penuh && awal.gulirHalaman, awal);
 
   await p.click('.ai-contoh-item');
@@ -358,7 +387,214 @@ const server = http.createServer(async (req, res) => {
   await p.keyboard.press('Escape');
   await p.waitForTimeout(200);
 
-  console.log('\n=== H. LAYAR HP ===');
+  console.log('\n=== H. MENYEMBUNYIKAN DAFTAR PERCAKAPAN ===');
+  await bukaHal('#chat', '#aiRailTutup');
+  const lebarSebelum = await p.$eval('.ai-utama', (e) => Math.round(e.getBoundingClientRect().width));
+  await p.click('#aiRailTutup');
+  await p.waitForTimeout(350);
+  const tutup = await p.evaluate(() => {
+    const rail = document.querySelector('.ai-rail');
+    return {
+      lebarUtama: Math.round(document.querySelector('.ai-utama').getBoundingClientRect().width),
+      railLebar: Math.round(rail.getBoundingClientRect().width),
+      /* Tombol pemanggilnya HARUS muncul — ia satu-satunya jalan kembali. */
+      tombolKembali: getComputedStyle(document.getElementById('aiRailTombol')).display !== 'none',
+      /* .tn-icon dibuat untuk bilah menu kiri dan lebarnya 100%. Kalau ia
+         terbawa apa adanya ke kepala percakapan, tombolnya melebar sebaris
+         penuh dan judul percakapan terdorong sampai hilang. */
+      lebarTombol: Math.round(document.getElementById('aiRailTombol').getBoundingClientRect().width),
+      judulTerbaca: document.getElementById('aiJudul').getBoundingClientRect().width > 60,
+      /* Isinya tetap ada di pohon dokumen, hanya disembunyikan. */
+      isiMasihAda: rail.querySelectorAll('.ai-rail-item').length,
+      ingat: localStorage.getItem('ai_rail_tutup'),
+      luber: document.documentElement.scrollWidth <= window.innerWidth + 2,
+    };
+  });
+  cek('daftar percakapan benar-benar menyempit jadi nol', tutup.railLebar === 0, tutup.railLebar);
+  cek('ruang percakapan jadi lebih lebar', tutup.lebarUtama > lebarSebelum + 200, { sebelum: lebarSebelum, sesudah: tutup.lebarUtama });
+  cek('tombol pemanggil daftar muncul di kepala', tutup.tombolKembali, tutup);
+  cek('tombol itu kotak kecil, bukan melebar menutupi judul',
+    tutup.lebarTombol <= 40 && tutup.judulTerbaca, tutup);
+  cek('isi daftarnya tidak dibuang, hanya disembunyikan', tutup.isiMasihAda === 2, tutup.isiMasihAda);
+  cek('pilihan menutup diingat', tutup.ingat === 'true', tutup.ingat);
+  cek('halaman tidak meluber setelah daftar ditutup', tutup.luber, tutup);
+  await p.screenshot({ path: path.join(LUAR, 'ai-rail-tutup.png') });
+
+  /* Pilihan yang diingat harus masih berlaku setelah halaman dimuat ulang —
+     itulah bedanya "diingat" dengan "kebetulan masih begitu". */
+  await p.reload();
+  await p.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
+  await p.waitForTimeout(500);
+  cek('daftar tetap tersembunyi setelah halaman dimuat ulang',
+    await p.$eval('.ai-rail', (e) => Math.round(e.getBoundingClientRect().width)) === 0);
+
+  await p.click('#aiRailTombol');
+  await p.waitForTimeout(350);
+  const buka = await p.evaluate(() => ({
+    railLebar: Math.round(document.querySelector('.ai-rail').getBoundingClientRect().width),
+    ingat: localStorage.getItem('ai_rail_tutup'),
+  }));
+  cek('daftar bisa dipanggil kembali', buka.railLebar > 200, buka);
+  cek('pilihan membuka juga diingat', buka.ingat === 'false', buka.ingat);
+
+  console.log('\n=== H2. PEMILIH MODEL DI KOTAK CHAT ===');
+  await bukaHal('#chat', '#aiModelTombol');
+  await p.click('#aiModelTombol');
+  await p.waitForTimeout(250);
+  const daftarModel = await p.evaluate(() => {
+    const m = document.getElementById('aiMenu');
+    const r = m.getBoundingClientRect();
+    return {
+      tampil: !document.getElementById('aiMenuBg').hidden,
+      model: Array.from(m.querySelectorAll('[data-model]')).map((x) => x.querySelector('.ai-menu-utama').textContent),
+      mati: Array.from(m.querySelectorAll('[data-model]')).filter((x) => x.disabled).length,
+      grup: Array.from(m.querySelectorAll('.ai-menu-grup')).map((x) => x.textContent),
+      persona: m.querySelectorAll('[data-persona]').length,
+      diLayar: r.top >= 0 && r.bottom <= window.innerHeight + 1 && r.left >= 0 && r.right <= window.innerWidth + 1,
+    };
+  });
+  cek('daftar model terbuka', daftarModel.tampil);
+  cek('semua model tersedia terdaftar',
+    daftarModel.model.join(',') === 'model-uji,model-cepat,claude-uji', daftarModel.model);
+  cek('model tanpa kunci API tidak bisa dipilih', daftarModel.mati === 1, daftarModel.mati);
+  /* Persis dua kepala kelompok: satu per provider. Kalau "Peran" ikut punya
+     kepala kelompok sendiri, judul bagiannya tergambar dua kali berturut-turut. */
+  cek('dikelompokkan per provider, tanpa kepala ganda',
+    daftarModel.grup.join(',') === 'Tiruan,Cadangan', daftarModel.grup);
+  cek('peran ikut di daftar yang sama', daftarModel.persona === 2, daftarModel.persona);
+  cek('daftarnya tidak terpotong tepi layar', daftarModel.diLayar, menu);
+  await p.screenshot({ path: path.join(LUAR, 'ai-model.png') });
+
+  await p.click('[data-model="model-cepat"]');
+  await p.waitForTimeout(250);
+  cek('model yang dipilih tampil di tombol',
+    (await p.$eval('#aiModelNama', (e) => e.textContent)) === 'model-cepat');
+  cek('daftar tertutup setelah memilih', await p.$eval('#aiMenuBg', (e) => e.hidden));
+
+  await p.click('#aiModelTombol');
+  await p.waitForTimeout(200);
+  await p.click('[data-persona="pr1"]');
+  await p.waitForTimeout(200);
+  cek('memilih peran menandai tombolnya',
+    await p.$eval('#aiModelTombol', (e) => e.classList.contains('ada-peran')));
+
+  console.log('\n=== I. LAMPIRAN BERKAS ===');
+  const tmp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'ujilampiran-'));
+  const berkasTxt = path.join(tmp, 'catatan.txt');
+  fs.writeFileSync(berkasTxt, 'Rekap penghimpunan Agustus: Rp 750.000 dari dua transaksi.');
+  const berkasCsv = path.join(tmp, 'rekap.csv');
+  fs.writeFileSync(berkasCsv, 'tanggal,jumlah\n2026-08-01,500000\n2026-08-11,250000');
+  const berkasPng = path.join(tmp, 'kwitansi.png');
+  fs.writeFileSync(berkasPng, Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAJklEQVR42u3OMQEAAAgDoC251a3g'
+    + 'LwEoJb1JCgUCgUAgEAgEAsE7CxKCAAGmcLQPAAAAAElFTkSuQmCC', 'base64'));
+  const berkasXlsx = path.join(tmp, 'buku.xlsx');
+  require('xlsx').writeFile(
+    (() => { const w = require('xlsx').utils.book_new();
+      require('xlsx').utils.book_append_sheet(w, require('xlsx').utils.aoa_to_sheet(
+        [['Nama', 'Jumlah'], ['Zakat', 500000], ['Infak', 250000]]), 'Rekap'); return w; })(),
+    berkasXlsx);
+  const berkasTolak = path.join(tmp, 'program.exe');
+  fs.writeFileSync(berkasTolak, 'MZ');
+
+  await p.setInputFiles('#aiBerkas', [berkasTxt, berkasCsv, berkasPng]);
+  await p.waitForFunction(() => {
+    const c = document.querySelectorAll('.ai-lampiran .ai-lp-chip');
+    return c.length === 3 && !document.querySelector('.ai-lp-chip.memuat');
+  }, { timeout: 15000 });
+  const chip = await p.evaluate(() => ({
+    jumlah: document.querySelectorAll('.ai-lampiran .ai-lp-chip').length,
+    thumb: document.querySelectorAll('.ai-lampiran .ai-lp-thumb').length,
+    ext: Array.from(document.querySelectorAll('.ai-lampiran .ai-lp-ext')).map((x) => x.textContent),
+    ket: Array.from(document.querySelectorAll('.ai-lampiran .ai-lp-ket')).map((x) => x.textContent),
+    buang: document.querySelectorAll('.ai-lampiran .ai-lp-x').length,
+  }));
+  cek('tiga berkas terbaca', chip.jumlah === 3, chip);
+  cek('gambar tampil sebagai pratinjau kecil', chip.thumb === 1, chip.thumb);
+  cek('berkas teks ditandai jenisnya', chip.ext.includes('TXT') && chip.ext.includes('CSV'), chip.ext);
+  cek('jumlah huruf terbaca ditampilkan', chip.ket.some((k) => /huruf/.test(k)), chip.ket);
+  cek('tiap berkas bisa dibuang', chip.buang === 3);
+  await p.screenshot({ path: path.join(LUAR, 'ai-lampiran.png') });
+
+  /* Pembaca Excel adalah pustaka 880 KB. Ia TIDAK boleh ikut terunduh saat
+     halaman dibuka — hanya saat ada yang benar-benar melampirkan Excel. */
+  const sheetSebelum = await p.evaluate(() => Boolean(window.XLSX));
+  await p.setInputFiles('#aiBerkas', [berkasXlsx]);
+  await p.waitForFunction(() => document.querySelectorAll('.ai-lampiran .ai-lp-chip').length === 4
+    && !document.querySelector('.ai-lp-chip.memuat'), { timeout: 20000 });
+  const sheetSesudah = await p.evaluate(() => Boolean(window.XLSX));
+  cek('pustaka Excel belum diunduh sebelum dibutuhkan', sheetSebelum === false);
+  cek('pustaka Excel diunduh saat Excel dilampirkan', sheetSesudah === true);
+
+  /* Batas jumlah berkas diuji SEBELUM jenis yang tidak didukung, karena
+     batas itulah yang lebih dulu berlaku — kalau dibalik, ujinya sebenarnya
+     mengukur batas jumlah sambil mengira sedang mengukur jenis berkas. */
+  await p.setInputFiles('#aiBerkas', [berkasTxt]);
+  await p.waitForTimeout(500);
+  const penuh = await p.evaluate(() => ({
+    toast: (document.getElementById('toast') || {}).textContent || '',
+    jumlah: document.querySelectorAll('.ai-lampiran .ai-lp-chip').length,
+  }));
+  cek('lebih dari batas berkas ditolak di browser',
+    /Maksimal 4/i.test(penuh.toast) && penuh.jumlah === 4, penuh);
+
+  await p.click('.ai-lampiran .ai-lp-x');
+  await p.waitForTimeout(200);
+  cek('membuang satu berkas menyisakan yang lain',
+    (await p.$$('.ai-lampiran .ai-lp-chip')).length === 3);
+
+  await p.setInputFiles('#aiBerkas', [berkasTolak]);
+  await p.waitForTimeout(600);
+  const tolakan = await p.evaluate(() => ({
+    toast: (document.getElementById('toast') || {}).textContent || '',
+    jumlah: document.querySelectorAll('.ai-lampiran .ai-lp-chip').length,
+  }));
+  cek('jenis berkas tak didukung ditolak dengan pesan jelas',
+    /belum didukung/i.test(tolakan.toast) && tolakan.jumlah === 3, tolakan);
+
+  await p.fill('#aiIsian', 'Tolong baca berkas ini');
+  await p.click('#aiKirim');
+  await p.waitForFunction(() => !document.getElementById('aiKirim').disabled, { timeout: 20000 });
+  await p.waitForTimeout(400);
+  const dikirim = await p.evaluate(() => ({
+    sisa: document.querySelectorAll('.ai-lampiran .ai-lp-chip').length,
+    kotakSembunyi: document.getElementById('aiLampiran').hidden,
+  }));
+  cek('kotak lampiran dikosongkan setelah terkirim', dikirim.sisa === 0 && dikirim.kotakSembunyi, dikirim);
+
+  const kirimanServer = server.badanTerakhir || {};
+  cek('lampiran ikut terkirim ke server', (kirimanServer.lampiran || []).length === 3, (kirimanServer.lampiran || []).length);
+  cek('gambar dikirim sebagai data, berkas teks sebagai teks',
+    kirimanServer.lampiran.some((l) => l.jenis === 'gambar' && l.data && !l.teks)
+    && kirimanServer.lampiran.some((l) => l.jenis === 'teks' && l.teks && !l.data), kirimanServer.lampiran.map((l) => l.jenis));
+  cek('gambar dikecilkan jadi JPEG sebelum dikirim',
+    kirimanServer.lampiran.find((l) => l.jenis === 'gambar').mime === 'image/jpeg');
+  cek('model & peran pilihan ikut dikirim',
+    kirimanServer.model === 'model-cepat' && kirimanServer.personaId === 'pr1', kirimanServer.model);
+
+  console.log('\n=== J. LAMPIRAN LAMA DI RIWAYAT ===');
+  const lp = await p.evaluate(() => ({
+    gambar: document.querySelectorAll('.ai-lp-gambar').length,
+    berkas: document.querySelectorAll('.ai-lp-pesan .ai-lp-chip').length,
+    termuat: document.querySelectorAll('.ai-lp-gambar img').length,
+    kedaluwarsa: Array.from(document.querySelectorAll('.ai-lp-kosong')).map((x) => x.textContent),
+  }));
+  cek('gambar lampiran lama digambar di riwayat', lp.gambar === 2, lp);
+  cek('gambar yang masih ada berhasil dimuat', lp.termuat === 1, lp.termuat);
+  cek('gambar yang sudah lewat umur dikatakan, bukan kotak rusak',
+    lp.kedaluwarsa.some((t) => /masa simpan/i.test(t)), lp.kedaluwarsa);
+  cek('berkas non-gambar tampil sebagai kartu berkas', lp.berkas === 1, lp.berkas);
+
+  console.log('\n=== K. TOMBOL SUARA ===');
+  const suara = await p.evaluate(() => {
+    const b = document.getElementById('aiSuara');
+    return { ada: !!b, tampil: b && !b.hidden, dukung: !!(window.SpeechRecognition || window.webkitSpeechRecognition) };
+  });
+  /* Chromium uji coba tidak punya mesin pengenalan suara. Yang diuji justru
+     itu: tombolnya HARUS hilang, bukan tampil lalu diam saat ditekan. */
+  cek('tombol suara mengikuti dukungan browser', suara.ada && suara.tampil === suara.dukung, suara);
+
+  console.log('\n=== L. LAYAR HP ===');
   const ctxHp = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const p2 = await ctxHp.newPage();
   p2.on('pageerror', (e) => galat.push('HP: ' + String(e)));
@@ -434,7 +670,7 @@ const server = http.createServer(async (req, res) => {
   await p2.screenshot({ path: path.join(LUAR, 'ai-hp-jawaban.png'), fullPage: false });
   await ctxHp.close();
 
-  console.log('\n=== I. TIDAK ADA GALAT JS ===');
+  console.log('\n=== M. TIDAK ADA GALAT JS ===');
   cek('tidak ada galat JavaScript sepanjang uji', galat.length === 0, galat.slice(0, 4));
 
   await b.close();

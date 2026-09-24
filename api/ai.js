@@ -17,6 +17,7 @@ const percakapan = require('../lib/ai/percakapan');
 const { pengetahuan, prompt, gabungPengetahuan } = require('../lib/ai/pustaka');
 const ringkas = require('../lib/ai/ringkas');
 const pakai = require('../lib/ai/pakai');
+const lampiranLib = require('../lib/ai/lampiran');
 const alir = require('../lib/ai/alir');
 
 const { sukses, gagal, bacaBody, GalatAplikasi } = util;
@@ -35,8 +36,17 @@ tindakan['ai.status'] = { async jalankan({ pengguna }) {
     pengguna: { id: pengguna.id, nama: pengguna.nama, peran: pengguna.peran },
     izin: izinTampil(pengguna),
     superadmin: sesi.bolehPenyedia(pengguna),
-    penyediaAktif: p ? { id: p.id, nama: p.nama, model: p.model, bentuk: p.bentuk } : null,
+    penyediaAktif: p ? { id: p.id, nama: p.nama, model: p.model, bentuk: p.bentuk, dukungGambar: p.dukungGambar !== false } : null,
     adaPenyedia: Boolean(p),
+    /* Daftar model yang boleh dipilih langsung dari kotak chat. Aman dikirim ke
+       siapa pun yang boleh memakai modul ini: isinya hanya nama provider dan
+       nama model, tidak ada alamat maupun kunci. */
+    model: await penyediaLib.daftarModel(),
+    lampiran: {
+      simpanHari: lampiranLib.SIMPAN_HARI,
+      maksPerPesan: lampiranLib.MAKS_PER_PESAN,
+      gambarBoleh: lampiranLib.GAMBAR_BOLEH,
+    },
     persona: (await prompt.semua()).filter((x) => x.aktif !== false)
       .map((x) => ({ id: x.id, judul: x.judul, jenis: x.jenis, ikon: x.ikon, isi: x.isi })),
     pengetahuan: { jumlah: tahu.jumlah, terpotong: tahu.terpotong },
@@ -91,6 +101,18 @@ tindakan['sesi.ulangi'] = { izin: 'sesi.kirim', async jalankan({ data }) {
    Medannya dibaca dari BADAN, bukan dari data, karena bentuk permintaannya
    memang berbeda: {tindakan, pesan, sesiId, personaId}. */
 tindakan['chat.alir'] = { izin: 'sesi.kirim', alir: true };
+
+/* Berkas mentah dibuka lewat pintu yang sama dengan percakapan, bukan lewat
+   alamat statis yang bisa ditebak. Percakapan memang dipakai bersama, jadi
+   izinnya pun "boleh melihat percakapan" — tetapi tetap harus punya izin itu:
+   id lampiran tidak boleh jadi tautan yang berlaku untuk siapa saja. */
+tindakan['lampiran.ambil'] = { izin: 'sesi.lihat', async jalankan({ data }) {
+  const isi = await lampiranLib.ambilData(String(data.id || ''));
+  if (!isi) {
+    return { ada: false, pesan: `Berkas sudah lewat masa simpan ${lampiranLib.SIMPAN_HARI} hari.` };
+  }
+  return { ada: true, mime: isi.mime, data: isi.data };
+} };
 
 // ================================================================ PENGETAHUAN & PROMPT
 tindakan['pengetahuan.daftar'] = { izin: 'pengetahuan.lihat', async jalankan() {
@@ -198,7 +220,13 @@ module.exports = async function penangan(req, res) {
     /* Satu-satunya tindakan yang tidak membalas JSON. Ia sengaja tetap melewati
        kedua pagar di atas seperti tindakan lain — bukan jalur pintas sendiri —
        supaya tidak ada satu pun pintu masuk yang luput diperiksa. */
-    if (pintu.alir) return alir.alirkan(req, res, { badan, pengguna });
+    /* "return await", BUKAN "return". Di dalam fungsi async, `return janji`
+       menyerahkan janji itu ke pemanggil TANPA menunggunya di sini — sehingga
+       kalau ia ditolak, penolakannya terjadi setelah try/catch ini selesai dan
+       lolos jadi unhandled rejection: permintaannya menggantung tanpa balasan
+       apa pun, dan pengguna cuma melihat halaman diam. Satu kata `await` yang
+       memindahkan galatnya kembali ke sini. */
+    if (pintu.alir) return await alir.alirkan(req, res, { badan, pengguna });
 
     const hasil = await pintu.jalankan({ data, pengguna, req, res });
     return sukses(res, hasil || {});

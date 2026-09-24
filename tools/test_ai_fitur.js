@@ -451,7 +451,7 @@ async function aliran(body, pengguna, { potongSetelahToken } = {}) {
   cek('satu pesan raksasa dipangkas, bukan menggagalkan sesi',
     dibaca.pesan[0].isi.length === percakapan.MAKS_ISI, dibaca.pesan[0].isi.length);
 
-  const potongRiwayat = aiStream.riwayatUntukModel(
+  const potongRiwayat = await aiStream.riwayatUntukModel(
     Array.from({ length: 60 }, (_, i) => ({ peran: i % 2 ? 'assistant' : 'user', isi: 'pesan ' + i })),
   );
   cek('riwayat ke model dibatasi', potongRiwayat.length <= aiStream.MAKS_RIWAYAT, potongRiwayat.length);
@@ -491,6 +491,118 @@ async function aliran(body, pengguna, { potongSetelahToken } = {}) {
     otakRusak.rincian.data === false && otakRusak.teks.includes('Asisten Lazismu'), otakRusak.rincian);
 
   rpc._internal.muat = aslinyaMuat;
+
+  console.log('\n=== O. LAMPIRAN BERKAS ===');
+  const lampiranLib = require('../lib/ai/lampiran.js');
+  const GAMBAR_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  const rapi2 = await serverTiruan({ token: ['Sudah ', 'saya ', 'baca.'] });
+  await penyediaLib.simpan({ id: pv.id, url: rapi2.url, dukungGambar: true }, SUPER);
+
+  const rL = await aliran({
+    pesan: 'Tolong baca dua berkas ini.',
+    lampiran: [
+      { nama: 'kwitansi.jpg', mime: 'image/jpeg', ukuran: 1234, data: GAMBAR_1PX },
+      { nama: 'rekap.csv', mime: 'text/csv', ukuran: 90, teks: 'tanggal,jumlah\n2026-08-01,500000' },
+    ],
+  }, ANI);
+  const mulaiL = bingkaiDari(rL).find((x) => x.t === 'mulai');
+  cek('lampiran dilaporkan balik ke tampilan', (mulaiL.lampiran || []).length === 2, mulaiL.lampiran);
+  cek('satu gambar dihitung ikut dikirim ke model', mulaiL.otak.gambar === 1, mulaiL.otak);
+
+  const sesiL = await percakapan.ambil(mulaiL.sesiId);
+  const pesanL = sesiL.pesan.find((x) => x.peran === 'user');
+  cek('metadata lampiran tersimpan di percakapan', (pesanL.lampiran || []).length === 2, pesanL.lampiran);
+  /* Inilah inti janjinya: yang besar tidak ikut masuk ke dokumen percakapan,
+     yang kecil dan bisa dicari ikut. */
+  cek('data gambar TIDAK ikut masuk dokumen percakapan',
+    !JSON.stringify(sesiL).includes(GAMBAR_1PX.slice(0, 40)));
+  cek('hasil bacaan berkas teks IKUT tersimpan',
+    pesanL.lampiran.some((l) => String(l.teks).includes('500000')), pesanL.lampiran.map((l) => l.nama));
+
+  const badanL = rapi2.srv.terakhirBadan;
+  const isiOrang = badanL.messages.filter((m) => m.role === 'user').pop().content;
+  cek('gambar dikirim ke model sebagai image_url',
+    Array.isArray(isiOrang) && isiOrang.some((x) => x.type === 'image_url'), typeof isiOrang);
+  cek('isi berkas teks disambung ke pertanyaannya',
+    JSON.stringify(isiOrang).includes('500000'));
+
+  /* Berkas yang isinya bisa dicari lagi bertahun kemudian — itu yang diminta:
+     "simpan dalam batas waktu aja tapi kalau ditanya nanti bisa dicari lagi". */
+  const ketemu = await jalan('sesi.daftar', { cari: '500000' }, BUDI);
+  cek('isi berkas bisa dicari lewat pencarian percakapan',
+    ketemu.baris.some((x) => x.id === mulaiL.sesiId), ketemu.baris.length);
+  const ketemuNama = await jalan('sesi.daftar', { cari: 'kwitansi' }, BUDI);
+  cek('nama berkas juga bisa dicari', ketemuNama.baris.some((x) => x.id === mulaiL.sesiId));
+
+  /* Umur berkas mentah dipasang pada KUNCINYA. Tanpa itu, tidak ada yang
+     menghapusnya dan basis data tumbuh tanpa batas — persis yang dikhawatirkan. */
+  const idGambar = pesanL.lampiran.find((l) => l.jenis === 'gambar').id;
+  cek('berkas mentah masih bisa diambil', Boolean(await lampiranLib.ambilData(idGambar)));
+  cek('berkas mentah disimpan di kunci terpisah, bukan di sesi',
+    lampiranLib.KUNCI(idGambar).startsWith('lampiran:'));
+  const bacaLampiran = await lewatPintu('lampiran.ambil', { id: idGambar }, ANI);
+  cek('lampiran hanya terbuka lewat pintu berizin', bacaLampiran.res.statusCode === 200 && bacaLampiran.tubuh.ada === true);
+  cek('lampiran ditolak tanpa sesi', (await lewatPintu('lampiran.ambil', { id: idGambar }, null)).res.statusCode === 401);
+  cek('lampiran yang sudah hilang dijawab baik-baik, bukan galat',
+    (await jalan('lampiran.ambil', { id: 'lp_tidakada' }, ANI)).ada === false);
+
+  cek('lebih dari batas berkas ditolak',
+    /Maksimal/i.test((await tolak('chat.alir', {}, ANI)) || '')
+    || await (async () => {
+      try {
+        await lampiranLib.simpanBanyak(Array.from({ length: 9 }, () => ({ nama: 'a.txt', mime: 'text/plain', teks: 'x' })), ANI);
+        return false;
+      } catch (e) { return /Maksimal/i.test(e.message); }
+    })());
+  cek('gambar kelewat besar ditolak sebelum tersimpan', await (async () => {
+    try {
+      await lampiranLib.simpanBanyak([{ nama: 'besar.jpg', mime: 'image/jpeg', data: 'a'.repeat(lampiranLib.MAKS_DATA + 10) }], ANI);
+      return false;
+    } catch (e) { return /terlalu besar/i.test(e.message); }
+  })());
+  cek('nama berkas dibersihkan dari jalur folder',
+    lampiranLib.bersihkanNama('C:\\Users\\ani\\Desktop\\rahasia.pdf') === 'rahasia.pdf');
+
+  await penyediaLib.simpan({ id: pv.id, dukungGambar: false }, SUPER);
+  const rTolak = await aliran({ pesan: 'lihat ini', lampiran: [{ nama: 'a.jpg', mime: 'image/jpeg', data: GAMBAR_1PX }] }, ANI);
+  /* Galat SEBELUM aliran dimulai harus kembali sebagai JSON biasa lengkap
+     dengan kode HTTP-nya. Kalau penangan lupa `await`, penolakan ini lolos jadi
+     unhandled rejection dan permintaannya menggantung tanpa balasan — di layar
+     terlihat seperti halaman yang diam saja. */
+  cek('galat sebelum aliran dibalas sebagai JSON, bukan menggantung',
+    rTolak.statusCode === 400 && rTolak.writableEnded, { kode: rTolak.statusCode, selesai: rTolak.writableEnded });
+  cek('gambar ke provider yang tidak mendukung ditolak dengan jelas',
+    /tidak disetel bisa membaca gambar/i.test((JSON.parse(rTolak.teks() || '{}').pesan) || ''), rTolak.teks().slice(0, 160));
+  await penyediaLib.simpan({ id: pv.id, dukungGambar: true }, SUPER);
+
+  console.log('\n=== P. MEMILIH MODEL DARI KOTAK CHAT ===');
+  await penyediaLib.simpan({ id: pv.id, model: 'model-uji', modelLain: 'model-cepat, model-pintar, model-cepat' }, SUPER);
+  const pvBaru = await penyediaLib.ambil(pv.id);
+  cek('model lain disimpan tanpa duplikat',
+    pvBaru.modelLain.length === 2 && pvBaru.modelLain[0] === 'model-cepat', pvBaru.modelLain);
+
+  const daftarM = await penyediaLib.daftarModel();
+  cek('daftar model merata dari semua provider', daftarM.length >= 3, daftarM.map((m) => m.model));
+  cek('daftar model tidak memuat kunci API', !JSON.stringify(daftarM).includes('sk-'));
+  cek('model utama ditandai', daftarM.some((m) => m.model === 'model-uji' && m.utama === true));
+
+  const rM = await aliran({ pesan: 'pakai model cepat', model: 'model-pintar' }, ANI);
+  const mulaiM = bingkaiDari(rM).find((x) => x.t === 'mulai');
+  cek('model pilihan dipakai', mulaiM.penyedia.model === 'model-pintar', mulaiM.penyedia);
+  cek('provider menerima model pilihan', rapi2.srv.terakhirBadan.model === 'model-pintar', rapi2.srv.terakhirBadan.model);
+  const sesiM = await percakapan.ambil(mulaiM.sesiId);
+  cek('pilihan model menempel di percakapan, bukan di orangnya', sesiM.model === 'model-pintar', sesiM.model);
+
+  /* Model yang tidak terdaftar tidak boleh lewat: siapa pun yang bisa membuka
+     chat bisa menyusun permintaannya sendiri dan menyebut model apa saja. */
+  const rPalsu = await aliran({ pesan: 'coba', model: 'model-mahal-sekali' }, ANI);
+  const mulaiP = bingkaiDari(rPalsu).find((x) => x.t === 'mulai');
+  cek('model karangan diabaikan, kembali ke model utama',
+    mulaiP.penyedia.model === 'model-uji' && rapi2.srv.terakhirBadan.model === 'model-uji', mulaiP.penyedia);
+  cek('modelSah menolak yang tak terdaftar',
+    penyediaLib.modelSah(pvBaru, 'model-cepat') === true && penyediaLib.modelSah(pvBaru, 'ngawur') === false);
+  await rapi2.tutup();
 
   console.log('\n=== N. JUMLAH SERVERLESS FUNCTION (batas Vercel Hobby) ===');
   /* Vercel menghitung SETIAP berkas .js di folder api/ yang tidak diawali "_"

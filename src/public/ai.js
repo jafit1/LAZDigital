@@ -21,6 +21,9 @@ const H = (t) => String(t === undefined || t === null ? '' : t)
 const negara = {
   pengguna: null, izin: [], superadmin: false, halaman: 'chat',
   persona: [], penyediaAktif: null, adaPenyedia: false, pengetahuan: null,
+  daftarModel: [], pilihan: { penyediaId: '', model: '' },
+  aturLampiran: { simpanHari: 30, maksPerPesan: 4, gambarBoleh: [] },
+  lampiran: [],               // berkas yang sudah dibaca, menunggu dikirim
   sesiId: '', sesi: null, daftarSesi: [],
   personaId: '', mengalir: false, kontrol: null, railBuka: false,
 };
@@ -235,6 +238,450 @@ function sebaris(t) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
+// ============================================================ berkas lampiran
+/* Seluruh pembacaan berkas dikerjakan DI BROWSER, bukan di server.
+   Alasannya praktis, bukan ideologis: Vercel menjalankan fungsi tanpa
+   penyimpanan, dengan batas ukuran permintaan dan batas ukuran paket fungsi.
+   Mengunggah PDF 20 MB ke sana untuk diambil teksnya berarti membayar lalu
+   lintas, waktu, dan ruang paket — padahal yang dibutuhkan model cuma
+   teksnya, dan browser sudah sanggup mengambilnya sendiri.
+   Yang menyeberang ke server hanya hasilnya: teks, atau gambar yang sudah
+   dikecilkan. */
+
+const VENDOR = '/js/vendor/';
+const MAKS_SISI_GAMBAR = 1280;
+const MAKS_DATA_GAMBAR = 1300000;   // panjang base64
+const MAKS_TEKS_BERKAS = 30000;
+const MAKS_BYTE_BERKAS = 25 * 1024 * 1024;
+const MAKS_HALAMAN_PDF = 40;
+
+/* Pustaka berat (pdf.js, mammoth, SheetJS) baru diunduh saat benar-benar ada
+   yang melampirkan jenis berkas itu. Orang yang cuma mengetik pertanyaan tidak
+   pernah mengunduh satu byte pun dari sini. */
+const skripJanji = {};
+function muatSkrip(src) {
+  if (skripJanji[src]) return skripJanji[src];
+  skripJanji[src] = new Promise((selesai, gagal) => {
+    const el = document.createElement('script');
+    el.src = src;
+    el.async = true;
+    el.onload = () => selesai();
+    el.onerror = () => { delete skripJanji[src]; gagal(new Error('Pustaka pembaca berkas gagal dimuat.')); };
+    document.head.appendChild(el);
+  });
+  return skripJanji[src];
+}
+
+const fmtUkuran = (b) => {
+  const n = Number(b) || 0;
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+};
+const eksDari = (nama) => String(nama || '').split('.').pop().toLowerCase();
+
+/* Gambar dikecilkan SEBELUM dikirim. Foto HP 12 MP itu 4 MB dan tidak membuat
+   jawaban model lebih baik — sisi terpanjang 1280 px sudah cukup untuk membaca
+   kwitansi, dan hasilnya puluhan kali lebih kecil. */
+function kecilkanGambar(berkas) {
+  return new Promise((selesai, gagal) => {
+    const url = URL.createObjectURL(berkas);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const skala = Math.min(1, MAKS_SISI_GAMBAR / Math.max(img.width, img.height));
+      const l = Math.max(1, Math.round(img.width * skala));
+      const t = Math.max(1, Math.round(img.height * skala));
+      const kanvas = document.createElement('canvas');
+      kanvas.width = l; kanvas.height = t;
+      const ktx = kanvas.getContext('2d');
+      /* Latar putih dulu: PNG berlatar tembus pandang yang langsung dijadikan
+         JPEG akan berlatar HITAM, dan tanda tangan atau tulisan gelap di
+         atasnya jadi tidak terbaca sama sekali. */
+      ktx.fillStyle = '#ffffff';
+      ktx.fillRect(0, 0, l, t);
+      ktx.drawImage(img, 0, 0, l, t);
+      let mutu = 0.82;
+      let hasil = kanvas.toDataURL('image/jpeg', mutu);
+      while (hasil.length > MAKS_DATA_GAMBAR && mutu > 0.4) {
+        mutu -= 0.12;
+        hasil = kanvas.toDataURL('image/jpeg', mutu);
+      }
+      selesai({ mime: 'image/jpeg', data: hasil.split(',')[1], pratinjau: hasil, lebar: l, tinggi: t });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); gagal(new Error('Berkas gambar tidak bisa dibaca.')); };
+    img.src = url;
+  });
+}
+
+async function bacaPdf(berkas) {
+  await muatSkrip(VENDOR + 'pdf.min.js');
+  const pdfjs = window.pdfjsLib;
+  if (!pdfjs) throw new Error('Pembaca PDF tidak tersedia.');
+  pdfjs.GlobalWorkerOptions.workerSrc = VENDOR + 'pdf.worker.min.js';
+  const dok = await pdfjs.getDocument({ data: await berkas.arrayBuffer() }).promise;
+  const batas = Math.min(dok.numPages, MAKS_HALAMAN_PDF);
+  let teks = '';
+  for (let i = 1; i <= batas; i++) {
+    const halaman = await dok.getPage(i);
+    const isi = await halaman.getTextContent();
+    teks += `\n\n[Halaman ${i}]\n` + isi.items.map((x) => x.str).join(' ');
+    if (teks.length > MAKS_TEKS_BERKAS) break;
+  }
+  teks = teks.trim();
+  /* PDF hasil pindai (foto yang dibungkus PDF) tidak punya teks sama sekali.
+     Diam-diam mengirim berkas kosong akan membuat asisten menjawab ngawur;
+     lebih baik katakan apa adanya dan tunjukkan jalan keluarnya. */
+  if (!teks) {
+    throw new Error('PDF ini tidak memuat teks — kemungkinan hasil pindai/foto. '
+      + 'Kirimkan halamannya sebagai gambar (JPG/PNG) supaya bisa dibaca.');
+  }
+  return { teks, halaman: dok.numPages, terpotong: dok.numPages > batas || teks.length >= MAKS_TEKS_BERKAS };
+}
+
+async function bacaDocx(berkas) {
+  await muatSkrip(VENDOR + 'mammoth.browser.min.js');
+  if (!window.mammoth) throw new Error('Pembaca Word tidak tersedia.');
+  const hasil = await window.mammoth.extractRawText({ arrayBuffer: await berkas.arrayBuffer() });
+  const teks = String(hasil.value || '').trim();
+  if (!teks) throw new Error('Berkas Word ini tidak berisi teks.');
+  return { teks: teks.slice(0, MAKS_TEKS_BERKAS), terpotong: teks.length > MAKS_TEKS_BERKAS };
+}
+
+async function bacaXlsx(berkas) {
+  await muatSkrip(VENDOR + 'xlsx.full.min.js');
+  if (!window.XLSX) throw new Error('Pembaca Excel tidak tersedia.');
+  const buku = window.XLSX.read(new Uint8Array(await berkas.arrayBuffer()), { type: 'array' });
+  let teks = '';
+  for (const nama of buku.SheetNames) {
+    teks += `\n\n[Sheet: ${nama}]\n` + window.XLSX.utils.sheet_to_csv(buku.Sheets[nama]);
+    if (teks.length > MAKS_TEKS_BERKAS) break;
+  }
+  teks = teks.trim();
+  if (!teks) throw new Error('Berkas Excel ini kosong.');
+  return { teks: teks.slice(0, MAKS_TEKS_BERKAS), terpotong: teks.length > MAKS_TEKS_BERKAS };
+}
+
+async function bacaTeksBiasa(berkas) {
+  const teks = (await berkas.text()).trim();
+  if (!teks) throw new Error('Berkas ini kosong.');
+  return { teks: teks.slice(0, MAKS_TEKS_BERKAS), terpotong: teks.length > MAKS_TEKS_BERKAS };
+}
+
+const EKS_TEKS = ['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'xml', 'html', 'htm',
+  'log', 'srt', 'vtt', 'js', 'ts', 'css', 'py', 'sql', 'yml', 'yaml', 'ini', 'env'];
+
+async function bacaBerkas(berkas) {
+  const eks = eksDari(berkas.name);
+  const mime = berkas.type || '';
+
+  if (mime.startsWith('image/')) {
+    if (berkas.size > MAKS_BYTE_BERKAS) throw new Error('Gambar terlalu besar (maksimal 25 MB).');
+    const g = await kecilkanGambar(berkas);
+    return {
+      nama: berkas.name, mime: g.mime, jenis: 'gambar', ukuran: berkas.size,
+      data: g.data, pratinjau: g.pratinjau, ket: `${g.lebar}×${g.tinggi}`,
+    };
+  }
+
+  if (berkas.size > MAKS_BYTE_BERKAS) throw new Error('Berkas terlalu besar (maksimal 25 MB).');
+
+  let hasil;
+  if (eks === 'pdf' || mime === 'application/pdf') hasil = await bacaPdf(berkas);
+  else if (eks === 'docx') hasil = await bacaDocx(berkas);
+  else if (eks === 'xlsx' || eks === 'xls') hasil = await bacaXlsx(berkas);
+  else if (EKS_TEKS.includes(eks) || mime.startsWith('text/')) hasil = await bacaTeksBiasa(berkas);
+  else if (eks === 'doc') throw new Error('Word format lama (.doc) belum didukung — simpan ulang sebagai .docx.');
+  else throw new Error(`Jenis berkas ".${eks}" belum didukung.`);
+
+  return {
+    nama: berkas.name, mime: mime || 'text/plain', jenis: 'teks', ukuran: berkas.size,
+    teks: hasil.teks, halaman: hasil.halaman || 0, terpotong: Boolean(hasil.terpotong),
+    ket: `${fmtAngka(hasil.teks.length)} huruf${hasil.halaman ? ` · ${hasil.halaman} hal` : ''}`,
+  };
+}
+
+// ------------------------------------------------------------ tampilan lampiran
+function pasangLampiran() {
+  const isian = $('#aiBerkas');
+  const tombol = $('#aiLampirTombol');
+  if (!isian || !tombol) return;
+  tombol.onclick = () => isian.click();
+  isian.onchange = async () => {
+    const berkas = Array.from(isian.files || []);
+    isian.value = '';           // supaya berkas yang sama bisa dipilih lagi
+    await tambahBerkas(berkas);
+  };
+
+  const area = $('#aiWrap');
+  if (area) {
+    const matikan = (e) => { e.preventDefault(); e.stopPropagation(); };
+    ['dragenter', 'dragover'].forEach((ev) => area.addEventListener(ev, (e) => {
+      matikan(e); area.classList.add('seret');
+    }));
+    ['dragleave', 'dragend'].forEach((ev) => area.addEventListener(ev, (e) => {
+      matikan(e); if (e.target === area) area.classList.remove('seret');
+    }));
+    area.addEventListener('drop', async (e) => {
+      matikan(e);
+      area.classList.remove('seret');
+      await tambahBerkas(Array.from((e.dataTransfer && e.dataTransfer.files) || []));
+    });
+  }
+
+  /* Tempel langsung dari papan klip — cara tercepat mengirim potongan layar,
+     dan yang paling sering dipakai orang tanpa diberi tahu. */
+  const teksIsian = $('#aiIsian');
+  if (teksIsian) teksIsian.addEventListener('paste', async (e) => {
+    const berkas = Array.from((e.clipboardData && e.clipboardData.files) || []);
+    if (!berkas.length) return;
+    e.preventDefault();
+    await tambahBerkas(berkas);
+  });
+
+  gambarLampiran();
+}
+
+async function tambahBerkas(daftar) {
+  if (!daftar.length) return;
+  const maks = negara.aturLampiran.maksPerPesan || 4;
+  for (const berkas of daftar) {
+    if (negara.lampiran.length >= maks) {
+      toast(`Maksimal ${maks} berkas per pertanyaan.`, 'galat');
+      break;
+    }
+    const baris = { kunci: 'l' + Date.now() + Math.random(), nama: berkas.name, ukuran: berkas.size, memuat: true };
+    negara.lampiran.push(baris);
+    gambarLampiran();
+    try {
+      const hasil = await bacaBerkas(berkas);
+      Object.assign(baris, hasil, { memuat: false });
+    } catch (e) {
+      negara.lampiran = negara.lampiran.filter((x) => x !== baris);
+      toast(`${berkas.name}: ${e.message}`, 'galat');
+    }
+    gambarLampiran();
+  }
+}
+
+function hapusLampiran(kunci) {
+  negara.lampiran = negara.lampiran.filter((x) => x.kunci !== kunci);
+  gambarLampiran();
+}
+
+function gambarLampiran() {
+  const kotak = $('#aiLampiran');
+  if (!kotak) return;
+  kotak.hidden = negara.lampiran.length === 0;
+  kotak.innerHTML = negara.lampiran.map((l) => `
+    <div class="ai-lp-chip${l.memuat ? ' memuat' : ''}">
+      ${l.pratinjau
+        ? `<img class="ai-lp-thumb" src="${l.pratinjau}" alt="">`
+        : `<span class="ai-lp-ext">${H(eksDari(l.nama).slice(0, 4).toUpperCase() || 'FILE')}</span>`}
+      <span class="ai-lp-teks">
+        <span class="ai-lp-nama">${H(l.nama)}</span>
+        <span class="ai-lp-ket">${l.memuat ? 'membaca…' : H(`${l.ket || ''} · ${fmtUkuran(l.ukuran)}`)}</span>
+      </span>
+      <button type="button" class="ai-lp-x" data-buang="${H(l.kunci)}" title="Buang" aria-label="Buang ${H(l.nama)}">&times;</button>
+    </div>`).join('');
+  $$('[data-buang]', kotak).forEach((b) => { b.onclick = () => hapusLampiran(b.dataset.buang); });
+}
+
+/* Lampiran yang sudah tersimpan, digambar di dalam gelembung pesan. */
+function lampiranPesanHtml(pesan) {
+  const l = pesan.lampiran || [];
+  if (!l.length) return '';
+  return `<div class="ai-lp-pesan">${l.map((x) => (x.jenis === 'gambar'
+    ? `<figure class="ai-lp-gambar" data-gambar="${H(x.id)}" data-ada="${x.adaBerkas ? '1' : '0'}">
+         <div class="ai-lp-kosong">${x.adaBerkas ? 'memuat gambar…' : 'gambar sudah lewat masa simpan'}</div>
+         <figcaption>${H(x.nama)}</figcaption>
+       </figure>`
+    : `<div class="ai-lp-chip tenang">
+         <span class="ai-lp-ext">${H(eksDari(x.nama).slice(0, 4).toUpperCase() || 'FILE')}</span>
+         <span class="ai-lp-teks">
+           <span class="ai-lp-nama">${H(x.nama)}</span>
+           <span class="ai-lp-ket">${H(`${fmtAngka(x.panjangTeks || String(x.teks || '').length)} huruf terbaca`
+             + (x.halaman ? ` · ${x.halaman} hal` : '') + (x.terpotong ? ' · dipotong' : ''))}</span>
+         </span>
+       </div>`)).join('')}</div>`;
+}
+
+/* Gambar diambil satu per satu setelah gelembungnya tergambar, bukan ikut
+   dalam balasan sesi. Kalau ikut, membuka percakapan berisi sepuluh foto
+   berarti mengunduh beberapa megabyte sebelum satu huruf pun terlihat. */
+async function muatGambarPesan() {
+  for (const el of $$('.ai-lp-gambar[data-ada="1"]')) {
+    if (el.dataset.sudah === '1') continue;
+    el.dataset.sudah = '1';
+    try {
+      const h = await rpc('lampiran.ambil', { id: el.dataset.gambar });
+      const kosong = $('.ai-lp-kosong', el);
+      if (!h.ada) { if (kosong) kosong.textContent = h.pesan || 'gambar tidak tersedia'; continue; }
+      const img = document.createElement('img');
+      img.src = `data:${h.mime};base64,${h.data}`;
+      img.alt = ($('figcaption', el) || {}).textContent || 'lampiran';
+      img.loading = 'lazy';
+      if (kosong) kosong.replaceWith(img);
+      img.onclick = () => window.open(img.src, '_blank', 'noopener');
+    } catch (_) {
+      const kosong = $('.ai-lp-kosong', el);
+      if (kosong) kosong.textContent = 'gambar gagal dimuat';
+    }
+  }
+}
+
+// ============================================================ suara
+/* Pengenalan suara bawaan browser: tidak ada rekaman yang keluar dari
+   perangkat lewat kita, tidak ada kunci API, tidak ada biaya. Harganya:
+   Safari dan sebagian browser HP tidak punya ini. Di situ tombolnya
+   DISEMBUNYIKAN, bukan ditampilkan lalu diam saat ditekan. */
+let mesinSuara = null;
+function pasangSuara() {
+  const tombol = $('#aiSuara');
+  if (!tombol) return;
+  const Mesin = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Mesin) { tombol.hidden = true; return; }
+  tombol.hidden = false;
+
+  const isian = $('#aiIsian');
+  let jalan = false;
+  let sebelum = '';
+
+  const berhenti = () => {
+    jalan = false;
+    tombol.classList.remove('merekam');
+    tombol.title = 'Bicara';
+  };
+
+  tombol.onclick = () => {
+    if (jalan) { if (mesinSuara) mesinSuara.stop(); return; }
+    const m = new Mesin();
+    mesinSuara = m;
+    m.lang = 'id-ID';
+    m.continuous = true;
+    m.interimResults = true;
+    sebelum = isian.value.trim();
+
+    m.onstart = () => { jalan = true; tombol.classList.add('merekam'); tombol.title = 'Berhenti merekam'; };
+    m.onerror = (e) => {
+      berhenti();
+      toast(e.error === 'not-allowed'
+        ? 'Izin mikrofon ditolak. Aktifkan di setelan situs browser.'
+        : 'Pengenalan suara gagal: ' + (e.error || 'tidak diketahui'), 'galat');
+    };
+    m.onend = berhenti;
+    m.onresult = (ev) => {
+      let teks = '';
+      for (let i = 0; i < ev.results.length; i++) teks += ev.results[i][0].transcript;
+      /* Ditambahkan ke apa yang SUDAH diketik, bukan menimpanya — orang sering
+         mengetik separuh lalu melanjutkannya dengan suara. */
+      isian.value = (sebelum ? sebelum + ' ' : '') + teks.trim();
+      isian.dispatchEvent(new Event('input'));
+    };
+    try { m.start(); } catch (_) { berhenti(); }
+  };
+}
+
+// ============================================================ pemilih model
+function modelSekarang() {
+  const d = negara.daftarModel || [];
+  if (!d.length) return null;
+  const p = negara.pilihan;
+  return d.find((m) => m.penyediaId === p.penyediaId && m.model === p.model)
+    || d.find((m) => m.baku) || d[0];
+}
+
+function gambarChipModel() {
+  const nama = $('#aiModelNama');
+  const tombol = $('#aiModelTombol');
+  if (!nama || !tombol) return;
+  const m = modelSekarang();
+  const persona = negara.persona.find((x) => x.id === negara.personaId);
+  nama.textContent = m ? m.model : 'belum ada model';
+  tombol.title = m
+    ? `${m.model} — lewat ${m.penyediaNama}` + (persona ? ` · peran: ${persona.judul}` : '')
+    : 'Belum ada provider AI yang dipasang';
+  tombol.classList.toggle('ada-peran', Boolean(persona));
+}
+
+function tutupMenu() {
+  const bg = $('#aiMenuBg');
+  if (bg) bg.hidden = true;
+}
+
+function pasangMenuModel() {
+  const tombol = $('#aiModelTombol');
+  const bg = $('#aiMenuBg');
+  if (!tombol || !bg) return;
+  tombol.onclick = (e) => { e.stopPropagation(); bukaMenuModel(); };
+  bg.onclick = (e) => { if (e.target === bg) tutupMenu(); };
+  gambarChipModel();
+}
+
+function bukaMenuModel() {
+  const bg = $('#aiMenuBg');
+  const menu = $('#aiMenu');
+  const tombol = $('#aiModelTombol');
+  if (!bg || !menu) return;
+
+  const sekarang = modelSekarang();
+  const perPenyedia = {};
+  (negara.daftarModel || []).forEach((m) => {
+    (perPenyedia[m.penyediaNama] = perPenyedia[m.penyediaNama] || []).push(m);
+  });
+
+  const bagianModel = Object.keys(perPenyedia).length
+    ? Object.keys(perPenyedia).map((nama) => `
+        <div class="ai-menu-grup">${H(nama)}</div>
+        ${perPenyedia[nama].map((m) => `
+          <button type="button" class="ai-menu-item${sekarang && m.penyediaId === sekarang.penyediaId && m.model === sekarang.model ? ' pilih' : ''}"
+                  data-model="${H(m.model)}" data-penyedia="${H(m.penyediaId)}"${m.siap ? '' : ' disabled'}>
+            <span class="ai-menu-utama">${H(m.model)}</span>
+            <span class="ai-menu-ket">${m.siap ? '' : 'kunci API belum diisi · '}${m.dukungGambar ? 'bisa baca gambar' : 'teks saja'}</span>
+          </button>`).join('')}`).join('')
+    : `<div class="ai-menu-kosong">Belum ada provider AI.${negara.superadmin ? ' Tambahkan di menu Provider AI.' : ' Hubungi superadmin.'}</div>`;
+
+  const bagianPeran = `
+    <button type="button" class="ai-menu-item${negara.personaId ? '' : ' pilih'}" data-persona="">
+      <span class="ai-menu-utama">Asisten umum</span>
+      <span class="ai-menu-ket">tanpa peran khusus</span>
+    </button>
+    ${negara.persona.map((x) => `
+      <button type="button" class="ai-menu-item${x.id === negara.personaId ? ' pilih' : ''}" data-persona="${H(x.id)}">
+        <span class="ai-menu-utama">${H((x.ikon ? x.ikon + ' ' : '') + x.judul)}</span>
+        <span class="ai-menu-ket">${H(String(x.isi || '').replace(/\s+/g, ' ').slice(0, 70))}</span>
+      </button>`).join('')}`;
+
+  menu.innerHTML = `<div class="ai-menu-judul">Model</div>${bagianModel}`
+    + `<div class="ai-menu-judul">Peran</div>${bagianPeran}`;
+
+  bg.hidden = false;
+  /* Ditempatkan tepat di atas tombolnya, dan dijaga agar tidak keluar layar.
+     Di layar sempit ia melebar penuh lewat CSS. */
+  const r = tombol.getBoundingClientRect();
+  menu.style.left = Math.max(10, Math.min(r.left, window.innerWidth - 310)) + 'px';
+  menu.style.bottom = Math.max(10, window.innerHeight - r.top + 8) + 'px';
+
+  $$('[data-model]', menu).forEach((b) => {
+    b.onclick = () => {
+      negara.pilihan = { penyediaId: b.dataset.penyedia, model: b.dataset.model };
+      gambarChipModel();
+      tutupMenu();
+      if (negara.sesiId) {
+        rpc('sesi.ubah', { id: negara.sesiId, penyediaId: b.dataset.penyedia, model: b.dataset.model }).catch(() => {});
+      }
+    };
+  });
+  $$('[data-persona]', menu).forEach((b) => {
+    b.onclick = () => {
+      negara.personaId = b.dataset.persona;
+      gambarChipModel();
+      tutupMenu();
+      if (negara.sesiId) rpc('sesi.ubah', { id: negara.sesiId, personaId: negara.personaId }).catch(() => {});
+    };
+  });
+}
+
 // ============================================================ HALAMAN: CHAT
 const CONTOH = [
   { ikon: '\u{1F4CA}', teks: 'Ringkas penghimpunan dan pentasyarufan bulan terakhir, lalu sebutkan yang perlu diperhatikan.' },
@@ -253,6 +700,13 @@ halaman.chat = {
       <div class="ai-wrap" id="aiWrap">
         <aside class="ai-rail" id="aiRail">
           <div class="ai-rail-atas">
+            <div class="ai-rail-kepala">
+              <span class="ai-rail-judul">Percakapan</span>
+              <button type="button" class="ai-alat ai-alat-kecil" id="aiRailTutup"
+                      title="Sembunyikan daftar percakapan" aria-label="Sembunyikan daftar percakapan">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M9.5 4.5v15"/><path d="m16.5 9.5-2.5 2.5 2.5 2.5"/></svg>
+              </button>
+            </div>
             <button type="button" class="btn btn-primary btn-sm ai-baru" id="aiBaru">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
               Percakapan baru
@@ -275,10 +729,25 @@ halaman.chat = {
           <div class="ai-thread" id="aiThread"></div>
           <div class="ai-komposer-bungkus">
             <div class="ai-komposer" id="aiKomposer">
+              <div class="ai-lampiran" id="aiLampiran" hidden></div>
               <textarea id="aiIsian" rows="1" placeholder="Tanyakan apa saja tentang Lazismu, zakat, atau pekerjaan Anda…"
                         aria-label="Pertanyaan"></textarea>
               <div class="ai-komposer-kaki">
-                <div class="ai-komposer-kiri" id="aiPersonaKotak"></div>
+                <div class="ai-komposer-kiri">
+                  <input type="file" id="aiBerkas" multiple hidden
+                         accept="image/*,.pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json,.xml,.html,.log,.srt,.vtt">
+                  <button type="button" class="ai-alat" id="aiLampirTombol" title="Lampirkan berkas" aria-label="Lampirkan berkas">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5 12.3 19a4.6 4.6 0 0 1-6.5-6.5l7.6-7.6a3 3 0 0 1 4.3 4.3l-7.6 7.6a1.5 1.5 0 0 1-2.1-2.1l7-7"/></svg>
+                  </button>
+                  <button type="button" class="ai-alat" id="aiSuara" title="Bicara" aria-label="Rekam suara" hidden>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>
+                  </button>
+                  <button type="button" class="ai-chip-model" id="aiModelTombol" aria-haspopup="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M11 3.5 12.6 8 17 9.6 12.6 11.2 11 15.7 9.4 11.2 5 9.6 9.4 8z"/></svg>
+                    <span id="aiModelNama">model</span>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                </div>
                 <div class="ai-komposer-kanan">
                   <button type="button" class="btn btn-sm ai-stop" id="aiStop" hidden>Hentikan</button>
                   <button type="button" class="btn btn-primary btn-sm ai-kirim" id="aiKirim" title="Kirim (Enter)" aria-label="Kirim">
@@ -290,12 +759,15 @@ halaman.chat = {
             <div class="ai-catatan-kecil muted" id="aiCatatanKecil"></div>
           </div>
         </section>
+        <div class="ai-menu-bg" id="aiMenuBg" hidden><div class="ai-menu" id="aiMenu" role="menu"></div></div>
       </div>`;
 
     pasangKomposer();
     pasangRail();
     pantauGeser();
-    gambarPersonaKotak();
+    pasangLampiran();
+    pasangSuara();
+    pasangMenuModel();
     catatanKecil();
     await muatDaftarSesi();
     await bukaSesi(negara.sesiId || '', { diam: true });
@@ -311,24 +783,8 @@ function catatanKecil() {
       : 'Belum ada provider AI yang dipasang. Hubungi superadmin.';
     return;
   }
-  const p = negara.penyediaAktif || {};
-  el.innerHTML = `Model: <b>${H(p.model || '—')}</b> lewat ${H(p.nama || '—')}. `
-    + 'Jawaban AI bisa keliru — periksa angka penting di menu aslinya.';
-}
-
-function gambarPersonaKotak() {
-  const kotak = $('#aiPersonaKotak');
-  if (!kotak) return;
-  if (!negara.persona.length) { kotak.innerHTML = ''; return; }
-  kotak.innerHTML = `<label class="ai-persona-label" for="aiPersona">Peran</label>
-    <select id="aiPersona" class="ai-persona">
-      <option value="">Asisten umum</option>
-      ${negara.persona.map((p) => `<option value="${H(p.id)}"${p.id === negara.personaId ? ' selected' : ''}>${H((p.ikon ? p.ikon + ' ' : '') + p.judul)}</option>`).join('')}
-    </select>`;
-  $('#aiPersona').onchange = (e) => {
-    negara.personaId = e.target.value;
-    if (negara.sesiId) rpc('sesi.ubah', { id: negara.sesiId, personaId: negara.personaId }).catch(() => {});
-  };
+  el.innerHTML = 'Jawaban AI bisa keliru — periksa angka penting di menu aslinya. '
+    + `Berkas yang dilampirkan disimpan ${fmtAngka(negara.aturLampiran.simpanHari)} hari; isi bacaannya tetap bisa dicari setelah itu.`;
 }
 
 function pasangKomposer() {
@@ -352,7 +808,11 @@ function pasangKomposer() {
   };
   kirim.onclick = () => {
     const t = isian.value.trim();
-    if (!t) return;
+    /* Boleh mengirim tanpa mengetik apa pun asalkan ada berkas — "tolong baca
+       ini" sering tidak diketik sama sekali. Yang tidak boleh: mengirim saat
+       ada berkas yang masih dibaca, karena isinya belum ada. */
+    if (!t && !negara.lampiran.length) return;
+    if (negara.lampiran.some((l) => l.memuat)) { toast('Tunggu berkasnya selesai dibaca.', 'galat'); return; }
     isian.value = '';
     tumbuh();
     kirimPesan(t).catch((e) => toast(e.message, 'galat'));
@@ -361,12 +821,41 @@ function pasangKomposer() {
   tumbuh();
 }
 
+/* Di layar lebar daftar percakapan adalah kolom tetap; di layar sempit ia laci
+   yang menutupi. Satu tombol yang sama melayani keduanya, karena bagi yang
+   memakainya keduanya adalah hal yang sama: "sembunyikan daftar ini".
+   Pilihannya diingat — orang yang sudah menutupnya tidak mau menutupnya lagi
+   setiap kali membuka halaman. */
+const layarLebar = () => window.matchMedia('(min-width:901px)').matches;
+
 function pasangRail() {
+  const bungkus = $('#aiWrap');
   const tombol = $('#aiRailTombol');
   const tirai = $('#aiTirai');
-  const tutup = () => { $('#aiWrap').classList.remove('rail-buka'); };
-  if (tombol) tombol.onclick = () => { $('#aiWrap').classList.toggle('rail-buka'); };
-  if (tirai) tirai.onclick = tutup;
+  const tutupRail = () => {
+    bungkus.classList.remove('rail-buka');
+    if (layarLebar()) {
+      bungkus.classList.add('rail-tutup');
+      try { localStorage.setItem('ai_rail_tutup', 'true'); } catch (_) {}
+    }
+  };
+  try {
+    if (localStorage.getItem('ai_rail_tutup') === 'true') bungkus.classList.add('rail-tutup');
+  } catch (_) {}
+
+  if (tombol) tombol.onclick = () => {
+    if (bungkus.classList.contains('rail-tutup')) {
+      bungkus.classList.remove('rail-tutup');
+      try { localStorage.setItem('ai_rail_tutup', 'false'); } catch (_) {}
+      return;
+    }
+    if (layarLebar()) { tutupRail(); return; }
+    bungkus.classList.toggle('rail-buka');
+  };
+  const silang = $('#aiRailTutup');
+  if (silang) silang.onclick = tutupRail;
+  if (tirai) tirai.onclick = () => bungkus.classList.remove('rail-buka');
+  const tutup = () => bungkus.classList.remove('rail-buka');
   const baru = $('#aiBaru');
   if (baru) baru.onclick = () => { tutup(); mulaiSesiBaru(); };
   const cari = $('#aiCari');
@@ -409,6 +898,9 @@ async function muatDaftarSesi(cari = '') {
 function mulaiSesiBaru() {
   negara.sesiId = '';
   negara.sesi = null;
+  negara.lampiran = [];
+  gambarLampiran();
+  gambarChipModel();
   $('#aiJudul').textContent = 'Percakapan baru';
   $$('.ai-rail-item').forEach((b) => b.classList.remove('aktif'));
   gambarKepalaAksi();
@@ -426,8 +918,11 @@ async function bukaSesi(id, { diam = false } = {}) {
     negara.sesi = h.sesi;
     negara.sesiId = h.sesi.id;
     negara.personaId = h.sesi.personaId || negara.personaId;
-    const sel = $('#aiPersona');
-    if (sel) sel.value = negara.personaId || '';
+    /* Model mengikuti percakapannya, bukan pilihan terakhir orang ini:
+       percakapan dipakai bersama, dan melanjutkan jawaban orang lain dengan
+       model yang berbeda diam-diam membuat riwayatnya tidak konsisten. */
+    if (h.sesi.model) negara.pilihan = { penyediaId: h.sesi.penyediaId || '', model: h.sesi.model };
+    gambarChipModel();
   } catch (e) {
     negara.sesiId = '';
     negara.sesi = null;
@@ -509,6 +1004,7 @@ function gambarThread() {
   }
   thread.innerHTML = `<div class="ai-thread-dalam" id="aiDalam">${pesan.map(gelembung).join('')}</div>`;
   pasangAksiPesan();
+  muatGambarPesan();
 }
 
 function sambutan() {
@@ -546,7 +1042,10 @@ function gelembung(p) {
     <div class="ai-avatar${asisten ? ' ai-avatar-ai' : ''}">${asisten ? '✨' : H(inisial(nama))}</div>
     <div class="ai-isi-bungkus">
       <div class="ai-pesan-kepala"><span class="ai-nama">${H(nama)}</span><span class="ai-pesan-meta">${H(meta.filter(Boolean).join(' · '))}</span></div>
-      <div class="ai-isi">${asisten ? keHtml(p.isi) : `<p>${H(p.isi).replace(/\n/g, '<br>')}</p>`}</div>
+      <div class="ai-isi">${asisten
+        ? keHtml(p.isi)
+        : (p.isi ? `<p>${H(p.isi).replace(/\n/g, '<br>')}</p>` : '<p class="muted">(berkas terlampir)</p>')
+          + lampiranPesanHtml(p)}</div>
       ${asisten ? `<div class="ai-pesan-aksi">
         <button type="button" class="ai-aksi-kecil" data-salin="1">Salin</button>
         ${bisa('sesi.kirim') ? '<button type="button" class="ai-aksi-kecil" data-ulangi="1">Minta ulang</button>' : ''}
@@ -595,7 +1094,10 @@ async function ulangiJawaban() {
        kali: kirimPesan() akan menuliskannya kembali. */
     negara.sesi.pesan = (negara.sesi.pesan || []).filter((p) => p.id !== terakhirOrang.id);
     gambarThread();
-    await kirimPesan(terakhirOrang.isi);
+    /* Lampiran lama TIDAK dikirim ulang: berkasnya sudah ada di riwayat sesi
+       dan tetap terbaca model dari sana. Mengirim ulang hanya menggandakannya
+       di percakapan dan membayar ulang tokennya. */
+    await kirimPesan(terakhirOrang.isi, []);
   } catch (e) { toast(e.message, 'galat'); }
 }
 
@@ -629,7 +1131,7 @@ function setSibukKomposer(sibuk) {
 /* Inilah satu-satunya jalur yang tidak lewat rpc(): jawabannya datang
    sepotong-sepotong, jadi ia harus dibaca sebagai aliran, bukan JSON sekali
    jadi. Bentuk bingkainya: {"t":"mulai"|"token"|"selesai"|"galat"}. */
-async function kirimPesan(teks) {
+async function kirimPesan(teks, lampiranDipakai) {
   if (negara.mengalir) return;
   if (!bisa('sesi.kirim')) { toast('Akun Anda hanya bisa membaca percakapan.', 'galat'); return; }
   if (!negara.adaPenyedia) {
@@ -642,9 +1144,18 @@ async function kirimPesan(teks) {
 
   // Gelembung pertanyaan digambar langsung, tanpa menunggu server — menunggu
   // membuat halaman terasa mati tepat pada saat orang paling memperhatikannya.
+  /* Lampiran diambil dari kotak isian lalu SEGERA dikosongkan, supaya menekan
+     kirim dua kali tidak mengirim berkas yang sama dua kali. */
+  const berkas = lampiranDipakai || negara.lampiran.slice();
+  if (!lampiranDipakai) { negara.lampiran = []; gambarLampiran(); }
+
   const dalam = pastikanDalam();
   dalam.insertAdjacentHTML('beforeend', gelembung({
     id: 'sementara', peran: 'user', isi: teks,
+    lampiran: berkas.map((l) => ({
+      id: 'x', nama: l.nama, jenis: l.jenis, mime: l.mime, adaBerkas: false,
+      panjangTeks: String(l.teks || '').length, halaman: l.halaman, terpotong: l.terpotong,
+    })),
     olehNama: (negara.pengguna && negara.pengguna.nama) || 'Anda', waktu: new Date().toISOString(),
   }));
   const artAI = document.createElement('article');
@@ -691,6 +1202,12 @@ async function kirimPesan(teks) {
         sesiId: negara.sesiId || '',
         pesan: teks,
         personaId: negara.personaId || '',
+        penyediaId: (modelSekarang() || {}).penyediaId || '',
+        model: (modelSekarang() || {}).model || '',
+        lampiran: berkas.map((l) => ({
+          nama: l.nama, mime: l.mime, jenis: l.jenis, ukuran: l.ukuran,
+          data: l.data, teks: l.teks, halaman: l.halaman, terpotong: l.terpotong,
+        })),
       }),
     });
 
@@ -724,6 +1241,10 @@ async function kirimPesan(teks) {
     } else {
       isiEl.innerHTML = keHtml(jawaban) + `<div class="ai-galat">${H(e.message || 'Gagal menghubungi asisten.')}</div>`;
       metaEl.textContent = 'gagal';
+      /* Berkasnya dikembalikan ke kotak isian. Membuangnya karena server
+         menolak berarti orangnya harus memilih ulang semua berkas — untuk
+         kesalahan yang bukan salahnya. */
+      if (!negara.sesiId || !jawaban) { negara.lampiran = berkas.concat(negara.lampiran); gambarLampiran(); }
       setSibukKomposer(false);
       negara.kontrol = null;
       geserKeBawah();
@@ -1122,9 +1643,11 @@ halaman.penyedia = {
             <span class="badge ${p.id === dd.aktif ? 'green' : 'grey'}">${p.id === dd.aktif ? 'aktif' : 'cadangan'}</span>
           </div>
           <p class="ai-kartu-isi">${H((bentuk[p.bentuk] && bentuk[p.bentuk].label) || p.bentuk)} · <b>${H(p.model)}</b><br>
+            ${(p.modelLain || []).length ? `Model lain: ${H((p.modelLain || []).join(', '))}<br>` : ''}
             ${H(p.url)}<br>
             Kunci: ${p.kunciTerpasang ? `terpasang (…${H(p.kunciEkor)})` : '<b style="color:var(--red)">belum diisi</b>'}
-            · suhu ${H(p.suhu)} · maks ${fmtAngka(p.maksToken)} token</p>
+            · suhu ${H(p.suhu)} · maks ${fmtAngka(p.maksToken)} token
+            · ${p.dukungGambar === false ? 'teks saja' : 'bisa baca gambar'}</p>
           <div class="ai-kartu-kaki">
             <span class="muted">${H(p.catatan || '')}</span>
             <span class="ai-kartu-aksi">
@@ -1169,19 +1692,27 @@ halaman.penyedia = {
     const segarkan = async () => { const lagi = await rpc('penyedia.daftar'); gambarDaftar(lagi); };
 
     const formulir = (p) => {
-      const d0 = p || { nama: '', bentuk: 'openai', url: '', model: '', suhu: 0.4, maksToken: 2048, catatan: '' };
+      const d0 = p || { nama: '', bentuk: 'openai', url: '', model: '', suhu: 0.4, maksToken: 2048, catatan: '', modelLain: [], dukungGambar: true };
       modal(p ? `Ubah provider — ${p.nama}` : 'Tambah provider',
         `<div class="field"><label>Nama</label><input id="pvNama" maxlength="60" value="${H(d0.nama)}" placeholder="Mis. OpenRouter Lazismu"></div>
          <div class="field"><label>Bentuk API</label><select id="pvBentuk">
            ${Object.keys(bentuk).map((k) => `<option value="${H(k)}"${k === d0.bentuk ? ' selected' : ''}>${H(bentuk[k].label)}</option>`).join('')}
          </select><div class="muted" id="pvKet" style="font-size:11.5px;margin-top:4px"></div></div>
          <div class="field"><label>Alamat (base URL)</label><input id="pvUrl" value="${H(d0.url)}" placeholder="https://…" autocomplete="off" spellcheck="false"></div>
-         <div class="field"><label>Model</label><input id="pvModel" value="${H(d0.model)}" autocomplete="off" spellcheck="false"></div>
+         <div class="field"><label>Model utama</label><input id="pvModel" value="${H(d0.model)}" autocomplete="off" spellcheck="false"></div>
+         <div class="field"><label>Model lain yang boleh dipilih <span class="muted">(pisahkan dengan koma)</span></label>
+           <input id="pvModelLain" value="${H((d0.modelLain || []).join(', '))}" autocomplete="off" spellcheck="false">
+           <div class="muted" id="pvContohModel" style="font-size:11.5px;margin-top:4px"></div></div>
          <div class="field"><label>Kunci API ${p && p.kunciTerpasang ? `<span class="muted">(terpasang …${H(p.kunciEkor)} — kosongkan bila tidak ingin mengubah)</span>` : ''}</label>
            <input id="pvKunci" type="password" autocomplete="new-password" spellcheck="false" placeholder="${p && p.kunciTerpasang ? '••••••••' : 'sk-…'}"></div>
          <div class="field ai-field-baris">
            <label style="font-size:12.5px">Suhu <input id="pvSuhu" type="number" step="0.1" min="0" max="2" value="${H(d0.suhu)}" style="width:80px"></label>
            <label style="font-size:12.5px">Maks token <input id="pvMaks" type="number" min="64" max="32000" value="${H(d0.maksToken)}" style="width:100px"></label>
+         </div>
+         <div class="field">
+           <label class="set-switch"><input type="checkbox" id="pvGambar"${d0.dukungGambar === false ? '' : ' checked'}>
+             <span>Model di provider ini bisa membaca gambar</span></label>
+           <div class="muted" style="font-size:11.5px;margin-top:4px">Matikan bila modelnya hanya menerima teks — tanpa ini, foto yang dikirim akan ditolak provider dengan pesan yang membingungkan.</div>
          </div>
          <div class="field"><label>Catatan</label><input id="pvCatatan" maxlength="300" value="${H(d0.catatan || '')}"></div>`,
         () => {
@@ -1192,6 +1723,8 @@ halaman.penyedia = {
             ket.textContent = b.keterangan || '';
             if (!$('#pvUrl').value) $('#pvUrl').placeholder = b.contohUrl || 'https://…';
             if (!$('#pvModel').value) $('#pvModel').placeholder = b.contohModel || '';
+            const contoh = $('#pvContohModel');
+            if (contoh) contoh.textContent = b.contohModelLain ? `Contoh: ${b.contohModelLain}` : '';
           };
           sel.onchange = perbarui;
           perbarui();
@@ -1205,6 +1738,8 @@ halaman.penyedia = {
               model: $('#pvModel').value.trim(),
               suhu: Number($('#pvSuhu').value),
               maksToken: Number($('#pvMaks').value),
+              modelLain: $('#pvModelLain').value,
+              dukungGambar: $('#pvGambar').checked,
               catatan: $('#pvCatatan').value.trim(),
             };
             const k = $('#pvKunci').value.trim();
@@ -1238,22 +1773,33 @@ async function muatStatus() {
   negara.adaPenyedia = !!s.adaPenyedia;
   negara.pengetahuan = s.pengetahuan;
   negara.upstash = s.upstash;
+  negara.daftarModel = s.model || [];
+  if (s.lampiran) negara.aturLampiran = s.lampiran;
+  if (!negara.pilihan.model) {
+    const baku = negara.daftarModel.find((m) => m.baku) || negara.daftarModel[0];
+    if (baku) negara.pilihan = { penyediaId: baku.penyediaId, model: baku.model };
+  }
 
   $('#uName').textContent = s.pengguna.nama;
   $('#uRole').textContent = s.pengguna.peran + (s.superadmin ? ' · superadmin' : '');
   $('#uAvatar').textContent = inisial(s.pengguna.nama);
+  /* Nama model TIDAK lagi ditaruh di bilah kiri. Di situ ia terpotong jadi dua
+     baris saat bilahnya dilebarkan, hilang sama sekali saat dikuncupkan, dan
+     jauh dari tempat orang memilihnya. Sekarang ia jadi tombol di kotak chat —
+     terbaca dan bisa diklik untuk berganti. Lencana ini hanya menyala kalau
+     ada yang perlu diberitahukan. */
   const ll = $('#lencanaLingkup');
   if (ll) {
-    if (s.adaPenyedia) {
-      ll.textContent = s.penyediaAktif.model;
-      ll.title = `Provider aktif: ${s.penyediaAktif.nama}`;
-      ll.className = 'badge green';
-    } else {
+    if (!s.adaPenyedia) {
       ll.textContent = 'belum ada provider';
       ll.title = 'Superadmin perlu menambahkan provider AI';
       ll.className = 'badge grey';
+      ll.hidden = false;
+    } else {
+      ll.hidden = true;
     }
   }
+  gambarChipModel();
   return s;
 }
 
@@ -1323,7 +1869,7 @@ async function buka(kode) {
     $$('.lz').forEach((el) => el.classList.toggle('lz-jeda', document.hidden));
   });
   $('#modalBg').onclick = (e) => { if (e.target.id === 'modalBg') tutupModal(); };
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tutupModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { tutupModal(); tutupMenu(); } });
 
   try { await muatStatus(); }
   catch (_) { location.href = '/index.html'; return; }
