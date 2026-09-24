@@ -37,7 +37,11 @@ const LUAR = path.join(AKAR, 'potret');
 /* Markup diambil dari index.html, bukan ditulis ulang di sini. */
 const indexHtml = fs.readFileSync(path.join(PUBLIK, 'index.html'), 'utf8');
 const a = indexHtml.indexOf('<div id="boot"');
-const b = indexHtml.indexOf('</div>', indexHtml.indexOf('id="bootLama"')) + 6;
+/* Dua kali: penutup pertama milik .lz-lama, yang kedua milik #boot sendiri.
+   Mengambil yang pertama saja menghasilkan potongan HTML yang tidak seimbang,
+   dan peramban lalu "memperbaikinya" dengan cara yang tidak bisa ditebak. */
+let b = indexHtml.indexOf('</div>', indexHtml.indexOf('id="bootLama"')) + 6;
+b = indexHtml.indexOf('</div>', b) + 6;
 if (a === -1 || b < a) throw new Error('markup #boot tidak ditemukan di index.html');
 const BOOT = indexHtml.slice(a, b);
 
@@ -88,65 +92,39 @@ const server = http.createServer((req, res) => {
     await p.waitForTimeout(600);
 
     const ukur = await p.evaluate(() => {
-      const mark = document.querySelector('#boot .lz-mark');
-      const pita = Array.from(mark.querySelectorAll('.lz-teks'));
-      const rM = mark.getBoundingClientRect();
-
-      /* Kotak tiap lapis harus identik. Kalau tidak, hurufnya bergeser antar
-         pita dan kata itu terlihat robek.
-         Diukur dengan offset*, bukan getBoundingClientRect: riaknya memang
-         menggeser tiap pita beberapa piksel, jadi kotak terpasang justru
-         SEHARUSNYA berbeda-beda saat animasi berjalan. Yang wajib sama adalah
-         kotak tata letaknya, sebelum transform. */
-      const meleset = pita.filter((t) =>
-        t.offsetLeft !== pita[0].offsetLeft || t.offsetTop !== pita[0].offsetTop
-        || Math.abs(t.offsetWidth - pita[0].offsetWidth) > 1
-        || Math.abs(t.offsetHeight - pita[0].offsetHeight) > 1).length;
-
-      /* clip-path tiap pita dibaca kembali dari gaya terhitung, lalu diperiksa
-         apakah gabungannya menutup seluruh tinggi huruf. Celah di antara pita
-         muncul sebagai garis rambut yang memotong huruf. */
-      const persen = (s) => {
-        const m = String(s).match(/inset\(([^)]+)\)/);
-        if (!m) return null;
-        const bagian = m[1].trim().split(/\s+/).map((v) => parseFloat(v) || 0);
-        return { atas: bagian[0], bawah: bagian[2] };
-      };
-      const pitaPersen = pita.map((t) => persen(getComputedStyle(t).clipPath)).filter(Boolean);
-      pitaPersen.sort((x, y) => x.atas - y.atas);
-      let tutupSampai = 0, celah = 0;
-      for (const q of pitaPersen) {
-        if (q.atas > tutupSampai + 0.01) celah++;
-        tutupSampai = Math.max(tutupSampai, 100 - q.bawah);
-      }
-
-      const teks = pita.map((t) => t.textContent.trim());
+      const bar = document.querySelector('#boot .lz-bar');
+      const batang = Array.from(bar.querySelectorAll('i'));
+      const r = bar.getBoundingClientRect();
+      /* offsetHeight, bukan getBoundingClientRect: animasinya memang
+         meregangkan batang lewat transform, jadi tinggi terpasangnya
+         SEHARUSNYA berubah-ubah saat berjalan. Yang dibandingkan di sini
+         tinggi tata letaknya, sebelum transform. */
+      const tinggi = batang.map((x) => x.offsetHeight);
+      const warna = batang.map((x) => getComputedStyle(x).backgroundColor);
+      const jeda = batang.map((x) => getComputedStyle(x).animationDelay);
       return {
-        jumlahPita: pita.length,
-        jumlahClip: pitaPersen.length,
-        meleset, celah,
-        tutupSampai: Math.round(tutupSampai * 100) / 100,
-        kataSama: new Set(teks).size === 1,
-        kata: teks[0],
-        lebarKata: Math.round(rM.width),
-        tinggiKata: Math.round(rM.height),
-        kotak: { x: Math.round(rM.left), y: Math.round(rM.top), w: Math.ceil(rM.width), h: Math.ceil(rM.height) },
+        jumlah: batang.length,
+        tinggi,
+        tengahLebihTinggi: tinggi.length === 3 && tinggi[1] > tinggi[0] + 8 && tinggi[1] > tinggi[2] + 8,
+        tepiSama: tinggi.length === 3 && tinggi[0] === tinggi[2],
+        /* Jeda yang berbeda itulah yang membuat ketiganya berdenyut bergantian
+           alih-alih berkedip bersamaan. */
+        jedaBeda: new Set(jeda).size === 3,
+        warna: warna[0],
+        kotak: { x: Math.round(r.left), y: Math.round(r.top), w: Math.ceil(r.width), h: Math.ceil(r.height) },
       };
     });
 
     const salah = [];
     if (galat.length) salah.push('galat JS: ' + galat.join(' | '));
-    if (ukur.jumlahPita !== 9) salah.push('pita ' + ukur.jumlahPita + ', seharusnya 9');
-    if (ukur.jumlahClip !== 9) salah.push('clip-path hanya ' + ukur.jumlahClip + ' pita');
-    if (ukur.meleset) salah.push(ukur.meleset + ' pita tidak sejajar');
-    if (ukur.celah) salah.push(ukur.celah + ' celah antar pita');
-    if (ukur.tutupSampai < 99.9) salah.push('pita berhenti di ' + ukur.tutupSampai + '%');
-    if (!ukur.kataSama) salah.push('kata antar pita berbeda');
-    if (ukur.lebarKata < 40 || ukur.tinggiKata < 12) salah.push('kotak kata terlalu kecil');
+    if (ukur.jumlah !== 3) salah.push('batang ' + ukur.jumlah + ', seharusnya 3');
+    if (!ukur.tengahLebihTinggi) salah.push('batang tengah tidak lebih tinggi');
+    if (!ukur.tepiSama) salah.push('dua batang tepi tidak sama tinggi');
+    if (!ukur.jedaBeda) salah.push('jeda animasinya tidak berbeda-beda');
+    if (/rgba?\(\s*255,\s*255,\s*255/.test(ukur.warna)) salah.push('batangnya masih putih');
 
-    console.log(`  ${tema}: "${ukur.kata}" ${ukur.jumlahPita} pita, `
-      + `${ukur.lebarKata}×${ukur.tinggiKata}px, tutup 0–${ukur.tutupSampai}%`
-      + (salah.length ? '  ← ' + salah.join('; ') : ''));
+    console.log(`  ${tema}: ${ukur.jumlah} batang ${ukur.tinggi.join('/')}px, warna ${ukur.warna}`
+      + (salah.length ? '  \u2190 ' + salah.join('; ') : ''));
     if (salah.length) process.exitCode = 1;
 
     /* Tiga saat berbeda dalam satu putaran: riaknya harus terlihat berpindah,
@@ -176,10 +154,15 @@ const server = http.createServer((req, res) => {
     await p.goto(A + '/');
     await p.waitForTimeout(300);
     const diam = await p.evaluate(() => {
-      const pita = Array.from(document.querySelectorAll('#boot .lz-teks'));
+      const batang = Array.from(document.querySelectorAll('#boot .lz-bar i'));
       return {
-        redup: pita.filter((t) => parseFloat(getComputedStyle(t).opacity) < 0.99).length,
-        bergeser: pita.filter((t) => getComputedStyle(t).transform !== 'none').length,
+        bergeser: batang.filter((x) => getComputedStyle(x).transform !== 'none').length,
+        /* Tanpa gerak, warnanya harus dipenuhkan — batang yang diam DAN redup
+           terbaca seperti elemen mati, bukan penanda "sedang memuat". */
+        redup: batang.filter((x) => {
+          const m = getComputedStyle(x).backgroundColor.match(/[\d.]+/g) || [];
+          return m.length > 3 && parseFloat(m[3]) < 0.9;
+        }).length,
       };
     });
     /* Kelas ditambahkan di panggilan terpisah lalu ditunggu sebentar.
@@ -187,21 +170,28 @@ const server = http.createServer((req, res) => {
        mengembalikan nilai LAMA di sini: tanpa animasi yang berjalan, Chromium
        belum tentu menghitung ulang gayanya saat itu juga. Yang terbaca lalu
        terlihat seperti aturan CSS yang tidak berlaku, padahal aturannya benar
-       — sudah sempat salah didiagnosis sekali. */
+       \u2014 sudah sempat salah didiagnosis sekali. */
     const sebelum = await p.evaluate(() =>
-      parseFloat(getComputedStyle(document.querySelector('#boot .lz-mark')).fontSize));
-    await p.evaluate(() => document.getElementById('boot').classList.add('lz--sibuk'));
+      document.querySelector('#boot .lz-bar i:nth-child(2)').offsetHeight);
+    await p.evaluate(() => {
+      const b = document.getElementById('boot');
+      b.classList.add('lz--sibuk');
+      b.querySelector('.lz-bar').classList.add('lz-bar-kecil');
+    });
     await p.waitForTimeout(120);
     const sesudah = await p.evaluate(() =>
-      parseFloat(getComputedStyle(document.querySelector('#boot .lz-mark')).fontSize));
-    await p.evaluate(() => document.getElementById('boot').classList.remove('lz--sibuk'));
+      document.querySelector('#boot .lz-bar i:nth-child(2)').offsetHeight);
+    await p.evaluate(() => {
+      const b = document.getElementById('boot');
+      b.classList.remove('lz--sibuk');
+      b.querySelector('.lz-bar').classList.remove('lz-bar-kecil');
+    });
     await p.waitForTimeout(60);
-    const besar = { sebelum, sesudah };
     const salah = [];
-    if (diam.redup) salah.push(diam.redup + ' pita tetap redup tanpa animasi');
-    if (diam.bergeser) salah.push(diam.bergeser + ' pita tetap tergeser tanpa animasi');
-    if (!(besar.sesudah < besar.sebelum * 0.7)) salah.push('selubung sibuk tidak mengecil');
-    console.log(`  tanpa-animasi: 9 pita utuh; selubung ${besar.sebelum}px \u2192 ${besar.sesudah}px`
+    if (diam.bergeser) salah.push(diam.bergeser + ' batang tetap tergeser tanpa animasi');
+    if (diam.redup) salah.push(diam.redup + ' batang tetap redup tanpa animasi');
+    if (!(sesudah < sebelum)) salah.push('selubung sibuk tidak mengecil');
+    console.log(`  tanpa-animasi: 3 batang penuh; selubung ${sebelum}px \u2192 ${sesudah}px`
       + (salah.length ? '  \u2190 ' + salah.join('; ') : ''));
     if (salah.length) process.exitCode = 1;
     await p.screenshot({ path: path.join(LUAR, 'loader-tanpa-animasi.png') });

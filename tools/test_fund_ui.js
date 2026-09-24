@@ -192,9 +192,29 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
      atas putih — nyaris tak terlihat dan tidak memberi tahu apa-apa. */
   const tema = await p.evaluate(() => {
     const b = document.getElementById('tombolTema');
-    return { ada: !!b, garis: b.querySelectorAll('svg path, svg circle').length, judul: b.title };
+    const svg = b.querySelector('svg');
+    const bentuk = svg ? svg.querySelectorAll('path, circle') : [];
+    const kotak = svg ? svg.getBoundingClientRect() : null;
+    const g = getComputedStyle(b);
+    return {
+      ada: !!b, judul: b.title,
+      adaSvg: !!svg,
+      bentuk: bentuk.length,
+      /* Bentuk PADAT, bukan cuma garis tipis: kalau semuanya fill="none",
+         yang tergambar cuma kotak putih kosong — persis keluhannya. */
+      adaIsian: Array.from(bentuk).some((x) => (x.getAttribute('fill') || '') === 'currentColor'),
+      lebarIkon: kotak ? Math.round(kotak.width) : 0,
+      warna: g.color,
+      latar: g.backgroundColor,
+    };
   });
   cek('tombol tema menjelaskan tema tujuannya', /Ganti ke tema gelap/i.test(tema.judul), tema.judul);
+  cek('ikonnya benar-benar tergambar, bukan kotak kosong',
+    tema.adaSvg && tema.bentuk > 0 && tema.lebarIkon >= 14, tema);
+  cek('bentuknya padat, tidak bergantung garis tipis saja', tema.adaIsian, tema);
+  /* Warna ikon dan warna latar tombol tidak boleh sama — itulah definisi
+     "blank putih" yang dilaporkan. */
+  cek('warna ikon berbeda dari latar tombolnya', tema.warna !== tema.latar, tema);
   await p.click('#tombolTema');
   await p.waitForTimeout(250);
   const temaSesudah = await p.evaluate(() => ({
@@ -266,6 +286,42 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
   await p.screenshot({ path: path.join(LUAR, 'fund-ambil.png') });
   await p.keyboard.press('Escape');
   await p.waitForTimeout(200);
+
+  console.log('\n=== B2. PINTASAN TAMBAH DONATUR DI DASBOR ===');
+  const pintas = await p.evaluate(() => {
+    const b = document.getElementById('pintasDonatur');
+    const t = document.getElementById('tombolTema');
+    if (!b || !t) return null;
+    const rb = b.getBoundingClientRect(); const rt = t.getBoundingClientRect();
+    return {
+      teks: b.textContent.trim(), ikon: !!b.querySelector('svg'),
+      diKiriTema: rb.right <= rt.left + 1,
+      sebaris: Math.abs((rb.top + rb.height / 2) - (rt.top + rt.height / 2)) < 6,
+      diDalamLayar: rb.right <= window.innerWidth + 1,
+    };
+  });
+  cek('pintasan tambah donatur ada di kepala dasbor', pintas !== null, pintas);
+  cek('letaknya di sebelah KIRI ikon tema', pintas && pintas.diKiriTema, pintas);
+  cek('sejajar sebaris dengan ikon tema', pintas && pintas.sebaris, pintas);
+  cek('berlabel dan berikon', pintas && /Tambah Donatur/i.test(pintas.teks) && pintas.ikon, pintas);
+  cek('tidak terdorong keluar layar', pintas && pintas.diDalamLayar, pintas);
+
+  await p.click('#pintasDonatur');
+  await p.waitForTimeout(600);
+  const dariPintas = await p.evaluate(() => ({
+    modal: document.getElementById('modalBg').classList.contains('show'),
+    judul: (document.getElementById('modalTitle') || {}).textContent || '',
+    nama: !!document.querySelector('[name=nama]'),
+  }));
+  cek('pintasan membuka formulir donatur baru',
+    dariPintas.modal && /Donatur baru/i.test(dariPintas.judul) && dariPintas.nama, dariPintas);
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(300);
+  /* Menutup formulirnya harus mengembalikan DASBOR, bukan berpindah diam-diam
+     ke daftar donatur — formulir ini dipakai dua halaman sekarang. */
+  cek('menutup formulir tidak memindahkan halaman',
+    (await p.$$('.jw-baris')).length === 3, (await p.$$('.jw-baris')).length);
+  await p.screenshot({ path: path.join(LUAR, 'fund-pintasan.png') });
 
   console.log('\n=== C. DONATUR: FORM + PETA ===');
   await p.evaluate(() => { location.hash = '#donatur'; });

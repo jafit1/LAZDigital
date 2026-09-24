@@ -12,6 +12,76 @@
 <link rel="stylesheet" href="/styles.css">
 <script>document.documentElement.setAttribute('data-theme',(function(){try{return localStorage.getItem('laz_theme')||'light'}catch(e){return 'light'}})());</script>
 <style>
+<<<<<<< HEAD
+  /* ——— layout full-page dengan sidebar ——— */
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{display:flex;flex-direction:column}
+  .bc-wrap{display:flex;flex:1;overflow:hidden;position:relative}
+
+  /* ——— sidebar auto-hide overlay ——— */
+  .bc-sidebar{
+    position:absolute;left:0;top:0;bottom:0;z-index:50;width:240px;
+    background:var(--surface);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;overflow:hidden;
+    transform:translateX(-100%);transition:transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s ease;
+  }
+  /* hover zone: invisible 18px strip at left edge triggers sidebar */
+  .bc-sidebar::before{content:'';position:absolute;left:100%;top:0;bottom:0;width:18px}
+  .bc-sidebar:hover,.bc-sidebar.pinned{transform:translateX(0);box-shadow:6px 0 20px rgba(0,0,0,.12)}
+  .bc-sidebar.pinned .bc-brand::after{content:'';position:absolute;right:12px;top:50%;transform:translateY(-50%);width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  .bc-brand{padding:18px 20px;display:flex;align-items:center;gap:10px;font-family:var(--head);font-weight:800;font-size:15px;letter-spacing:-.02em;border-bottom:1px solid var(--border);cursor:pointer;position:relative}
+  .bc-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;box-shadow:0 6px 16px -6px rgba(var(--accent-rgb),.9);flex:none;cursor:pointer}
+  .bc-logo svg{width:18px;height:18px}
+  .bc-nav{flex:1;overflow-y:auto;padding:12px 0}
+  .bc-nav button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 20px;background:none;border:none;font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--text2);cursor:pointer;text-align:left;transition:.15s}
+  .bc-nav button:hover{background:var(--surface2);color:var(--text)}
+  .bc-nav button.active{background:var(--accent-soft);color:var(--accent-d);border-right:3px solid var(--accent)}
+  .bc-nav button svg{width:18px;height:18px;flex:none}
+  .bc-foot{padding:14px 20px;border-top:1px solid var(--border);font-size:12px}
+  .bc-foot .dev{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .bc-back{color:var(--muted);text-decoration:none;font-weight:600;transition:color .15s}
+  .bc-back:hover{color:var(--accent)}
+
+  /* ——— riwayat layout: head fixed, table scroll, detail scroll ——— */
+  section[data-panel=riwayat]{display:flex;flex-direction:column;gap:12px}
+  .riwayat-head{flex:none}
+  .riwayat-scroll{flex:1;min-height:0;overflow-y:auto;max-height:180px}
+  .card-riwayat-detail{flex:1;min-height:0;overflow-y:auto}
+
+  /* ——— tombol menu (hamburger) ——— */
+  .bc-menubtn{
+    position:fixed;top:14px;left:14px;z-index:40;
+    width:36px;height:36px;border-radius:9px;
+    background:var(--surface);border:1px solid var(--border);
+    display:grid;place-items:center;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);transition:.2s;
+  }
+  .bc-menubtn:hover{background:var(--accent-soft);border-color:var(--accent-soft2)}
+  .bc-menubtn svg{width:18px;height:18px;color:var(--text2)}
+
+  /* ——— main full-width, no scroll ——— */
+  .bc-main{flex:1;overflow:hidden;padding:20px 24px 24px 24px;display:flex;flex-direction:column}
+  .bc-main>pita{flex:none}
+  section[data-panel]{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+  section[data-panel]:not([hidden]){animation:fadeUp .32s ease both}
+  section[data-panel]>[hidden]{display:none}
+  section[data-panel]>.card{flex:none}
+  section[data-panel]>.riwayat-scroll,section[data-panel]>.card-riwayat-detail{flex:1;min-height:0;overflow-y:auto}
+  @media(max-width:768px){
+    .bc-sidebar{width:64px}
+    .bc-brand{padding:14px;justify-content:center}
+    .bc-brand span:not(.bc-logo){display:none}
+    .bc-nav button{justify-content:center;padding:14px}
+    .bc-nav button span{display:none}
+    .bc-foot{padding:10px}
+    .bc-foot .dev,.bc-foot .bc-back{display:none}
+    .bc-main{padding:18px 16px}
+  }
+
+  /* ——— komponen lain (dari versi sebelumnya) ——— */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+=======
   /* ——— khusus halaman broadcast; kerangka, tombol, kartu, tabel, modal,
          dropdown, dan tema semuanya dari /styles.css yang sama dengan
          halaman utama, supaya tampilannya benar-benar satu keluarga ——— */
@@ -23,19 +93,12 @@
   @media(max-width:1080px){.bc-kerja{grid-template-columns:1fr}.bc-sisi{position:static}}
 
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
   @media(max-width:680px){.grid2{grid-template-columns:1fr}}
   .row-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px}
   .lbl-min{font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:5px}
-  .chip{cursor:pointer;font-size:11.5px;font-family:var(--sans);font-weight:600;background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:4px 10px;transition:.15s;color:var(--text2)}
+  .chip{cursor:pointer;font-size:11px;font-family:var(--sans);font-weight:600;background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:3px 9px;transition:.15s;color:var(--text2)}
   .chip:hover{background:var(--accent-soft);border-color:var(--accent-soft2);color:var(--accent-d)}
-  .chip:active{transform:scale(.95)}
-  /* chip nama dibedakan: ia yang paling sering dipakai dan selalu tersedia */
-  .chip-nama{background:var(--accent-soft);border-color:var(--accent-soft2);color:var(--accent-d)}
-  .sisip-baris{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px}
-  .sisip-baris .lbl{font-size:12px;color:var(--muted);font-weight:600}
-  .nama-contoh{font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5}
-  .nama-contoh b{color:var(--text);font-weight:600}
-  .dk-card .nama-contoh{margin-top:6px;font-size:12px}
   .pratinjau{white-space:pre-wrap;word-break:break-word;font-family:var(--sans);margin:0;background:var(--accent-soft);border:1px solid var(--accent-soft2);border-radius:var(--radius-sm);padding:13px;min-height:132px;font-size:13px;line-height:1.6;color:var(--text)}
   .kartu-pesan{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:7px;font-size:12.5px;animation:fadeUp .3s ease both}
   .kartu-pesan .no{font-family:var(--sans);font-weight:600;color:var(--muted);margin-bottom:3px;font-size:11.5px}
@@ -59,66 +122,17 @@
   input[type=file]{padding:7px 10px;font-size:12.5px}
   input[type=file]::file-selector-button{font-family:var(--sans);font-weight:600;font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 10px;margin-right:10px;cursor:pointer;color:var(--text2);transition:.15s}
   input[type=file]::file-selector-button:hover{background:var(--accent-soft);border-color:var(--accent-soft2);color:var(--accent-d)}
-  /* ——— tanda centang gaya WhatsApp ———
-     Kata "terkirim / diterima / dibaca / dilewati" berjejer sebagai badge sulit
-     dibaca sekilas; centang langsung dikenali siapa pun yang pakai WhatsApp. */
-  .ck{width:17px;height:17px;vertical-align:-3px}
-  .ck-wrap{display:inline-flex;align-items:center;gap:5px;font-size:12px}
-  .ck-abu{color:var(--muted)}
-  .ck-biru{color:var(--blue)}
-  .ck-tunggu{color:var(--muted);opacity:.6}
-  .ck-gagal{color:var(--red)}
-  .ck-lewat{color:var(--muted);opacity:.55}
-  .bls{display:inline-flex;align-items:center;gap:4px;color:var(--green);font-weight:600;font-size:11.5px}
-  .bls svg{width:14px;height:14px}
-  .bls-teks{display:block;color:var(--text2);font-size:12px;margin-top:3px;max-width:320px;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+<<<<<<< HEAD
 
-  /* ——— riwayat: 3 baris terlihat, sisanya digulung ———
-     Supaya kartu rincian di bawahnya langsung kelihatan tanpa menggulung jauh. */
-  .riwayat-gulung{max-height:var(--tinggi-3baris,318px);overflow-y:auto}
-  .riwayat-gulung table{margin:0}
-  .riwayat-gulung thead th{position:sticky;top:0;z-index:2;background:var(--surface)}
-
-  /* ——— pemilih jam ———
-     <input type="time"> memunculkan pemilih bawaan sistem: di Chrome Indonesia
-     ia tampil 12 jam dengan AM/PM plus ikon jam kecil, gaya kotaknya beda
-     sendiri dari komponen lain di aplikasi ini, dan menit hanya bisa diketik.
-     Diganti dua dropdown halaman sendiri, 24 jam, kelipatan 5 menit. */
-  .waktu{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-  .waktu .titik{font-weight:700;color:var(--muted);margin:0 -1px}
-  /* .btn-dropdown bawaan melebar penuh mengikuti lebar kolom; untuk angka
-     dua digit itu berlebihan dan mendorong tanda titik dua ke baris baru. */
-  .waktu .btn-dropdown{width:auto;flex:0 0 auto;min-width:78px;justify-content:space-between}
-  .baris-set{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-top:12px}
-  /* Rentang jam butuh empat dropdown + pemisah; setengah lebar kartu tidak
-     cukup dan barisnya pecah, jadi ia mengambil satu baris penuh. */
-  #kotakJam{grid-column:1/-1}
-  @media(max-width:520px){.baris-set{grid-template-columns:1fr}}
-  /* jam kirim dimatikan → dropdownnya diredupkan, bukan dibiarkan seolah aktif */
-  .set-mati{opacity:.45;pointer-events:none}
-  .aksi-set{margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);display:flex;gap:9px;align-items:center;flex-wrap:wrap}
-  .rinci-perangkat{margin-top:12px}
-  .rinci-perangkat>summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted);list-style:none;user-select:none}
-  .rinci-perangkat>summary::-webkit-details-marker{display:none}
-  .rinci-perangkat>summary::before{content:'▸';display:inline-block;margin-right:6px;transition:transform .15s}
-  .rinci-perangkat[open]>summary::before{transform:rotate(90deg)}
-  .rinci-perangkat>summary:hover{color:var(--accent)}
-  .rinci-perangkat .sender-pre{margin-top:8px}
-  /* Halaman ini padat isi; kartu bawaan terlalu longgar kalau ditumpuk banyak. */
-  .card{padding:14px 16px;margin-bottom:14px}
-  .card h2{font-size:16px}
-  .card .desc{margin-bottom:10px}
-  .opt-row{padding:11px 0}
-  .opt-row .ot{font-size:13.5px}
-
-  /* ——— daftar kontak tersimpan ——— */
+  /* ——— daftar kontak ——— */
   .dk-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:16px}
   .dk-card{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:14px;cursor:pointer;transition:.15s}
   .dk-card:hover{border-color:var(--accent);box-shadow:0 4px 12px -4px rgba(var(--accent-rgb),.2)}
   .dk-card h4{font-size:14px;font-weight:700;margin-bottom:4px}
   .dk-card .meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
   .dk-card .desc{font-size:12.5px;color:var(--text2);margin-top:4px}
+
+=======
   section[data-panel]:not([hidden]){animation:fadeUp .3s ease both}
   /* .btn memakai display:inline-flex, yang mengalahkan atribut hidden bawaan —
      akibatnya tombol "Hapus" pustaka selalu kelihatan meski belum ada pesan
@@ -131,19 +145,221 @@
      tiga kartu yang harus muat satu layar. */
   .bc-kerja .card{margin-bottom:0}
   .bc-kerja .card h2{font-size:16px}
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
   @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
 <body>
+<<<<<<< HEAD
+<button class="bc-menubtn" id="menubtn" type="button" aria-label="Menu">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
+<div class="bc-wrap">
+  <aside class="bc-sidebar">
+    <div class="bc-brand">
+      <span class="bc-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg></span>
+      <span>Broadcast <span class="gradient-text">WhatsApp</span></span>
+    </div>
+    <nav class="bc-nav">
+      <button data-tab="baru" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Broadcast Baru</span>
+      </button>
+      <button data-tab="riwayat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Riwayat</span>
+      </button>
+      <button data-tab="daftar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Daftar Kontak</span>
+      </button>
+      <button data-tab="tolak">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+        <span>Tolak Kirim</span>
+      </button>
+      <button data-tab="setelan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Setelan</span>
+      </button>
+    </nav>
+    <div class="bc-foot">
+      <div class="dev"><span id="lblPerangkat" class="badge abu"></span></div>
+      <a href="/" class="bc-back">← Kembali ke LAZDigital</a>
+    </div>
+  </aside>
+
+  <main class="bc-main">
+    <div id="pita" class="card" hidden style="border-color:var(--amber);background:var(--amber-bg);color:var(--text)"></div>
+
+    <!-- BARU -->
+    <section data-panel="baru">
+      <div class="card">
+        <div class="row-head"><h2>Tulis pesan</h2>
+          <div style="display:flex;gap:8px;align-items:center" class="lib-sel">
+            <select id="pilihPustaka"><option value="">— pustaka —</option></select>
+            <button id="simpanPustaka" class="btn">Simpan</button>
+            <button id="hapusPustaka" class="btn btn-danger" hidden>Hapus</button>
+          </div>
+        </div>
+        <p class="muted" style="margin-top:2px">Sisipkan data kontak dengan <code>{nama}</code>.</p>
+        <div class="grid2" style="margin-top:14px">
+          <div>
+            <input id="namaPesan" placeholder="Nama pesan (untuk pustaka)" style="margin-bottom:9px">
+            <textarea id="isiPesan" rows="8" placeholder="Assalamualaikum {nama}, terima kasih donasi Rp{nominal}.&#10;&#10;Balas STOP untuk berhenti."></textarea>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px"><span class="muted" style="font-size:12px">Kolom:</span><span id="chipKolom"></span></div>
+            <input id="lampiranUrl" placeholder="URL lampiran (opsional)" style="margin-top:9px">
+          </div>
+          <div>
+            <span class="lbl-min">Pratinjau</span>
+            <pre id="pra" class="pratinjau">—</pre>
+            <div id="cekPesan" style="margin-top:7px;font-size:12px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row-head">
+          <h2>Daftar kontak</h2>
+          <div style="display:flex;gap:8px;align-items:center" class="lib-sel">
+            <select id="pilihDaftar"><option value="">— pilih daftar tersimpan —</option></select>
+            <button id="muatDaftar" class="btn">Muat</button>
+          </div>
+        </div>
+        <p class="muted" style="margin-top:2px">Unggah CSV atau tempel dari spreadsheet. Nomor 08xx jadi 62xx otomatis. (Excel: simpan dulu sebagai CSV.)</p>
+        <div class="grid2" style="margin-top:14px">
+          <input id="berkas" type="file" accept=".csv,.tsv,.txt">
+          <div>
+            <textarea id="tempel" rows="4" placeholder="0812...;Ahmad;150.000" style="font-family:ui-monospace,monospace;font-size:12px"></textarea>
+            <button id="prosesTempel" class="btn" style="margin-top:9px">Proses</button>
+          </div>
+        </div>
+        <div id="ringkasKontak" style="margin-top:14px" hidden></div>
+        <div id="aksiDaftar" style="margin-top:14px;display:none;gap:10px;align-items:center;flex-wrap:wrap">
+          <button id="simpanKeDaftar" class="btn btn-primary">Simpan ke Daftar Kontak</button>
+          <span class="muted" style="font-size:12px">atau lanjut ke kirim</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Periksa &amp; kirim</h2>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field" style="margin:0"><label>Nama kampanye</label><input id="namaKampanye" placeholder="mis. Laporan Donasi September"></div>
+          <label style="display:flex;align-items:center;gap:10px;align-self:flex-end;padding-bottom:8px;cursor:pointer"><span class="switch"><input id="langsung" type="checkbox" checked><span class="slider"></span></span> <span style="font-weight:600;font-size:13.5px">Langsung kirim</span></label>
+        </div>
+        <div id="pratinjauKirim" style="margin-top:14px"></div>
+        <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button id="kirim" class="btn btn-primary" disabled>Kirim broadcast</button>
+          <span id="statusKirim" class="muted"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIWAYAT -->
+    <section data-panel="riwayat" hidden>
+      <div class="card riwayat-head">
+        <div class="row-head"><h2>Riwayat</h2>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button id="dorong" class="btn">Kirim sekarang</button>
+            <label class="muted" style="display:flex;gap:7px;align-items:center;cursor:pointer;font-size:12.5px"><span class="switch" style="width:38px;height:22px"><input id="autoSegar" type="checkbox" checked><span class="slider"></span></span> auto</label>
+          </div>
+        </div>
+        <div id="ringkasAntrean" class="muted" style="margin-top:6px"></div>
+      </div>
+      <div class="riwayat-scroll">
+        <div class="table-wrap"><table><thead><tr><th>Kampanye</th><th>Isi</th><th>Status</th><th>Kemajuan</th><th>Dibuat</th><th></th></tr></thead><tbody id="tabelKampanye"></tbody></table></div>
+      </div>
+      <div id="detail" class="card card-riwayat-detail" hidden></div>
+    </section>
+
+    <!-- DAFTAR KONTAK -->
+    <section data-panel="daftar" hidden>
+      <div class="card">
+        <div class="row-head">
+          <h2>Daftar Kontak Tersimpan</h2>
+          <button id="buatDaftarBaru" class="btn btn-primary">Buat Daftar Baru</button>
+        </div>
+        <p class="muted" style="margin-top:2px">Simpan daftar penerima bernama untuk dipakai berulang kali di broadcast berbeda.</p>
+        <div id="daftarKontakList" class="dk-list"></div>
+      </div>
+    </section>
+
+    <!-- TOLAK KIRIM -->
+    <section data-panel="tolak" hidden>
+      <div class="card">
+        <h2>Tolak kirim</h2>
+        <p class="muted" style="margin-top:2px">Nomor di sini dilewati. Balasan <b>STOP</b> masuk otomatis.</p>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <input id="nomorOptout" placeholder="0812..., 0813..." style="flex:1;min-width:220px">
+          <button id="tambahOptout" class="btn btn-primary">Tambah</button>
+        </div>
+        <div id="daftarOptout" style="margin-top:14px"></div>
+      </div>
+    </section>
+
+    <!-- SETELAN -->
+    <section data-panel="setelan" hidden>
+      <div class="card">
+        <h2>Anti-spam pengiriman</h2>
+        <p class="muted" style="margin-top:2px">Jeda acak antar pesan bikin pengiriman terlihat wajar. Pesan di luar jam ditunda ke jam mulai; lebih dari batas harian diantre ke besok.</p>
+        <div style="margin-top:14px">
+          <span class="lbl-min">Jeda antar pesan (detik)</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <input id="jedaMin" type="number" min="0" max="600" step="1" style="width:110px" placeholder="min">
+            <span class="muted">sampai</span>
+            <input id="jedaMax" type="number" min="0" max="600" step="1" style="width:110px" placeholder="maks">
+            <span class="muted" style="font-size:12px">detik acak tiap kirim. 0 = tanpa jeda (tidak disarankan).</span>
+          </div>
+        </div>
+        <div class="opt-row" style="margin-top:16px">
+          <div><div class="ot">Batasi jam kirim</div><div class="od">Hanya mengirim dalam rentang jam yang ditentukan.</div></div>
+          <span class="switch"><input id="jamAktif" type="checkbox"><span class="slider"></span></span>
+        </div>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field" style="margin:0"><label>Jam mulai (WIB)</label><input id="jamMulai" type="time"></div>
+          <div class="field" style="margin:0"><label>Jam selesai (WIB)</label><input id="jamSelesai" type="time"></div>
+          <div class="field" style="margin:0"><label>Batas per hari (0 = bebas)</label><input id="batasHarian" type="number" min="0" step="10"></div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button id="simpanSetelan" class="btn btn-primary">Simpan setelan</button>
+          <span id="statusSetelan" class="muted"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Koneksi &amp; pengirim</h2>
+        <p class="muted" style="margin-top:2px">Atur di sini, tanpa perlu deploy ulang. Token diambil dari dashboard Fonnte → Device → Token.</p>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field" style="margin:0"><label>Token Fonnte</label><input id="fonnteToken" type="password" autocomplete="off" placeholder="tempel token (kosong = tetap)"><div class="muted" id="tokenInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+          <div class="field" style="margin:0"><label>Kode negara</label><input id="kodeNegara" placeholder="62"></div>
+        </div>
+        <div class="opt-row" style="margin-top:6px">
+          <div><div class="ot">Efek mengetik</div><div class="od">Tampak "sedang mengetik" sebelum pesan masuk — lebih natural.</div></div>
+          <span class="switch"><input id="typing" type="checkbox"><span class="slider"></span></span>
+        </div>
+        <div class="field" style="margin:0"><label>Kunci webhook</label><input id="webhookSecret" type="password" autocomplete="off" placeholder="tempel kunci (kosong = tetap)"><div class="muted" id="secretInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+        <div style="margin-top:8px">
+          <span class="lbl-min">URL webhook — tempel ke Fonnte → Device → Webhook</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="webhookUrl" readonly class="kode" style="flex:1;min-width:240px;font-size:12px">
+            <button id="salinWebhook" class="btn" type="button">Salin</button>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button id="simpanKoneksi" class="btn btn-primary">Simpan koneksi</button>
+          <button id="tesKoneksi" class="btn" type="button">Test koneksi</button>
+          <span id="statusKoneksi" class="muted"></span>
+        </div>
+        <pre id="infoPengirim" class="sender-pre" style="margin-top:14px">memuat…</pre>
+      </div>
+    </section>
+  </main>
+=======
 <div class="bg-blob bg-blob-1"></div>
 <div class="bg-blob bg-blob-2"></div>
 <div class="bg-blob bg-blob-3"></div>
 <div class="ag-grid"></div>
 
-<div id="boot">
-  <div class="loadingspinner">
-    <div id="square1"></div><div id="square2"></div><div id="square3"></div><div id="square4"></div><div id="square5"></div>
-  </div>
+<div id="boot" class="lz lz--full">
+  <div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div>
 </div>
 
 <!-- Kerangka sama persis dengan index.html: sidebar ciut otomatis + topnav -->
@@ -177,7 +393,6 @@
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="baru">Broadcast Baru</button>
-      <button class="tab-btn" data-tab="daftar">Daftar Kontak</button>
       <button class="tab-btn" data-tab="riwayat">Riwayat</button>
       <button class="tab-btn" data-tab="tolak">Tolak Kirim</button>
       <button class="tab-btn" data-tab="setelan">Setelan</button>
@@ -202,17 +417,12 @@
             <div class="desc">Sisipkan data kontak dengan <code>{nama}</code>.</div>
             <input id="namaPesan" placeholder="Nama pesan (untuk pustaka)" style="margin-bottom:9px">
             <textarea id="isiPesan" rows="9" placeholder="Assalamualaikum {nama}, terima kasih donasi Rp{nominal}.&#10;&#10;Balas STOP untuk berhenti."></textarea>
-            <div class="sisip-baris"><span class="lbl">Sisipkan di posisi kursor:</span><span id="chipKolom"></span></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px"><span class="muted" style="font-size:12px">Kolom:</span><span id="chipKolom"></span></div>
             <input id="lampiranUrl" placeholder="URL lampiran (opsional)" style="margin-top:9px">
           </div>
 
           <div class="card">
-            <div class="row-head"><h2>Daftar kontak</h2>
-              <div style="display:flex;gap:8px;align-items:center" class="lib-sel">
-                <select id="pilihDaftar"><option value="">— daftar tersimpan —</option></select>
-                <button id="muatDaftar" class="btn btn-sm">Muat</button>
-              </div>
-            </div>
+            <h2>Daftar kontak</h2>
             <div class="desc">Unggah CSV/TSV atau tempel dari spreadsheet. Nomor 08xx jadi 62xx otomatis.</div>
             <div class="grid2">
               <div>
@@ -226,10 +436,6 @@
               </div>
             </div>
             <div id="ringkasKontak" style="margin-top:14px" hidden></div>
-            <div id="aksiDaftar" style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap" hidden>
-              <button id="simpanKeDaftar" class="btn btn-sm">Simpan ke Daftar Kontak</button>
-              <span class="muted" style="font-size:12px">supaya bisa dipakai lagi nanti</span>
-            </div>
           </div>
         </div>
 
@@ -257,17 +463,6 @@
       </div>
     </section>
 
-    <!-- ============ DAFTAR KONTAK ============ -->
-    <section data-panel="daftar" hidden>
-      <div class="card">
-        <div class="row-head"><h2>Daftar kontak tersimpan</h2>
-          <button id="buatDaftarBaru" class="btn btn-primary">Buat daftar baru</button>
-        </div>
-        <div class="desc">Simpan daftar penerima bernama supaya bisa dipakai berulang di broadcast berbeda.</div>
-        <div id="daftarKontakList" class="dk-list"></div>
-      </div>
-    </section>
-
     <!-- ============ RIWAYAT ============ -->
     <section data-panel="riwayat" hidden>
       <div class="card">
@@ -278,7 +473,7 @@
           </div>
         </div>
         <div id="ringkasAntrean" class="muted" style="margin-top:6px"></div>
-        <div class="table-wrap riwayat-gulung" style="margin-top:14px"><table><thead><tr><th>Kampanye</th><th>Isi</th><th>Status</th><th>Kemajuan</th><th>Dibuat</th><th></th></tr></thead><tbody id="tabelKampanye"></tbody></table></div>
+        <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Kampanye</th><th>Isi</th><th>Status</th><th>Kemajuan</th><th>Dibuat</th><th></th></tr></thead><tbody id="tabelKampanye"></tbody></table></div>
       </div>
       <div id="detail" class="card" hidden></div>
     </section>
@@ -303,33 +498,23 @@
           <h2>Anti-spam pengiriman</h2>
           <div class="desc">Jeda acak bikin pengiriman terlihat wajar. Di luar jam ditunda ke jam mulai; lebih dari batas harian diantre ke besok.</div>
           <span class="lbl-min">Jeda antar pesan (detik)</span>
-          <div class="waktu">
-            <input id="jedaMin" type="number" min="0" max="600" step="1" style="width:76px" placeholder="min">
-            <span class="muted" style="font-size:12.5px">sampai</span>
-            <input id="jedaMax" type="number" min="0" max="600" step="1" style="width:76px" placeholder="maks">
-            <span class="muted" style="font-size:11.5px">0 = tanpa jeda</span>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <input id="jedaMin" type="number" min="0" max="600" step="1" style="width:104px" placeholder="min">
+            <span class="muted">sampai</span>
+            <input id="jedaMax" type="number" min="0" max="600" step="1" style="width:104px" placeholder="maks">
           </div>
-          <div class="opt-row">
-            <div><div class="ot">Batasi jam kirim</div><div class="od">Hanya mengirim dalam rentang jam ini.</div></div>
+          <div class="muted" style="font-size:11.5px;margin-top:5px">0 = tanpa jeda (tidak disarankan).</div>
+          <div class="opt-row" style="margin-top:14px">
+            <div><div class="ot">Batasi jam kirim</div><div class="od">Hanya mengirim dalam rentang jam yang ditentukan.</div></div>
             <span class="switch"><input id="jamAktif" type="checkbox"><span class="slider"></span></span>
           </div>
-          <div class="baris-set">
-            <div id="kotakJam"><span class="lbl-min">Rentang jam (WIB)</span>
-              <div class="waktu">
-                <select id="mulaiJ" data-lebar="88"></select><span class="titik">:</span><select id="mulaiM" data-lebar="88"></select>
-                <span class="muted" style="margin:0 2px">&ndash;</span>
-                <select id="selesaiJ" data-lebar="88"></select><span class="titik">:</span><select id="selesaiM" data-lebar="88"></select>
-              </div>
-            </div>
-            <div><span class="lbl-min">Batas per hari</span>
-              <div class="waktu">
-                <input id="batasHarian" type="number" min="0" step="10" style="width:92px">
-                <span class="muted" style="font-size:11.5px">0 = bebas</span>
-              </div>
-            </div>
+          <div class="grid2" style="margin-top:12px">
+            <div class="field" style="margin:0"><label>Jam mulai (WIB)</label><input id="jamMulai" type="time"></div>
+            <div class="field" style="margin:0"><label>Jam selesai (WIB)</label><input id="jamSelesai" type="time"></div>
           </div>
-          <div class="aksi-set">
-            <button id="simpanSetelan" class="btn btn-primary btn-sm">Simpan setelan</button>
+          <div class="field" style="margin:12px 0 0"><label>Batas per hari (0 = bebas)</label><input id="batasHarian" type="number" min="0" step="10"></div>
+          <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <button id="simpanSetelan" class="btn btn-primary">Simpan setelan</button>
             <span id="statusSetelan" class="muted" style="font-size:12.5px"></span>
           </div>
         </div>
@@ -343,27 +528,27 @@
             <div><div class="ot">Efek mengetik</div><div class="od">Tampak "sedang mengetik" sebelum pesan masuk.</div></div>
             <span class="switch"><input id="typing" type="checkbox"><span class="slider"></span></span>
           </div>
-          <div class="field" style="margin:10px 0 0"><label>Kunci webhook</label><input id="webhookSecret" type="password" autocomplete="off" placeholder="tempel kunci (kosong = tetap)"><div class="muted" id="secretInfo" style="font-size:11.5px;margin-top:4px"></div></div>
-          <div class="aksi-set">
-            <button id="simpanKoneksi" class="btn btn-primary btn-sm">Simpan koneksi</button>
-            <button id="tesKoneksi" class="btn btn-sm" type="button">Test koneksi</button>
-            <button id="salinWebhook" class="btn btn-sm" type="button">Salin URL webhook</button>
+          <div class="field" style="margin:12px 0 0"><label>Kunci webhook</label><input id="webhookSecret" type="password" autocomplete="off" placeholder="tempel kunci (kosong = tetap)"><div class="muted" id="secretInfo" style="font-size:11.5px;margin-top:4px"></div></div>
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="simpanKoneksi" class="btn btn-primary">Simpan koneksi</button>
+            <button id="tesKoneksi" class="btn" type="button">Test koneksi</button>
+            <button id="salinWebhook" class="btn" type="button">Salin URL webhook</button>
           </div>
-          <div id="statusKoneksi" class="muted" style="margin-top:8px;font-size:12.5px"></div>
-          <!-- keluaran mentah: berguna saat bermasalah, tapi tidak perlu
-               memakan satu kartu penuh setiap kali tab ini dibuka -->
-          <details class="rinci-perangkat">
-            <summary>Status perangkat mentah</summary>
-            <pre id="infoPengirim" class="sender-pre">memuat…</pre>
-          </details>
+          <div id="statusKoneksi" class="muted" style="margin-top:9px;font-size:12.5px"></div>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Status perangkat</h2>
+        <pre id="infoPengirim" class="sender-pre">memuat…</pre>
       </div>
     </section>
 
   </div></main>
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
 </div>
 
-<!-- modal + toast (komponen /styles.css) -->
+<!-- modal + toast -->
 <div class="modal-bg" id="modalBg">
   <div class="modal" id="modalCard">
     <div class="modal-head"><h3 id="modalTitle"></h3><button class="close-x" id="modalX" type="button">&times;</button></div>
@@ -378,14 +563,21 @@ var TOKEN = null;
 try { TOKEN = localStorage.getItem('laz_token'); } catch(e) {}
 if (!TOKEN) { location.href = '/'; }
 
+<<<<<<< HEAD
+var S = { kontak:null, pustaka:[], daftarKontak:[], pesanId:null, kampanyeAktif:null, timer:null, pakaiPesanBebas:true, setelan:null };
+=======
 var ME = null, SETTINGS = {};
-var S = { kontak:null, pustaka:[], daftarKontak:[], daftarKontakAktif:null, pesanId:null, kampanyeAktif:null, timer:null, pakaiPesanBebas:true, setelan:null, batasPenerima:5000 };
+var S = { kontak:null, pustaka:[], pesanId:null, kampanyeAktif:null, timer:null, pakaiPesanBebas:true, setelan:null, batasPenerima:5000 };
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
 var $=function(s){return document.querySelector(s)}, $$=function(s){return [].slice.call(document.querySelectorAll(s))};
 function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function angka(n){return new Intl.NumberFormat('id-ID').format(n||0)}
 function waktu(ms){return ms?new Date(ms).toLocaleString('id-ID',{dateStyle:'short',timeStyle:'short'}):'—'}
 function nk(s){return String(s).toLowerCase().replace(/[^a-z0-9]/g,'')}
 
+<<<<<<< HEAD
+/* ---------- toast & modal ---------- */
+=======
 /* ================= KERANGKA: sidebar & menu, sama dengan app.js =================
    Halaman ini tidak memuat app.js (474 KB dan ia langsung menyalakan SPA-nya
    sendiri), jadi kerangkanya disalin seadanya: daftar menu, ikon, dan perilaku
@@ -454,13 +646,8 @@ function gambarKerangka(){
   if(ciut) app.classList.add('collapsed');
 
   var logo=SETTINGS.logoData||'', nm=SETTINGS.namaLembaga||'LAZ Digital';
-  /* sama dengan halaman utama: lencana inisial saat sidebar ciut, logo penuh
-     saat lebar — wordmark tidak muat di rel 84px */
-  var ini=(function(){var k=String(nm||'').replace(/[^A-Za-z0-9 ]/g,' ').split(/\s+/).filter(Boolean);
-    if(!k.length) return 'LZ'; if(k.length===1) return k[0].slice(0,2).toUpperCase();
-    return (k[0].charAt(0)+k[1].charAt(0)).toUpperCase();})();
-  var ident = logo ? '<img class="logo-img" src="'+logo+'" alt="logo"><span class="logo-mini">'+esc(ini)+'</span>'
-                   : '<span class="logo">'+esc(ini)+'</span><span class="brand-name">'+esc(nm)+'</span>';
+  var ident = logo ? '<img class="logo-img" src="'+logo+'" alt="logo">'
+                   : '<span class="logo">LZ</span><span class="brand-name">'+esc(nm)+'</span>';
   $('#brandBox').innerHTML='<button class="tn-brand-id" type="button" id="btnBrand"'
     +' title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu">'+ident+'</button>';
   $('#btnBrand').addEventListener('click',toggleSidebar);
@@ -501,6 +688,7 @@ function rpc(fn){ return function(){
 }; }
 
 /* ---------- toast & modal (pengganti alert/confirm) ---------- */
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
 function toast(msg){ var t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove('show'); },2800); }
 function tutupModal(){ var bg=$('#modalBg'); bg.classList.remove('show'); }
 function modalDasar(judul, isiHTML, tombol){
@@ -521,7 +709,7 @@ $('#modalX').addEventListener('click',tutupModal);
 $('#modalBg').addEventListener('mousedown',function(e){ if(e.target===$('#modalBg')) tutupModal(); });
 document.addEventListener('keydown',function(e){ if(e.key==='Escape' && $('#modalBg').classList.contains('show')) tutupModal(); });
 
-/* ---------- select custom (gaya LAZDigital, bukan bawaan browser) ---------- */
+/* ---------- select custom ---------- */
 var CARET='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 function enhanceSelect(sel){
   if(sel._enh) { sel._sync(); return; }
@@ -543,9 +731,7 @@ function enhanceSelect(sel){
       it.addEventListener('click',function(){ sel.selectedIndex=i; sync(); close(); sel.dispatchEvent(new Event('change',{bubbles:true})); });
       sec.appendChild(it); });
     document.body.appendChild(pop);
-    /* daftar dua digit tidak perlu selebar 180px — select boleh meminta
-       lebar minimumnya sendiri lewat data-lebar. */
-    var r=btn.getBoundingClientRect(); var lebar=Math.max(r.width,Number(sel.dataset.lebar)||180);
+    var r=btn.getBoundingClientRect(); var lebar=Math.max(r.width,180);
     if(r.left+lebar>window.innerWidth-8) pop.style.left=Math.max(8,window.innerWidth-8-lebar)+'px'; else pop.style.left=r.left+'px';
     pop.style.top=(r.bottom+6)+'px'; pop.style.width=lebar+'px'; pop.style.maxHeight='min(320px,55vh)';
     btn.setAttribute('aria-expanded','true');
@@ -565,15 +751,28 @@ async function wa(aksi, data){
 }
 
 /* ---------- tab ---------- */
+/* sidebar: pin on logo click, unpin on click outside */
+(function(){
+  var sb=$('.bc-sidebar'), logo=$('.bc-logo'), brand=$('.bc-brand'), menu=$('#menubtn');
+  function togglePin(e){ e.stopPropagation(); sb.classList.toggle('pinned'); }
+  logo.addEventListener('click',togglePin);
+  menu.addEventListener('click',function(e){ e.stopPropagation(); sb.classList.toggle('pinned'); });
+  document.addEventListener('click',function(e){
+    if(sb.classList.contains('pinned') && !sb.contains(e.target) && e.target!==menu && !menu.contains(e.target)){
+      sb.classList.remove('pinned');
+    }
+  });
+})();
+
 function bukaTab(nama){
-  $$('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===nama); });
+  $$('.bc-nav button').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===nama); });
   $$('[data-panel]').forEach(function(p){ p.hidden = p.dataset.panel!==nama; });
-  if(nama==='daftar') muatDaftarKontak();
   if(nama==='riwayat') muatKampanye();
+  if(nama==='daftar') muatDaftarKontak();
   if(nama==='tolak') muatOptout();
   if(nama==='setelan') muatSetelan();
 }
-$$('.tab-btn').forEach(function(b){ b.addEventListener('click', function(){ bukaTab(b.dataset.tab); }); });
+$$('.bc-nav button').forEach(function(b){ b.addEventListener('click', function(){ bukaTab(b.dataset.tab); }); });
 
 /* ---------- placeholder klien ---------- */
 function isiPh(teks, nilai){
@@ -606,78 +805,17 @@ $('#hapusPustaka').addEventListener('click',async function(){
   try{ await wa('pesan-hapus',{id:S.pesanId}); S.pesanId=null; $('#namaPesan').value=''; $('#isiPesan').value=''; $('#lampiranUrl').value=''; $('#hapusPustaka').hidden=true; await muatPustaka(); gambarPra(); toast('Pesan dihapus.'); }catch(e){ toast(e.message); }
 });
 
-/* Nilai satu baris kontak untuk mengisi placeholder. {nama} selalu terisi:
-   kalau judul kolomnya bukan "nama", nilainya disalin dari kolom nama yang
-   dikenali server (S.kontak.kolomNama) — sama persis dengan yang dilakukan
-   server saat kampanye dibuat, jadi pratinjau tidak pernah berbeda. */
-function nilaiBaris(b){
-  var kolom=(S.kontak&&S.kontak.headerParameter)||[], nilai={telepon:b.telepon};
-  kolom.forEach(function(h,i){ nilai[h]=(b.params&&b.params[i])||''; });
-  var kn=S.kontak&&S.kontak.kolomNama;
-  if(!nilai.nama) nilai.nama=(kn?nilai[kn]:'')||b.nama||'';
-  return nilai;
-}
-/* Nama-nama pertama dari sebuah daftar: "Ahmad, Budi, Citra +12 lainnya".
-   `baris` boleh berisi .nama (dari server) atau .params + kolomNama. */
-function namaDari(b, kolom, kolomNama){
-  if(b.nama) return String(b.nama).trim();
-  if(kolomNama && b.params){ var i=(kolom||[]).indexOf(kolomNama); if(i>=0) return String(b.params[i]||'').trim(); }
-  return '';
-}
-function ringkasNama(baris, kolom, kolomNama, batas){
-  batas=batas||3;
-  var nama=(baris||[]).map(function(b){ return namaDari(b,kolom,kolomNama); }).filter(Boolean);
-  if(!nama.length) return '';
-  var awal=nama.slice(0,batas).map(function(x){return '<b>'+esc(x)+'</b>';}).join(', ');
-  var sisa=nama.length-batas;
-  return awal+(sisa>0?' <span class="muted">+'+angka(sisa)+' lainnya</span>':'');
-}
-
 /* ---------- composer ---------- */
 $('#isiPesan').addEventListener('input',function(){ gambarPra(); cekPesan(); });
 $('#lampiranUrl').addEventListener('input',gambarPra);
-/* Deretan chip untuk menyisipkan data kontak ke dalam pesan.
-   {nama} SELALU ada — walau kontaknya belum diunggah dan walau judul kolomnya
-   "Nama Donatur" atau "Muzakki" — karena server memetakannya otomatis. */
 function chipKolom(){
-  var kolom=S.kontak?(S.kontak.headerParameter||[]):[];
-  var kolomNama=S.kontak?S.kontak.kolomNama:null;
-  var html='<button class="chip chip-nama" data-k="nama" title="Nama kontak dari daftar yang diimpor'
-    +(kolomNama?' (kolom \''+esc(kolomNama)+'\')':'')+'">{nama}</button>';
-  kolom.forEach(function(h){
-    /* kolom nama aslinya tidak perlu jadi chip sendiri — {nama} sudah
-       mengambil nilai yang sama, dua chip kembar hanya membingungkan */
-    if(nk(h)==='nama' || h===kolomNama) return;
-    html+=' <button class="chip" data-k="'+esc(h)+'" title="Kolom '+esc(h)+' dari berkas kontak">{'+esc(h)+'}</button>';
-  });
-  if(!kolom.length) html+=' <span class="muted" style="font-size:11.5px">unggah kontak untuk kolom lainnya</span>';
-  $('#chipKolom').innerHTML=html;
-  $$('#chipKolom .chip').forEach(function(b){
-    /* mousedown, bukan click: click terjadi setelah textarea kehilangan fokus,
-       jadi posisi kursornya sudah telanjur hilang di sebagian peramban */
-    b.addEventListener('mousedown',function(e){ e.preventDefault(); sisip(b.dataset.k); });
-  });
+  var kolom=S.kontak?S.kontak.headerParameter:[];
+  $('#chipKolom').innerHTML = kolom.length? kolom.map(function(h){return '<button class="chip" data-k="'+esc(h)+'">{'+esc(h)+'}</button>';}).join(' ') : '<span class="muted" style="font-size:12px">unggah kontak dulu</span>';
+  $$('#chipKolom .chip').forEach(function(b){ b.addEventListener('click',function(){ sisip(b.dataset.k); }); });
 }
-
-/* Posisi kursor terakhir di dalam textarea diingat, supaya menekan chip
-   menyisipkan TEPAT di tempat yang tadi diklik — bukan selalu di ujung.
-   Versi lama memakai `ta.selectionStart||ta.value.length`, sehingga kursor di
-   posisi 0 (nilai 0 = falsy) malah menyisipkan di akhir teks. */
-var KURSOR={a:0,b:0};
-(function(){
-  var ta=$('#isiPesan');
-  ['input','click','keyup','select','focus'].forEach(function(ev){
-    ta.addEventListener(ev,function(){ KURSOR={a:ta.selectionStart,b:ta.selectionEnd}; });
-  });
-})();
 function sisip(nama){
-  var ta=$('#isiPesan');
-  var a=Math.min(KURSOR.a,ta.value.length), b=Math.min(Math.max(KURSOR.b,a),ta.value.length);
-  var sisipan='{'+nama+'}';
-  ta.value=ta.value.slice(0,a)+sisipan+ta.value.slice(b);
-  var pos=a+sisipan.length; KURSOR={a:pos,b:pos};
-  ta.focus(); ta.setSelectionRange(pos,pos);
-  gambarPra(); cekPesan();
+  var ta=$('#isiPesan'), a=ta.selectionStart||ta.value.length, b=ta.selectionEnd||a;
+  ta.value=ta.value.slice(0,a)+'{'+nama+'}'+ta.value.slice(b); ta.focus(); var pos=a+nama.length+2; ta.setSelectionRange(pos,pos); gambarPra(); cekPesan();
 }
 var timerCek=null;
 function cekPesan(){
@@ -690,13 +828,12 @@ function cekPesan(){
   },400);
 }
 function gambarPra(){
-  var teks=$('#isiPesan').value, p=S.kontak&&S.kontak.baris[0];
-  $('#pra').textContent=teks?isiPh(teks,p?nilaiBaris(p):{})+($('#lampiranUrl').value?'\n\n[lampiran: '+$('#lampiranUrl').value+']':''):'—';
+  var teks=$('#isiPesan').value, kolom=S.kontak?S.kontak.headerParameter:[], p=S.kontak&&S.kontak.baris[0];
+  var nilai={}; if(p){ kolom.forEach(function(h,i){ nilai[h]=p.params[i]||''; }); nilai.telepon=p.telepon; }
+  $('#pra').textContent=teks?isiPh(teks,nilai)+($('#lampiranUrl').value?'\n\n[lampiran: '+$('#lampiranUrl').value+']':''):'—';
   var wadah=$('#pratinjauKirim');
-  wadah.innerHTML=(S.kontak?S.kontak.baris:[]).slice(0,3).map(function(b){
-    var nl=nilaiBaris(b);
-    return '<div class="kartu-pesan"><div class="no kode">'+esc(nl.nama?nl.nama+' · '+b.telepon:b.telepon)+'</div><div class="isi">'+esc(isiPh(teks,nl))+'</div></div>';
-  }).join('') || '<div class="muted" style="font-size:12px">unggah kontak dulu</div>';
+  wadah.innerHTML=(S.kontak?S.kontak.baris:[]).slice(0,3).map(function(b){ var nl={telepon:b.telepon}; kolom.forEach(function(h,i){nl[h]=b.params[i]||'';}); return '<div class="kartu-pesan"><div class="no kode">'+esc(b.telepon)+'</div><div class="isi">'+esc(isiPh(teks,nl))+'</div></div>'; }).join('')
+    || '<div class="muted" style="font-size:12px">unggah kontak dulu</div>';
   tombolKirim();
 }
 function tombolKirim(){
@@ -714,102 +851,74 @@ $('#berkas').addEventListener('change',function(e){ var f=e.target.files[0]; if(
 $('#prosesTempel').addEventListener('click',function(){ if($('#tempel').value.trim()) prosesKontak($('#tempel').value); });
 async function prosesKontak(teks){
   var kotak=$('#ringkasKontak'); kotak.hidden=false; kotak.innerHTML='<span class="muted">memproses…</span>';
-  try{ var d=await wa('kontak-parse',{teks:teks}); S.kontak=d; S.daftarKontakAktif=null;
+  try{ var d=await wa('kontak-parse',{teks:teks}); S.kontak=d;
     var contoh=d.baris.slice(0,5);
-    var namaAwal=ringkasNama(d.baris,d.headerParameter,d.kolomNama,3);
     kotak.innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;align-items:center"><span class="badge green">'+angka(d.jumlahSah)+' nomor sah</span>'+(d.jumlahDitolak?'<span class="badge amber">'+angka(d.jumlahDitolak)+' ditolak</span>':'')+(d.jumlahOptout?'<span class="badge red">'+angka(d.jumlahOptout)+' opt-out</span>':'')+'</div>'
-      +(namaAwal
-        ? '<div class="nama-contoh">Nama terbaca dari kolom <b>'+esc(d.kolomNama)+'</b> — '+namaAwal+'. Pakai <code>{nama}</code> di pesan.</div>'
-        : '<div class="nama-contoh" style="color:var(--amber)">Kolom nama tidak dikenali, jadi <code>{nama}</code> akan kosong. Beri judul kolomnya <b>nama</b> di berkas kontak.</div>')
       +'<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Nomor</th>'+d.headerParameter.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+contoh.map(function(b){return '<tr><td class="kode">'+esc(b.telepon)+'</td>'+b.params.map(function(p){return '<td>'+esc(p)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>'
       +(d.ditolak.length?'<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">'+d.ditolak.length+' baris ditolak</summary><ul class="muted" style="margin:6px 0 0 18px">'+d.ditolak.map(function(x){return '<li>baris '+x.baris+': '+esc(x.isi)+' — '+esc(x.alasan)+'</li>';}).join('')+'</ul></details>':'');
-    $('#aksiDaftar').hidden = !(d.jumlahSah>0);
+    $('#aksiDaftar').style.display='flex';
     chipKolom(); gambarPra(); cekPesan();
-  }catch(e){ kotak.innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'; $('#aksiDaftar').hidden=true; }
+  }catch(e){ kotak.innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'; }
 }
 
-/* ---------- daftar kontak tersimpan ----------
-   Buku kontak bernama yang bisa dipakai ulang, terpisah dari tabel Donatur. */
+<<<<<<< HEAD
+/* ---------- daftar kontak ---------- */
 async function muatDaftarKontak(){
   try{ var d=await wa('daftarkontak-list'); S.daftarKontak=d.daftar||[];
-    $('#pilihDaftar').innerHTML='<option value="">— daftar tersimpan —</option>'+S.daftarKontak.map(function(dk){return '<option value="'+esc(dk.id)+'">'+esc(dk.nama)+' ('+dk.jumlah+' kontak)</option>';}).join('');
+    $('#pilihDaftar').innerHTML='<option value="">— pilih daftar tersimpan —</option>'+S.daftarKontak.map(function(dk){return '<option value="'+esc(dk.id)+'">'+esc(dk.nama)+' ('+dk.jumlah+' kontak)</option>';}).join('');
     enhanceSelect($('#pilihDaftar'));
     var list=$('#daftarKontakList');
     list.innerHTML=S.daftarKontak.length? S.daftarKontak.map(function(dk){
       return '<div class="dk-card" data-id="'+esc(dk.id)+'">'
         +'<h4>'+esc(dk.nama)+'</h4>'
         +(dk.deskripsi?'<div class="desc">'+esc(dk.deskripsi)+'</div>':'')
-        +(ringkasNama(dk.baris,dk.headerParameter,dk.kolomNama,3)
-            ? '<div class="nama-contoh">'+ringkasNama(dk.baris,dk.headerParameter,dk.kolomNama,3)+'</div>' : '')
-        +'<div class="meta"><span>'+angka(dk.jumlah)+' kontak</span><span>dipakai '+(dk.dipakai||0)+'×</span><span>'+waktu(dk.diperbarui)+'</span></div>'
-        +'<div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm" data-pakai="'+esc(dk.id)+'">Pakai</button><button class="btn btn-danger btn-sm" data-hapus-dk="'+esc(dk.id)+'">Hapus</button></div>'
+        +'<div class="meta"><span>'+angka(dk.jumlah)+' kontak</span><span>Dipakai '+dk.dipakai+'×</span><span>'+waktu(dk.diperbarui)+'</span></div>'
+        +'<div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm" data-pakai="'+esc(dk.id)+'">Pakai</button><button class="btn btn-danger btn-sm" data-hapus="'+esc(dk.id)+'">Hapus</button></div>'
         +'</div>';
     }).join('') : '<div class="muted">Belum ada daftar kontak tersimpan.</div>';
     $$('[data-pakai]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); pakaiDaftar(b.dataset.pakai); }); });
-    $$('[data-hapus-dk]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); hapusDaftar(b.dataset.hapusDk); }); });
+    $$('[data-hapus]').forEach(function(b){ b.addEventListener('click',function(e){ e.stopPropagation(); hapusDaftar(b.dataset.hapus); }); });
     $$('.dk-card').forEach(function(c){ c.addEventListener('click',function(){ pakaiDaftar(c.dataset.id); }); });
   }catch(e){ $('#daftarKontakList').innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>'; }
 }
-$('#muatDaftar').addEventListener('click',function(){ var id=$('#pilihDaftar').value; if(id) pakaiDaftar(id); else toast('Pilih daftarnya dulu.'); });
-$('#buatDaftarBaru').addEventListener('click',function(){ bukaTab('baru'); toast('Unggah kontaknya dulu, lalu tekan "Simpan ke Daftar Kontak".'); });
-
+$('#muatDaftar').addEventListener('click',function(){ var id=$('#pilihDaftar').value; if(id) pakaiDaftar(id); });
 async function pakaiDaftar(id){
   var dk=S.daftarKontak.find(function(x){return x.id===id;});
-  if(!dk||!dk.baris){ try{ var d=await wa('daftarkontak-get',{id:id}); dk=d.daftar; }catch(e){ return toast(e.message); } }
+  if(!dk){ try{ var d=await wa('daftarkontak-get',{id:id}); dk=d.daftar; }catch(e){ return toast(e.message); } }
   if(!dk) return;
-  S.kontak={header:dk.header,headerParameter:dk.headerParameter,kolomNama:dk.kolomNama,jumlahSah:dk.jumlah,jumlahDitolak:0,jumlahOptout:0,baris:dk.baris,ditolak:[]};
-  S.daftarKontakAktif=dk.id;
+  S.kontak={header:dk.header,headerParameter:dk.headerParameter,jumlahSah:dk.jumlah,jumlahDitolak:0,jumlahOptout:0,baris:dk.baris,ditolak:[]};
+  toast('Memuat daftar: '+dk.nama+' ('+dk.jumlah+' kontak)');
   bukaTab('baru');
-  var kotak=$('#ringkasKontak'); kotak.hidden=false;
+  $('#ringkasKontak').hidden=false;
   var contoh=dk.baris.slice(0,5);
-  var namaAwal=ringkasNama(dk.baris,dk.headerParameter,dk.kolomNama,3);
-  kotak.innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;align-items:center"><span class="badge green">'+angka(dk.jumlah)+' nomor</span><span class="muted">dari daftar <b>'+esc(dk.nama)+'</b></span></div>'
-    +(namaAwal?'<div class="nama-contoh">'+namaAwal+'. Pakai <code>{nama}</code> di pesan.</div>':'')
+  $('#ringkasKontak').innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px;align-items:center"><span class="badge green">'+angka(dk.jumlah)+' nomor dari daftar <b>'+esc(dk.nama)+'</b></span></div>'
     +'<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Nomor</th>'+dk.headerParameter.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+contoh.map(function(b){return '<tr><td class="kode">'+esc(b.telepon)+'</td>'+(b.params||[]).map(function(p){return '<td>'+esc(p)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
-  $('#aksiDaftar').hidden=true;   /* sudah tersimpan, tidak perlu disimpan lagi */
   chipKolom(); gambarPra(); cekPesan();
-  toast('Daftar "'+dk.nama+'" dimuat.');
 }
-
-/* Versi lama memakai prompt() bawaan browser — kotak abu-abu sistem yang
-   tampak asing di tengah halaman ini dan tidak bisa ditata. Diganti modal
-   halaman sendiri, sama dengan dialog lain di sini. */
-function tanyaNamaDaftar(){
-  return new Promise(function(res){
-    modalDasar('Simpan daftar kontak',
-      '<div class="field"><label>Nama daftar</label><input id="dkNama" placeholder="mis. Donatur Rutin Bantul Kota"></div>'
-      +'<div class="field" style="margin-bottom:0"><label>Keterangan (opsional)</label><input id="dkDesc" placeholder="mis. hasil rekap Agustus"></div>',
-      [{label:'Batal',kelas:'',klik:function(){ tutupModal(); res(null); }},
-       {label:'Simpan',kelas:'btn-primary',klik:function(){
-          var n=($('#dkNama').value||'').trim();
-          if(!n){ $('#dkNama').focus(); return; }
-          var d=($('#dkDesc').value||'').trim();
-          tutupModal(); res({nama:n, deskripsi:d||null});
-       }}]);
-    setTimeout(function(){ var i=$('#dkNama'); if(i){ i.value='Daftar '+(S.daftarKontak.length+1); i.select(); i.focus(); } },60);
-  });
-}
+$('#buatDaftarBaru').addEventListener('click',function(){ bukaTab('baru'); toast('Unggah kontak dulu, lalu tekan "Simpan ke Daftar Kontak".'); });
 $('#simpanKeDaftar').addEventListener('click',async function(){
-  if(!S.kontak || !S.kontak.jumlahSah) return toast('Belum ada kontak yang diproses.');
-  var isi=await tanyaNamaDaftar(); if(!isi) return;
-  var b=this; b.disabled=true;
+  if(!S.kontak || !S.kontak.jumlahSah) return toast('Belum ada kontak diproses.');
+  var nama=prompt('Nama daftar kontak:','Daftar '+(S.daftarKontak.length+1));
+  if(!nama) return;
+  var desc=prompt('Deskripsi (opsional):','')||null;
   try{
-    await wa('daftarkontak-simpan',{nama:isi.nama,deskripsi:isi.deskripsi,header:S.kontak.header,headerParameter:S.kontak.headerParameter,baris:S.kontak.baris});
-    toast('Tersimpan sebagai "'+isi.nama+'".');
-    $('#aksiDaftar').hidden=true;
+    await wa('daftarkontak-simpan',{nama:nama,deskripsi:desc,header:S.kontak.header,headerParameter:S.kontak.headerParameter,baris:S.kontak.baris});
+    toast('Daftar kontak tersimpan: '+nama);
     await muatDaftarKontak();
   }catch(e){ toast(e.message); }
-  finally{ b.disabled=false; }
 });
 async function hapusDaftar(id){
-  if(!await konfirm({judul:'Hapus daftar',isi:'Hapus daftar kontak ini? Kampanye yang sudah terlanjur dibuat tidak ikut terhapus.',ya:'Hapus',bahaya:true})) return;
+  if(!await konfirm({judul:'Hapus daftar',isi:'Hapus daftar kontak ini? Kontak di kampanye yang sudah dibuat tetap ada.',ya:'Hapus',bahaya:true})) return;
   try{ await wa('daftarkontak-hapus',{id:id}); toast('Daftar dihapus.'); muatDaftarKontak(); }catch(e){ toast(e.message); }
 }
 
+/* ---------- kirim ---------- */
+=======
 /* ---------- kirim ----------
    Penerima ditulis ke Redis di dalam satu permintaan HTTP, jadi satu kampanye
    dibatasi S.batasPenerima nomor. Kontak yang lebih banyak dipecah di sini
    menjadi beberapa kampanye berurutan — bukan ditolak mentah-mentah. */
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
 $('#kirim').addEventListener('click',async function(){
   if(!S.kontak) return;
   var semua=S.kontak.baris, batas=S.batasPenerima||5000;
@@ -830,7 +939,6 @@ $('#kirim').addEventListener('click',async function(){
         pesan:{pesanId:S.pesanId||undefined,teks:$('#isiPesan').value,lampiranUrl:$('#lampiranUrl').value||null},
         kolom:kolom,
         baris:potongan[k].map(function(b){ var nl={}; kolom.forEach(function(h,i){nl[h]=b.params[i]||'';}); return {telepon:b.telepon,kolom:nl}; }),
-        daftarKontakId:S.daftarKontakAktif||undefined,
         langsung:true, langsungJalan:$('#langsung').checked});
       if(!pertama) pertama=d.kampanye.id;
       totalAntre+=d.jumlahAntre||0; totalLewat+=d.jumlahDilewati||0;
@@ -844,75 +952,29 @@ $('#kirim').addEventListener('click',async function(){
 
 /* ---------- riwayat ---------- */
 var WARNA={dibaca:'green',diterima:'purple',terkirim:'blue',gagal:'red',dilewati:'amber',dibatalkan:'abu',antre:'abu',berjalan:'blue',ditahan:'amber',selesai:'green'};
-/* Status KAMPANYE (berjalan/selesai/dibatalkan) tetap badge — itu keadaan satu
-   pekerjaan, bukan perjalanan satu pesan. */
 function keping(s){ return '<span class="badge '+(WARNA[s]||'abu')+'">'+esc(s)+'</span>'; }
-
-/* Status PESAN digambar sebagai centang, seperti di WhatsApp:
-   satu centang = sudah dikirim tapi belum sampai, dua centang = sampai di
-   perangkat, dua centang biru = sudah dibaca. */
-function centang(n){
-  var jalur = n===2 ? '<path d="m1.5 12.5 4 4 8.5-8.5"/><path d="m9.5 16.5 8.5-8.5"/>'
-                    : '<path d="m4 12.5 4.5 4.5 10-10"/>';
-  return '<svg class="ck" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'+jalur+'</svg>';
-}
-var IKON_JAM='<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
-var IKON_SERU='<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16.2h.01"/></svg>';
-var IKON_BALAS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-5-5 5-5"/><path d="M4 9h9a7 7 0 0 1 7 7v4"/></svg>';
-var ARTI_CENTANG={
-  antre:'Masih di antrean, belum dikirim',
-  terkirim:'Sudah dikirim, belum sampai ke perangkat penerima',
-  diterima:'Sampai di perangkat penerima',
-  dibaca:'Sudah dibaca',
-  gagal:'Gagal dikirim',
-  dilewati:'Dilewati — nomor ada di daftar tolak kirim',
-  dibatalkan:'Kampanye dibatalkan sebelum nomor ini dikirimi'
-};
-function tandaPesan(st){
-  var k, isi;
-  if(st==='dibaca'){ k='ck-biru'; isi=centang(2); }
-  else if(st==='diterima'){ k='ck-abu'; isi=centang(2); }
-  else if(st==='terkirim'){ k='ck-abu'; isi=centang(1); }
-  else if(st==='gagal'){ k='ck-gagal'; isi=IKON_SERU+'<span>gagal</span>'; }
-  else if(st==='antre'){ k='ck-tunggu'; isi=IKON_JAM; }
-  else { k='ck-lewat'; isi=centang(1)+'<span>'+esc(st)+'</span>'; }
-  return '<span class="ck-wrap '+k+'" title="'+esc(ARTI_CENTANG[st]||st)+'">'+isi+'</span>';
-}
 function ringkasIsi(kp){ if(kp.mode==='pesan'){ var t=(kp.pesan&&kp.pesan.teks||'').replace(/\s+/g,' ').trim(); return t.length>40?t.slice(0,40)+'…':(t||'(kosong)'); } return (kp.template&&kp.template.nama)||'-'; }
-function bilah(s){ var bag=[['dibaca',s.dibaca,'var(--green)'],['diterima',s.diterima,'var(--purple)'],['terkirim',s.terkirim,'var(--blue)'],['gagal',s.gagal,'var(--red)'],['dilewati',s.dilewati,'var(--amber)'],['dibatalkan',s.dibatalkan,'var(--muted)']]; var tot=Math.max(s.total,1); return '<div class="bar">'+bag.map(function(x){return x[1]>0?'<div style="width:'+(x[1]/tot*100).toFixed(2)+'%;background:'+x[2]+'"></div>':'';}).join('')+'</div><div class="muted" style="margin-top:4px">'+s.persen+'% · '+angka(s.selesai)+'/'+angka(s.total)+(s.dibalas?' · <span class="bls">'+IKON_BALAS+angka(s.dibalas)+'</span>':'')+'</div>'; }
+function bilah(s){ var bag=[['dibaca',s.dibaca,'var(--green)'],['diterima',s.diterima,'var(--purple)'],['terkirim',s.terkirim,'var(--blue)'],['gagal',s.gagal,'var(--red)'],['dilewati',s.dilewati,'var(--amber)'],['dibatalkan',s.dibatalkan,'var(--muted)']]; var tot=Math.max(s.total,1); return '<div class="bar">'+bag.map(function(x){return x[1]>0?'<div style="width:'+(x[1]/tot*100).toFixed(2)+'%;background:'+x[2]+'"></div>':'';}).join('')+'</div><div class="muted" style="margin-top:4px">'+s.persen+'% · '+angka(s.selesai)+'/'+angka(s.total)+'</div>'; }
 async function muatKampanye(){
   try{ var d=await wa('kampanye-list',{limit:50}); var tb=$('#tabelKampanye');
     tb.innerHTML=d.kampanye.length? d.kampanye.map(function(kp){ return '<tr><td><button class="btn btn-ghost btn-sm" style="font-weight:700" data-buka="'+kp.id+'">'+esc(kp.nama)+'</button><div class="muted" style="margin-top:2px">'+angka(kp.stat.total)+' penerima</div></td><td class="muted" style="max-width:190px">'+esc(ringkasIsi(kp))+'</td><td>'+keping(kp.status)+'</td><td style="min-width:160px">'+bilah(kp.stat)+'</td><td class="muted">'+waktu(kp.dibuatPada)+'</td><td><button class="btn btn-sm" data-buka="'+kp.id+'">rincian</button></td></tr>'; }).join('') : '<tr><td colspan="6" class="muted">Belum ada kampanye.</td></tr>';
     $$('[data-buka]').forEach(function(b){ b.addEventListener('click',function(){ bukaDetail(b.dataset.buka); }); });
-    setTinggiRiwayat();
     var lw=await wa('log-webhook'); $('#ringkasAntrean').innerHTML='Antrean: <b>'+angka(lw.antrean.siap)+'</b> siap · <b>'+angka(lw.antrean.tunda)+'</b> menunggu';
   }catch(e){ $('#tabelKampanye').innerHTML='<tr><td colspan="6" style="color:var(--red)">'+esc(e.message)+'</td></tr>'; }
 }
-/* Tinggi area riwayat dipatok tepat 3 baris + kepala tabel, diukur dari baris
-   sungguhan (tingginya berbeda-beda tergantung panjang nama kampanye). Sisanya
-   digulung, supaya kartu rincian di bawahnya langsung terlihat. */
-function setTinggiRiwayat(){
-  var kotak=$('.riwayat-gulung'); if(!kotak) return;
-  var kepala=kotak.querySelector('thead'), baris=kotak.querySelectorAll('tbody tr');
-  if(!kepala||!baris.length){ kotak.style.removeProperty('--tinggi-3baris'); return; }
-  var t=kepala.getBoundingClientRect().height;
-  for(var i=0;i<Math.min(3,baris.length);i++) t+=baris[i].getBoundingClientRect().height;
-  kotak.style.setProperty('--tinggi-3baris', Math.ceil(t)+'px');
-}
-window.addEventListener('resize',setTinggiRiwayat);
-
 async function bukaDetail(id){
   S.kampanyeAktif=id; var box=$('#detail'); box.hidden=false;
   try{ var d=await wa('kampanye-get',{id:id}); var kp=d.kampanye,s=d.stat;
-    /* "Dilewati" dibuang dari deret angka — nomornya cuma ada di daftar tolak
-       kirim dan angkanya membingungkan berjejer dengan status pengiriman.
-       Masih bisa dilihat lewat saringan status di bawah. */
-    var tiles=[['Total',s.total],['Antre',s.antre],['Terkirim',s.terkirim],['Diterima',s.diterima],['Dibaca',s.dibaca],['Dibalas',s.dibalas||0],['Gagal',s.gagal]];
-    box.innerHTML='<div class="row-head"><div><h2>'+esc(kp.nama)+'</h2><div class="muted" style="margin-top:5px">'+keping(kp.status)+' · '+(kp.mode==='pesan'?'pesan bebas lewat <b>'+esc(kp.pengirim||'fonnte')+'</b>':'template <code>'+esc((kp.template&&kp.template.nama)||'-')+'</code>')+' · '+waktu(kp.dibuatPada)+'</div>'+(kp.catatanTahan?'<div style="color:var(--amber);margin-top:5px">Ditahan: '+esc(kp.catatanTahan)+'</div>':'')+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'
+    var tiles=[['Total',s.total],['Antre',s.antre],['Terkirim',s.terkirim],['Diterima',s.diterima],['Dibaca',s.dibaca],['Gagal',s.gagal],['Dilewati',s.dilewati]];
+    box.innerHTML='<div style="display:flex;flex-direction:column;height:100%;overflow:hidden">'
+      +'<div style="flex:none">'
+      +'<div class="row-head"><div><h2>'+esc(kp.nama)+'</h2><div class="muted" style="margin-top:5px">'+keping(kp.status)+' · '+(kp.mode==='pesan'?'pesan bebas lewat <b>'+esc(kp.pengirim||'fonnte')+'</b>':'template <code>'+esc((kp.template&&kp.template.nama)||'-')+'</code>')+' · '+waktu(kp.dibuatPada)+'</div>'+(kp.catatanTahan?'<div style="color:var(--amber);margin-top:5px">Ditahan: '+esc(kp.catatanTahan)+'</div>':'')+'</div><div style="display:flex;gap:7px;flex-wrap:wrap">'
       +'<button class="btn btn-sm" data-aksi="tahan">Tahan</button><button class="btn btn-sm" data-aksi="lanjutkan">Lanjutkan</button><button class="btn btn-sm" data-aksi="ulangi-gagal">Ulangi gagal</button><button class="btn btn-danger btn-sm" data-aksi="batalkan">Batalkan</button></div></div>'
       +'<div class="bc-tiles" style="margin-top:14px">'+tiles.map(function(t){return '<div class="bc-tile"><div class="l">'+t[0]+'</div><div class="n">'+angka(t[1])+'</div></div>';}).join('')+'</div>'
       +'<div style="margin-top:14px;display:flex;align-items:center;gap:10px"><span class="muted" style="font-size:12px">Saring:</span><select id="saringStatus"><option value="">semua status</option>'+['antre','terkirim','diterima','dibaca','gagal','dilewati','dibatalkan'].map(function(x){return '<option value="'+x+'">'+x+'</option>';}).join('')+'</select></div>'
-      +'<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Nomor</th><th>Status</th><th>Balasan</th><th>Parameter</th><th>Galat</th><th>Waktu</th></tr></thead><tbody id="tabelPenerima"></tbody></table></div>';
+      +'</div>'
+      +'<div style="flex:1;min-height:0;overflow-y:auto;margin-top:10px"><div class="table-wrap"><table><thead><tr><th>Nomor</th><th>Status</th><th>Parameter</th><th>Coba</th><th>Galat</th><th>Waktu</th></tr></thead><tbody id="tabelPenerima"></tbody></table></div></div>'
+      +'</div>';
     box.querySelectorAll('[data-aksi]').forEach(function(b){ b.addEventListener('click',async function(){ if(b.dataset.aksi==='batalkan'&&!await konfirm({judul:'Batalkan kampanye',isi:'Hentikan pengiriman kampanye ini?',ya:'Batalkan',bahaya:true}))return; try{ await wa('kampanye-aksi',{id:id,tindakan:b.dataset.aksi}); bukaDetail(id); muatKampanye(); }catch(e){ toast(e.message); } }); });
     enhanceSelect($('#saringStatus'));
     $('#saringStatus').addEventListener('change',muatPenerima);
@@ -922,13 +984,7 @@ async function bukaDetail(id){
 async function muatPenerima(){
   if(!S.kampanyeAktif) return; var st=$('#saringStatus')?$('#saringStatus').value:'';
   try{ var d=await wa('kampanye-recipients',{id:S.kampanyeAktif,status:st||null,limit:200});
-    $('#tabelPenerima').innerHTML=d.baris.map(function(r){
-      var par=r.kolom?Object.keys(r.kolom).filter(function(n){return n!=='telepon';}).map(function(n){return n+': '+r.kolom[n];}).join(' · '):(r.params||[]).join(' | ');
-      var bls=r.balasan
-        ? '<span class="bls">'+IKON_BALAS+(r.balasan.jumlah>1?r.balasan.jumlah+' balasan':'dibalas')+'</span><span class="bls-teks" title="'+esc(r.balasan.teks)+'">'+esc(r.balasan.teks)+'</span>'
-        : '<span class="muted">—</span>';
-      return '<tr><td class="kode">'+esc(r.telepon)+'</td><td>'+tandaPesan(r.status)+'</td><td>'+bls+'</td><td class="muted">'+esc(par)+'</td><td class="muted" style="color:'+(r.status==='gagal'?'var(--red)':'var(--muted)')+'">'+esc((r.kodeGalat?'['+r.kodeGalat+'] ':'')+(r.pesanGalat||''))+'</td><td class="muted">'+waktu(r.waktu&&(r.balasan&&r.balasan.pada||r.waktu.dibaca||r.waktu.diterima||r.waktu.dikirim||r.waktu.gagal))+'</td></tr>';
-    }).join('')||'<tr><td colspan="6" class="muted">Tidak ada.</td></tr>';
+    $('#tabelPenerima').innerHTML=d.baris.map(function(r){ var par=r.kolom?Object.keys(r.kolom).filter(function(n){return n!=='telepon';}).map(function(n){return n+': '+r.kolom[n];}).join(' · '):(r.params||[]).join(' | '); return '<tr><td class="kode">'+esc(r.telepon)+'</td><td>'+keping(r.status)+'</td><td class="muted">'+esc(par)+'</td><td>'+(r.coba||0)+'</td><td class="muted" style="color:'+(r.status==='gagal'?'var(--red)':'var(--muted)')+'">'+esc((r.kodeGalat?'['+r.kodeGalat+'] ':'')+(r.pesanGalat||''))+'</td><td class="muted">'+waktu(r.waktu&&(r.waktu.dibaca||r.waktu.diterima||r.waktu.dikirim||r.waktu.gagal))+'</td></tr>'; }).join('')||'<tr><td colspan="6" class="muted">Tidak ada.</td></tr>';
   }catch(e){ $('#tabelPenerima').innerHTML='<tr><td colspan="6" style="color:var(--red)">'+esc(e.message)+'</td></tr>'; }
 }
 var sedangPacu=false;
@@ -937,8 +993,11 @@ async function satuPutaran(){
   if(res.status===401){ location.href='/'; throw new Error('Sesi berakhir'); }
   var j=await res.json(); if(j.__error) throw new Error(j.__error); return j.result||{};
 }
+<<<<<<< HEAD
+=======
 /* Pengiriman juga berjalan sendiri di server (rantai wa-dispatch + cron per
    jam). Tombol ini hanya mempercepat / menyalakan ulang dari browser. */
+>>>>>>> 84e0b2e (Update 13-09-2026  0:23)
 async function pacuKirim(opsi){
   opsi=opsi||{}; if(sedangPacu) return; sedangPacu=true;
   var t=$('#dorong'); var lbl=t?t.textContent:''; if(t){ t.disabled=true; t.innerHTML='<span class="spin" style="border-color:rgba(0,0,0,.2);border-top-color:var(--accent)"></span>mengirim…'; }
@@ -975,38 +1034,10 @@ $('#tambahOptout').addEventListener('click',async function(){
   try{ var d=await wa('optout-tambah',{nomor:isi}); $('#nomorOptout').value=''; if(d.gagal&&d.gagal.length) modalInfo('Sebagian tidak terbaca','<ul style="margin:0 0 0 18px">'+d.gagal.map(function(g){return '<li>'+esc(g.isi)+' — '+esc(g.alasan)+'</li>';}).join('')+'</ul>'); else toast('Ditambahkan ke tolak kirim.'); muatOptout(); }catch(e){ toast(e.message); }
 });
 
-/* ---------- pemilih jam ----------
-   Dua dropdown halaman sendiri menggantikan <input type="time">: 24 jam penuh
-   (bukan AM/PM), menit kelipatan 5, dan bentuknya sama dengan dropdown lain. */
-function isiPilihanJam(){
-  var jam=''; for(var i=0;i<24;i++){ var v=('0'+i).slice(-2); jam+='<option value="'+v+'">'+v+'</option>'; }
-  var menit=''; for(var m=0;m<60;m+=5){ var w=('0'+m).slice(-2); menit+='<option value="'+w+'">'+w+'</option>'; }
-  ['mulai','selesai'].forEach(function(p){
-    $('#'+p+'J').innerHTML=jam; $('#'+p+'M').innerHTML=menit;
-  });
-}
-function setJam(pre, nilai){
-  var b=String(nilai||'08:00').split(':');
-  var j=('0'+(parseInt(b[0],10)||0)).slice(-2), m=('0'+(parseInt(b[1],10)||0)).slice(-2);
-  var selJ=$('#'+pre+'J'), selM=$('#'+pre+'M');
-  /* menit tersimpan yang bukan kelipatan 5 (mis. 08:07 dari setelan lama)
-     tetap bisa ditampilkan — pilihannya ditambahkan seperlunya */
-  if(!Array.prototype.some.call(selM.options,function(o){return o.value===m;})){
-    var o=document.createElement('option'); o.value=m; o.textContent=m; selM.appendChild(o);
-  }
-  selJ.value=j; selM.value=m;
-  enhanceSelect(selJ); enhanceSelect(selM);
-}
-function ambilJam(pre){ return $('#'+pre+'J').value+':'+$('#'+pre+'M').value; }
-function segarkanKotakJam(){ $('#kotakJam').classList.toggle('set-mati', !$('#jamAktif').checked); }
-$('#jamAktif').addEventListener('change',segarkanKotakJam);
-
 /* ---------- setelan ---------- */
 async function muatSetelan(){
   try{ var d=await wa('setelan-get'); var s=d.setelan; S.setelan=Object.assign({},s,{pengirim:d.pengirim});
-    $('#jamAktif').checked=!!s.jamKirimAktif;
-    setJam('mulai', s.jamMulai); setJam('selesai', s.jamSelesai); segarkanKotakJam();
-    $('#batasHarian').value=s.batasHarian;
+    $('#jamAktif').checked=!!s.jamKirimAktif; $('#jamMulai').value=s.jamMulai; $('#jamSelesai').value=s.jamSelesai; $('#batasHarian').value=s.batasHarian;
     $('#jedaMin').value=s.jedaMin; $('#jedaMax').value=s.jedaMax;
     $('#statusSetelan').textContent='Hari ini terkirim '+angka(d.terkirimHariIni)+' pesan ('+d.tanggal+').';
   }catch(e){ $('#statusSetelan').textContent=e.message; }
@@ -1049,7 +1080,7 @@ $('#salinWebhook').addEventListener('click',async function(){
   finally{ b.disabled=false; }
 });
 $('#simpanSetelan').addEventListener('click',async function(){
-  try{ await wa('setelan-simpan',{jamKirimAktif:$('#jamAktif').checked,jamMulai:ambilJam('mulai'),jamSelesai:ambilJam('selesai'),batasHarian:Number($('#batasHarian').value)||0,jedaMin:Number($('#jedaMin').value)||0,jedaMax:Number($('#jedaMax').value)||0}); $('#statusSetelan').textContent='Tersimpan.'; toast('Setelan tersimpan.'); setTimeout(muatSetelan,800); }catch(e){ $('#statusSetelan').textContent=e.message; toast(e.message); }
+  try{ await wa('setelan-simpan',{jamKirimAktif:$('#jamAktif').checked,jamMulai:$('#jamMulai').value,jamSelesai:$('#jamSelesai').value,batasHarian:Number($('#batasHarian').value)||0,jedaMin:Number($('#jedaMin').value)||0,jedaMax:Number($('#jedaMax').value)||0}); $('#statusSetelan').textContent='Tersimpan.'; toast('Setelan tersimpan.'); setTimeout(muatSetelan,800); }catch(e){ $('#statusSetelan').textContent=e.message; toast(e.message); }
 });
 
 /* ---------- mulai ----------
@@ -1077,8 +1108,7 @@ async function mulai(){
     var st=await wa('setelan-get'); S.setelan=Object.assign({},st.setelan,{pengirim:st.pengirim});
   }catch(e){ if(String(e.message).indexOf('Sesi')<0){ $('#pita').hidden=false; $('#pita').textContent='Pengirim belum bisa dibaca: '+e.message; } }
 
-  isiPilihanJam();
-  muatPustaka(); muatDaftarKontak(); chipKolom(); gambarPra(); tombolKirim();
+  muatPustaka(); chipKolom(); gambarPra(); tombolKirim();
   S.timer=setInterval(function(){ if(!$('#autoSegar')||!$('#autoSegar').checked)return; if($('[data-panel=riwayat]').hidden)return; muatKampanye(); if(S.kampanyeAktif) bukaDetail(S.kampanyeAktif); },6000);
 }
 mulai();

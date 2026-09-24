@@ -5,7 +5,11 @@ var BULAN=['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus'
 /* Ikon unggah kecil untuk kotak pilih berkas — sengaja inline supaya tidak
    ada permintaan berkas tambahan dan warnanya ikut tema lewat currentColor. */
 var IKON_UNGGAH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 9l5-5 5 5"/><path d="M12 4v12"/></svg>';
-var BOXES_SPINNER = '<div class="loader-wrap"><div class="loadingspinner"><div id="square1"></div><div id="square2"></div><div id="square3"></div><div id="square4"></div><div id="square5"></div></div></div>';
+/* Pemuat sebaris di dalam halaman. Bentuknya sama persis dengan layar muat
+   pembuka — dulu keduanya berbeda (lima kotak di sini, tulisan beriak di
+   sana), dan dua penanda "sedang memuat" yang berlainan di satu aplikasi
+   membuat orang mengira keduanya menandakan hal yang berbeda. */
+var BOXES_SPINNER = '<div class="loader-wrap lz"><div class="lz-bar lz-bar-kecil" aria-hidden="true"><i></i><i></i><i></i></div></div>';
 
 function getSavedCreds(){ try{var s=localStorage.getItem('laz_creds');return s?JSON.parse(atob(s)):null;}catch(e){return null;} }
 function setSavedCreds(u,p){ try{localStorage.setItem('laz_creds',btoa(unescape(encodeURIComponent(JSON.stringify({u:u,p:p})))));}catch(e){} }
@@ -2165,23 +2169,18 @@ var LZ = (function(){
 
   var sibuk=null, tTampil=null, tLama=null, tLamaBoot=null, mulai=0;
 
-  function markBoot(){
-    var b=document.getElementById('boot');
-    return b ? b.querySelector('.lz-mark') : null;
-  }
-
   function buatSibuk(){
     if(sibuk) return sibuk;
-    var mb=markBoot();
     sibuk=document.createElement('div');
     sibuk.id='lzSibuk';
+    /* lz--full dibutuhkan untuk posisinya (menutupi layar), lz--sibuk untuk
+       tampilannya. Ukuran batangnya diatur .lz--sibuk, dan aturannya ditulis
+       SESUDAH aturan .lz--full di styles.css — itulah yang membuat versi
+       kecilnya menang meski keduanya sama khusus. */
     sibuk.className='lz lz--full lz--sibuk';
     sibuk.setAttribute('role','status');
     sibuk.setAttribute('aria-live','polite');
-    /* Isinya disalin dari #boot supaya kata dan jumlah pitanya tidak ditulis
-       di dua tempat yang bisa berbeda diam-diam. */
-    sibuk.innerHTML='<div class="lz-mark">'+(mb?mb.innerHTML:'')+'</div>'
-      + '<div class="lz-line"><i></i></div>'
+    sibuk.innerHTML='<div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div>'
       + '<div class="lz-lama" id="lzSibukLama"></div>';
     document.body.appendChild(sibuk);
     return sibuk;

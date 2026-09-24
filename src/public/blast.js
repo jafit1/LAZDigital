@@ -314,28 +314,37 @@ const rangka = (n = 5) => `<div style="display:grid;gap:8px;padding:4px 0">${Arr
    lebih sering ditekan daripada yang lain. Sekarang ia sebaris dengan judul
    halaman di pojok kanan atas: tempat yang lazim, dan tidak lagi ikut
    terpotong saat sidebar diciutkan. */
-const IKON_MATAHARI = '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2"/><path d="M12 19.3v2.2"/><path d="M4.2 4.2l1.6 1.6"/><path d="M18.2 18.2l1.6 1.6"/><path d="M2.5 12h2.2"/><path d="M19.3 12h2.2"/><path d="M4.2 19.8l1.6-1.6"/><path d="M18.2 5.8l1.6-1.6"/>';
-const IKON_BULAN = '<path d="M20 14.5A8.2 8.2 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>';
-/* Yang digambar adalah tema YANG AKAN DIDAPAT, bukan tema yang sedang berlaku:
-   tombol bergambar bulan berarti "klik untuk gelap". Ikon lama — lingkaran
-   dengan separuh terisi — tidak mengatakan keduanya, dan warnanya var(--text2)
-   di atas latar putih membuatnya nyaris tak terlihat. */
+/* Bentuk ikon ditulis UTUH di sini, lengkap dengan fill dan stroke-nya
+   sendiri — tidak mewarisi apa pun dari luar kecuali warnanya. Ikon lama
+   digambar dengan garis setebal 1,8 px dan mengandalkan currentColor; di
+   beberapa peramban dan tingkat perbesaran hasilnya tombol putih kosong
+   tanpa gambar apa pun, dan tidak ada yang tahu itu tombol apa. Sekarang
+   bentuknya PADAT, jadi kalaupun garisnya tidak tergambar, bulatannya tetap
+   terlihat. */
+function svgTema(gelap) {
+  var isi = gelap
+    ? '<circle cx="12" cy="12" r="4.6" fill="currentColor"/>'
+      + '<g stroke="currentColor" stroke-width="2.1" stroke-linecap="round">'
+      + '<path d="M12 2.4v2.3"/><path d="M12 19.3v2.3"/><path d="M4.2 4.2l1.7 1.7"/>'
+      + '<path d="M18.1 18.1l1.7 1.7"/><path d="M2.4 12h2.3"/><path d="M19.3 12h2.3"/>'
+      + '<path d="M4.2 19.8l1.7-1.7"/><path d="M18.1 5.9l1.7-1.7"/></g>'
+    : '<path fill="currentColor" d="M20.4 14.9A8.6 8.6 0 0 1 9.1 3.6 8.7 8.7 0 1 0 20.4 14.9z"/>';
+  return '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true">' + isi + '</svg>';
+}
+var judulTema = function (gelap) { return gelap ? 'Ganti ke tema terang' : 'Ganti ke tema gelap'; };
+
 const tombolTema = () => `
   <button class="tn-icon kepala-tema" id="tombolTema" type="button"
-          title="${temaGelap() ? 'Ganti ke tema terang' : 'Ganti ke tema gelap'}"
-          aria-label="${temaGelap() ? 'Ganti ke tema terang' : 'Ganti ke tema gelap'}">
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${temaGelap() ? IKON_MATAHARI : IKON_BULAN}</svg>
-  </button>`;
+          title="${judulTema(temaGelap())}" aria-label="${judulTema(temaGelap())}">${svgTema(temaGelap())}</button>`;
+
 /* Ikonnya harus ikut berganti SAAT DITEKAN. Tanpa ini ia baru berubah pada
    penggambaran halaman berikutnya, sehingga tombol yang baru saja dipakai
    masih menggambarkan tema lama — dan terbaca seperti tidak berfungsi. */
 function segarTema(b) {
   if (!b) return;
-  const gelap = temaGelap();
-  b.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-    stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${gelap ? IKON_MATAHARI : IKON_BULAN}</svg>`;
-  b.title = gelap ? 'Ganti ke tema terang' : 'Ganti ke tema gelap';
+  var gelap = temaGelap();
+  b.innerHTML = svgTema(gelap);
+  b.title = judulTema(gelap);
   b.setAttribute('aria-label', b.title);
 }
 

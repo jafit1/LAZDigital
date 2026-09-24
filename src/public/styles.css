@@ -1052,221 +1052,10 @@ html[data-theme="dark"] #dashMonthSelect option {
   justify-content: center;
   padding: 40px 0;
 }
-.loadingspinner {
-  --square: 26px;
-  --offset: 30px;
-  --duration: 2.4s;
-  --delay: 0.2s;
-  --timing-function: ease-in-out;
-  --in-duration: 0.4s;
-  --in-delay: 0.1s;
-  --in-timing-function: ease-out;
-  width: calc( 3 * var(--offset) + var(--square));
-  height: calc( 2 * var(--offset) + var(--square));
-  padding: 0px;
-  margin-left: auto;
-  margin-right: auto;
-  margin-top: 10px;
-  margin-bottom: 30px;
-  position: relative;
-}
-
-.loadingspinner div {
-  display: inline-block;
-  background: var(--accent, #ea6a1e);
-  border: none;
-  border-radius: 4px;
-  width: var(--square);
-  height: var(--square);
-  position: absolute;
-  padding: 0px;
-  margin: 0px;
-}
-
-.loadingspinner #square1 {
-  left: calc( 0 * var(--offset) );
-  top: calc( 0 * var(--offset) );
-  animation: square1 var(--duration) var(--delay) var(--timing-function) infinite,
-               squarefadein var(--in-duration) calc(1 * var(--in-delay)) var(--in-timing-function) both;
-}
-
-.loadingspinner #square2 {
-  left: calc( 0 * var(--offset) );
-  top: calc( 1 * var(--offset) );
-  animation: square2 var(--duration) var(--delay) var(--timing-function) infinite,
-              squarefadein var(--in-duration) calc(1 * var(--in-delay)) var(--in-timing-function) both;
-}
-
-.loadingspinner #square3 {
-  left: calc( 1 * var(--offset) );
-  top: calc( 1 * var(--offset) );
-  animation: square3 var(--duration) var(--delay) var(--timing-function) infinite,
-               squarefadein var(--in-duration) calc(2 * var(--in-delay)) var(--in-timing-function) both;
-}
-
-.loadingspinner #square4 {
-  left: calc( 2 * var(--offset) );
-  top: calc( 1 * var(--offset) );
-  animation: square4 var(--duration) var(--delay) var(--timing-function) infinite,
-               squarefadein var(--in-duration) calc(3 * var(--in-delay)) var(--in-timing-function) both;
-}
-
-.loadingspinner #square5 {
-  left: calc( 3 * var(--offset) );
-  top: calc( 1 * var(--offset) );
-  animation: square5 var(--duration) var(--delay) var(--timing-function) infinite,
-               squarefadein var(--in-duration) calc(4 * var(--in-delay)) var(--in-timing-function) both;
-}
-
-@keyframes square1 {
-  0% {
-    left: calc( 0 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-  8.333% {
-    left: calc( 0 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  100% {
-    left: calc( 0 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-}
-
-@keyframes square2 {
-  0% {
-    left: calc( 0 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  8.333% {
-    left: calc( 0 * var(--offset) );
-    top: calc( 2 * var(--offset) );
-  }
-  16.67% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 2 * var(--offset) );
-  }
-  25.00% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  83.33% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  91.67% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-  100% {
-    left: calc( 0 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-}
-
-@keyframes square3 {
-  0%,100% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  16.67% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  25.00% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-  33.33% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-  41.67% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  66.67% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  75.00% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 2 * var(--offset) );
-  }
-  83.33% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 2 * var(--offset) );
-  }
-  91.67% {
-    left: calc( 1 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-}
-
-@keyframes square4 {
-  0% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  33.33% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  41.67% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 2 * var(--offset) );
-  }
-  50.00% {
-    left: calc( 3 * var(--offset) );
-    top: calc( 2 * var(--offset) );
-  }
-  58.33% {
-    left: calc( 3 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  100% {
-    left: calc( 3 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-}
-
-@keyframes square5 {
-  0% {
-    left: calc( 3 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  50.00% {
-    left: calc( 3 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  58.33% {
-    left: calc( 3 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-  66.67% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 0 * var(--offset) );
-  }
-  75.00% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-  100% {
-    left: calc( 2 * var(--offset) );
-    top: calc( 1 * var(--offset) );
-  }
-}
-
-@keyframes squarefadein {
-  0% {
-    transform: scale(0.75);
-    opacity: 0.0;
-  }
-  100% {
-    transform: scale(1.0);
-    opacity: 1.0;
-  }
-}
+/* Pemuat lima kotak yang dulu di sini sudah dicabut: seluruh aplikasi kini
+   memakai satu penanda muat yang sama — tiga batang di bagian 37. Dua
+   bentuk "sedang memuat" yang berbeda di satu aplikasi membuat orang
+   mengira keduanya menandakan hal yang berlainan. */
 
 /* ===== GLOBAL SCROLLBAR HIDE (retains scroll function) ===== */
 ::-webkit-scrollbar {
@@ -1875,7 +1664,6 @@ tbody tr:hover{background:rgba(var(--accent-rgb),.045)}
 .dash-edit .wc{outline-color:rgba(var(--accent-rgb),.35)}
 .wc-placeholder{border-color:var(--accent) !important;background:rgba(var(--accent-rgb),.06) !important;border-radius:20px}
 .edit-hint{background:rgba(var(--accent-rgb),.08);border-color:rgba(var(--accent-rgb),.22);color:var(--accent-d);border-radius:16px}
-.loadingspinner div{background:var(--accent)}
 .skeleton{border-radius:12px}
 .upload-box{border-radius:16px;border-color:var(--border)}
 .upload-box:hover{border-color:var(--accent);background:var(--accent-soft)}
@@ -4143,37 +3931,36 @@ html.plat-sentuh .sp-ulang{min-height:34px;padding:6px 13px}
 
 
 /* ============================================================
-   37. LAYAR MUAT LAZISMU
-   Dipakai dua kali dengan tampilan berbeda:
+   37. LAYAR MUAT — TIGA PITA
+   Dipakai dua kali dengan ukuran berbeda:
    - #boot      : layar pembuka, dipasang langsung di HTML supaya sudah
                   terlihat sebelum berkas JS yang besar selesai diunduh.
    - .lz--sibuk : selubung tipis saat berpindah halaman di tengah pemakaian.
 
-   SEMBILAN PITA, SATU KATA.
-   Tulisan "Lazismu" digambar sembilan kali dan ditumpuk persis. Tiap lapis
-   hanya memperlihatkan satu pita mendatar setinggi sepersembilan huruf, lalu
-   bergeser sedikit dengan jeda berurutan — yang terlihat satu kata yang
-   beriak dari atas ke bawah, bukan sembilan kata.
+   Sebelumnya di sini ada tulisan "Lazismu" yang digambar sembilan kali dan
+   dipotong jadi pita-pita mendatar. Bagus dilihat, tetapi ia bergantung pada
+   clip-path, pada pembulatan piksel yang rapi, dan pada huruf yang sudah
+   selesai diunduh — tiga hal yang bisa meleset justru di saat paling awal,
+   ketika layar ini muncul. Tiga batang yang berdenyut tidak bergantung pada
+   satu pun dari itu.
 
-   TIDAK ADA GAMBAR LAGI.
-   Sebelumnya di sini ada tiga PNG (bunga, wordmark, "bantul") yang ditanam
-   sebagai base64: sekitar 35 KB CSS yang harus diunduh lebih dulu sebelum
-   satu piksel pun tergambar — padahal justru layar muat inilah yang harus
-   muncul paling cepat. Sekarang hurufnya teks biasa dan warnanya token tema,
-   jadi ia terbaca benar di tema terang maupun gelap tanpa dua versi berkas
-   yang harus diingat untuk diperbarui berdua.
+   WARNANYA TOKEN TEMA, BUKAN PUTIH.
+   Aslinya batang ini putih karena dirancang untuk latar gelap. Di sini
+   latarnya mengikuti latar aplikasi yang terang, jadi putih akan hilang sama
+   sekali; yang dipakai warna aksen Lazismu, dan karena ia token tema, ia ikut
+   benar di tema gelap tanpa versi kedua yang harus diingat.
    ============================================================ */
 .lz{
-  --lz-aksen:#F3971E;
-  /* Tinta tulisan: ikut warna teks tema, dihangatkan sedikit ke arah oranye
-     supaya tetap terasa Lazismu dan bukan tulisan hitam biasa. */
-  --lz-tinta:color-mix(in srgb, var(--text) 82%, var(--lz-aksen));
+  --lz-aksen:var(--accent);
+  --lz-aksen2:var(--accent2);
+  /* Keadaan diam batangnya: aksen yang diredupkan, bukan abu-abu. Abu-abu
+     membuat denyutnya terbaca seperti dua warna yang tidak berhubungan.
+     Ditulis rgba() dengan token --accent-rgb, bukan color-mix: color-mix
+     dihitung peramban jadi nilai oklab(), dan itu menyulitkan siapa pun —
+     termasuk uji otomatis — yang perlu membaca warna jadinya. */
+  --lz-lembut:rgba(var(--accent-rgb),.34);
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:22px; overflow:hidden; contain:paint;
-}
-@supports not (color: color-mix(in srgb, red 50%, blue)) {
-  .lz{ --lz-tinta:#3a3027; }
-  [data-theme="dark"] .lz{ --lz-tinta:#efe7df; }
+  gap:20px; overflow:hidden; contain:paint;
 }
 
 /* Latar layar muat mengikuti latar aplikasi, bukan warna gelap tersendiri.
@@ -4192,82 +3979,24 @@ html.plat-sentuh .sp-ulang{min-height:34px;padding:6px 13px}
   #boot.lz{ background:var(--bg); }
 }
 
-/* ─── kata yang beriak ───
-   Lapis PERTAMA sengaja tetap ikut aliran biasa: dialah yang menentukan
-   lebar dan tinggi kotak. clip-path memotong tampilan tanpa mengubah kotak
-   itu, jadi delapan lapis sisanya tinggal ditumpuk di atasnya dengan
-   inset:0 dan semuanya pasti sejajar — tidak ada ukuran yang ditulis dua
-   kali dan bisa berbeda diam-diam. */
-.lz-mark{
-  position:relative;
-  font-size:clamp(30px,7.5vw,52px);
-  font-weight:800; letter-spacing:.005em; line-height:1.14;
-  color:var(--lz-tinta);
-  -webkit-user-select:none; user-select:none;
-  animation:lzMasuk .55s cubic-bezier(.22,1,.36,1) both;
-}
-.lz-teks{ white-space:nowrap; }
-.lz-teks + .lz-teks{ position:absolute; inset:0; }
-
-/* Pitanya dibuat sedikit bertindih (0,4%) — tanpa itu, pembulatan piksel
-   menyisakan garis rambut putih di antara pita pada layar tertentu. */
-.lz-teks:nth-child(1){ clip-path:inset(0      0 88.49% 0); animation-delay:0s;    }
-.lz-teks:nth-child(2){ clip-path:inset(11.11% 0 77.38% 0); animation-delay:.075s; }
-.lz-teks:nth-child(3){ clip-path:inset(22.22% 0 66.27% 0); animation-delay:.15s;  }
-.lz-teks:nth-child(4){ clip-path:inset(33.33% 0 55.16% 0); animation-delay:.225s; }
-.lz-teks:nth-child(5){ clip-path:inset(44.44% 0 44.04% 0); animation-delay:.3s;   }
-.lz-teks:nth-child(6){ clip-path:inset(55.56% 0 32.93% 0); animation-delay:.375s; }
-.lz-teks:nth-child(7){ clip-path:inset(66.67% 0 21.82% 0); animation-delay:.45s;  }
-.lz-teks:nth-child(8){ clip-path:inset(77.78% 0 10.71% 0); animation-delay:.525s; }
-.lz-teks:nth-child(9){ clip-path:inset(88.89% 0 0      0); animation-delay:.6s;   }
-
-.lz-teks{
-  will-change:transform,opacity;
-  animation:lzPita 2.4s cubic-bezier(.45,0,.55,1) infinite;
-}
-/* Geserannya kecil — 5px. Lebih dari itu hurufnya tidak lagi terbaca sebagai
-   satu kata, melainkan seperti tulisan yang rusak. */
-@keyframes lzPita{
-  0%,100%{ transform:translate3d(0,0,0);   opacity:.42; color:var(--lz-tinta); }
-  42%    { transform:translate3d(5px,0,0); opacity:1;   color:var(--lz-aksen); }
-}
-@supports not (clip-path: inset(10% 0 10% 0)) {
-  /* Tanpa clip-path, sembilan lapis yang sama akan saling menimpa jadi satu
-     kata yang terlalu pekat. Delapan di antaranya disembunyikan; yang tersisa
-     satu kata utuh yang tetap berdenyut. */
-  .lz-teks + .lz-teks{ display:none; }
-  .lz-teks:nth-child(1){ animation:lzNafas 2.4s cubic-bezier(.45,0,.55,1) infinite; }
-}
-@keyframes lzNafas{
-  0%,100%{ opacity:.55; }
-  50%    { opacity:1; }
-}
-
-@keyframes lzMasuk{
-  from{ opacity:0; transform:scale(.94); }
-  to{ opacity:1; transform:scale(1); }
-}
-
-.lz-line{
-  width:180px; height:3px; border-radius:99px; overflow:hidden;
-  background:color-mix(in srgb, var(--text) 12%, transparent);
-  opacity:0; animation:lzMasuk .6s ease .35s forwards;
-}
-@supports not (background: color-mix(in srgb, red 50%, transparent)) {
-  .lz-line{ background:rgba(0,0,0,.10); }
-  [data-theme="dark"] .lz-line{ background:rgba(255,255,255,.12); }
-}
-/* Ujung gradiennya transparan supaya geraknya terasa mengalir, bukan balok
-   yang meluncur. */
-.lz-line i{
-  display:block; height:100%; width:45%; border-radius:99px;
-  background:linear-gradient(90deg,transparent,var(--lz-aksen) 30%,var(--lz-aksen) 70%,transparent);
+/* ─── tiga batang ─── */
+.lz-bar{ display:flex; align-items:center; }
+.lz-bar i{
+  display:inline-block; width:4px; height:26px; border-radius:10px;
+  background:var(--lz-lembut);
   will-change:transform;
-  animation:lzRun 1.9s cubic-bezier(.45,0,.55,1) infinite;
+  animation:lzBatang 1s linear infinite;
 }
-@keyframes lzRun{
-  0%{ transform:translateX(-120%); }
-  100%{ transform:translateX(280%); }
+/* Batang tengah lebih tinggi dan berjarak — itulah yang membuat ketiganya
+   terbaca sebagai satu benda yang berdenyut, bukan tiga garis sejajar. */
+.lz-bar i:nth-child(2){
+  height:46px; margin:0 6px; animation-delay:.25s;
+  --lz-aksen:var(--lz-aksen2);
+}
+.lz-bar i:nth-child(3){ animation-delay:.5s; }
+@keyframes lzBatang{
+  20%{ background:var(--lz-aksen); transform:scaleY(1.5); }
+  40%{ transform:scaleY(1); }
 }
 
 /* Keterangan yang baru muncul kalau menunggunya sudah kelewat lama, supaya
@@ -4281,9 +4010,9 @@ html.plat-sentuh .sp-ulang{min-height:34px;padding:6px 13px}
 .lz.lz-lama-tampil .lz-lama{ opacity:1; }
 
 /* ─── selubung saat berpindah halaman ───
-   Sengaja TIDAK gelap penuh dan hurufnya kecil: menutupi seluruh layar dengan
-   lambang sebesar layar pembuka hanya untuk menunggu setengah detik justru
-   terasa seperti aplikasi nge-hang. */
+   Sengaja TIDAK gelap penuh dan batangnya kecil: menutupi seluruh layar
+   dengan lambang sebesar layar pembuka hanya untuk menunggu setengah detik
+   justru terasa seperti aplikasi nge-hang. */
 .lz--sibuk{
   position:fixed; inset:0; z-index:8000;
   background:color-mix(in srgb, var(--bg) 58%, transparent);
@@ -4298,18 +4027,36 @@ html.plat-sentuh .sp-ulang{min-height:34px;padding:6px 13px}
   [data-theme="dark"] .lz--sibuk{ background:rgba(16,18,22,.62); }
 }
 .lz--sibuk.tampil{ opacity:1; visibility:visible; }
-.lz--sibuk .lz-mark{ font-size:clamp(20px,4.5vw,26px); animation:none; }
-.lz--sibuk .lz-line{ width:120px; }
+/* Layar pembuka memenuhi seluruh jendela, jadi batang seukuran pemuat sebaris
+   tenggelam di tengahnya — terbaca seperti noda, bukan penanda. Ia membesar
+   mengikuti lebar layar, tapi ada batas atasnya: batang setinggi telapak
+   tangan justru membuat menunggu terasa lebih lama. */
+.lz--full .lz-bar i{ width:5px; height:clamp(26px,3.4vw,34px); }
+.lz--full .lz-bar i:nth-child(2){ height:clamp(46px,6vw,60px); margin:0 7px; }
+
+/* Versi kecil ditulis SESUDAH versi besar, dan lewat .lz--sibuk juga — bukan
+   hanya lewat kelas .lz-bar-kecil. Kekhususan keduanya sama, jadi yang belakangan
+   menang; kalau urutannya dibalik, selubung sibuk diam-diam memakai ukuran layar
+   pembuka dan menutupi layar dengan batang raksasa hanya untuk menunggu
+   setengah detik. */
+.lz--sibuk .lz-bar i,
+.lz-bar-kecil i{ width:3px; height:20px; }
+.lz--sibuk .lz-bar i:nth-child(2),
+.lz-bar-kecil i:nth-child(2){ height:35px; margin:0 5px; }
+
+/* Dipakai di dalam halaman (bukan selubung) — mis. saat tabel sedang diisi. */
+.loader-wrap .lz-bar{ justify-content:center; }
 
 /* Tab yang tidak dilihat tidak perlu membakar baterai. */
 .lz-jeda *{ animation-play-state:paused !important; }
 
 @media (prefers-reduced-motion: reduce){
-  /* Sembilan pita yang diam dan berdampingan tetap membentuk satu kata utuh,
-     jadi mematikan animasinya tidak menyisakan layar kosong. */
-  .lz *{ animation:none !important; opacity:1 !important; transform:none !important; }
-  .lz-teks{ color:var(--lz-tinta) !important; }
-  .lz-line i{ width:100%; }
+  /* Tiga batang yang diam dengan tinggi berbeda tetap terbaca sebagai
+     penanda "sedang memuat", jadi mematikan geraknya tidak menyisakan layar
+     kosong — hanya warnanya yang perlu dipenuhkan. */
+  .lz *{ animation:none !important; transform:none !important; }
+  .lz-bar i{ background:var(--lz-aksen) !important; }
+  .lz-bar i:nth-child(2){ background:var(--accent2) !important; }
 }
 
 /* ========================================================================
@@ -5337,4 +5084,25 @@ html[data-sentuh="ya"] select{ min-height:40px; }
     --u-kartu-y:13px; --u-kartu-x:14px;
   }
   .page-head .desc{ font-size:12.5px; }
+}
+
+/* ================================================================
+   52. TOMBOL TEMA & PINTASAN DI KEPALA HALAMAN
+   ================================================================
+   Warnanya dipatok, tidak diwariskan. Ikon tema sempat tergambar sebagai
+   kotak putih kosong: bentuknya digambar dengan garis tipis ber-currentColor,
+   dan begitu warna itu tidak terwarisi seperti dugaan, yang tersisa cuma
+   kotak. Sekarang bentuknya padat DAN warnanya disebut di sini. */
+.tn-icon.kepala-tema{ color:var(--text) !important; }
+.tn-icon.kepala-tema svg{ display:block; }
+.tn-icon.kepala-tema:hover{ color:var(--accent-d) !important; }
+html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !important; }
+
+.kepala-pintasan{ display:inline-flex; align-items:center; gap:6px; flex:none; white-space:nowrap; }
+.kepala-pintasan svg{ flex-shrink:0; }
+/* Di layar sempit labelnya menyingkir, ikonnya tetap — judul halaman tidak
+   boleh terdorong hanya demi kata "Tambah Donatur". */
+@media (max-width:560px){
+  .kepala-pintasan span{ display:none; }
+  .kepala-pintasan{ width:38px; padding:0; justify-content:center; }
 }

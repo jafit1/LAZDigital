@@ -719,13 +719,23 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     }
     return angka;
   };
+  /* Animasinya dimatikan dulu sebelum warnanya dibaca. Batang ini berdenyut
+     antara warna diam dan warna aksen penuh; membacanya sambil bergerak
+     memberi nilai acak di tengah-tengah, dan ujinya jadi kadang merah kadang
+     hijau tanpa ada yang berubah di kodenya. */
+  await p.evaluate(() => {
+    document.querySelectorAll('.lz-bar i').forEach((x) => { x.style.animation = 'none'; });
+  });
   const pemuatan = await p.evaluate(() => {
     const boot = document.getElementById('boot');
     const cs = getComputedStyle(boot);
     return {
       latar: cs.backgroundColor,
       latarBadan: getComputedStyle(document.body).backgroundColor,
-      garis: getComputedStyle(boot.querySelector('.lz-line')).backgroundColor,
+      batang: getComputedStyle(boot.querySelector('.lz-bar i')).backgroundColor,
+      jumlahBatang: boot.querySelectorAll('.lz-bar i').length,
+      tinggiTengah: Math.round(boot.querySelector('.lz-bar i:nth-child(2)').getBoundingClientRect().height),
+      tinggiTepi: Math.round(boot.querySelector('.lz-bar i:nth-child(1)').getBoundingClientRect().height),
       teks: getComputedStyle(boot.querySelector('.lz-lama')).color,
     };
   });
@@ -735,8 +745,16 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     Math.abs(lr - uraiRgb(pemuatan.latarBadan)[0]) < 12, pemuatan);
   cek('agak tembus supaya gradasi di belakangnya terlihat', la < 1, pemuatan.latar);
 
-  const [gr, gg, gb] = uraiRgb(pemuatan.garis);
-  cek('garis pemuatan gelap supaya terlihat di latar terang', (gr + gg + gb) / 3 < 120, pemuatan.garis);
+  cek('pemuatnya tiga batang', pemuatan.jumlahBatang === 3, pemuatan.jumlahBatang);
+  /* Batang tengah harus lebih tinggi — itulah yang membuat ketiganya terbaca
+     sebagai satu benda berdenyut, bukan tiga garis sejajar. */
+  cek('batang tengah lebih tinggi daripada tepinya',
+    pemuatan.tinggiTengah > pemuatan.tinggiTepi + 8, pemuatan);
+  const [gr, gg, gb, ga = 1] = uraiRgb(pemuatan.batang);
+  /* Aslinya batang ini putih (dirancang untuk latar gelap). Di latar terang
+     aplikasi ini, putih berarti tidak terlihat sama sekali. */
+  cek('batangnya berwarna aksen, bukan putih', gr > gg && gg > gb && gr > 120, pemuatan.batang);
+  cek('batangnya cukup pekat untuk terlihat', ga > 0.2, pemuatan.batang);
   const [tr, tg, tb] = uraiRgb(pemuatan.teks);
   cek('teks keterangannya juga terbaca di latar terang', (tr + tg + tb) / 3 < 200, pemuatan.teks);
 
@@ -746,13 +764,17 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     const boot = document.getElementById('boot');
     return {
       latar: getComputedStyle(boot).backgroundColor,
-      garis: getComputedStyle(boot.querySelector('.lz-line')).backgroundColor,
+      batang: getComputedStyle(boot.querySelector('.lz-bar i')).backgroundColor,
     };
   });
   const [dr, dg, db] = uraiRgb(gelapLoader.latar);
   cek('di tema gelap ikut menggelap sendiri', (dr + dg + db) / 3 < 120, gelapLoader.latar);
-  const [ggr, ggg, ggb] = uraiRgb(gelapLoader.garis);
-  cek('garisnya ikut berbalik jadi terang', (ggr + ggg + ggb) / 3 > 160, gelapLoader.garis);
+  /* Warna aksen sama-sama terbaca di latar terang maupun gelap, jadi di sini
+     yang diperiksa bukan "berbalik jadi terang" melainkan bahwa batangnya
+     tetap kelihatan — tidak ikut menghilang bersama latarnya. */
+  const [ggr, ggg, ggb, gga = 1] = uraiRgb(gelapLoader.batang);
+  cek('batangnya tetap terlihat di tema gelap',
+    gga > 0.2 && ggr > ggg && ggg > ggb && ggr > 120, gelapLoader.batang);
 
   await p.unroute('**/api/blast').catch(() => {});
 
