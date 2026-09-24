@@ -235,11 +235,13 @@ function applyBranding(){
   var nm=SETTINGS.namaLembaga||'LAZ Digital';
   var b=el('brandBox'),tb=el('tbBrand');
   if(b){
-    /* Sidebar ciut hanya selebar 84px — wordmark lembaga yang dipaksa masuk ke
-       sana jadi terpotong. Jadi keduanya dipasang, dan CSS yang memilih:
-       lencana inisial saat ciut, logo penuh saat lebar. */
+    /* Satu logo saja. Dulu lencana inisial ikut dipasang sebagai pengganti saat
+       sidebar ciut, dan CSS yang memilih salah satunya — hasilnya saat diciutkan
+       yang terlihat cuma dua huruf, bukan logonya. Sekarang logonya yang
+       dikecilkan (lihat styles.css bagian logo sidebar); inisial hanya dipakai
+       kalau lembaga memang belum mengunggah logo. */
     var ident = logo
-      ? '<img class="logo-img" src="'+logo+'" alt="logo"><span class="logo-mini">'+esc(inisialLembaga(nm))+'</span>'
+      ? '<img class="logo-img" src="'+logo+'" alt="'+esc(nm)+'">'
       : '<span class="logo">'+esc(inisialLembaga(nm))+'</span><span class="brand-name">'+esc(nm)+'</span>';
     // Logo merangkap tombol buka/tutup menu — tidak ada tombol panel terpisah lagi.
     b.innerHTML = '<button class="tn-brand-id" type="button" onclick="toggleSidebar()"'
