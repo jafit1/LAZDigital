@@ -1,7 +1,13 @@
-// api/ai.js — satu pintu untuk tindakan modul AI Asisten (selain streaming)
+// api/ai.js — SATU pintu untuk seluruh modul AI Asisten
 //
-// Percakapan yang mengalir ada di api/ai-stream.js karena bentuk balasannya
-// berbeda (SSE, bukan JSON sekali kirim). Selebihnya di sini.
+// Termasuk percakapan yang mengalir (SSE), lewat tindakan khusus "chat.alir".
+// Ia sempat berdiri sebagai api/ai-stream.js tersendiri, dan itu menggagalkan
+// deploy: paket Hobby Vercel hanya mengizinkan 12 Serverless Function, dan
+// folder api/ sudah penuh. Karena satu berkas berlebih menjatuhkan SELURUH
+// deploy — bukan cuma fiturnya — semuanya ditumpangkan ke fungsi ini dan
+// logikanya pindah ke lib/ai/alir.js.
+//
+// Sebelum menambah berkas baru di folder api/, hitung dulu isinya.
 
 const util = require('../lib/blast/util');
 const db = require('../lib/ai/db');
@@ -11,6 +17,7 @@ const percakapan = require('../lib/ai/percakapan');
 const { pengetahuan, prompt, gabungPengetahuan } = require('../lib/ai/pustaka');
 const ringkas = require('../lib/ai/ringkas');
 const pakai = require('../lib/ai/pakai');
+const alir = require('../lib/ai/alir');
 
 const { sukses, gagal, bacaBody, GalatAplikasi } = util;
 
@@ -78,6 +85,12 @@ tindakan['sesi.hapusBanyak'] = { izin: 'sesi.hapus', async jalankan({ data }) {
 tindakan['sesi.ulangi'] = { izin: 'sesi.kirim', async jalankan({ data }) {
   return { sesi: await percakapan.buangJawabanTerakhir(data.id) };
 } };
+
+/* Bertanya. Balasannya mengalir, jadi ia tidak punya jalankan() — ditandai
+   `alir` dan dikerjakan lib/ai/alir.js setelah kedua pagar di penangan lewat.
+   Medannya dibaca dari BADAN, bukan dari data, karena bentuk permintaannya
+   memang berbeda: {tindakan, pesan, sesiId, personaId}. */
+tindakan['chat.alir'] = { izin: 'sesi.kirim', alir: true };
 
 // ================================================================ PENGETAHUAN & PROMPT
 tindakan['pengetahuan.daftar'] = { izin: 'pengetahuan.lihat', async jalankan() {
@@ -181,6 +194,11 @@ module.exports = async function penangan(req, res) {
     if (pintu.izin && !sesi.bolehAi(pengguna, pintu.izin)) {
       throw new GalatAplikasi('Anda tidak berhak melakukan tindakan ini.', 403);
     }
+
+    /* Satu-satunya tindakan yang tidak membalas JSON. Ia sengaja tetap melewati
+       kedua pagar di atas seperti tindakan lain — bukan jalur pintas sendiri —
+       supaya tidak ada satu pun pintu masuk yang luput diperiksa. */
+    if (pintu.alir) return alir.alirkan(req, res, { badan, pengguna });
 
     const hasil = await pintu.jalankan({ data, pengguna, req, res });
     return sukses(res, hasil || {});

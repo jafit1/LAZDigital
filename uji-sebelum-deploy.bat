@@ -24,8 +24,16 @@ if not exist node_modules (
 
 set GAGAL=0
 
+REM Yang paling depan sengaja yang paling murah dan paling fatal: kalau jumlah
+REM fungsi melewati batas Vercel, SELURUH deploy ditolak - bukan cuma satu fitur.
+call :jalankan "Batas fungsi Vercel"            tools\uji_batas_vercel.js
 call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
+call :jalankan "Fitur Broadcast"                tools\test_blast_fitur.js
 call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
+call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
+call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
+call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
+call :jalankan "Tampilan halaman AI Asisten"    tools\test_ai_ui.js
 call :jalankan "Apa yang sudah sampai di server" tools\uji_cek_deploy.js
 
 echo.

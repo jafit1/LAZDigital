@@ -112,20 +112,21 @@ const JAWABAN = {
 };
 
 const TIPE = { '.css': 'text/css', '.js': 'text/javascript', '.html': 'text/html', '.png': 'image/png' };
+/* Satu alamat untuk semuanya, persis seperti di produksi: /api/ai membalas
+   JSON untuk tindakan biasa dan SSE untuk "chat.alir". Kalau tampilan suatu
+   saat kembali memanggil alamat kedua, permintaannya akan jatuh ke penyaji
+   berkas statis dan uji bagian C gagal — itu memang yang diinginkan, karena
+   alamat kedua membuat deploy Vercel gagal seluruhnya. */
 const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/api/ai') {
     let body = '';
-    req.on('data', (c) => { body += c; });
-    req.on('end', () => {
-      let t = '';
-      try { t = JSON.parse(body).tindakan; } catch (_) {}
+    for await (const c of req) body += c;
+    let t = '';
+    try { t = JSON.parse(body).tindakan; } catch (_) {}
+    if (t !== 'chat.alir') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, ...(JAWABAN[t] || {}) }));
-    });
-    return;
-  }
-  if (req.method === 'POST' && req.url === '/api/ai-stream') {
-    for await (const _ of req) { /* buang badan */ }
+      return res.end(JSON.stringify({ ok: true, ...(JAWABAN[t] || {}) }));
+    }
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',

@@ -677,11 +677,16 @@ async function kirimPesan(teks) {
   };
 
   try {
-    const res = await fetch('/api/ai-stream', {
+    /* Alamatnya sama dengan rpc() — /api/ai — hanya bentuk balasannya yang
+       berbeda, jadi ia tidak bisa memakai rpc() yang menunggu JSON utuh.
+       Satu alamat untuk semuanya bukan pilihan gaya: Vercel Hobby membatasi
+       jumlah fungsi, dan alamat kedua membuat seluruh deploy gagal. */
+    const res = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Laz-Token': tokenLaz() },
       signal: kontrol.signal,
       body: JSON.stringify({
+        tindakan: 'chat.alir',
         token: tokenLaz(),
         sesiId: negara.sesiId || '',
         pesan: teks,

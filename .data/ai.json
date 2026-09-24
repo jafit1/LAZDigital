@@ -1,0 +1,38 @@
+{
+  "kv": {
+    "ai:penyedia:pv_muez790j59e81ad191": "{\"id\":\"pv_muez790j59e81ad191\",\"nama\":\"Tiruan Satu (ubah)\",\"bentuk\":\"openai\",\"url\":\"https://contoh.test/v1\",\"kunci\":\"sk-rahasia-sekali-9931\",\"model\":\"gpt-uji\",\"suhu\":0.4,\"maksToken\":2048,\"catatan\":\"\",\"dibuat\":\"2026-09-24T03:32:11.491Z\",\"diubah\":\"2026-09-24T03:32:11.499Z\",\"olehNama\":\"User us\"}",
+    "ai:penyedia:aktif": "\"pv_muez792l3c350cd9e1\"",
+    "ai:sesi:s_muez790u0b774ced6a": "{\"id\":\"s_muez790u0b774ced6a\",\"judul\":\"Berapa total penghimpunan bulan ini?\",\"penyediaId\":\"\",\"personaId\":\"\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"pesan\":[{\"id\":\"m_muez790u3de090639a\",\"peran\":\"user\",\"isi\":\"Berapa total penghimpunan bulan ini?\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"model\":\"\",\"penyedia\":\"\",\"token\":null,\"terpotong\":false,\"waktu\":\"2026-09-24T03:32:11.502Z\"}],\"dibuat\":\"2026-09-24T03:32:11.502Z\",\"diubah\":\"2026-09-24T03:32:11.502Z\"}",
+    "ai:tahu:ta_muez790xf306d281f9": "{\"id\":\"ta_muez790xf306d281f9\",\"judul\":\"Jam kantor\",\"isi\":\"Senin sampai Jumat pukul 08.00-15.00 WIB.\",\"jenis\":\"prompt\",\"ikon\":\"\",\"aktif\":true,\"urutan\":100,\"dibuat\":\"2026-09-24T03:32:11.505Z\",\"diubah\":\"2026-09-24T03:32:11.505Z\",\"olehNama\":\"User u1\"}",
+    "ai:tahu:ta_muez790x9a6dfa76a9": "{\"id\":\"ta_muez790x9a6dfa76a9\",\"judul\":\"Mati\",\"isi\":\"Catatan lama yang tidak dipakai.\",\"jenis\":\"prompt\",\"ikon\":\"\",\"aktif\":false,\"urutan\":100,\"dibuat\":\"2026-09-24T03:32:11.505Z\",\"diubah\":\"2026-09-24T03:32:11.505Z\",\"olehNama\":\"User u1\"}",
+    "ai:prompt:pr_muez791hf8ea85d357": "{\"id\":\"pr_muez791hf8ea85d357\",\"judul\":\"Penulis Surat\",\"isi\":\"Tulis surat resmi.\",\"jenis\":\"prompt\",\"ikon\":\"📝\",\"aktif\":true,\"urutan\":100,\"dibuat\":\"2026-09-24T03:32:11.525Z\",\"diubah\":\"2026-09-24T03:32:11.525Z\",\"olehNama\":\"User u1\"}",
+    "ai:penyedia:pv_muez792l3c350cd9e1": "{\"id\":\"pv_muez792l3c350cd9e1\",\"nama\":\"Tiruan Lokal\",\"bentuk\":\"openai\",\"url\":\"http://127.0.0.1:61091/v1\",\"kunci\":\"sk-uji\",\"model\":\"model-uji\",\"suhu\":0.4,\"maksToken\":2048,\"catatan\":\"\",\"dibuat\":\"2026-09-24T03:32:11.565Z\",\"diubah\":\"2026-09-24T03:32:11.765Z\",\"olehNama\":\"User us\"}",
+    "ai:sesi:s_muez792l415f870166": "{\"id\":\"s_muez792l415f870166\",\"judul\":\"Berapa totalnya?\",\"penyediaId\":\"\",\"personaId\":\"\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"pesan\":[{\"id\":\"m_muez792maa6e51f29d\",\"peran\":\"user\",\"isi\":\"Berapa totalnya?\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"model\":\"\",\"penyedia\":\"\",\"token\":null,\"terpotong\":false,\"waktu\":\"2026-09-24T03:32:11.566Z\"},{\"id\":\"m_muez7957d0b51cea6f\",\"peran\":\"assistant\",\"isi\":\"Total penghimpunan bulan ini Rp 750.000.\",\"olehId\":\"\",\"olehNama\":\"\",\"model\":\"model-uji\",\"penyedia\":\"Tiruan Lokal\",\"token\":{\"masuk\":120,\"keluar\":7},\"terpotong\":false,\"waktu\":\"2026-09-24T03:32:11.659Z\"},{\"id\":\"m_muez7959844f215ceb\",\"peran\":\"user\",\"isi\":\"Lanjutkan.\",\"olehId\":\"u2\",\"olehNama\":\"User u2\",\"model\":\"\",\"penyedia\":\"\",\"token\":null,\"terpotong\":false,\"waktu\":\"2026-09-24T03:32:11.661Z\"}],\"dibuat\":\"2026-09-24T03:32:11.565Z\",\"diubah\":\"2026-09-24T03:32:11.765Z\"}",
+    "ai:pakai:2026-09": "{\"bulan\":\"2026-09\",\"panggilan\":2,\"masuk\":240,\"keluar\":14,\"perModel\":{\"Tiruan Lokal · model-uji\":{\"panggilan\":2,\"masuk\":240,\"keluar\":14}},\"perPengguna\":{\"User u1\":{\"panggilan\":1,\"masuk\":120,\"keluar\":7},\"User u2\":{\"panggilan\":1,\"masuk\":120,\"keluar\":7}},\"diubah\":\"2026-09-24T03:32:11.672Z\"}",
+    "ai:sesi:s_muez795p9b2c30238c": "{\"id\":\"s_muez795p9b2c30238c\",\"judul\":\"Hitung sampai lima.\",\"penyediaId\":\"\",\"personaId\":\"\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"pesan\":[{\"id\":\"m_muez795q6bdfa0c6f4\",\"peran\":\"user\",\"isi\":\"Hitung sampai lima.\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"model\":\"\",\"penyedia\":\"\",\"token\":null,\"terpotong\":false,\"waktu\":\"2026-09-24T03:32:11.678Z\"},{\"id\":\"m_muez797r021fec21d6\",\"peran\":\"assistant\",\"isi\":\"Satu dua \",\"olehId\":\"\",\"olehNama\":\"\",\"model\":\"model-uji\",\"penyedia\":\"Tiruan Lokal\",\"token\":null,\"terpotong\":true,\"waktu\":\"2026-09-24T03:32:11.751Z\"}],\"dibuat\":\"2026-09-24T03:32:11.677Z\",\"diubah\":\"2026-09-24T03:32:11.751Z\"}",
+    "ai:sesi:s_muez797wc8de136c53": "{\"id\":\"s_muez797wc8de136c53\",\"judul\":\"Halo.\",\"penyediaId\":\"\",\"personaId\":\"\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"pesan\":[{\"id\":\"m_muez797w280194bab1\",\"peran\":\"user\",\"isi\":\"Halo.\",\"olehId\":\"u1\",\"olehNama\":\"User u1\",\"model\":\"\",\"penyedia\":\"\",\"token\":null,\"terpotong\":false,\"waktu\":\"2026-09-24T03:32:11.756Z\"}],\"dibuat\":\"2026-09-24T03:32:11.756Z\",\"diubah\":\"2026-09-24T03:32:11.756Z\"}"
+  },
+  "set": {
+    "ai:penyedia:daftar": [
+      "pv_muez790j59e81ad191",
+      "pv_muez792l3c350cd9e1"
+    ],
+    "ai:sesi:daftar": [
+      "s_muez790u0b774ced6a",
+      "s_muez792l415f870166",
+      "s_muez795p9b2c30238c",
+      "s_muez797wc8de136c53"
+    ],
+    "ai:tahu:daftar": [
+      "ta_muez790xf306d281f9",
+      "ta_muez790x9a6dfa76a9"
+    ],
+    "ai:prompt:daftar": [
+      "pr_muez791hf8ea85d357"
+    ],
+    "ai:pakai:bulan": [
+      "2026-09"
+    ]
+  },
+  "kedaluwarsa": {}
+}

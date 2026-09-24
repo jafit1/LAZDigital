@@ -26,7 +26,7 @@ delete process.env.UPSTASH_REDIS_REST_URL;
 delete process.env.UPSTASH_REDIS_REST_TOKEN;
 
 const ai = require('../api/ai.js');
-const aiStream = require('../api/ai-stream.js');
+const aiStream = require('../lib/ai/alir.js');
 const rpc = require('../api/rpc.js');
 const sesi = require('../lib/ai/sesi-laz.js');
 const penyediaLib = require('../lib/ai/penyedia.js');
@@ -36,9 +36,15 @@ const ringkas = require('../lib/ai/ringkas.js');
 const pakai = require('../lib/ai/pakai.js');
 
 let ok = 0, g = 0;
+const yangGagal = [];
 const cek = (n, syarat, info) => {
   if (syarat) { ok++; console.log('  OK   |', n); }
-  else { g++; console.log('  GAGAL|', n, info === undefined ? '' : String(JSON.stringify(info)).slice(0, 300)); }
+  else {
+    g++;
+    const ket = info === undefined ? '' : String(JSON.stringify(info)).slice(0, 300);
+    yangGagal.push(ket ? `${n}  ->  ${ket}` : n);
+    console.log('  GAGAL|', n, ket);
+  }
 };
 
 // ------------------------------------------------------------ pengguna palsu
@@ -126,11 +132,24 @@ function serverTiruan({ token, jedaMs = 0, statusGalat = 0, pesanGalat = '' } = 
     await tulisPelan(`data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 120, completion_tokens: 7 } })}\n\n`);
     res.end('data: [DONE]\n\n');
   });
+  /* Soket dilacak supaya benar-benar bisa diputus saat server ditutup.
+     fetch() bawaan Node memakai sambungan keep-alive: srv.close() saja hanya
+     berhenti menerima sambungan BARU dan menunggu yang lama selesai — yang
+     tidak pernah terjadi. Akibatnya proses uji menggantung, atau (di Windows)
+     berhenti dengan "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)"
+     karena process.exit() dipanggil saat soket masih dibereskan. */
+  const soket = new Set();
+  srv.on('connection', (s) => { soket.add(s); s.on('close', () => soket.delete(s)); });
+
   return new Promise((selesai) => {
     srv.listen(0, '127.0.0.1', () => selesai({
       srv,
       url: `http://127.0.0.1:${srv.address().port}/v1`,
-      tutup: () => new Promise((s) => srv.close(s)),
+      tutup: () => new Promise((s) => {
+        for (const k of soket) k.destroy();
+        soket.clear();
+        srv.close(() => s());
+      }),
     }));
   });
 }
@@ -142,13 +161,33 @@ function bingkaiDari(res) {
     .filter(Boolean);
 }
 
-async function aliran(body, pengguna, { potongSetelahMs } = {}) {
+/* Lewat PINTU DEPAN juga, sama seperti tindakan lain — sejak streaming
+   ditumpangkan ke api/ai.js, pagar sesi dan pagar izinnya memang duduk di
+   sana. Memanggil lib/ai/alir.js langsung akan lulus walau pagarnya dicopot. */
+async function aliran(body, pengguna, { potongSetelahToken } = {}) {
   sesi.penggunaLaz = async () => pengguna || null;
-  const req = reqPalsu(body);
+  const req = reqPalsu({ tindakan: 'chat.alir', ...body });
   const res = resPalsu();
-  const kerja = aiStream(req, res);
-  if (potongSetelahMs) setTimeout(() => req.picu('close'), potongSetelahMs);
-  await kerja;
+
+  /* Pemutusan dipicu oleh JUMLAH TOKEN yang sudah sampai, bukan oleh stopwatch.
+     Versi sebelumnya memutus setelah 200  md dengan harapan 1-2 token keburu
+     datang — di komputer yang lebih lambat bisa saja belum ada satu pun, dan
+     ujinya gagal karena mesinnya, bukan karena kodenya. Uji yang kadang merah
+     kadang hijau lebih buruk daripada tidak ada ujinya: orang berhenti
+     mempercayainya. */
+  if (potongSetelahToken) {
+    let n = 0;
+    const tulisAsli = res.write;
+    res.write = (t) => {
+      const hasil = tulisAsli(t);
+      if (String(t).includes('"t":"token"') && ++n >= potongSetelahToken) {
+        setImmediate(() => req.picu('close'));
+      }
+      return hasil;
+    };
+  }
+
+  await ai(req, res);
   sesi.penggunaLaz = asliPenggunaLaz;
   return res;
 }
@@ -218,6 +257,13 @@ async function aliran(body, pengguna, { potongSetelahMs } = {}) {
   cek('pengelola boleh menghapus',
     (await lewatPintu('sesi.hapus', { id: (await percakapan.buat({}, ANI)).id }, PENGELOLA)).res.statusCode === 200);
   cek('izin yang tidak terdaftar dianggap "edit" (ketat)', sesi.aksiLaz('sesuatu.baru') === 'edit');
+  /* Bertanya sekarang menumpang pintu yang sama; pagarnya harus ikut berlaku,
+     bukan jadi celah baru. */
+  const alirPembaca = await lewatPintu('chat.alir', {}, PEMBACA);
+  cek('chat.alir ditolak untuk yang hanya boleh membaca', alirPembaca.res.statusCode === 403, alirPembaca.tubuh);
+  const alirTanpaAkun = await lewatPintu('chat.alir', {}, null);
+  cek('chat.alir ditolak tanpa sesi', alirTanpaAkun.res.statusCode === 401, alirTanpaAkun.tubuh);
+  cek('chat.alir terdaftar sebagai tindakan beraliran', ai.tindakan['chat.alir'].alir === true);
 
   console.log('\n=== E. PENGETAHUAN & PERSONA ===');
   await jalan('pengetahuan.simpan', { judul: 'Jam kantor', isi: 'Senin sampai Jumat pukul 08.00-15.00 WIB.' }, ANI);
@@ -252,8 +298,10 @@ async function aliran(body, pengguna, { potongSetelahMs } = {}) {
   cek('status menyebut jumlah pengetahuan', st.pengetahuan.jumlah >= 1, st.pengetahuan);
 
   console.log('\n=== F. BLOK DATA: TIDAK BOLEH ADA DATA PRIBADI ===');
+  /* Buku besar palsu. Dipasang di sini DAN DIBIARKAN TERPASANG sampai akhir —
+     lihat catatan di bawah setelah pemeriksaan blok data. */
   const aslinyaMuat = rpc._internal.muat;
-  rpc._internal.muat = async () => ({
+  const bukuPalsu = async () => ({
     db: {
       sheets: {
         Penghimpunan: [
@@ -269,8 +317,18 @@ async function aliran(body, pengguna, { potongSetelahMs } = {}) {
       props: {},
     }, teks: '', ver: '0',
   });
+  rpc._internal.muat = bukuPalsu;
   const blok = await ringkas.blokRingkas();
-  rpc._internal.muat = aslinyaMuat;
+
+  /* SENGAJA TIDAK DIKEMBALIKAN DI SINI.
+     Versi sebelumnya mengembalikannya tepat di baris ini, sehingga bagian G
+     membaca buku besar yang SUNGGUHAN — yaitu berkas data/laz-db-local.json
+     yang kebetulan ada di komputer pengembang. Di komputer lain berkas itu
+     tidak ada (datanya di Upstash, dan uji ini memang mematikan Upstash), jadi
+     blok data kosong dan uji "rincian otak" gagal — gagal karena isi folder
+     komputernya, bukan karena kodenya.
+     Uji yang hasilnya tergantung berkas yang tidak ikut dalam repositori bukan
+     uji; ia cuma cermin komputer yang menjalankannya. */
 
   const terlarang = ['Budi Santosa', 'Siti Aminah', 'Pak Karto', '081211110001', '081233334444',
     'Jl. Mawar', 'Jl. Melati', '3402011203990001'];
@@ -342,14 +400,15 @@ async function aliran(body, pengguna, { potongSetelahMs } = {}) {
 
   console.log('\n=== I. JAWABAN TERPUTUS TETAP DISIMPAN ===');
   await tiruan.tutup();
-  const lambat = await serverTiruan({ token: ['Satu ', 'dua ', 'tiga ', 'empat ', 'lima'], jedaMs: 120 });
+  const lambat = await serverTiruan({ token: ['Satu ', 'dua ', 'tiga ', 'empat ', 'lima'], jedaMs: 60 });
   await penyediaLib.simpan({ id: pv.id, url: lambat.url }, SUPER);
 
-  const r3 = await aliran({ pesan: 'Hitung sampai lima.' }, ANI, { potongSetelahMs: 200 });
+  const r3 = await aliran({ pesan: 'Hitung sampai lima.' }, ANI, { potongSetelahToken: 2 });
   const b3 = bingkaiDari(r3);
   const mulai3 = b3.find((x) => x.t === 'mulai');
   const sesi3 = await percakapan.ambil(mulai3.sesiId);
   const jawab3 = sesi3.pesan.find((p) => p.peran === 'assistant');
+  cek('dua token pertama sempat sampai', b3.filter((x) => x.t === 'token').length >= 2, b3.map((x) => x.t));
   cek('potongan jawaban tetap tersimpan', Boolean(jawab3 && jawab3.isi.length), jawab3);
   cek('jawaban setengah DITANDAI terpotong', jawab3 && jawab3.terpotong === true, jawab3);
   cek('jawabannya memang belum lengkap', jawab3 && !/lima/.test(jawab3.isi), jawab3 && jawab3.isi);
@@ -392,10 +451,10 @@ async function aliran(body, pengguna, { potongSetelahMs } = {}) {
   cek('satu pesan raksasa dipangkas, bukan menggagalkan sesi',
     dibaca.pesan[0].isi.length === percakapan.MAKS_ISI, dibaca.pesan[0].isi.length);
 
-  const potongRiwayat = aiStream._internal.riwayatUntukModel(
+  const potongRiwayat = aiStream.riwayatUntukModel(
     Array.from({ length: 60 }, (_, i) => ({ peran: i % 2 ? 'assistant' : 'user', isi: 'pesan ' + i })),
   );
-  cek('riwayat ke model dibatasi', potongRiwayat.length <= aiStream._internal.MAKS_RIWAYAT, potongRiwayat.length);
+  cek('riwayat ke model dibatasi', potongRiwayat.length <= aiStream.MAKS_RIWAYAT, potongRiwayat.length);
   cek('yang dipertahankan adalah yang TERBARU',
     potongRiwayat[potongRiwayat.length - 1].isi === 'pesan 59', potongRiwayat[potongRiwayat.length - 1]);
 
@@ -406,13 +465,66 @@ async function aliran(body, pengguna, { potongSetelahMs } = {}) {
     /tidak ada|Tidak ada/i.test(await tolak('sesi.hapusBanyak', { id: [] }, PENGELOLA)));
 
   console.log('\n=== M. PROMPT SISTEM ===');
-  const otak = await aiStream._internal.susunSistem({ personaId: persona.id, tanpaData: true });
+  const otak = await aiStream.susunSistem({ personaId: persona.id, tanpaData: true });
   cek('jati diri selalu ada', otak.teks.includes('Asisten Lazismu'));
   cek('persona yang dipilih ikut masuk', otak.teks.includes('Tulis surat resmi.') && otak.rincian.persona === 'Penulis Surat');
   cek('tanpaData benar-benar menahan blok data', otak.rincian.data === false && !otak.teks.includes('DATA RINGKAS'));
-  const otak2 = await aiStream._internal.susunSistem({ personaId: '' });
+  const otak2 = await aiStream.susunSistem({ personaId: '' });
   cek('tanpa persona tetap jalan', otak2.rincian.persona === '' && otak2.teks.includes('Asisten Lazismu'));
 
+  const otakAdaData = await aiStream.susunSistem({ personaId: '' });
+  cek('dengan buku besar terisi, blok data ikut masuk',
+    otakAdaData.rincian.data === true && otakAdaData.teks.includes('DATA RINGKAS'), otakAdaData.rincian);
+
+  /* Dua keadaan yang pasti terjadi di lapangan: lembaga yang belum punya satu
+     pun transaksi, dan Upstash yang sedang tidak bisa dihubungi. Keduanya tidak
+     boleh mematikan asisten — ia hanya kehilangan angkanya, dan itu sudah
+     dikatakannya sendiri kepada penanya. */
+  rpc._internal.muat = async () => ({ db: { sheets: {}, props: {} }, teks: '', ver: '0' });
+  const otakKosong = await aiStream.susunSistem({ personaId: '' });
+  cek('buku besar kosong: blok data dilewati, percakapan tetap jalan',
+    otakKosong.rincian.data === false && otakKosong.teks.includes('Asisten Lazismu'), otakKosong.rincian);
+
+  rpc._internal.muat = async () => { throw new Error('Upstash sedang mati'); };
+  const otakRusak = await aiStream.susunSistem({ personaId: '' });
+  cek('basis data tak terbaca: percakapan tetap jalan, hanya tanpa angka',
+    otakRusak.rincian.data === false && otakRusak.teks.includes('Asisten Lazismu'), otakRusak.rincian);
+
+  rpc._internal.muat = aslinyaMuat;
+
+  console.log('\n=== N. JUMLAH SERVERLESS FUNCTION (batas Vercel Hobby) ===');
+  /* Vercel menghitung SETIAP berkas .js di folder api/ yang tidak diawali "_"
+     sebagai satu Serverless Function, termasuk yang di dalam subfolder. Paket
+     Hobby membatasi 12 per deploy, dan kalau lewat, yang gagal adalah SELURUH
+     deploy — situs yang sudah jalan pun tidak ikut diperbarui. Kegagalan itu
+     hanya muncul di log Vercel, jauh setelah semuanya terasa beres, jadi
+     dihitung di sini sebelum berangkat. */
+  const BATAS_FUNGSI = 12;
+  const hitungFungsi = (dir) => fs.readdirSync(dir, { withFileTypes: true }).reduce((n, d) => {
+    if (d.isDirectory()) return n + hitungFungsi(path.join(dir, d.name));
+    return n + (d.name.endsWith('.js') && !d.name.startsWith('_') ? 1 : 0);
+  }, 0);
+  const jumlahFungsi = hitungFungsi(path.join(AKAR, 'api'));
+  cek(`folder api/ berisi ${jumlahFungsi} fungsi, batas ${BATAS_FUNGSI}`, jumlahFungsi <= BATAS_FUNGSI, jumlahFungsi);
+  cek('modul AI hanya menambah SATU fungsi', fs.existsSync(path.join(AKAR, 'api', 'ai.js'))
+    && !fs.existsSync(path.join(AKAR, 'api', 'ai-stream.js')));
+
   console.log(`\n================  ${ok} lulus, ${g} gagal  ================`);
-  process.exit(g ? 1 : 0);
-})().catch((e) => { console.error('\nGALAT UJI:', e); process.exit(1); });
+  /* Daftar yang gagal diulang di paling bawah. Keluarannya panjang; tanpa ini
+     satu baris GAGAL di tengah gulungan mudah terlewat, dan yang terbaca cuma
+     angka ringkasannya. */
+  if (yangGagal.length) {
+    console.log('\nYANG GAGAL:');
+    yangGagal.forEach((n, i) => console.log(`  ${i + 1}. ${n}`));
+  }
+  selesaikan(g ? 1 : 0);
+})().catch((e) => { console.error('\nGALAT UJI:', e); selesaikan(1); });
+
+/* Keluar tanpa memaksa. process.exit() di tengah pembersihan soket adalah yang
+   memicu assertion libuv di Windows, jadi kodenya disetel lalu prosesnya
+   dibiarkan berhenti sendiri; pemaksaan hanya dipakai bila setelah setengah
+   detik masih ada yang menahan. */
+function selesaikan(kode) {
+  process.exitCode = kode;
+  setTimeout(() => process.exit(kode), 500).unref();
+}
