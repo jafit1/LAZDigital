@@ -5179,10 +5179,25 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
    Keduanya membeli kemulusan dengan hal yang lebih mengganggu.
    ================================================================ */
 :root{
-  --u-rail:84px;        /* lebar rel saat ciut — ikon dipaku di sini */
-  --u-rail-pad:19px;    /* jarak kiri ikon; dipilih agar ikon pas di tengah rel */
-  --u-label-kiri:53px;  /* 19 + 22 (ikon) + 12 (jarak) */
-  --u-label-lebar:150px;
+  --u-rail:84px;          /* lebar rel saat ciut */
+  --u-nav-pad:12px;       /* padding kiri/kanan .topnav */
+  --u-ikon-kotak:22px;    /* kotak ikon menu */
+  /* SATU SUMBU untuk SEMUA yang ada di rel: ikon menu, foto pengguna, ikon
+     keluar, dan logo. Tengah rel, dihitung sekali di sini. Sebelumnya tiap
+     elemen memakai padding sendiri-sendiri dan sumbunya meleset sampai 4,5 px
+     antara yang satu dengan yang lain — kelihatan sebagai deretan yang goyah,
+     dan itulah yang dikeluhkan. */
+  --u-ikon-cx:42px;       /* = --u-rail / 2 */
+  --u-celah-label:17px;   /* jarak dari tepi kanan kotak ikon ke awal teks */
+  /* Awal teks, diukur dari tepi kiri .topnav:
+     42 + 11 (separuh kotak ikon) + 17 = 70 px. */
+  --u-label-x:calc(var(--u-ikon-cx) + var(--u-ikon-kotak) / 2 + var(--u-celah-label));
+  /* Offset "left" untuk label yang melayang: dikurangi padding .topnav dan
+     1 px garis tepi butirnya. */
+  --u-label-kiri:calc(var(--u-label-x) - var(--u-nav-pad) - 1px);
+  /* Lebar label TETAP selama animasi — ia hanya bergantung pada --u-sisi yang
+     ditentukan media query, bukan pada lebar panel yang sedang berubah. */
+  --u-label-lebar:calc(var(--u-sisi) - var(--u-label-x) - var(--u-nav-pad));
   --u-sidebar-kurva:cubic-bezier(.22,.7,.2,1);
   --u-sidebar-lama:.26s;
 }
@@ -5251,14 +5266,26 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
      ikon jatuh tepat di tengah rel sempit (12 + 19 + 11 = 42 = 84/2). Jadi
      saat ciut ikonnya tetap terlihat di tengah seperti dulu, tapi saat panel
      melebar ia tidak perlu bergeser ke mana-mana. */
+  /* Padding kiri tiap elemen DIHITUNG dari sumbu, bukan ditulis sebagai angka
+     yang kebetulan mirip. Isinya berbeda lebar (kotak ikon 22, ikon keluar 18,
+     foto pengguna 36), jadi paddingnya memang harus berbeda supaya titik
+     tengahnya sama. Menyamakan paddingnya justru yang membuat sumbunya
+     meleset. Angka 1px yang dikurangi itu garis tepi transparan butirnya —
+     ia ikut menggeser isi, dan itu penyebab meleset 1 px yang dulu. */
   .app .tn-item,
   .app.collapsed .tn-item,
-  .app.collapsed .topnav:hover .tn-item,
+  .app.collapsed .topnav:hover .tn-item{
+    justify-content:flex-start !important;
+    padding:0 14px 0 calc(var(--u-ikon-cx) - var(--u-ikon-kotak) / 2 - var(--u-nav-pad) - 1px) !important;
+    gap:0 !important;
+    border:1px solid transparent !important;
+    transition:background-color .16s ease,color .16s ease,box-shadow .16s ease !important;
+  }
   .app .tn-icon,
   .app.collapsed .tn-icon,
   .app.collapsed .topnav:hover .tn-icon{
     justify-content:flex-start !important;
-    padding:0 var(--u-rail-pad) !important;
+    padding:0 14px 0 calc(var(--u-ikon-cx) - 9px - var(--u-nav-pad) - 1px) !important;
     gap:0 !important;
     border:1px solid transparent !important;
     transition:background-color .16s ease,color .16s ease,box-shadow .16s ease !important;
@@ -5291,7 +5318,7 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   .app.collapsed .user-chip,
   .app.collapsed .topnav:hover .user-chip{
     justify-content:flex-start !important;
-    padding:6px 6px 6px 10px !important;
+    padding:6px 14px 6px calc(var(--u-ikon-cx) - 18px - var(--u-nav-pad) - 1px) !important;
     gap:0 !important;
     border:1px solid var(--border) !important;
   }
@@ -5321,9 +5348,12 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
     transition:opacity .15s ease,
                transform .24s var(--u-sidebar-kurva) !important;
   }
+  /* .tn-brand-id memakai margin -8px, jadi kotaknya mulai 8 px lebih kiri
+     daripada butir menu. Offsetnya dihitung ulang dari sumbu yang sama supaya
+     nama lembaga tetap sebaris dengan keterangan menu di bawahnya. */
   .app .tn-brand .brand-name{
     position:absolute !important;
-    left:calc(var(--u-label-kiri) + 14px) !important;
+    left:calc(var(--u-label-x) - var(--u-nav-pad) + 8px - 1px) !important;
     right:auto !important;
     top:50% !important;
     width:118px !important; max-width:118px !important;
@@ -5380,9 +5410,18 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   .app.collapsed .topnav:hover .tn-brand .logo-img{
     transform:translateX(var(--u-logo-x, 0px)) scale(1) !important;
   }
+  /* Saat ciut ia mengecil, jadi geserannya tidak bisa sama dengan yang di atas:
+     yang menengahkan logo penuh tidak menengahkan logo yang tinggal 56%.
+     Dua angka, dua-duanya diukur di js/lz-sisi.js. */
   .app.collapsed .tn-brand .logo-img{
-    transform:translateX(0) scale(.56) !important;
+    transform:translateX(var(--u-logo-x-ciut, 0px)) scale(.56) !important;
   }
+
+  /* Ikon diratakan ukuran optisnya lewat transform di js/lz-sisi.js. Supaya
+     penskalaan itu tidak ikut menebalkan atau menipiskan garisnya, ketebalan
+     garis dikunci ke nilai yang ditulis di gambarnya. */
+  .app .tn-item .ic svg *,
+  .app .tn-icon > svg *{ vector-effect:non-scaling-stroke; }
   /* Lencana inisial dipakai hanya kalau lembaga belum mengunggah logo. Ia
      tetap rata kiri dengan nama lembaga di sampingnya — di situ namanya yang
      mengisi panel, jadi tidak ada yang perlu ditengahkan. */

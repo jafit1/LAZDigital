@@ -68,8 +68,22 @@ function isiBerat() {
   return h + '</div>';
 }
 
-const MENU = ['Dashboard', 'Penghimpunan', 'Pentasyarufan', 'Saldo Kas & Bank', 'Saldo KLL & ULL',
-  'Donatur', 'Laporan', 'Manajemen User', 'Pengaturan', 'Broadcast', 'Fundraising'];
+/* Ikon menu diambil dari app.js, bukan ditulis ulang di sini. Versi pertama
+   uji ini memakai satu ikon kotak yang sama untuk kesebelas menu — dan ikon
+   yang seragam membuat pemeriksaan kerapian jarak jadi tidak ada artinya,
+   karena yang membuat deretan terlihat tidak rapi justru perbedaan lebar
+   antar-ikon yang sesungguhnya. */
+const BUTIR = (() => {
+  const src = fs.readFileSync(path.join(PUBLIK, 'app.js'), 'utf8');
+  const i = src.indexOf('function navIcon(');
+  const j = src.indexOf('var MENU=[');
+  if (i === -1 || j === -1) throw new Error('NAV_ICONS / MENU tidak ditemukan di app.js');
+  const NAV_ICONS = eval(src.slice(i, j) + '; NAV_ICONS');        // eslint-disable-line no-eval
+  void NAV_ICONS;
+  const daftar = eval(src.slice(j, src.indexOf('\n];', j) + 3).replace('var MENU=', '') + ';');  // eslint-disable-line no-eval
+  return daftar.map((m) => ({ label: m.label, ic: m.ic }));
+})();
+const MENU = BUTIR.map((m) => m.label);
 
 const halaman = `<!DOCTYPE html><html lang="id" data-theme="light"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -87,10 +101,10 @@ const halaman = `<!DOCTYPE html><html lang="id" data-theme="light"><head><meta c
     + '<img class="logo-img" src="${LOGO}" alt="Lazismu Bantul">'
     + '</button>';
   var nav = document.getElementById('nav');
-  nav.innerHTML = ${JSON.stringify(MENU)}.map(function (n, i) {
-    return '<button class="tn-item' + (i === 0 ? ' active' : '') + '" data-menu="' + n + '" title="' + n + '">'
-      + '<span class="ic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></span>'
-      + '<span class="tn-tip">' + n + '</span></button>';
+  nav.innerHTML = ${JSON.stringify(BUTIR)}.map(function (m, i) {
+    return '<button class="tn-item' + (i === 0 ? ' active' : '') + '" data-menu="' + m.label + '" title="' + m.label + '">'
+      + '<span class="ic">' + m.ic + '</span>'
+      + '<span class="tn-tip">' + m.label + '</span></button>';
   }).join('');
   window.__ditekan = [];
   nav.addEventListener('click', function (e) {
@@ -280,8 +294,10 @@ const server = http.createServer((req, res) => {
   await p.waitForTimeout(500);
   const logoBuka = (await potret());
   if (logoCiut.logo && logoBuka.logo) {
-    const kiriRel = logoCiut.logo.x - logoCiut.nav.x;
-    cek('saat ciut logonya menepi ke kiri', kiriRel < 20, { kiriRel });
+    /* Keputusannya berubah setelah dilihat langsung: awalnya logo dirapatkan
+       ke kiri saat ciut, tapi ikon-ikon di bawahnya ada di TENGAH rel, jadi
+       logonya terbaca meleset sendiri. Sekarang ia ikut sumbu yang sama —
+       diperiksa lebih teliti di bagian F2. */
     cek('saat ciut logonya masih muat di dalam rel',
       logoCiut.logo.x + logoCiut.logo.w <= logoCiut.nav.x + logoCiut.nav.w, logoCiut.logo);
     const pusatLogo = logoBuka.logo.x + logoBuka.logo.w / 2;
@@ -316,6 +332,68 @@ const server = http.createServer((req, res) => {
   await p.evaluate(() => document.getElementById('appView').classList.add('collapsed'));
   await p.waitForTimeout(450);
   await p.screenshot({ path: path.join(LUAR, 'sidebar-gerak-ciut.png'), clip: { x: 0, y: 0, width: 360, height: 900 } });
+
+  console.log('\n=== F2. SATU SUMBU DAN JARAK YANG SERAGAM ===');
+  /* Keluhannya: "posisi antara ikon dan teks nggak jelas nggak rapi" dan
+     "logo... nggak presisi sejajar dengan ikon lain dibawahnya".
+     Dulu ada EMPAT sumbu berbeda di rel yang sama — ikon menu di 43, foto
+     pengguna di 41, ikon keluar di 41, logo di 38,5 — karena tiap elemen
+     memakai padding sendiri-sendiri. Selisih 4,5 px itu cukup untuk terbaca
+     sebagai deretan yang goyah. */
+  await p.evaluate(() => document.getElementById('appView').classList.add('collapsed'));
+  await p.waitForTimeout(500);
+  const sumbu = await p.evaluate(() => {
+    const cx = (e) => { const r = e.getBoundingClientRect(); return +(r.x + r.width / 2).toFixed(2); };
+    const nav = document.querySelector('.topnav').getBoundingClientRect();
+    return {
+      relCx: +(nav.x + nav.width / 2).toFixed(2),
+      ikon: [...document.querySelectorAll('.tn-item .ic')].map(cx),
+      avatar: cx(document.querySelector('.user-chip .avatar')),
+      keluar: cx(document.querySelector('.tn-keluar svg')),
+      logo: cx(document.querySelector('.tn-brand .logo-img')),
+    };
+  });
+  const menyimpang = sumbu.ikon.filter((x) => Math.abs(x - sumbu.relCx) > 0.75);
+  cek('semua ikon menu tepat di sumbu tengah rel', menyimpang.length === 0, { relCx: sumbu.relCx, menyimpang });
+  cek('foto pengguna di sumbu yang sama', Math.abs(sumbu.avatar - sumbu.relCx) <= 0.75, sumbu);
+  cek('ikon keluar di sumbu yang sama', Math.abs(sumbu.keluar - sumbu.relCx) <= 0.75, sumbu);
+  cek('logo di sumbu yang sama — bukan menepi ke kiri', Math.abs(sumbu.logo - sumbu.relCx) <= 0.75, sumbu);
+
+  await p.evaluate(() => document.getElementById('appView').classList.remove('collapsed'));
+  await p.waitForTimeout(500);
+  const rapi = await p.evaluate(() => {
+    const nav = document.querySelector('.topnav').getBoundingClientRect();
+    const baris = [...document.querySelectorAll('.tn-item')].map((it) => {
+      const ic = it.querySelector('.ic').getBoundingClientRect();
+      const svg = it.querySelector('.ic svg');
+      const tip = it.querySelector('.tn-tip').getBoundingClientRect();
+      let tintaKanan = null;
+      try {
+        const bb = svg.getBBox(); const r = svg.getBoundingClientRect(); const vb = svg.viewBox.baseVal;
+        const k = r.width / vb.width;
+        tintaKanan = r.x + (bb.x - vb.x) * k + bb.width * k;
+      } catch (e) { /* peramban tanpa getBBox */ }
+      return {
+        label: it.dataset.menu,
+        tipX: +tip.x.toFixed(2),
+        dy: +((tip.y + tip.height / 2) - (ic.y + ic.height / 2)).toFixed(2),
+        celah: tintaKanan === null ? null : +(tip.x - tintaKanan).toFixed(2),
+      };
+    });
+    const logo = document.querySelector('.tn-brand .logo-img').getBoundingClientRect();
+    return { baris, navCx: +(nav.x + nav.width / 2).toFixed(2), logoCx: +(logo.x + logo.width / 2).toFixed(2) };
+  });
+  const xLabel = [...new Set(rapi.baris.map((b) => b.tipX))];
+  cek('semua keterangan mulai di titik yang sama persis', xLabel.length === 1, xLabel);
+  cek('semua keterangan sejajar tegak dengan ikonnya', rapi.baris.every((b) => Math.abs(b.dy) <= 0.6),
+    rapi.baris.filter((b) => Math.abs(b.dy) > 0.6));
+  const celah = rapi.baris.map((b) => b.celah).filter((x) => x !== null);
+  const min = Math.min(...celah), maks = Math.max(...celah);
+  console.log('  ukur  | jarak ikon ke teks: ' + min.toFixed(1) + '-' + maks.toFixed(1) + ' px');
+  /* Dulu 13,6-18,0 px: terlalu rapat, dan selisih antar-barisnya 4,4 px. */
+  cek('jarak ikon ke teks tidak terlalu rapat (>= 18 px)', min >= 18, min);
+  cek('jarak itu seragam antar-baris (selisih <= 3,5 px)', maks - min <= 3.5, { min, maks, beda: +(maks - min).toFixed(2) });
+  cek('saat dibuka, logo tepat di tengah panel', Math.abs(rapi.logoCx - rapi.navCx) <= 1, rapi);
 
   console.log('\n=== G. SEMUA MENU TETAP BISA DITEKAN ===');
   for (const keadaan of ['collapsed', 'terbuka']) {
