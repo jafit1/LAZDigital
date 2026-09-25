@@ -6259,12 +6259,24 @@ function markNavAnim() {
   }, 340);
 }
 
+/* Pilihan buka/ciut disimpan SETELAH animasinya selesai, bukan di saat yang
+   sama dengan pergantian class. localStorage.setItem menulis ke cakram secara
+   sinkron: ia menahan utas tampilan beberapa milidetik, dan milidetik itu
+   jatuh tepat di frame pertama animasi — frame yang paling terasa kalau
+   tersendat. Ditunda, penyimpanannya jatuh di saat layar sudah diam. */
+function simpanSisiNanti(ciut) {
+  clearTimeout(window.__navSimpanTimer);
+  window.__navSimpanTimer = setTimeout(function () {
+    try { localStorage.setItem('sidebar_collapsed', ciut ? 'true' : 'false'); } catch (e) {}
+  }, 360);
+}
+
 function toggleSidebar() {
   var app = el('appView');
   if (app) {
     markNavAnim();
     app.classList.toggle('collapsed');
-    localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed'));
+    simpanSisiNanti(app.classList.contains('collapsed'));
   }
 }
 
@@ -6275,7 +6287,7 @@ function expandSidebar() {
   if (app && app.classList.contains('collapsed')) {
     markNavAnim();
     app.classList.remove('collapsed');
-    localStorage.setItem('sidebar_collapsed', 'false');
+    simpanSisiNanti(false);
   }
 }
 
@@ -6284,7 +6296,7 @@ function collapseSidebar() {
   if (app && !app.classList.contains('collapsed')) {
     markNavAnim();
     app.classList.add('collapsed');
-    localStorage.setItem('sidebar_collapsed', 'true');
+    simpanSisiNanti(true);
   }
 }
 
@@ -6301,6 +6313,18 @@ function collapseSidebar() {
     if (window.innerWidth < 1024) return;
     if (e.target.closest('.topnav')) return;
     if (e.target.closest('.modal-bg, .cd-overlay, .dropdown-popover, .custom-dropdown-menu, .select-enhanced-popover, .datepicker-enhanced-popover')) return;
+    collapseSidebar();
+  });
+
+  /* Esc menutupnya juga. Bilah yang menutupi isi halaman harus punya jalan
+     keluar dari papan ketik — bukan cuma dari tetikus. Tidak dijalankan kalau
+     ada modal terbuka: di sana Esc sudah punya arti sendiri. */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (window.innerWidth < 1024) return;
+    var app = document.getElementById('appView');
+    if (!app || app.classList.contains('hidden') || app.classList.contains('collapsed')) return;
+    if (document.querySelector('.modal-bg.show, .modal-bg.open')) return;
     collapseSidebar();
   });
 })();

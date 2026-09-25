@@ -259,9 +259,21 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   cek('kerangka modal sama dengan LAZDigital', kerangka.modal, kerangka);
   cek('toast memakai elemen tunggal .toast', kerangka.toast, kerangka);
 
-  const ciut = await p.evaluate(() => { toggleSidebar(); return document.getElementById('appView').classList.contains('collapsed'); });
-  cek('menu bisa diciutkan seperti halaman utama', ciut === true, ciut);
-  await p.evaluate(() => toggleSidebar());
+  /* Yang diperiksa: tombolnya benar-benar memindahkan keadaan KE DUA ARAH,
+     lalu keadaannya dikembalikan seperti semula. Menguji satu nilai akhir
+     saja akan lulus walaupun tombolnya cuma bisa satu arah. */
+  const sisi = await p.evaluate(() => {
+    const a = document.getElementById('appView');
+    const awal = a.classList.contains('collapsed');
+    toggleSidebar();
+    const sekali = a.classList.contains('collapsed');
+    toggleSidebar();
+    const duaKali = a.classList.contains('collapsed');
+    if (duaKali !== awal) toggleSidebar();  // kembalikan seperti semula
+    return { awal, sekali, duaKali, akhir: a.classList.contains('collapsed') };
+  });
+  cek('menu bisa diciutkan seperti halaman utama', sisi.sekali !== sisi.awal && sisi.duaKali === sisi.awal, sisi);
+  cek('keadaannya kembali seperti semula setelah diuji', sisi.akhir === sisi.awal, sisi);
 
   console.log('\n=== C. KESEBELAS HALAMAN BERSIH DARI TAILWIND ===');
   const sisaTailwind = [];

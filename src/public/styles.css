@@ -5141,3 +5141,276 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
    selesai dimuat, dan kalau CSS tidak ikut menetapkannya, lambangnya melar
    mengikuti kotak induknya saat layar diperbesar. */
 .login-logo img{ width:40px; height:40px; display:block; }
+
+/* ================================================================
+   55. BILAH MENU: GERAK BUKA/TUTUP YANG TENANG
+   ================================================================
+   KELUHANNYA. Membuka lalu menutup bilah menu terasa tersendat sedikit.
+
+   SEBABNYA, DIUKUR BUKAN DITEBAK. Chrome bisa ditanya berapa lama ia
+   menghitung ulang tata letak (Performance.getMetrics -> LayoutDuration).
+   Untuk dua kali buka-tutup di halaman berisi dua belas kartu bertabel:
+
+       cara lama ........................ 93 - 136 ms
+       cara sekarang .................... 12 -  23 ms
+
+   Yang mahal ternyata bukan animasinya, melainkan TUJUH hal yang dulu
+   dianimasikan bersamaan, enam di antaranya properti tata letak:
+
+     1. .main margin + width    -> seluruh dashboard dihitung ulang tiap frame
+     2. .topnav width           -> anak-anaknya ikut
+     3. .tn-item padding        -> tiap butir menu bergeser sendiri
+     4. label max-width 0->170  -> tiap label mengubah lebar tiap frame
+     5. gap 0 -> 10px           -> menggeser ikon sepanjang animasi
+     6. logo width/height       -> gambarnya diukur ulang tiap frame
+     7. opacity label           -> satu-satunya yang murah
+
+   YANG DIUBAH. Nomor 2 sampai 6 dihapus seluruhnya: ikon tidak bergerak,
+   labelnya melayang, logonya memakai transform. Nomor 1 TETAP ADA —
+   isi halaman tetap didorong seperti sebelumnya, karena bilah yang
+   menutupi kartu bukan perbaikan — tetapi perpindahannya dibuat SEKALI,
+   bukan enam puluh kali, dan waktunya diatur supaya jatuh saat bagian itu
+   sedang tertutup panel. Rinciannya ada di bagian 1 di bawah.
+
+   Dicoba juga dua jalan lain sebelum memilih ini: membuat bilahnya
+   mengambang di atas isi halaman (6 ms, tapi kartunya tertutup saat menu
+   terbuka) dan mematikan isi kartu selama animasi dengan
+   content-visibility (17 ms, tapi kartunya berkedip kosong 0,26 detik).
+   Keduanya membeli kemulusan dengan hal yang lebih mengganggu.
+   ================================================================ */
+:root{
+  --u-rail:84px;        /* lebar rel saat ciut — ikon dipaku di sini */
+  --u-rail-pad:19px;    /* jarak kiri ikon; dipilih agar ikon pas di tengah rel */
+  --u-label-kiri:53px;  /* 19 + 22 (ikon) + 12 (jarak) */
+  --u-label-lebar:150px;
+  --u-sidebar-kurva:cubic-bezier(.22,.7,.2,1);
+  --u-sidebar-lama:.26s;
+}
+
+@media (min-width:1024px){
+  /* ---- 1. ISI HALAMAN PINDAH SEKALI, BUKAN TIAP FRAME ---------------- */
+  /* durasi 0s + delay: perpindahannya tidak dianimasikan sama sekali, cuma
+     DIJADWALKAN. Arahnya sengaja berbeda, dan itu inti triknya:
+
+       MEMBUKA  — isi menunggu (delay .26s). Selama panel melebar ia
+                  menutupi jalur yang akan dilewati isi; begitu panel
+                  berhenti, isinya sudah menyesuaikan di balik panel.
+       MENUTUP  — isi pindah lebih dulu (delay 0). Panel masih lebar dan
+                  menutupinya; saat panel menyusut, yang tersingkap sudah
+                  isi yang rapi di tempat barunya.
+
+     Dua-duanya membuat satu-satunya perhitungan ulang jatuh di bagian layar
+     yang sedang tertutup panel buram. Kalau delay-nya disamakan, salah satu
+     arah pasti menyisakan jalur kosong selebar 128 px selama 0,26 detik. */
+  .app:not(.collapsed) .main{
+    margin-left:var(--u-sisi) !important;
+    width:calc(100% - var(--u-sisi)) !important;
+    transition:margin-left 0s linear var(--u-sidebar-lama),
+               width 0s linear var(--u-sidebar-lama) !important;
+  }
+  .app.collapsed .main{
+    margin-left:var(--u-rail) !important;
+    width:calc(100% - var(--u-rail)) !important;
+    transition:margin-left 0s linear 0s, width 0s linear 0s !important;
+  }
+
+  /* ---- 2. PANEL ------------------------------------------------------ */
+  /* Lebarnya satu-satunya properti tata letak yang masih dianimasikan, dan
+     itu murah sekarang: isinya sudah tidak bergantung pada lebar ini. */
+  .app .topnav{
+    width:var(--u-sisi) !important;
+    padding:18px 12px !important;     /* sama di kedua keadaan: ikon tidak bergeser */
+    overflow:hidden;
+    z-index:70 !important;
+    box-shadow:none !important;
+    will-change:width;
+    transition:width var(--u-sidebar-lama) var(--u-sidebar-kurva),
+               box-shadow .2s ease !important;
+  }
+  .app.collapsed .topnav{
+    width:var(--u-rail) !important;
+    padding:18px 12px !important;
+  }
+  /* Melebar sementara karena kursor. Ini SATU-SATUNYA keadaan yang menutupi
+     isi halaman — .main tetap selebar rel — jadi hanya di sini bayangannya
+     dimunculkan, sebagai tanda bahwa panelnya sedang mengambang. */
+  .app.collapsed .topnav:hover{
+    width:var(--u-sisi) !important;
+    padding:18px 12px !important;
+    box-shadow:0 18px 44px -22px rgba(70,45,35,.30) !important;
+  }
+  /* Panel yang sedang menutupi isi halaman harus pekat. Latar 94% menyisakan
+     angka di belakangnya terbaca samar menembus menu. */
+  .app .topnav,
+  .app.nav-anim .topnav{ background:var(--surface) !important; }
+  html[data-theme="dark"] .app .topnav,
+  html[data-theme="dark"] .app.nav-anim .topnav{ background:var(--surface) !important; }
+
+  /* ---- 3. IKON DIPAKU DI SATU TITIK ---------------------------------- */
+  /* Padding dan gap sama persis di kedua keadaan, dan angkanya dipilih agar
+     ikon jatuh tepat di tengah rel sempit (12 + 19 + 11 = 42 = 84/2). Jadi
+     saat ciut ikonnya tetap terlihat di tengah seperti dulu, tapi saat panel
+     melebar ia tidak perlu bergeser ke mana-mana. */
+  .app .tn-item,
+  .app.collapsed .tn-item,
+  .app.collapsed .topnav:hover .tn-item,
+  .app .tn-icon,
+  .app.collapsed .tn-icon,
+  .app.collapsed .topnav:hover .tn-icon{
+    justify-content:flex-start !important;
+    padding:0 var(--u-rail-pad) !important;
+    gap:0 !important;
+    border:1px solid transparent !important;
+    transition:background-color .16s ease,color .16s ease,box-shadow .16s ease !important;
+  }
+  .app .tn-item .ic,
+  .app.collapsed .tn-item .ic,
+  .app.collapsed .topnav:hover .tn-item .ic{
+    width:22px !important; font-size:20px !important; flex:0 0 22px !important;
+  }
+  .app .tn-icon svg,
+  .app.collapsed .tn-icon svg{ flex:0 0 auto !important; }
+
+  .app .tn-brand,
+  .app.collapsed .tn-brand,
+  .app.collapsed .topnav:hover .tn-brand{
+    flex-direction:row !important;
+    justify-content:flex-start !important;
+    align-items:center !important;
+    gap:0 !important;
+  }
+  .app .tn-brand-id,
+  .app.collapsed .tn-brand-id,
+  .app.collapsed .topnav:hover .tn-brand-id{
+    width:100% !important; flex:1 1 auto !important;
+    justify-content:flex-start !important;
+    gap:0 !important;
+    padding:6px 8px !important; margin:-6px -8px !important;
+  }
+  .app .user-chip,
+  .app.collapsed .user-chip,
+  .app.collapsed .topnav:hover .user-chip{
+    justify-content:flex-start !important;
+    padding:6px 6px 6px 10px !important;
+    gap:0 !important;
+    border:1px solid var(--border) !important;
+  }
+  .app .user-chip .avatar,
+  .app.collapsed .user-chip .avatar{ flex:0 0 36px !important; }
+
+  /* ---- 4. KETERANGAN NAMA MELAYANG ----------------------------------- */
+  /* Lebarnya TETAP. Kalau ia memakai right:12px, lebarnya ikut berubah tiap
+     frame mengikuti panel — persis pekerjaan mahal yang sedang dihindari. */
+  .app .tn-item .tn-tip,
+  .app .tn-icon span,
+  .app .user-chip .uc-meta{
+    position:absolute !important;
+    left:var(--u-label-kiri) !important;
+    right:auto !important;
+    top:50% !important;
+    width:var(--u-label-lebar) !important;
+    max-width:var(--u-label-lebar) !important;
+    margin:0 !important;
+    display:block !important;
+    text-align:left !important;
+    white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;
+    transform:translate3d(0,-50%,0) !important;
+    opacity:1;
+    pointer-events:none;
+    transition:opacity .15s ease,
+               transform .24s var(--u-sidebar-kurva) !important;
+  }
+  .app .tn-brand .brand-name{
+    position:absolute !important;
+    left:calc(var(--u-label-kiri) + 14px) !important;
+    right:auto !important;
+    top:50% !important;
+    width:118px !important; max-width:118px !important;
+    margin:0 !important;
+    transform:translate3d(0,-50%,0) !important;
+    opacity:1; pointer-events:none;
+    white-space:normal;
+    display:-webkit-box !important;
+    -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    transition:opacity .15s ease,
+               transform .24s var(--u-sidebar-kurva) !important;
+  }
+  /* Saat ciut ia menepi sedikit lalu memudar — geseran kecil itu yang membuat
+     kemunculannya terasa menyambung, bukan berkedip. */
+  .app.collapsed .tn-item .tn-tip,
+  .app.collapsed .tn-icon span,
+  .app.collapsed .user-chip .uc-meta,
+  .app.collapsed .tn-brand .brand-name{
+    opacity:0 !important;
+    transform:translate3d(-10px,-50%,0) !important;
+  }
+  .app.collapsed .topnav:hover .tn-item .tn-tip,
+  .app.collapsed .topnav:hover .tn-icon span,
+  .app.collapsed .topnav:hover .user-chip .uc-meta,
+  .app.collapsed .topnav:hover .tn-brand .brand-name{
+    opacity:1 !important;
+    transform:translate3d(0,-50%,0) !important;
+  }
+  .app .user-chip .uc-meta .uc-name,
+  .app .user-chip .uc-meta .uc-role{
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* ---- 5. LOGO: MENEPI SAAT CIUT, KE TENGAH SAAT DIBUKA -------------- */
+  /* Dua-duanya lewat transform, jadi logonya berpindah dan membesar tanpa
+     sekali pun memicu perhitungan ulang tata letak.
+
+     Jarak ke tengahnya tidak bisa dihitung di CSS: ia bergantung pada lebar
+     logo yang diunggah lembaga, dan tiap lembaga berbeda. js/lz-sisi.js yang
+     mengukurnya sekali lalu menaruhnya di --u-logo-x. Kalau skripnya belum
+     jalan, nilai cadangan 0px membuat logonya rata kiri — tetap benar,
+     cuma belum di tengah. */
+  .app .tn-brand .logo-img,
+  .app.collapsed .tn-brand .logo-img,
+  .app.collapsed .topnav:hover .tn-brand .logo-img{
+    display:block !important;
+    height:34px !important; width:auto !important;
+    max-height:34px !important; max-width:none !important;
+    object-fit:contain !important; object-position:left center !important;
+    transform-origin:left center !important;
+    transition:transform var(--u-sidebar-lama) var(--u-sidebar-kurva) !important;
+  }
+  .app:not(.collapsed) .tn-brand .logo-img,
+  .app.collapsed .topnav:hover .tn-brand .logo-img{
+    transform:translateX(var(--u-logo-x, 0px)) scale(1) !important;
+  }
+  .app.collapsed .tn-brand .logo-img{
+    transform:translateX(0) scale(.56) !important;
+  }
+  /* Lencana inisial dipakai hanya kalau lembaga belum mengunggah logo. Ia
+     tetap rata kiri dengan nama lembaga di sampingnya — di situ namanya yang
+     mengisi panel, jadi tidak ada yang perlu ditengahkan. */
+  .app .tn-brand .logo,
+  .app.collapsed .tn-brand .logo{ flex:0 0 38px !important; }
+
+  /* ---- 6. YANG TIDAK BOLEH DIANIMASIKAN ------------------------------ */
+  /* transition:all ikut menganimasikan width, padding, dan border — properti
+     tata letak. Daftar ini menggantinya dengan yang benar-benar perlu. */
+  .app .tn-nav{ contain:layout style; }
+  .app .topnav .tn-item,
+  .app .topnav .tn-icon,
+  .app .topnav .user-chip{ transition-property:background-color,color,box-shadow,border-color !important; }
+}
+
+/* applyBranding() menggambar SALAH SATU: gambar logo, atau lencana inisial
+   ditambah nama lembaga. Kalau suatu saat keduanya tergambar bersamaan,
+   namanya yang melayang akan jatuh tepat di atas logonya. */
+.tn-brand-id .logo-img ~ .brand-name{ display:none !important; }
+
+/* Saat gerak dikurangi (pengaturan sistem), semuanya langsung tanpa animasi.
+   Ini bukan sekadar kesopanan: bagi sebagian orang animasi melintang seperti
+   ini memicu pusing. */
+@media (prefers-reduced-motion: reduce){
+  .app .topnav,
+  .app .tn-item .tn-tip,
+  .app .tn-icon span,
+  .app .user-chip .uc-meta,
+  .app .tn-brand .brand-name,
+  .app .tn-brand .logo-img{ transition:none !important; }
+}

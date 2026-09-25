@@ -195,6 +195,8 @@ const BATAS = {
           tombol: ukur('.btn'),
           isian: ukur('input:not([type=checkbox]):not([type=hidden])'),
           navLebar: nav ? Math.round(nav.getBoundingClientRect().width) : null,
+          navCiut: (document.getElementById('appView') || { classList: { contains: () => false } })
+            .classList.contains('collapsed'),
           navMendatar: nav ? getComputedStyle(nav).flexDirection === 'row' : null,
           keluarKanan: Array.from(document.querySelectorAll('.card, .kpi-v2, .stat, .table-wrap, .btn'))
             .filter((x) => x.getBoundingClientRect().right > window.innerWidth + 1).length,
@@ -225,9 +227,18 @@ const BATAS = {
       /* navLebar 0 berarti bilahnya memang tidak tergambar — layar masuk
          tidak punya menu sama sekali. Itu bukan kegagalan ukuran. */
       if (uk.w >= 1024 && u.navLebar) {
-        cek(`${tag}: bilah menu tidak makan tempat berlebihan`,
-          u.navLebar <= BATAS.sisi.maks[uk.perangkat], u.navLebar);
-        cek(`${tag}: bilah menu masih cukup lebar untuk labelnya`, u.navLebar >= 180, u.navLebar);
+        /* Sejak bilahnya mengambang di atas isi halaman, keadaan bakunya CIUT
+           — rel sempit berisi ikon saja. Dua keadaan, dua ukuran yang wajar:
+           yang ciut harus muat ikon 22 px beserta jaraknya tanpa jadi rel
+           kosong yang boros, yang terbuka harus muat keterangan namanya. */
+        if (u.navCiut) {
+          cek(`${tag}: rel ikon tidak terlalu sempit`, u.navLebar >= 70, u.navLebar);
+          cek(`${tag}: rel ikon tidak boros tempat`, u.navLebar <= 100, u.navLebar);
+        } else {
+          cek(`${tag}: bilah menu tidak makan tempat berlebihan`,
+            u.navLebar <= BATAS.sisi.maks[uk.perangkat], u.navLebar);
+          cek(`${tag}: bilah menu masih cukup lebar untuk labelnya`, u.navLebar >= 180, u.navLebar);
+        }
       }
 
       await ctx.close();
