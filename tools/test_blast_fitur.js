@@ -9,6 +9,7 @@
    jalankan:  node tools/test_blast_fitur.js
 */
 'use strict';
+require('./_pagar-db.js')('Uji fitur Broadcast');
 const fs = require('fs');
 const path = require('path');
 const AKAR = path.join(__dirname, '..');
@@ -72,7 +73,22 @@ async function lewatPintu(nama, data, pengguna) {
    langsung untuk memeriksa umur kunci, jadi ia harus menunggu tulisannya
    mendarat — bukan menebak dengan jeda tetap. */
 const tidur = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Uji ini memeriksa UMUR kunci, dan umur tidak muncul di API mana pun — jadi
+   ia harus mengintip ke dalam penyimpanannya. Bentuk yang dikembalikan sama
+   untuk kedua penyimpanan ({ kedaluwarsa: { kunci: waktuMs } }), jadi kasus
+   ujinya di bawah tidak perlu tahu sedang berjalan di atas apa. */
 async function bacaSimpanan() {
+  if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
+    const pg = require('../lib/kv-postgres.js');
+    const klien = await pg.ambilKolam().connect();
+    try {
+      const r = await klien.query('SELECT kunci, kedaluwarsa FROM kv WHERE kedaluwarsa IS NOT NULL');
+      const kedaluwarsa = {};
+      for (const x of r.rows) kedaluwarsa[x.kunci] = new Date(x.kedaluwarsa).getTime();
+      return { kedaluwarsa };
+    } finally { klien.release(); }
+  }
   for (let i = 0; i < 40; i++) {
     try { return JSON.parse(fs.readFileSync('.data/blast.json', 'utf8')); }
     catch (_) { await tidur(25); }

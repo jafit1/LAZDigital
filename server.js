@@ -71,10 +71,19 @@ function nyalakan(port) {
     console.log('==================================================');
     console.log('  Alamat api yang terpasang:');
     rute.forEach((r) => console.log('   ', r.jalur));
-    const lokal = !process.env.UPSTASH_REDIS_REST_URL;
-    console.log(lokal
-      ? '\n  Tanpa UPSTASH_*: data Broadcast disimpan di .data/blast.json (aman, bukan data asli).'
-      : '\n  PERHATIAN: UPSTASH_* terisi — percobaan ini menyentuh DATA SUNGGUHAN.');
+    /* Peringatan ini penting: yang paling mudah terjadi saat mencoba di
+       komputer sendiri adalah menyentuh basis data produksi tanpa sadar. */
+    if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
+      const alamat = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+      const sendiri = /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(alamat);
+      console.log(sendiri
+        ? '\n  PostgreSQL di komputer ini. Aman untuk percobaan.'
+        : '\n  PERHATIAN: DATABASE_URL menunjuk ke server LUAR — percobaan ini menyentuh DATA SUNGGUHAN.');
+    } else if (!process.env.UPSTASH_REDIS_REST_URL) {
+      console.log('\n  Tanpa DATABASE_URL dan tanpa UPSTASH_*: data disimpan di berkas lokal (aman, bukan data asli).');
+    } else {
+      console.log('\n  PERHATIAN: UPSTASH_* terisi — percobaan ini menyentuh DATA SUNGGUHAN.');
+    }
     console.log('');
   });
 

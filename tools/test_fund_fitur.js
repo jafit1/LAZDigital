@@ -8,6 +8,7 @@
    jalankan:  node tools/test_fund_fitur.js
 */
 'use strict';
+require('./_pagar-db.js')('Uji fitur Fundraising');
 const fs = require('fs');
 const path = require('path');
 const AKAR = path.join(__dirname, '..');

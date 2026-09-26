@@ -21,7 +21,27 @@ const drive = require('./_drive.js');
 const fs = require('fs');
 const path = require('path');
 
-const { muat, tulisRedis, redis, PAKAI_REDIS } = rpc._internal;
+const lazpg = require('../lib/laz-pg.js');
+
+const { muat: muatRedis, tulisRedis, redis, PAKAI_REDIS } = rpc._internal;
+const PAKAI_PG = () => lazpg.pakaiPostgres();
+
+/* Sejak buku besarnya di PostgreSQL, "muat" berarti membaca seluruh tabel dan
+   menyusunnya kembali ke bentuk lama, dan bentuk itulah yang dipakai berkas
+   cadangan, sehingga cadangan lama tetap bisa dipulihkan dan cadangan baru tetap
+   bisa dibuka dengan alat yang sudah ada.
+
+   Ini yang PALING PENTING di berkas ini: tanpa cabang PostgreSQL, muat() versi
+   Redis akan mengembalikan basis data KOSONG (karena Redis tidak lagi dipakai),
+   dan cron harian akan rajin menyimpan cadangan kosong setiap malam tanpa ada
+   satu pun pesan galat. */
+async function muat(){
+  if (PAKAI_PG()) {
+    const r = await lazpg.muatSemua();
+    return { db: r.db, teks: r.teks, ver: r.versi };
+  }
+  return muatRedis();
+}
 const AWALAN_KUNCI = 'laz:cadangan:';
 const KUNCI_DAFTAR = 'laz:cadangan:_daftar';
 const DIR_LOKAL = path.join(process.cwd(), 'data', 'cadangan');
@@ -35,6 +55,10 @@ function jamWIB(){ return wib().toISOString().slice(11, 16).replace(':', ''); }
 
 /* ─── penyimpanan salinan: Redis atau berkas lokal ─── */
 async function bacaDaftar(){
+  if (PAKAI_PG()) {
+    const r = await lazpg.sql('SELECT nama, waktu, ukuran FROM cadangan ORDER BY waktu DESC');
+    return r.rows.map((x) => ({ nama: x.nama, waktu: new Date(x.waktu).toISOString(), ukuran: Number(x.ukuran) }));
+  }
   if (!PAKAI_REDIS) {
     if (!fs.existsSync(DIR_LOKAL)) return [];
     return fs.readdirSync(DIR_LOKAL).filter(f => f.endsWith('.json')).map(f => {
@@ -45,9 +69,20 @@ async function bacaDaftar(){
   const r = await redis(['GET', KUNCI_DAFTAR]);
   try { return r ? JSON.parse(r) : []; } catch (e) { return []; }
 }
-async function tulisDaftar(d){ if (PAKAI_REDIS) await redis(['SET', KUNCI_DAFTAR, JSON.stringify(d)]); }
+/* Di PostgreSQL daftarnya bukan data tersendiri, melainkan hasil kueri atas
+   tabel cadangan, jadi tidak mungkin daftarnya menyebut salinan yang sudah
+   tidak ada, atau sebaliknya. */
+async function tulisDaftar(d){ if (!PAKAI_PG() && PAKAI_REDIS) await redis(['SET', KUNCI_DAFTAR, JSON.stringify(d)]); }
 
-async function simpanSalinan(nama, teks){
+async function simpanSalinan(nama, teks, jenis){
+  if (PAKAI_PG()) {
+    await lazpg.sql(
+      'INSERT INTO cadangan (nama, jenis, waktu, ukuran, isi) VALUES ($1,$2,now(),$3,$4) '
+      + 'ON CONFLICT (nama) DO UPDATE SET jenis=EXCLUDED.jenis, waktu=now(), '
+      + 'ukuran=EXCLUDED.ukuran, isi=EXCLUDED.isi',
+      [nama, String(jenis || nama.split('-')[0] || 'manual'), teks.length, teks]);
+    return;
+  }
   if (!PAKAI_REDIS) {
     if (!fs.existsSync(DIR_LOKAL)) fs.mkdirSync(DIR_LOKAL, { recursive: true });
     fs.writeFileSync(path.join(DIR_LOKAL, nama + '.json'), teks);
@@ -61,6 +96,10 @@ async function simpanSalinan(nama, teks){
 async function bacaSalinan(nama){
   nama = String(nama || '').replace(/[^A-Za-z0-9_\-]/g, '');
   if (!nama) return null;
+  if (PAKAI_PG()) {
+    const r = await lazpg.sql('SELECT isi FROM cadangan WHERE nama=$1', [nama]);
+    return r.rows.length ? r.rows[0].isi : null;
+  }
   if (!PAKAI_REDIS) {
     const f = path.join(DIR_LOKAL, nama + '.json');
     return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null;
@@ -68,18 +107,28 @@ async function bacaSalinan(nama){
   return redis(['GET', AWALAN_KUNCI + nama]);
 }
 async function hapusSalinan(nama){
+  if (PAKAI_PG()) { await lazpg.sql('DELETE FROM cadangan WHERE nama=$1', [nama]); return; }
   if (!PAKAI_REDIS) { try { fs.unlinkSync(path.join(DIR_LOKAL, nama + '.json')); } catch (e) {} return; }
   await redis(['DEL', AWALAN_KUNCI + nama]);
   await tulisDaftar((await bacaDaftar()).filter(x => x.nama !== nama));
 }
 /* Sisakan N salinan terbaru per jenis awalan. */
 async function pangkasSalinan(awalan, simpan){
+  if (PAKAI_PG()) {
+    /* Satu perintah, bukan satu perintah per salinan yang dibuang. */
+    await lazpg.sql(
+      'DELETE FROM cadangan WHERE nama LIKE $1 AND nama NOT IN ('
+      + '  SELECT nama FROM cadangan WHERE nama LIKE $1 ORDER BY waktu DESC LIMIT $2)',
+      [awalan + '%', simpan]);
+    return;
+  }
   const d = (await bacaDaftar()).filter(x => x.nama.indexOf(awalan) === 0);
   for (const x of d.slice(simpan)) await hapusSalinan(x.nama);
 }
 
 /* ─── ubah basis data utama dengan compare-and-set ─── */
 async function ubahDB(kerja){
+  if (PAKAI_PG()) return lazpg.ubahSemua(kerja);
   for (let i = 1; i <= 4; i++) {
     const r = await muat();
     const out = await kerja(r.db);
@@ -110,10 +159,10 @@ async function jalankanCadangan(jenis, oleh){
   };
 
   try {
-    await simpanSalinan(nama, teks);
+    await simpanSalinan(nama, teks, jenis);
     if (jenis === 'harian') await pangkasSalinan('harian-', SIMPAN_HARIAN);
     if (jenis === 'manual') await pangkasSalinan('manual-', SIMPAN_MANUAL);
-    status.redis = { ok: true, tempat: PAKAI_REDIS ? 'Redis' : 'data/cadangan/' };
+    status.redis = { ok: true, tempat: PAKAI_PG() ? 'PostgreSQL (tabel cadangan)' : (PAKAI_REDIS ? 'Redis' : 'data/cadangan/') };
   } catch (e) { status.redis = { ok: false, galat: e.message }; }
 
   if (drive.driveSiap()) {
@@ -126,7 +175,7 @@ async function jalankanCadangan(jenis, oleh){
     status.drive = { ok: false, galat: 'Google Drive belum dikonfigurasi (lihat PANDUAN-CADANGAN.md)' };
   }
 
-  if (status.ukuranDB > BATAS_PERINGATAN_BYTE) {
+  if (!PAKAI_PG() && status.ukuranDB > BATAS_PERINGATAN_BYTE) {
     status.peringatan.push('Ukuran basis data ' + Math.round(status.ukuranDB / 1024) + ' KB mendekati batas 1 MB paket gratis Upstash. Pertimbangkan naik paket atau mengarsipkan data lama.');
   }
   if (!status.redis.ok && !status.drive.ok) status.peringatan.push('CADANGAN GAGAL DI SEMUA TUJUAN.');
@@ -152,7 +201,7 @@ async function jalankanPulihkan(token, sumber, konfirmasi){
 
   /* 2. simpan keadaan sekarang sebagai "sebelum-pulih" supaya bisa dibatalkan */
   const kini = await muat();
-  await simpanSalinan('sebelum-pulih', JSON.stringify(engine.buatCadangan(kini.db, 'sistem (sebelum pulih)')));
+  await simpanSalinan('sebelum-pulih', JSON.stringify(engine.buatCadangan(kini.db, 'sistem (sebelum pulih)')), 'sebelum-pulih');
 
   /* 3. jalankan pemulihan lewat engine (yang memeriksa superadmin & konfirmasi) */
   let hasil = null;
@@ -203,7 +252,7 @@ module.exports = async (req, res) => {
       if (drive.driveSiap()) { try { driveFiles = (await drive.daftar('laz-cadangan-')).slice(0, 10); } catch (e) { driveGalat = e.message; } }
       res.status(200).json({ result: {
         salinan, drive: driveFiles, driveSiap: drive.driveSiap(), driveGalat,
-        cronSiap: !!secret, tempat: PAKAI_REDIS ? 'Redis' : 'data/cadangan/',
+        cronSiap: !!secret, tempat: PAKAI_PG() ? 'PostgreSQL (tabel cadangan)' : (PAKAI_REDIS ? 'Redis' : 'data/cadangan/'),
         status: (r.db.props && r.db.props._cadanganTerakhir) || null,
         ukuranDB: (r.teks || '').length, batasPeringatan: BATAS_PERINGATAN_BYTE
       } }); return;

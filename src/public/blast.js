@@ -2544,17 +2544,66 @@ async function mulaiStatus() {
     selesaiMemuat();
   }
 
-  // Penyegaran ringan: hanya dasbor dan antrean yang perlu tampak hidup.
-  // Sekalian mendorong antrean — berguna pada paket Vercel Hobby, yang cron
-  // bawaannya hanya boleh jalan sekali sehari.
-  setInterval(async () => {
-    if (document.hidden) return;
-    if (!['dasbor', 'antrean'].includes(negara.halaman)) return;
-    if ($('#modalBg').classList.contains('show')) return;
+  /* PENYEGARAN BERKALA — dengan jeda yang mengendur sendiri.
+   *
+   * Dulu: setInterval 20 detik, tanpa syarat selain halaman sedang terlihat.
+   * Satu tab yang ditinggal terbuka di halaman dasbor menghasilkan 4.320
+   * permintaan sehari, dan tiap permintaan dulu berarti mengunduh SELURUH
+   * basis data. Itu yang menghabiskan kuota 500.000 perintah Redis per bulan
+   * dari satu tab yang tidak dipakai siapa pun.
+   *
+   * Sekarang jedanya mengendur: 20 detik selagi antrean benar-benar bergerak,
+   * lalu berlipat sampai 5 menit kalau tidak ada yang terjadi, dan kembali ke
+   * 20 detik begitu ada gerakan atau begitu pengguna menyentuh halaman. Setelah
+   * setengah jam tanpa sentuhan sama sekali, penyegarannya berhenti meminta apa
+   * pun dan hanya menunggu: tab yang ditinggalkan tidak lagi menambah beban.
+   *
+   * Yang TIDAK dikurangi: kecepatan saat ada yang benar-benar dikerjakan. Saat
+   * antrean jalan, jedanya tetap 20 detik seperti semula. */
+  const SEGAR_MIN = 20000;          /* selagi ada yang bergerak */
+  const SEGAR_MAKS = 300000;        /* saat sepi */
+  const DIAM_MAKS = 30 * 60 * 1000; /* setelah ini, berhenti meminta sampai disentuh */
+  let segarJeda = SEGAR_MIN;
+  let sentuhTerakhir = Date.now();
+
+  function dibangunkan() {
+    sentuhTerakhir = Date.now();
+    segarJeda = SEGAR_MIN;
+  }
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((n) => {
+    window.addEventListener(n, dibangunkan, { passive: true });
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) dibangunkan(); });
+  window.addEventListener('hashchange', dibangunkan);
+
+  async function segarkanSekali() {
+    if (document.hidden) return false;
+    if (!['dasbor', 'antrean'].includes(negara.halaman)) return false;
+    if ($('#modalBg').classList.contains('show')) return false;
+    if (Date.now() - sentuhTerakhir > DIAM_MAKS) return false;
+
+    let bergerak = false;
     if (bisa('pesan.kirim')) {
-      try { await rpc('antrean.proses', { diam: true }); } catch (_) { /* diam saja, ini hanya dorongan */ }
+      try {
+        const j = await rpc('antrean.proses', { diam: true });
+        const l = (j && j.laporan) || {};
+        /* "Bergerak" berarti ada pesan yang benar-benar diproses, terkirim,
+           diserahkan, atau gagal. Hanya kalau begitu penyegaran cepat ada
+           gunanya. */
+        bergerak = Boolean((l.diproses || 0) + (l.terkirim || 0) + (l.diserahkan || 0) + (l.gagal || 0));
+      } catch (_) { /* diam saja, ini hanya dorongan */ }
     }
     const wadah = $('#isiHalaman');
-    if (wadah) halaman[negara.halaman].gambar(wadah).catch(() => {});
-  }, 20000);
+    if (wadah) { try { await halaman[negara.halaman].gambar(wadah); } catch (_) {} }
+    return bergerak;
+  }
+
+  (function jadwalkanSegar() {
+    setTimeout(async () => {
+      let bergerak = false;
+      try { bergerak = await segarkanSekali(); } catch (_) {}
+      segarJeda = bergerak ? SEGAR_MIN : Math.min(segarJeda * 2, SEGAR_MAKS);
+      jadwalkanSegar();
+    }, segarJeda);
+  })();
 })();

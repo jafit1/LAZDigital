@@ -1,4 +1,5 @@
 const engine = require('./_engine.js');
+const lazpg = require('../lib/laz-pg.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -122,6 +123,18 @@ module.exports = async (req, res) => {
       ua: String(req.headers['user-agent'] || '').slice(0, 160)
     };
 
+    /* ── PostgreSQL ──
+       Kalau DATABASE_URL disetel, buku besar ada di tabel sungguhan dan
+       seluruh pemuatan/penyimpanan ditangani lib/laz-pg.js: memuat hanya tabel
+       yang dibutuhkan fungsi ini, dan menyimpan selisih barisnya saja.
+       Jalur Redis di bawah dibiarkan utuh sebagai jalan pulang: cukup hapus
+       DATABASE_URL dan aplikasinya kembali memakai bongkah laz:db. */
+    if (lazpg.pakaiPostgres()) {
+      const hasil = await lazpg.jalankanRPC(engine, fn, args, ctx);
+      res.status(200).json({ result: hasil });
+      return;
+    }
+
     for (let percobaan = 1; percobaan <= MAKS_ULANG; percobaan++) {
       const r = await pastikanTerpasang();
       /* Beberapa fungsi mengubah objek argumennya (mis. mengisi d.id). Kalau
@@ -155,4 +168,4 @@ module.exports = async (req, res) => {
 };
 
 /* Dipakai api/backup.js dan pengujian. */
-module.exports._internal = { muat, tulisRedis, redis, PAKAI_REDIS, DB_KEY, VER_KEY };
+module.exports._internal = { muat, tulisRedis, redis, PAKAI_REDIS, DB_KEY, VER_KEY, lazpg };

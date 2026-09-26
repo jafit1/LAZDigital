@@ -15,6 +15,7 @@
  * jalankan:  node tools/test_ai_fitur.js
  */
 'use strict';
+require('./_pagar-db.js')('Uji fitur AI Asisten');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');

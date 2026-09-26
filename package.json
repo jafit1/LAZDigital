@@ -10,9 +10,10 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "pg": "^8.23.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "express": "^4.19.2"
+    "express": "^4.22.3"
   }
 }

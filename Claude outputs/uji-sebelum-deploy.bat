@@ -34,9 +34,6 @@ call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
 call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
 call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
 call :jalankan "Tampilan halaman AI Asisten"    tools\test_ai_ui.js
-call :jalankan "Sambungan ke PostgreSQL"         tools\cek-postgres.js
-call :jalankan "Buku besar di PostgreSQL"        tools\test_laz_pg.js
-call :jalankan "Cadangan & pemulihan PostgreSQL" tools\test_cadangan_pg.js
 call :jalankan "Alat ukur & rapikan Redis"       tools\test_alat_redis.js
 call :jalankan "Alat ekspor Redis"              tools\test_ekspor_redis.js
 call :jalankan "Lambang & ikon situs"            tools\test_ikon.js

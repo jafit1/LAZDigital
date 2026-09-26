@@ -1,6 +1,24 @@
 // ====== Google Apps Script SHIM (Node) ======
 const crypto = require('crypto');
 let DB = { sheets:{}, props:{} };
+/* ===== PEMUATAN BERTAHAP (dipakai lib/laz-pg.js) =====
+   Mode lama: seluruh basis data ada di memori sebagai satu bongkah, jadi
+   setiap lembar selalu lengkap dan LAMBAT tetap null.
+   Mode PostgreSQL: yang dimuat lebih dulu hanya baris judul tiap tabel plus
+   tiga tabel kecil yang selalu dipakai (Users, Sessions, Settings). Kalau
+   engine ternyata butuh isi tabel lain, LAMBAT.minta() melempar galat khusus;
+   api/rpc.js menangkapnya, memuat tabel itu, lalu menjalankan ulang. Ini
+   satu-satunya cara memuat sesuai kebutuhan di engine yang seluruhnya
+   sinkron: tidak ada tempat untuk menunggu jaringan di tengah jalan.
+
+   getLastRow() SENGAJA tidak melempar: ensureSheet() memanggilnya pada setiap
+   permintaan hanya untuk bertanya "tabelnya masih kosong?", dan jumlah baris
+   sesungguhnya sudah diketahui dari sisi PostgreSQL. Kalau ia melempar,
+   setup() akan memaksa seluruh tabel dimuat setiap kali. */
+let LAMBAT = null;
+function _setLambat(o){ LAMBAT = o || null; }
+function _belumLengkap(n){ return !!(LAMBAT && !LAMBAT.lengkap.has(n)); }
+function _perluLembar(n){ if (_belumLengkap(n)) LAMBAT.minta(n); }
 const ID_M=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const ID_MS=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const TZ = 'Asia/Jakarta';
@@ -24,13 +42,13 @@ class Sheet{
   constructor(name){this.name=name;}
   _a(){if(!DB.sheets[this.name])DB.sheets[this.name]=[];return DB.sheets[this.name];}
   getName(){return this.name;}
-  getLastRow(){return this._a().length;}
+  getLastRow(){const a=this._a(); if(!a.length) return 0; return _belumLengkap(this.name) ? a.length + (LAMBAT.jumlah[this.name]||0) : a.length;}
   getLastColumn(){let m=0;this._a().forEach(r=>{if(r&&r.length>m)m=r.length;});return m;}
-  getDataRange(){return new Range(this._a(),1,1,Math.max(this._a().length,1),Math.max(this.getLastColumn(),1));}
-  getRange(r,c,nr,nc){return new Range(this._a(),r,c,nr||1,nc||1);}
+  getDataRange(){_perluLembar(this.name);return new Range(this._a(),1,1,Math.max(this._a().length,1),Math.max(this.getLastColumn(),1));}
+  getRange(r,c,nr,nc){if(r>1||(nr||1)>1)_perluLembar(this.name);return new Range(this._a(),r,c,nr||1,nc||1);}
   appendRow(arr){this._a().push(arr.slice());return this;}
-  deleteRow(r){this._a().splice(r-1,1);return this;}
-  setFrozenRows(){return this;} clear(){DB.sheets[this.name]=[];return this;}
+  deleteRow(r){_perluLembar(this.name);this._a().splice(r-1,1);return this;}
+  setFrozenRows(){return this;} clear(){_perluLembar(this.name);DB.sheets[this.name]=[];return this;}
 }
 class Spreadsheet{
   getSheetByName(n){return Object.prototype.hasOwnProperty.call(DB.sheets,n)?new Sheet(n):null;}
@@ -312,7 +330,23 @@ function apiBootstrap(t){ var u=authUser(t); return {user:sanitizeUser(u),settin
 function apiGetPermissionMeta(t){ authUser(t); return {modules:MODULES, actions:ACTIONS, label:MODUL_LABEL, ket:MODUL_KET, aksi:MODUL_AKSI}; }
 
 /* ===== PENGHIMPUNAN ===== */
-function generateNoKwitansi(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var n=0; readAll(SHEETS.PENGHIMPUNAN).forEach(function(r){if(String(r.noKwitansi).indexOf('KW/'+ym)===0)n++;}); return 'KW/'+ym+'/'+('0000'+(n+1)).slice(-4); }
+/* Nomor urut diambil dari nomor TERBESAR yang sudah ada, bukan dari JUMLAH
+   baris. Dengan menghitung jumlah, satu transaksi yang dihapus membuat nomor
+   berikutnya mengulang nomor yang masih terpakai, jadi ada dua kwitansi bernomor sama,
+   dan yang menemukannya biasanya auditor. Sejak tabelnya di PostgreSQL, nomor
+   kembar juga ditolak oleh indeks unik, jadi kekeliruan ini muncul sebagai
+   "gagal menyimpan" alih-alih diam-diam lolos. */
+function _nomorUrutTerakhir(nama, kolom, awalan){
+  var maks = 0;
+  readAll(nama).forEach(function(r){
+    var v = String(r[kolom] || '');
+    if (v.indexOf(awalan) !== 0) return;
+    var n = parseInt(v.slice(awalan.length).replace(/[^0-9]/g, ''), 10);
+    if (isFinite(n) && n > maks) maks = n;
+  });
+  return maks;
+}
+function generateNoKwitansi(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='KW/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENGHIMPUNAN,'noKwitansi',awalan)+1)).slice(-4); }
 function apiListPenghimpunan(t){ _requirePerm(t,'penghimpunan','view'); return readAll(SHEETS.PENGHIMPUNAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
 async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.id?'edit':'create');
   d.fundraising = cleanFundraisingName(d.fundraising);
@@ -359,7 +393,7 @@ async function apiDeletePenghimpunan(t,id){ var u=_requirePerm(t,'penghimpunan',
 function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view'); return {data:findById(SHEETS.PENGHIMPUNAN,id),settings:getAllSettings()}; }
 
 /* ===== PENTASYARUFAN ===== */
-function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var n=0; readAll(SHEETS.PENTASYARUFAN).forEach(function(r){if(String(r.noBukti).indexOf('BPT/'+ym)===0)n++;}); return 'BPT/'+ym+'/'+('0000'+(n+1)).slice(-4); }
+function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='BPT/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENTASYARUFAN,'noBukti',awalan)+1)).slice(-4); }
 function apiListPentasyarufan(t){ _requirePerm(t,'pentasyarufan','view'); return readAll(SHEETS.PENTASYARUFAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
 async function apiSavePentasyarufan(t,d){ var u=_requirePerm(t,'pentasyarufan',d.id?'edit':'create');
   d.fundraising = cleanFundraisingName(d.fundraising);
@@ -6340,6 +6374,6 @@ async function runRPC(db, fn, args, ctx){
 }
 /* buatCadangan & catatStatusCadangan dipakai api/backup.js di luar sesi
    pengguna. Keduanya bekerja pada DB yang sedang dimuat lewat runRPC. */
-module.exports = { runRPC, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
+module.exports = { runRPC, _setLambat, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
   catatStatusCadangan: function(db, st){ DB = db; catatStatusCadangan(st); return db; },
   cekIzin: function(db, token, modul, aksi, ctx){ DB = db || {sheets:{},props:{}}; if(!DB.sheets)DB.sheets={}; if(!DB.props)DB.props={}; try{auditKonteks(ctx||{});}catch(e){} setup(); return sanitizeUser(_requirePerm(token, modul, aksi)); } };
