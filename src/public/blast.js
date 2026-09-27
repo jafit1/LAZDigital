@@ -1836,20 +1836,102 @@ halaman.kontak = {
 
     const ti = $('#imporK', el);
     if (ti) ti.onclick = () => modal('Impor kontak', `
-      <p class="muted">Tempel isi berkas CSV, atau pilih berkasnya. Baris pertama sebaiknya berisi nama kolom: <code>nama, nomor, kantor, grup</code>.
-         Satu kontak boleh masuk beberapa grup — pisahkan dengan tanda <code>|</code>.</p>
-      <div class="field" style="margin-top:12px"><input type="file" id="berkasK" accept=".csv,.txt"></div>
+      <p class="muted">Pilih berkas <b>Excel</b> (.xlsx/.xls) atau <b>CSV</b>, atau tempel langsung dari Excel.
+         Kolomnya: <code>nama, nomor, kantor, grup</code>. Satu kontak boleh masuk beberapa grup,
+         pisahkan dengan tanda <code>|</code>.</p>
+      <p class="muted">Baris judul boleh ada boleh tidak. Kalau tidak ada, kolomnya ditebak dari isinya,
+         dan tebakannya diperlihatkan di pratinjau sebelum apa pun tersimpan.</p>
+      <div class="field" style="margin-top:12px"><input type="file" id="berkasK" accept=".xlsx,.xls,.csv,.txt,.tsv"></div>
       <div class="field">
-        <textarea id="teksK" rows="9" placeholder="nama,nomor,kantor,grup&#10;Budi,081234567890,KLL Sewon,Pengurus|Panitia Qurban" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"></textarea>
-      </div>`, (wadah) => {
+        <textarea id="teksK" rows="8" placeholder="nama,nomor,kantor,grup&#10;Budi,081234567890,KLL Sewon,Pengurus|Panitia Qurban" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"></textarea>
+      </div>
+      <div id="pratinjauK" class="muted" style="font-size:12.5px"></div>`, (wadah) => {
       $('#fiBatal').onclick = tutupModal;
-      $('#berkasK', wadah).onchange = (ev) => {
+
+      /* Pustaka SheetJS baru diunduh kalau memang ada berkas Excel yang
+         dipilih. Yang cuma menempel teks tidak mengunduh satu byte pun. */
+      const VENDOR_XLSX = '/js/vendor/xlsx.full.min.js';
+      let janjiXlsx = null;
+      function muatXlsx() {
+        if (janjiXlsx) return janjiXlsx;
+        janjiXlsx = new Promise((selesai, gagal) => {
+          const sk = document.createElement('script');
+          sk.src = VENDOR_XLSX; sk.async = true;
+          sk.onload = () => selesai();
+          sk.onerror = () => { janjiXlsx = null; gagal(new Error('Pembaca Excel gagal dimuat.')); };
+          document.head.appendChild(sk);
+        });
+        return janjiXlsx;
+      }
+
+      /* Excel diubah jadi TSV, bukan CSV: nama kantor dan nama grup sering
+         memuat koma, dan mengubahnya jadi CSV membuat satu sel pecah jadi dua
+         kolom. Tab tidak pernah muncul di dalam sel. */
+      async function excelKeTeks(berkas) {
+        await muatXlsx();
+        if (!window.XLSX) throw new Error('Pembaca Excel tidak tersedia.');
+        const buku = window.XLSX.read(new Uint8Array(await berkas.arrayBuffer()), { type: 'array' });
+        const nama = buku.SheetNames[0];
+        if (!nama) throw new Error('Berkas Excel ini tidak punya lembar.');
+        return window.XLSX.utils.sheet_to_csv(buku.Sheets[nama], { FS: '\t' });
+      }
+
+      let jedaPratinjau = null;
+      async function gambarPratinjau() {
+        const kotak = $('#pratinjauK', wadah);
+        const teks = $('#teksK', wadah).value;
+        if (!kotak) return;
+        if (!teks.trim()) { kotak.innerHTML = ''; return; }
+        kotak.innerHTML = 'Membaca…';
+        try {
+          const { pratinjau: p } = await rpc('kontak.praimpor', { teks });
+          const kol = (n, i) => `${n}: ` + (i ? `kolom ${i}` : '<b>tidak ada</b>');
+          const grupBaru = p.grup.filter((g) => g.baru);
+          kotak.innerHTML =
+            `<div style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px">`
+            + `<div><b>${p.sah}</b> baris siap diimpor`
+            + (p.tidakSahJumlah ? `, <b>${p.tidakSahJumlah}</b> dilewati karena nomornya tidak sah` : '')
+            + `.</div>`
+            + `<div style="margin-top:6px">Baris judul: <b>${p.adaJudul ? 'ada, tidak ikut diimpor' : 'tidak ada'}</b>`
+            + (p.ditebak ? ' (kolom ditebak dari isinya)' : '') + '</div>'
+            + `<div style="margin-top:4px">${kol('Nama', p.kolom.nama)} &middot; ${kol('Nomor', p.kolom.nomor)}`
+            + ` &middot; ${kol('Kantor', p.kolom.kantor)} &middot; ${kol('Grup', p.kolom.grup)}</div>`
+            + (p.grup.length
+              ? `<div style="margin-top:6px">Grup: `
+                + p.grup.slice(0, 12).map((g) => `${H(g.nama)} (${g.jumlah}${g.baru ? ', baru' : ''})`).join(', ')
+                + (p.grup.length > 12 ? `, dan ${p.grup.length - 12} lagi` : '')
+                + `</div>`
+                + (grupBaru.length ? `<div style="margin-top:2px"><b>${grupBaru.length}</b> grup baru akan dibuat.</div>` : '')
+              : `<div style="margin-top:6px"><b>Tidak ada grup yang terbaca.</b> Kalau seharusnya ada,`
+                + ` periksa kolom grupnya, atau sertakan baris judul.</div>`)
+            + (p.tidakSah.length
+              ? `<div style="margin-top:6px">Contoh yang dilewati: `
+                + p.tidakSah.slice(0, 3).map((x) => H(x.nama || '(tanpa nama)') + ' ' + H(x.nomor)).join('; ')
+                + `</div>` : '')
+            + `</div>`;
+        } catch (e) { kotak.innerHTML = `<span style="color:var(--bahaya)">${H(e.message)}</span>`; }
+      }
+
+      $('#teksK', wadah).oninput = () => {
+        clearTimeout(jedaPratinjau);
+        jedaPratinjau = setTimeout(gambarPratinjau, 400);
+      };
+
+      $('#berkasK', wadah).onchange = async (ev) => {
         const berkas = ev.target.files[0];
         if (!berkas) return;
-        const pembaca = new FileReader();
-        pembaca.onload = () => { $('#teksK', wadah).value = pembaca.result; };
-        pembaca.readAsText(berkas);
+        const kotak = $('#pratinjauK', wadah);
+        try {
+          if (/\.(xlsx|xls)$/i.test(berkas.name)) {
+            if (kotak) kotak.innerHTML = 'Membaca berkas Excel…';
+            $('#teksK', wadah).value = await excelKeTeks(berkas);
+          } else {
+            $('#teksK', wadah).value = await berkas.text();
+          }
+          gambarPratinjau();
+        } catch (e) { toast(e.message, 'galat'); if (kotak) kotak.innerHTML = ''; }
       };
+
       $('#fiJalan').onclick = async () => {
         const tombol = $('#fiJalan');
         tombol.disabled = true; tombol.textContent = 'Mengimpor…';

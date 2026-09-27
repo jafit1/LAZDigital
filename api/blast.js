@@ -571,6 +571,13 @@ tindakan['kontak.ubahBlokir'] = { izin: 'kontak.ubah', async jalankan({ data, pe
 } };
 tindakan['kontak.ubahLangganan'] = tindakan['kontak.ubahBlokir']; // nama lama
 
+/* Pratinjau impor: hanya membaca, tidak menyimpan apa pun. Izinnya tetap
+   'kontak.impor' supaya yang boleh melihat pratinjau adalah yang memang boleh
+   mengimpor, bukan siapa saja yang bisa membuka halaman kontak. */
+tindakan['kontak.praimpor'] = { izin: 'kontak.impor', async jalankan({ data }) {
+  return { pratinjau: await kontakLib.praTinjauImpor(String(data.teks || '')) };
+} };
+
 tindakan['kontak.impor'] = { izin: 'kontak.impor', async jalankan({ data, pengguna, req }) {
   const teks = String(data.teks || '');
   if (!teks.trim()) throw new GalatAplikasi('Tidak ada data untuk diimpor');

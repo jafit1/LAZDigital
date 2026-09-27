@@ -621,6 +621,71 @@ async function buatPerangkat(id = 'p_uji') {
 
   }
 
+  console.log('\n=== L. IMPOR KONTAK DARI EXCEL ===');
+  {
+    /* KEGAGALAN YANG DIUJI DI SINI TIDAK BERBUNYI SAMA SEKALI.
+
+       Orang menyorot baris-baris isi di Excel lalu menempelkannya, tanpa ikut
+       menyorot baris judulnya. Dulu keadaan itu dijawab dengan kolom 1 nama,
+       kolom 2 nomor, dan kolom sisanya dibuang. Impornya melaporkan sekian
+       kontak masuk, semuanya benar, hanya saja tidak satu pun grup yang
+       diminta pernah terbentuk. Yang terlihat petugas: fitur grupnya rusak. */
+    const bersihkanKontak = async () => {
+      for (const i of await db.anggotaHimpunan('kontak:daftar')) await db.keluarDariHimpunan('kontak:daftar', i);
+      await db.simpan('kontak:indeks-nomor', {});
+    };
+    await bersihkanKontak();
+
+    const tanpaJudul = [
+      ['Ashari', '6285702629260', '', 'JH-L-01'],
+      ['Sarjuni Anis', '628170402083', '', 'JH-L-01'],
+      ['Agus Purmawanto', '6285103247788', '', 'JH-L-02'],
+    ].map((r) => r.join('\t')).join('\n');
+
+    const pra = (await jalan('kontak.praimpor', { teks: tanpaJudul })).pratinjau;
+    cek('pratinjau tahu tidak ada baris judul', pra.adaJudul === false, pra);
+    cek('pratinjau menemukan kolom grup', pra.kolom.grup === 4, pra.kolom);
+    cek('pratinjau menyebut dua grup baru',
+      pra.grup.length === 2 && pra.grup.every((x) => x.baru), pra.grup);
+    cek('pratinjau tidak menyimpan apa pun', (await kontakLib.daftarGrup()).length === 0);
+
+    const hImpor = (await jalan('kontak.impor', { teks: tanpaJudul })).hasil;
+    cek('tiga kontak masuk tanpa baris judul', hImpor.baru === 3, hImpor);
+    const grupSesudah = await kontakLib.daftarGrup();
+    cek('grup dari tempelan Excel benar-benar terbentuk',
+      grupSesudah.length === 2 && grupSesudah.some((x) => x.nama === 'JH-L-01'), grupSesudah);
+    cek('grup dengan tanda hubung dan angka tidak dipotong',
+      grupSesudah.some((x) => x.nama === 'JH-L-02'), grupSesudah);
+
+    /* Baris judul, kalau ada, tidak boleh ikut jadi kontak. */
+    await bersihkanKontak();
+    const denganJudul = ['Nama\tNomor\tKantor\tGrup',
+      'Ashari\t6285702629260\tKLL Sewon\tJH-L-01'].join('\n');
+    const h2 = (await jalan('kontak.impor', { teks: denganJudul })).hasil;
+    cek('baris judul tidak ikut jadi kontak', h2.total === 1 && h2.dilewati === 0, h2);
+    const semuaK = await kontakLib.semuaKontak();
+    cek('tidak ada kontak bernama Nama', !semuaK.some((x) => x.nama === 'Nama'),
+      semuaK.map((x) => x.nama));
+    cek('kantor ikut terbaca', semuaK.some((x) => x.kantor === 'KLL Sewon'),
+      semuaK.map((x) => x.kantor));
+
+    /* Kolom boleh tidak urut: kolom nomor dikenali dari isinya. */
+    const pra2 = (await jalan('kontak.praimpor',
+      { teks: '6281299990001\tPak Slamet\tKLL Bantul\tJH-L-09' })).pratinjau;
+    cek('kolom nomor dikenali walau ada di depan', pra2.kolom.nomor === 1, pra2.kolom);
+    cek('grup tetap terbaca saat kolomnya tidak urut',
+      pra2.grup.length === 1 && pra2.grup[0].nama === 'JH-L-09', pra2.grup);
+
+    /* Nomor yang tidak sah dilaporkan di pratinjau, bukan baru ketahuan
+       setelah impornya jalan. */
+    const pra3 = (await jalan('kontak.praimpor',
+      { teks: ['Budi\t6281200000001\t\tA', 'Rusak\t123\t\tA'].join('\n') })).pratinjau;
+    cek('pratinjau menghitung nomor yang tidak sah',
+      pra3.sah === 1 && pra3.tidakSahJumlah === 1, pra3);
+    cek('pratinjau memberi contoh yang akan dilewati',
+      pra3.tidakSah.length === 1 && pra3.tidakSah[0].nomor === '123', pra3.tidakSah);
+  }
+
   console.log('\ntest_blast_fitur.js  ' + ok + '/' + (ok + g) + (g ? '  ADA GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);
 })().catch((e) => { console.error('ERROR', e); process.exit(1); });
