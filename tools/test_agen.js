@@ -56,6 +56,20 @@ async function detak(status, tambahan) {
 }
 async function pesanDi(id) { return db.ambil(antrean.KUNCI_PESAN(id)); }
 
+/* Mendorong antrean sampai satu pesan TERTENTU benar-benar diserahkan.
+   Satu putaran hanya menyerahkan satu pesan per perangkat lalu memasang jeda,
+   dan yang lebih tua didahulukan — jadi menunggu "satu putaran" saja membuat
+   ujinya bergantung pada berapa sisa pesan dari bagian sebelumnya. */
+async function serahkan(id) {
+  for (let i = 0; i < 12; i++) {
+    const m = await pesanDi(id);
+    if (m && m.status !== 'antre') return m;
+    await lepasJeda();
+    await antrean.prosesAntrean();
+  }
+  return pesanDi(id);
+}
+
 /* Setelah satu pesan diserahkan, perangkat memasang jeda 10-20 detik supaya
    pengirimannya tidak terlihat seperti mesin. Di dalam uji, jeda itu kita
    lepas sendiri — yang sedang diuji kontrak dengan gateway, bukan jedanya
@@ -333,8 +347,156 @@ async function serahkan(id) { await lepasJeda(); await majukan(id); return antre
   cek('dan dihitung sebagai diabaikan', r.tubuh.diabaikan === 1, r.tubuh);
 
   r = await hit('lapor-status', { hasil: [{ idLuar: 'WA-tidak-dikenal', status: 'dibaca' }] });
-  cek('id WhatsApp yang tidak dikenal diabaikan, bukan bikin galat',
-    r.tubuh.ok !== false && r.tubuh.diabaikan === 1, r.tubuh);
+  /* DITITIPKAN, bukan diabaikan. Dulu centang yang id-nya belum dikenal
+     langsung dibuang, dan itu permanen: WhatsApp tidak pernah mengirim tanda
+     terima yang sama dua kali. Lihat bagian N2. */
+  cek('id WhatsApp yang belum dikenal dititipkan, bukan bikin galat',
+    r.tubuh.ok !== false && r.tubuh.dititipkan === 1 && r.tubuh.naik === 0, r.tubuh);
+
+  console.log('\n=== K2. CENTANG TIDAK BOLEH MENYENTUH PESAN MASUK ===');
+  /* Sejak pesan masuk ikut menyimpan id WhatsApp-nya (untuk menjaga dari
+     pencatatan ganda), sebuah id yang tertukar bisa menaikkan status pesan
+     MASUK jadi "sampai" — dan gelembung dari donatur mendadak bercentang,
+     seolah kita yang mengirimnya. */
+  {
+    const rMasuk = await hit('masuk', {
+      perangkatId: PERANGKAT, nomor: '081200011122', teks: 'Halo min',
+      nama: 'Donatur Uji', idLuar: 'WA-MASUK-1',
+    });
+    const idMasuk = rMasuk.tubuh.pesanId;
+    cek('pesan masuk tercatat', !!idMasuk, rMasuk.tubuh);
+
+    const kembar = await hit('masuk', {
+      perangkatId: PERANGKAT, nomor: '081200011122', teks: 'Halo min',
+      nama: 'Donatur Uji', idLuar: 'WA-MASUK-1',
+    });
+    cek('pesan masuk dengan id WhatsApp yang sama tidak dicatat dua kali',
+      kembar.tubuh.kembar === true && kembar.tubuh.pesanId === idMasuk, kembar.tubuh);
+
+    const rs = await hit('lapor-status', { hasil: [{ idLuar: 'WA-MASUK-1', status: 'dibaca' }] });
+    const mm = await pesanDi(idMasuk);
+    cek('centang untuk id pesan MASUK diabaikan', mm.status === 'masuk', mm.status);
+    cek('dan dihitung sebagai diabaikan, bukan naik',
+      rs.tubuh.naik === 0 && rs.tubuh.diabaikan === 1, rs.tubuh);
+  }
+
+  console.log('\n=== N2. CENTANG YANG DATANG MENDAHULUI PESANNYA ===');
+  /* URUTAN YANG BENAR-BENAR TERJADI DI LAPANGAN. WhatsApp mengantar tanda
+     terima beberapa detik sesudah pesan lepas dari HP, sedangkan laporan
+     gateway yang mendaftarkan id WhatsApp-nya baru dikirim setelah seluruh
+     rombongan selesai, dan itu bisa setengah menit kemudian atau lebih lama
+     lagi kalau jaringannya sempat putus.
+
+     Dulu centang yang belum dikenali langsung dibuang. Akibatnya permanen,
+     karena WhatsApp TIDAK PERNAH mengirim tanda terima yang sama dua kali:
+     pesan itu bercentang satu selamanya walau di HP penerima sudah dibaca.
+     Persis keluhan yang membuat bagian ini ditulis. */
+  {
+    await lepasJeda();
+    const pDulu = await antrean.antrikan({
+      perangkatId: PERANGKAT, nomor: '081277788899', isi: { teks: 'Centang duluan' },
+    });
+    /* Didorong sendiri: kotak keluar perangkat masih berisi sisa bagian
+       sebelumnya, dan tindakan 'ambil' hanya mendorong antrean kalau kotaknya
+       benar-benar kosong. */
+    await serahkan(pDulu.id);
+    await hit('ambil', { perangkatId: PERANGKAT, maks: 5 });
+
+    /* Centang tiba LEBIH DULU, sebelum gateway sempat melapor. */
+    const rAwal = await hit('lapor-status', { hasil: [{ idLuar: 'WA-DULUAN', status: 'dibaca' }] });
+    cek('centang yang belum dikenali DITITIPKAN, bukan dibuang',
+      rAwal.tubuh.dititipkan === 1 && rAwal.tubuh.naik === 0, rAwal.tubuh);
+
+    /* Baru kemudian laporan gateway datang dan mendaftarkan id-nya. */
+    await hit('lapor', { hasil: [{ pesanId: pDulu.id, status: 'terkirim', idLuar: 'WA-DULUAN' }] });
+    const m = await pesanDi(pDulu.id);
+    cek('begitu pesannya terdaftar, centang titipan langsung terpasang',
+      m.status === 'dibaca', m.status);
+    cek('waktunya ikut tercatat', !!m.dibaca, m.dibaca);
+
+    /* Titipan dipakai sekali lalu habis: kalau tertinggal, pesan BERIKUTNYA
+       yang kebetulan memakai id yang sama akan langsung dianggap dibaca. */
+    const pLain = await antrean.antrikan({
+      perangkatId: PERANGKAT, nomor: '081277788800', isi: { teks: 'Pesan lain' },
+    });
+    await serahkan(pLain.id);
+    await hit('ambil', { perangkatId: PERANGKAT, maks: 5 });
+    await hit('lapor', { hasil: [{ pesanId: pLain.id, status: 'terkirim', idLuar: 'WA-DULUAN' }] });
+    const m2 = await pesanDi(pLain.id);
+    cek('titipan tidak dipakai ulang oleh pesan berikutnya',
+      m2.status === 'terkirim', m2.status);
+  }
+
+  console.log('\n=== K3. CERMIN: PESAN YANG LAHIR DI HP ===');
+  /* Amil sering membalas langsung dari HP. Tanpa cermin ini, layar Percakapan
+     memuat pertanyaan donatur tanpa jawabannya, dan petugas berikutnya
+     menjawab pertanyaan yang sudah selesai. */
+  {
+    const kemarin = new Date(Date.now() - 26 * 3600 * 1000).toISOString();
+    const r = await hit('cermin', { pesan: [
+      { perangkatId: PERANGKAT, nomor: '081200011122', teks: 'Sudah kami proses ya Pak',
+        keluar: true, idLuar: 'WA-HP-1', waktu: new Date().toISOString() },
+      { perangkatId: PERANGKAT, nomor: '081200033344', nama: 'Orang Baru',
+        teks: 'Assalamualaikum', keluar: false, idLuar: 'WA-HP-2', waktu: kemarin },
+    ] });
+    cek('dua pesan dari HP tercatat', r.tubuh.dicatat === 2, r.tubuh);
+
+    const semua = (await db.ambil('pesan:baru')) || [];
+    const isi = (await db.ambilBanyak(semua.map(antrean.KUNCI_PESAN))).filter(Boolean);
+    const keluarHp = isi.find((x) => x.idLuar === 'WA-HP-1');
+    const masukHp = isi.find((x) => x.idLuar === 'WA-HP-2');
+
+    cek('pesan yang diketik di HP tercatat sebagai KELUAR',
+      keluarHp && keluarHp.arah === 'keluar', keluarHp && keluarHp.arah);
+    cek('dan berstatus terkirim, bukan antre',
+      keluarHp && keluarHp.status === 'terkirim', keluarHp && keluarHp.status);
+    cek('pesan masuk dari HP tercatat sebagai MASUK',
+      masukHp && masukHp.arah === 'masuk', masukHp && masukHp.arah);
+    cek('waktunya memakai waktu asli dari HP, bukan waktu pencatatan',
+      masukHp && masukHp.dibuat === kemarin, masukHp && masukHp.dibuat);
+
+    /* Nomor yang belum pernah ada harus jadi kontak sendiri, kalau tidak
+       percakapannya muncul tanpa nama dan tidak bisa dicari. */
+    const kontakBaru = await require('../lib/blast/kontak').cariLewatNomor('6281200033344');
+    cek('nomor baru dari HP otomatis jadi kontak',
+      !!kontakBaru && kontakBaru.nama === 'Orang Baru', kontakBaru && kontakBaru.nama);
+
+    /* Penyelarasan ulang WhatsApp mengirimkan pesan yang sama lagi. */
+    const ulang = await hit('cermin', { pesan: [
+      { perangkatId: PERANGKAT, nomor: '081200011122', teks: 'Sudah kami proses ya Pak',
+        keluar: true, idLuar: 'WA-HP-1', waktu: new Date().toISOString() },
+    ] });
+    cek('pesan yang sama tidak tercatat dua kali',
+      ulang.tubuh.dicatat === 0 && ulang.tubuh.kembar === 1, ulang.tubuh);
+
+    /* Inilah gunanya indeks id: centang untuk pesan yang dikirim dari HP pun
+       tetap bisa naik, jadi amil melihat pesan HP-nya sudah dibaca. */
+    const rc = await hit('lapor-status', { hasil: [{ idLuar: 'WA-HP-1', status: 'dibaca' }] });
+    const sesudah = await pesanDi(keluarHp.id);
+    cek('centang pesan yang dikirim dari HP tetap bisa naik jadi dibaca',
+      sesudah.status === 'dibaca', { status: sesudah.status, jawab: rc.tubuh });
+
+    /* Riwayat lama tidak boleh mendorong pesan hari ini keluar dari potongan
+       daftar yang dibaca layar. */
+    const daftarBaru = (await db.ambil('pesan:baru')) || [];
+    const posisiLama = daftarBaru.indexOf(masukHp.id);
+    const posisiBaru = daftarBaru.indexOf(keluarHp.id);
+    cek('pesan lama ditaruh di akhir daftar, pesan baru tetap di depan',
+      posisiBaru >= 0 && posisiLama > posisiBaru, { posisiBaru, posisiLama });
+
+    /* Pengaman terakhir: cermin TIDAK boleh menjalankan balasan otomatis.
+       Kalau ia menjalankannya, mengimpor riwayat berarti mengirimi ratusan
+       donatur jawaban untuk pertanyaan bulan lalu. */
+    const antre = (await db.anggotaHimpunan(antrean.KUNCI_ANTREAN));
+    const isiAntre = (await db.ambilBanyak(antre.map(antrean.KUNCI_PESAN))).filter(Boolean);
+    cek('cermin tidak memicu balasan otomatis',
+      !isiAntre.some((x) => x.nomor === '6281200033344'),
+      isiAntre.map((x) => x.nomor));
+
+    const kosong = await hit('cermin', { pesan: [{ nomor: 'bukan-nomor', teks: 'x', idLuar: 'WA-X' }] });
+    cek('nomor tidak sah diabaikan, bukan bikin galat',
+      kosong.tubuh.ok !== false && kosong.tubuh.diabaikan === 1, kosong.tubuh);
+  }
 
   console.log('\n=== L. DRIVER LAMA TIDAK IKUT BERUBAH ===');
   /* Perubahan di antrean.js menambah status 'diserahkan'. Driver yang memang
