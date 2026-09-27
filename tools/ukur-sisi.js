@@ -232,6 +232,8 @@ const bulat = (n) => Math.round(n * 100) / 100;
     const sebarTinta = tKiri.length ? bulat(Math.max(...tKiri) - Math.min(...tKiri)) : 0;
     return {
       sebarTeks, sebarIkon, sebarTinta,
+      teksX: xs.length ? bulat(Math.min(...xs)) : null,
+      ikonCx: cxs.length ? bulat(Math.min(...cxs)) : null,
       sebarSvg: svgCxs.length ? bulat(Math.max(...svgCxs) - Math.min(...svgCxs)) : 0,
     };
   }
@@ -243,6 +245,15 @@ const bulat = (n) => Math.round(n * 100) / 100;
   await page.evaluate(() => document.querySelector('.app').classList.add('collapsed'));
   await page.waitForTimeout(500);
   const ciut = laporkan('BILAH DICIUTKAN', await ukur('ciut'));
+
+  /* Keadaan ketiga, dan yang paling sering terlewat: bilah masih berstatus
+     ciut tetapi melebar karena kursor menyentuhnya. Keadaan ini punya aturan
+     CSS-nya sendiri (.app.collapsed .topnav:hover), dan aturan itu lebih
+     spesifik daripada aturan sumbu di bagian 55, jadi ia MENIMPANYA tanpa
+     terlihat di dua keadaan lain. */
+  await page.hover('.topnav');
+  await page.waitForTimeout(600);
+  const hover = laporkan('BILAH CIUT + KURSOR MENYENTUH', await ukur('hover'));
 
   console.log('\n================ KESIMPULAN ================');
 
@@ -258,12 +269,26 @@ const bulat = (n) => Math.round(n * 100) / 100;
     ['kotak ikon sejajar (diciutkan)', ciut.sebarIkon, 0.6],
     ['TINTA ikon sejajar (terbuka)', buka.sebarTinta, 1.0],
     ['TINTA ikon sejajar (diciutkan)', ciut.sebarTinta, 1.0],
+    ['tulisan sejajar (kursor menyentuh)', hover.sebarTeks, 0.6],
+    ['kotak ikon sejajar (kursor menyentuh)', hover.sebarIkon, 0.6],
+    ['TINTA ikon sejajar (kursor menyentuh)', hover.sebarTinta, 1.0],
   ];
+  /* PERBANDINGAN ANTAR KEADAAN, dan ini yang dulu terlewat sama sekali.
+     Tiap keadaan bisa rapi SENDIRI-SENDIRI sementara letaknya berbeda antara
+     satu keadaan dan lainnya. Persis yang terjadi: bilah yang dibuka dengan
+     mengeklik logo menaruh tulisan di 70 px, bilah yang sama yang melebar
+     karena kursor menaruhnya di 53 px, dan kedua keadaan itu masing-masing
+     melaporkan "sebaran 0 px" dengan tenang. Yang dilihat pengguna adalah
+     tulisannya meloncat tergantung cara membukanya. */
+  nilai.push(['tulisan: hover = terbuka', bulat(Math.abs(hover.teksX - buka.teksX)), 0.6]);
+  nilai.push(['sumbu ikon: hover = terbuka', bulat(Math.abs(hover.ikonCx - buka.ikonCx)), 0.6]);
+  nilai.push(['sumbu ikon: ciut = terbuka', bulat(Math.abs(ciut.ikonCx - buka.ikonCx)), 0.6]);
+
   let gagal = 0;
   nilai.forEach(([n, v, batas]) => {
     const ok = v <= batas;
     if (!ok) gagal++;
-    console.log('  ' + (ok ? 'ok    ' : 'MELESET') + ' | ' + n.padEnd(32)
+    console.log('  ' + (ok ? 'ok    ' : 'MELESET') + ' | ' + n.padEnd(38)
       + ' sebaran ' + String(v).padStart(5) + ' px   (batas ' + batas + ')');
   });
   console.log('');

@@ -84,7 +84,27 @@ async function tulisRedis(db, verLama){
 /* ─── muat & simpan ─── */
 function dbKosong(){ return { sheets: {}, props: {} }; }
 
+/* MUAT DIPAKAI JAUH LEBIH LUAS DARIPADA NAMANYA MENYIRATKAN.
+
+   Selain penangan RPC di bawah, fungsi ini dipanggil api/backup.js,
+   api/fund.js, api/wa.js, api/wa-dispatch.js, dan lib/ai/ringkas.js untuk
+   membaca buku besar. Kalau ia tetap membaca Redis setelah pindah ke
+   PostgreSQL, semua tempat itu menerima basis data KOSONG tanpa satu pun
+   galat: cadangan harian tersimpan kosong, ringkasan AI mengira belum ada
+   transaksi, dan pencocokan Fundraising tidak menemukan apa-apa.
+
+   Kegagalan seperti itu tidak berbunyi. Karena itu pemilihan penyimpanannya
+   diletakkan DI SINI, di satu tempat yang dilewati semuanya, bukan diulang
+   sebagai cabang di tiap pemanggil yang bisa terlewat satu per satu.
+
+   Pemeriksaan izin modul Broadcast/AI/Fundraising SENGAJA tidak lewat sini:
+   ia berjalan pada setiap permintaan dan hanya butuh Users, Sessions, dan
+   Settings, jadi ia memakai lazpg.cekIzin() yang jauh lebih murah. */
 async function muat(){
+  if (lazpg.pakaiPostgres()) {
+    const r = await lazpg.muatSemua();
+    return { db: r.db, teks: r.teks, ver: r.versi };
+  }
   if (!PAKAI_REDIS) {
     const db = bacaLokal() || dbKosong();
     return { db: db, teks: JSON.stringify(db), ver: '0' };

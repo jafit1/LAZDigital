@@ -5366,8 +5366,47 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
     transition:opacity .15s ease,
                transform .24s var(--u-sidebar-kurva) !important;
   }
-  /* Saat ciut ia menepi sedikit lalu memudar — geseran kecil itu yang membuat
-     kemunculannya terasa menyambung, bukan berkedip. */
+  /* Saat ciut ia menepi sedikit lalu memudar, geseran kecil itu yang membuat
+     kemunculannya terasa menyambung, bukan berkedip.
+
+     LETAKNYA IKUT DITEGASKAN DI SINI, dan ini bukan pengulangan yang mubazir.
+     Bagian 31 masih memuat aturan lama yang memaksa position:static pada
+     keterangan menu saat bilah ciut dan saat kursor menyentuhnya. Pemilihnya
+     lebih spesifik daripada aturan sumbu di atas, jadi ia menang: keterangan
+     kembali mengalir tepat di belakang ikon, bukan duduk di sumbu tetap.
+
+     Akibatnya terukur. Saat bilah dibuka dengan mengeklik logo, tulisan duduk
+     di 70 px; saat bilah yang sama melebar karena kursor menyentuhnya, tulisan
+     duduk di 53 px. Ikonnya tidak bergeser sedikit pun di kedua keadaan, jadi
+     yang terlihat adalah tulisannya meloncat 17 px tergantung cara membukanya.
+     Diukur di tools/ukur-sisi.js, keadaan "kursor menyentuh". */
+  /* HANYA keadaan hover yang ditegaskan di sini, bukan keadaan ciut biasa.
+     Saat ciut, keterangannya memang tidak terlihat, dan membuatnya absolut di
+     sumbu 70 px berarti kotaknya menjulur keluar rel yang lebarnya 84 px.
+     Itu tidak terlihat mata, tapi tetap salah: uji bilah menu memeriksa bahwa
+     kata "Keluar" benar-benar menyingkir saat diciutkan, dan ia gagal. */
+  .app.collapsed .topnav:hover .tn-item .tn-tip,
+  .app.collapsed .topnav:hover .tn-icon span,
+  .app.collapsed .topnav:hover .user-chip .uc-meta{
+    position:absolute !important;
+    left:var(--u-label-kiri) !important;
+    right:auto !important;
+    top:50% !important;
+    width:var(--u-label-lebar) !important;
+    max-width:var(--u-label-lebar) !important;
+    margin:0 !important;
+    display:block !important;
+    text-align:left !important;
+  }
+  .app.collapsed .topnav:hover .tn-brand .brand-name{
+    position:absolute !important;
+    left:calc(var(--u-label-x) - var(--u-nav-pad) + 8px - 1px) !important;
+    right:auto !important;
+    top:50% !important;
+    width:118px !important; max-width:118px !important;
+    margin:0 !important;
+  }
+
   .app.collapsed .tn-item .tn-tip,
   .app.collapsed .tn-icon span,
   .app.collapsed .user-chip .uc-meta,
@@ -5381,6 +5420,7 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   .app.collapsed .topnav:hover .tn-brand .brand-name{
     opacity:1 !important;
     transform:translate3d(0,-50%,0) !important;
+    pointer-events:auto !important;
   }
   .app .user-chip .uc-meta .uc-name,
   .app .user-chip .uc-meta .uc-role{

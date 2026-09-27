@@ -26,22 +26,10 @@ const lazpg = require('../lib/laz-pg.js');
 const { muat: muatRedis, tulisRedis, redis, PAKAI_REDIS } = rpc._internal;
 const PAKAI_PG = () => lazpg.pakaiPostgres();
 
-/* Sejak buku besarnya di PostgreSQL, "muat" berarti membaca seluruh tabel dan
-   menyusunnya kembali ke bentuk lama, dan bentuk itulah yang dipakai berkas
-   cadangan, sehingga cadangan lama tetap bisa dipulihkan dan cadangan baru tetap
-   bisa dibuka dengan alat yang sudah ada.
-
-   Ini yang PALING PENTING di berkas ini: tanpa cabang PostgreSQL, muat() versi
-   Redis akan mengembalikan basis data KOSONG (karena Redis tidak lagi dipakai),
-   dan cron harian akan rajin menyimpan cadangan kosong setiap malam tanpa ada
-   satu pun pesan galat. */
-async function muat(){
-  if (PAKAI_PG()) {
-    const r = await lazpg.muatSemua();
-    return { db: r.db, teks: r.teks, ver: r.versi };
-  }
-  return muatRedis();
-}
+/* Buku besarnya dibaca lewat rpc._internal.muat(), yang sejak pindah ke
+   PostgreSQL sudah memilih penyimpanannya sendiri. Cabangnya tidak diulang di
+   sini: satu tempat yang memutuskan, bukan dua yang harus selalu sepakat. */
+const muat = muatRedis;
 const AWALAN_KUNCI = 'laz:cadangan:';
 const KUNCI_DAFTAR = 'laz:cadangan:_daftar';
 const DIR_LOKAL = path.join(process.cwd(), 'data', 'cadangan');
