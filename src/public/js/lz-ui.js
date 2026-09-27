@@ -689,6 +689,312 @@ document.addEventListener('click', function(e) {
   popTutupSemua(null);
 });
 
+/* ============================================================
+   PEMILIH RENTANG TANGGAL
+   ------------------------------------------------------------
+   Satu tombol, satu kalender. Klik pertama menetapkan tanggal awal, klik kedua
+   tanggal akhir. Tidak ada dua kotak tanggal terpisah.
+
+   KENAPA BUKAN DUA <input type="date">.
+   Dua kotak terpisah memaksa orang menghitung sendiri: "tanggal berapa tujuh
+   hari lalu?" Lalu membuka dua kalender, dan tidak ada satu pun layar yang
+   memperlihatkan rentang yang sedang dipilih sebagai satu kesatuan. Di sini
+   rentangnya terlihat sebagai pita di kalender sejak sebelum klik kedua, dan
+   pilihan yang paling sering dipakai tersedia sebagai satu tombol.
+
+   Bentuknya SAMA PERSIS dengan pemilih rentang di halaman utama LAZDigital,
+   sampai ke nama kelas CSS-nya (.rt-*, sudah ada di styles.css). Itu bukan
+   kebetulan: bagian kecil seperti tinggi baris kalender dan cara pita rentang
+   digambar adalah yang paling cepat membuat sebuah halaman terasa bukan bagian
+   dari aplikasi yang sama.
+
+   CATATAN SALINAN. app.js masih memegang salinannya sendiri, sama seperti
+   penyelaras dropdown di atas, dan alasannya sama: app.js berukuran setengah
+   megabita dan dipakai setiap hari. Kalau app.js dirapikan nanti, hapus blok
+   PEMILIH RENTANG TANGGAL di sana lalu muat berkas ini dari index.html.
+   ============================================================ */
+var _RT = {};
+
+function rtEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+function rtIso(d) {
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+function rtUrai(s) {
+  var p = String(s || '').split('-');
+  if (p.length < 3) return null;
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+var RT_BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli',
+                'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+var RT_HARI = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+/* Pilihan cepat. "Hari ini", "3 hari", dan "7 hari" ada di depan karena itu
+   yang ditanyakan tiap pagi; rentang panjang dipakai saat menutup buku, yang
+   terjadi sebulan sekali. */
+var RT_PRESET = [
+  { kode: 'kini', label: 'Hari ini' },
+  { kode: '3', label: '3 hari' },
+  { kode: '7', label: '7 hari' },
+  { kode: '30', label: '30 hari' },
+  { kode: 'bln', label: 'Bulan ini' },
+  { kode: 'blnLalu', label: 'Bulan lalu' },
+  { kode: 'thn', label: 'Tahun ini' }
+];
+
+/* "5 – 20 Agustus 2026" bila sebulan, "28 Jul – 3 Agu 2026" bila beda bulan. */
+function rtLabel(dari, sampai) {
+  var a = rtUrai(dari), b = rtUrai(sampai);
+  if (!a || !b) return 'Pilih rentang tanggal';
+  var sng = function (d) { return RT_BULAN[d.getMonth()].slice(0, 3); };
+  if (dari === sampai) return a.getDate() + ' ' + RT_BULAN[a.getMonth()] + ' ' + a.getFullYear();
+  if (a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth())
+    return a.getDate() + ' – ' + b.getDate() + ' ' + RT_BULAN[b.getMonth()] + ' ' + b.getFullYear();
+  if (a.getFullYear() === b.getFullYear())
+    return a.getDate() + ' ' + sng(a) + ' – ' + b.getDate() + ' ' + sng(b) + ' ' + b.getFullYear();
+  return a.getDate() + ' ' + sng(a) + ' ' + a.getFullYear() + ' – ' + b.getDate() + ' ' + sng(b) + ' ' + b.getFullYear();
+}
+
+function rentangHTML(id, dari, sampai, opsi) {
+  opsi = opsi || {};
+  var kls = 'rt' + (opsi.rapat ? ' rt-rapat' : '');
+  var teks = (dari && sampai) ? rtLabel(dari, sampai) : (opsi.kosong || 'Pilih rentang tanggal');
+  return '<div class="' + kls + '" id="' + id + '_wrap">'
+    + '<button type="button" class="rt-btn' + ((dari && sampai) ? '' : ' rt-hampa') + '" id="' + id + '_btn" aria-haspopup="dialog">'
+    + '<span class="rt-ic" aria-hidden="true">' + IKON_KALENDER + '</span>'
+    + '<span class="rt-teks" id="' + id + '_teks">' + rtEsc(teks) + '</span>'
+    + '<span class="rt-car" aria-hidden="true">▾</span>'
+    + '</button></div>';
+}
+
+function rentangNilai(id) {
+  var s = _RT[id] || {};
+  return { dari: s.dari || '', sampai: s.sampai || '' };
+}
+
+function rentangPasang(id, opsi) {
+  opsi = opsi || {};
+  var btn = el(id + '_btn');
+  if (!btn) return;
+
+  /* Popover lama dibuang dulu. Halaman ini menggambar ulang isinya setiap kali
+     penyaringnya berubah, dan tanpa pembuangan ini <body> perlahan penuh
+     kalender yatim yang tidak terlihat siapa pun. */
+  var lama = _RT[id];
+  if (lama && lama.pop && lama.pop.parentNode) lama.pop.parentNode.removeChild(lama.pop);
+
+  var pop = document.createElement('div');
+  pop.className = 'dropdown-popover datepicker-enhanced-popover rt-pop hidden';
+
+  var s = _RT[id] = {
+    dari: opsi.dari || '', sampai: opsi.sampai || '',
+    tahap: 'awal', bayang: '', pop: pop, btn: btn,
+    onTerap: opsi.onTerap || null,
+    bolehKosong: opsi.bolehKosong === true,
+    kosong: opsi.kosong || 'Semua tanggal'
+  };
+  var awal = rtUrai(s.dari) || new Date();
+  s.lihat = new Date(awal.getFullYear(), awal.getMonth(), 1);
+
+  pop.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+  pop.addEventListener('click', function (e) { e.stopPropagation(); });
+
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var tertutup = pop.classList.contains('hidden');
+    popTutupSemua(pop);
+    if (!tertutup) { pop.classList.add('hidden'); return; }
+    s.tahap = 'awal'; s.bayang = '';
+    var a = rtUrai(s.dari) || new Date();
+    s.lihat = new Date(a.getFullYear(), a.getMonth(), 1);
+    rtGambar(id);
+    popBuka(btn, pop);
+  });
+
+  rtGambar(id);
+  rtTeksBaru(id);
+}
+
+function rtTeksBaru(id) {
+  var s = _RT[id]; if (!s) return;
+  var isi = !!(s.dari && s.sampai);
+  var t = el(id + '_teks');
+  if (t) t.textContent = isi ? rtLabel(s.dari, s.sampai) : (s.bolehKosong ? s.kosong : 'Pilih rentang tanggal');
+  if (s.btn) s.btn.classList.toggle('rt-hampa', !isi);
+}
+
+/* Kosongkan pilihan — dipakai saringan yang boleh "semua tanggal". */
+function rtHapus(id) {
+  var s = _RT[id]; if (!s) return;
+  s.dari = ''; s.sampai = ''; s.tahap = 'awal'; s.bayang = '';
+  rtGambar(id); rtTeksBaru(id);
+  s.pop.classList.add('hidden');
+  if (s.onTerap) s.onTerap('', '');
+}
+
+function rtGambar(id) {
+  var s = _RT[id]; if (!s) return;
+  var v = s.lihat;
+  var thn = v.getFullYear(), bln = v.getMonth();
+  var pertama = new Date(thn, bln, 1);
+  var jmlHari = new Date(thn, bln + 1, 0).getDate();
+  var geser = pertama.getDay();
+  var hariIni = rtIso(new Date());
+
+  var h = '<div class="rt-preset">' + RT_PRESET.map(function (p) {
+    return '<button type="button" class="rt-chip" data-preset="' + p.kode + '">' + rtEsc(p.label) + '</button>';
+  }).join('') + '</div>';
+
+  h += '<div class="rt-head">'
+    + '<button type="button" class="rt-nav" data-geser="-1" aria-label="Bulan sebelumnya">‹</button>'
+    + '<div class="rt-judul">' + RT_BULAN[bln] + ' ' + thn + '</div>'
+    + '<button type="button" class="rt-nav" data-geser="1" aria-label="Bulan berikutnya">›</button>'
+    + '</div>';
+
+  h += '<div class="rt-hari">' + RT_HARI.map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>';
+  h += '<div class="rt-grid">';
+  for (var i = 0; i < geser; i++) h += '<span class="rt-kosong"></span>';
+  for (var d = 1; d <= jmlHari; d++) {
+    var iso = thn + '-' + ('0' + (bln + 1)).slice(-2) + '-' + ('0' + d).slice(-2);
+    h += '<button type="button" class="rt-sel' + (iso === hariIni ? ' kini' : '') + '" data-iso="' + iso + '">' + d + '</button>';
+  }
+  h += '</div>';
+
+  h += '<div class="rt-kaki">'
+    + '<span class="rt-info" id="' + id + '_info"></span>'
+    + (s.bolehKosong ? '<button type="button" class="rt-hapus" data-hapus="1">Semua</button>' : '')
+    + '<button type="button" class="rt-terap" data-terap="1">Selesai</button>'
+    + '</div>';
+
+  s.pop.innerHTML = h;
+
+  /* Pendengar dipasang di sini, bukan lewat atribut onclick seperti di app.js.
+     Atribut onclick menuntut fungsinya berada di ruang nama global halaman;
+     berkas ini terbungkus IIFE justru supaya TIDAK menaruh apa-apa di sana
+     kecuali yang sengaja dibuka lewat window. */
+  s.pop.querySelectorAll('[data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () { rtPreset(id, b.getAttribute('data-preset')); });
+  });
+  s.pop.querySelectorAll('[data-geser]').forEach(function (b) {
+    b.addEventListener('click', function () { rtGeser(id, Number(b.getAttribute('data-geser'))); });
+  });
+  s.pop.querySelectorAll('.rt-sel').forEach(function (b) {
+    var iso = b.getAttribute('data-iso');
+    b.addEventListener('click', function () { rtKlik(id, iso); });
+    b.addEventListener('mouseenter', function () { rtBayang(id, iso); });
+  });
+  var bHapus = s.pop.querySelector('[data-hapus]');
+  if (bHapus) bHapus.addEventListener('click', function () { rtHapus(id); });
+  var bTerap = s.pop.querySelector('[data-terap]');
+  if (bTerap) bTerap.addEventListener('click', function () { rtTutup(id); });
+
+  rtTandai(id);
+  if (!s.pop.classList.contains('hidden')) popUkur(s.btn, s.pop);
+}
+
+/* Menandai ujung dan pita rentang dengan mengubah KELAS pada tombol yang sudah
+   ada. Membangun ulang seluruh kalender tiap kali kursor pindah hari membuat
+   transisi CSS tidak pernah sempat berjalan, dan geraknya patah-patah. */
+function rtTandai(id) {
+  var s = _RT[id]; if (!s || !s.pop) return;
+  var lo = s.dari, hi = s.sampai;
+  if (s.tahap === 'akhir' && s.dari && s.bayang) {
+    lo = s.dari < s.bayang ? s.dari : s.bayang;
+    hi = s.dari < s.bayang ? s.bayang : s.dari;
+  }
+  var hariIni = rtIso(new Date());
+  s.pop.querySelectorAll('.rt-sel').forEach(function (b) {
+    var iso = b.getAttribute('data-iso');
+    var k = ['rt-sel'];
+    if (iso === hariIni) k.push('kini');
+    if (lo && hi && iso > lo && iso < hi) k.push('dalam');
+    if (lo && hi && iso === lo && iso === hi) k.push('tunggal');
+    else if (iso === lo) k.push('ujung awal');
+    else if (iso === hi) k.push('ujung akhir');
+    var baru = k.join(' ');
+    if (b.className !== baru) b.className = baru;
+  });
+  var info = s.pop.querySelector('#' + id + '_info');
+  if (info) {
+    info.innerHTML = s.tahap === 'akhir' ? 'Pilih <b>tanggal akhir</b>'
+      : (s.dari && s.sampai) ? rtEsc(rtLabel(s.dari, s.sampai))
+      : 'Klik <b>tanggal awal</b>';
+  }
+}
+
+function rtGeser(id, delta) {
+  var s = _RT[id]; if (!s) return;
+  s.lihat = new Date(s.lihat.getFullYear(), s.lihat.getMonth() + delta, 1);
+  rtGambar(id);
+}
+
+function rtBayang(id, iso) {
+  var s = _RT[id]; if (!s || s.tahap !== 'akhir' || !s.dari) return;
+  if (s.bayang === iso) return;
+  s.bayang = iso;
+  rtTandai(id);
+}
+
+function rtKlik(id, iso) {
+  var s = _RT[id]; if (!s) return;
+  if (s.tahap === 'awal') {
+    s.dari = iso; s.sampai = ''; s.bayang = iso; s.tahap = 'akhir';
+    rtTandai(id); rtTeksBaru(id);
+    return;
+  }
+  /* Klik kedua: urutan tanggal dirapikan sendiri bila terbalik. Orang yang
+     mengklik akhir dulu lalu awal tidak sedang salah, ia cuma membaca kalender
+     dari arah lain. */
+  if (iso < s.dari) { s.sampai = s.dari; s.dari = iso; }
+  else s.sampai = iso;
+  s.tahap = 'awal'; s.bayang = '';
+  rtTandai(id); rtTeksBaru(id);
+  /* Jeda pendek supaya pita rentangnya sempat terlihat sebelum menutup. */
+  setTimeout(function () { rtSelesai(id); }, 180);
+}
+
+function rtPreset(id, jenis) {
+  var s = _RT[id]; if (!s) return;
+  var n = new Date(), a, b;
+  if (jenis === 'kini') { a = n; b = n; }
+  else if (jenis === '3') { b = n; a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 2); }
+  else if (jenis === '7') { b = n; a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 6); }
+  else if (jenis === '30') { b = n; a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - 29); }
+  else if (jenis === 'bln') { a = new Date(n.getFullYear(), n.getMonth(), 1); b = new Date(n.getFullYear(), n.getMonth() + 1, 0); }
+  else if (jenis === 'blnLalu') { a = new Date(n.getFullYear(), n.getMonth() - 1, 1); b = new Date(n.getFullYear(), n.getMonth(), 0); }
+  else { a = new Date(n.getFullYear(), 0, 1); b = new Date(n.getFullYear(), 11, 31); }
+  s.dari = rtIso(a); s.sampai = rtIso(b);
+  s.tahap = 'awal'; s.bayang = '';
+  s.lihat = new Date(a.getFullYear(), a.getMonth(), 1);
+  rtGambar(id); rtTeksBaru(id);
+  rtSelesai(id);
+}
+
+function rtTutup(id) {
+  var s = _RT[id]; if (!s) return;
+  /* "Selesai" ditekan saat baru satu tanggal terpilih: dianggap satu hari.
+     Menutupnya tanpa hasil akan membuang klik yang sudah benar. */
+  if (s.tahap === 'akhir' && s.dari && !s.sampai) {
+    s.sampai = s.dari; s.tahap = 'awal'; s.bayang = '';
+    rtGambar(id); rtTeksBaru(id);
+  }
+  s.pop.classList.add('hidden');
+  if (s.dari && s.sampai && s.onTerap) s.onTerap(s.dari, s.sampai);
+}
+
+function rtSelesai(id) {
+  var s = _RT[id]; if (!s) return;
+  s.pop.classList.add('hidden');
+  if (s.onTerap) s.onTerap(s.dari, s.sampai);
+}
+
 /* ============ MUTASI BANK ============ */
 window.MUTASI_PARSED_ROWS = [];
 
@@ -700,6 +1006,9 @@ window.enhanceSelects = enhanceSelects;
 window.enhanceDatePickers = enhanceDatePickers;
 window.formatIndoDate = formatIndoDate;
 window.popTutupSemua = popTutupSemua;
+window.rentangHTML = rentangHTML;
+window.rentangPasang = rentangPasang;
+window.rentangNilai = rentangNilai;
 /* Halaman yang baru mengganti innerHTML memakai ini untuk memaksa pemindaian
    ulang seketika, tanpa menunggu putaran 800 ms berikutnya. */
 window.tandaiPerluEnhance = function () { __enhDirty = true; if (typeof runEnhancers === 'function') runEnhancers(); };

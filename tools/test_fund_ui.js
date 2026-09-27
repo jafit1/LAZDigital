@@ -484,7 +484,8 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
       jumlahBaris: baris.length,
       isi: baris.map((b) => b.textContent.replace(/\s+/g, ' ').trim()),
       kpi: Array.from(document.querySelectorAll('#isi .kpi-v2')).map((k) => k.textContent.replace(/\s+/g, ' ').trim()),
-      adaTanggal: Boolean(document.getElementById('dariF')),
+      adaRentang: Boolean(document.getElementById('rtFund_btn')),
+      kotakTanggalLama: document.querySelectorAll('#isi input[type=date]').length,
     };
   });
   cek('tiga fundraiser tergambar', fr.jumlahBaris === 3, fr.jumlahBaris);
@@ -492,7 +493,8 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
     fr.isi.some((t) => /Fundraiser Baru/.test(t)), fr.isi);
   cek('rupiah yang belum cocok ditampilkan, bukan cuma jumlah barisnya',
     fr.kpi.some((t) => /Belum cocok/.test(t) && /200\.000/.test(t)), fr.kpi);
-  cek('ada penyaring tanggal', fr.adaTanggal === true);
+  cek('penyaring tanggalnya satu tombol rentang, bukan dua kotak terpisah',
+    fr.adaRentang === true && fr.kotakTanggalLama === 0, fr);
 
   await p.click('#isi [data-buka="u_slamet"]');
   await p.waitForTimeout(700);
@@ -519,6 +521,77 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
     rinci.lencana.some((t) => /^belum$/.test(t)), rinci.lencana);
   cek('ada tombol menutup rinciannya', rinci.adaTutup === true);
   await p.screenshot({ path: path.join(LUAR, 'fund-fundraiser.png'), fullPage: true });
+
+  console.log('\n=== E2b. PEMILIH RENTANG TANGGAL ===');
+  /* Dua kotak tanggal terpisah memaksa orang menghitung sendiri "tanggal
+     berapa tujuh hari lalu", lalu membuka dua kalender, dan tidak ada satu pun
+     layar yang memperlihatkan rentang yang sedang dipilih sebagai satu
+     kesatuan. Yang diperiksa di sini: pilihan cepatnya ada, dan klik awal lalu
+     klik akhir benar-benar menghasilkan rentang. */
+  await p.click('#rtFund_btn');
+  await p.waitForTimeout(400);
+  const kal = await p.evaluate(() => {
+    const pop = document.querySelector('.rt-pop:not(.hidden)');
+    return {
+      terbuka: Boolean(pop),
+      chip: pop ? Array.from(pop.querySelectorAll('.rt-chip')).map((c) => c.textContent.trim()) : [],
+      jumlahHari: pop ? pop.querySelectorAll('.rt-sel').length : 0,
+      info: pop ? (pop.querySelector('.rt-info') || {}).textContent || '' : '',
+      adaSemua: pop ? Boolean(pop.querySelector('[data-hapus]')) : false,
+      adaSelesai: pop ? Boolean(pop.querySelector('[data-terap]')) : false,
+    };
+  });
+  cek('kalendernya terbuka', kal.terbuka === true);
+  cek('pilihan cepat Hari ini, 3 hari, dan 7 hari tersedia',
+    ['Hari ini', '3 hari', '7 hari'].every((x) => kal.chip.includes(x)), kal.chip);
+  cek('pilihan rentang panjang tetap ada',
+    ['30 hari', 'Bulan ini', 'Bulan lalu', 'Tahun ini'].every((x) => kal.chip.includes(x)), kal.chip);
+  cek('sebulan penuh tergambar', kal.jumlahHari >= 28 && kal.jumlahHari <= 31, kal.jumlahHari);
+  cek('diminta mengklik tanggal AWAL lebih dulu', /tanggal awal/i.test(kal.info), kal.info);
+  cek('ada tombol "Semua" untuk melepas penyaringnya', kal.adaSemua === true);
+  cek('dan tombol Selesai', kal.adaSelesai === true);
+
+  /* Klik awal lalu klik akhir. Di antara keduanya, rentangnya harus sudah
+     terlihat sebagai pita — itu yang membuat orang tahu ia sedang memilih
+     rentang, bukan satu tanggal. */
+  const hasilRentang = await p.evaluate(async () => {
+    const pop = document.querySelector('.rt-pop:not(.hidden)');
+    const sel = Array.from(pop.querySelectorAll('.rt-sel'));
+    const awal = sel[4], akhir = sel[9];
+    awal.click();
+    const sesudahAwal = {
+      info: (pop.querySelector('.rt-info') || {}).textContent || '',
+      ujung: pop.querySelectorAll('.rt-sel.ujung').length,
+    };
+    akhir.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    const pita = pop.querySelectorAll('.rt-sel.dalam').length;
+    akhir.click();
+    await new Promise((r) => setTimeout(r, 400));
+    return {
+      sesudahAwal, pita,
+      teksTombol: (document.getElementById('rtFund_teks') || {}).textContent || '',
+      tertutup: !document.querySelector('.rt-pop:not(.hidden)'),
+    };
+  });
+  cek('sesudah klik pertama, diminta mengklik tanggal AKHIR',
+    /tanggal akhir/i.test(hasilRentang.sesudahAwal.info), hasilRentang.sesudahAwal.info);
+  cek('rentangnya terlihat sebagai pita sebelum klik kedua',
+    hasilRentang.pita === 4, hasilRentang.pita);
+  cek('klik kedua menutup kalender dan menuliskan rentangnya di tombol',
+    hasilRentang.tertutup === true && /\u2013/.test(hasilRentang.teksTombol),
+    hasilRentang);
+
+  /* Pilihan cepat harus benar-benar menyaring, bukan cuma mengubah tulisan. */
+  await p.click('#rtFund_btn');
+  await p.waitForTimeout(300);
+  const cepat = await p.evaluate(async () => {
+    const pop = document.querySelector('.rt-pop:not(.hidden)');
+    const chip = Array.from(pop.querySelectorAll('.rt-chip')).find((c) => c.textContent.trim() === '7 hari');
+    chip.click();
+    await new Promise((r) => setTimeout(r, 500));
+    return (document.getElementById('rtFund_teks') || {}).textContent || '';
+  });
+  cek('pilihan cepat 7 hari mengisi rentangnya', /\u2013/.test(cepat), cepat);
 
   console.log('\n=== E3. ALASAN BELUM COCOK ===');
   await p.evaluate(() => { location.hash = '#cocok'; });

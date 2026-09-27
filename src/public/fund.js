@@ -959,9 +959,8 @@ halaman.fundraiser = {
 
     const r = d.ringkas || {};
     el.innerHTML = `
-      <div class="toolbar fund-alat" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <input type="date" id="dariF" class="search" value="${H(s.dari)}" style="width:auto" title="Dari tanggal">
-        <input type="date" id="sampaiF" class="search" value="${H(s.sampai)}" style="width:auto" title="Sampai tanggal">
+      <div class="toolbar fund-alat" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <span style="width:260px;flex:none">${rentangHTML('rtFund', s.dari, s.sampai, { kosong: 'Semua tanggal' })}</span>
         <span class="muted" style="font-size:12px">${fmtAngka(r.orang || 0)} orang</span>
       </div>
       ${d.galatUsers ? `<div class="card" style="border-color:var(--amber,#d97706)">
@@ -1010,8 +1009,19 @@ halaman.fundraiser = {
       `)}
       <div id="rincianF"></div>`;
 
-    $('#dariF', el).onchange = (ev) => { s.dari = ev.target.value; halaman.fundraiser.gambar(el); };
-    $('#sampaiF', el).onchange = (ev) => { s.sampai = ev.target.value; halaman.fundraiser.gambar(el); };
+    /* Satu tombol, satu kalender: klik tanggal awal lalu tanggal akhir, dengan
+       pilihan cepat Hari ini / 3 hari / 7 hari di atasnya. Komponennya milik
+       js/lz-ui.js, sama persis dengan yang dipakai halaman utama LAZDigital —
+       bukan tiruan yang mirip. */
+    rentangPasang('rtFund', {
+      dari: s.dari, sampai: s.sampai,
+      bolehKosong: true, kosong: 'Semua tanggal',
+      onTerap: (dari, sampai) => {
+        if (dari === s.dari && sampai === s.sampai) return;
+        s.dari = dari; s.sampai = sampai;
+        halaman.fundraiser.gambar(el);
+      },
+    });
     $$('[data-buka], [data-buka2]', el).forEach((x) => {
       x.onclick = (ev) => {
         ev.stopPropagation();
