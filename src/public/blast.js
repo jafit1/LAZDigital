@@ -367,6 +367,9 @@ const IKON = {
   kirim: ikonNav('<path d="M21 3 10.5 13.5"/><path d="M21 3l-6.8 18-3.7-7.5L3 9.8z"/>'),
   massal: ikonNav('<path d="M3 10.5v3a1.5 1.5 0 0 0 1.5 1.5H7l6 4.5V6L7 10.5H4.5A1.5 1.5 0 0 0 3 12"/><path d="M17 9.5a4 4 0 0 1 0 5"/><path d="M19.5 7a7.5 7.5 0 0 1 0 10"/>'),
   antrean: ikonNav('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  /* Gelembung percakapan dengan tiga titik. Bentuk yang sama dipakai semua
+     aplikasi pesan, jadi tidak perlu dijelaskan. */
+  percakapan: ikonNav('<path d="M20.5 11.5a7.5 7.5 0 0 1-10.9 6.7L4.5 20l1.4-4.3A7.5 7.5 0 1 1 20.5 11.5z"/><circle cx="8.8" cy="11.5" r=".9" fill="currentColor" stroke="none"/><circle cx="12.5" cy="11.5" r=".9" fill="currentColor" stroke="none"/><circle cx="16.2" cy="11.5" r=".9" fill="currentColor" stroke="none"/>'),
   kontak: ikonNav('<circle cx="9.5" cy="8" r="3.2"/><path d="M3.5 19.5a6 6 0 0 1 12 0"/><path d="M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18 14.4a6 6 0 0 1 3 5.1"/>'),
   templat: ikonNav('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 12h5"/><path d="M9.5 16h5"/>'),
   webhook: ikonNav('<path d="M10 13.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5L11 7.5"/><path d="M14 10.5a3.5 3.5 0 0 0-5 0L6.5 13a3.5 3.5 0 0 0 5 5l1.5-1.5"/>'),
@@ -379,8 +382,12 @@ const MENU = [
   { kode: 'dasbor', label: 'Dashboard', izin: 'dasbor' },
   { kode: 'perangkat', label: 'Perangkat', izin: 'perangkat.lihat' },
   { kode: 'kirim', label: 'Kirim Pesan', izin: 'pesan.kirim' },
+  /* PERCAKAPAN SEBELUM KIRIMAN MASSAL, dan itu bukan soal selera: yang dibuka
+     pertama tiap pagi adalah pesan yang menunggu dijawab, bukan kampanye yang
+     akan dikirim. Menu yang paling sering ditekan duduk paling atas. */
+  { kode: 'percakapan', label: 'Percakapan', izin: 'inbox.lihat' },
   { kode: 'massal', label: 'Kiriman Massal', izin: 'massal.kelola' },
-  { kode: 'antrean', label: 'Pesan & Antrean', izin: 'pesan.lihat' },
+  { kode: 'antrean', label: 'Antrean & Status', izin: 'pesan.lihat' },
   { kode: 'kontak', label: 'Kontak', izin: 'kontak.lihat' },
   { kode: 'templat', label: 'Template', izin: 'pesan.lihat' },
   /* Dua menu ini hanya untuk superadmin. Webhook memuat alamat tujuan dan
@@ -1440,8 +1447,7 @@ halaman.massal = {
             </div>
             ${kotakLampiran('fm')}
             <div style="border-radius:var(--radius);background:var(--accent-soft);padding:14px;font-size:12px;color:var(--text2);margin-bottom:12px">
-              Kontak yang diblokir otomatis dilewati. Sertakan kalimat cara berhenti pada pesan ajakan — balasan
-              &ldquo;BERHENTI&rdquo; langsung memblokir nomornya sendiri.
+              Kontak yang diblokir otomatis dilewati.
             </div>
             <button class="btn btn-primary btn-block">Jalankan kiriman</button>
           </form>`)}
@@ -1508,8 +1514,19 @@ halaman.massal = {
         (k.grup || []).some((x) => g.has(x)) || (k.segmen || []).some((x) => s.has(x)));
     };
 
+    /* DAFTAR GRUP MENUTUP SENDIRI SAAT DIKLIK DI LUARNYA.
+
+       Yang menentukan penerima tetap radio "Grup / segmen tertentu", bukan
+       terbuka-tertutupnya daftar. Jadi menutup daftarnya TIDAK membatalkan
+       centangan: yang dicentang tetap terkirim, dan hitungannya tetap
+       terlihat di bawah kotak. Kalau menutup berarti membatalkan, satu klik
+       tidak sengaja di luar kotak akan menghapus pilihan yang disusun
+       berhati-hati, dan itu baru ketahuan setelah terkirim. */
+    let daftarDibuka = false;
+    const bolehTampil = () => modePilih() && daftarDibuka;
+
     const perbaruiHitung = () => {
-      daftarPenerima.hidden = !modePilih();
+      daftarPenerima.hidden = !bolehTampil();
       const n = hitungPenerima().length;
       const diblokir = semuaKontak.length - bisaDikirimi.length;
       hitungEl.innerHTML = modePilih() && !grupTerpilih().length && !segmenTerpilih().length
@@ -1578,8 +1595,54 @@ halaman.massal = {
     }
     namaEl.addEventListener('input', perbaruiNama);
     $$('[name=carePenerima], [data-grup], [data-segmen]', el).forEach((c) => {
-      c.onchange = () => { perbaruiHitung(); saringDaftar(); perbaruiNama(); };
+      c.onchange = () => {
+        /* Berpindah radio lewat papan tik memicu change tanpa click, jadi
+           keadaan terbuka ikut disetel di sini. */
+        if (c.name === 'carePenerima') daftarDibuka = c.value === 'pilih';
+        perbaruiHitung(); saringDaftar(); perbaruiNama();
+      };
     });
+
+    /* Memilih "Grup / segmen tertentu" membuka daftarnya; memilih "Semua
+       kontak" menutupnya. Mengeklik barisnya lagi saat sudah terpilih ikut
+       membuka kembali, karena itulah yang dicari orang setelah daftarnya
+       tertutup sendiri. */
+    $$('[name=carePenerima]', el).forEach((r) => {
+      const baris = r.closest('.penerima-baris') || r;
+      baris.addEventListener('click', () => {
+        daftarDibuka = r.value === 'pilih';
+        perbaruiHitung();
+        if (daftarDibuka && cari) { saringDaftar(); }
+      });
+    });
+
+    /* Klik di luar kotak penerima menutup daftarnya. Klik DI DALAMNYA tidak,
+       termasuk saat sedang mencentang atau mengetik di kotak pencarian. */
+    const kotakPenerima = daftarPenerima.closest('.penerima');
+    const tutupBilaDiLuar = (ev) => {
+      if (!daftarDibuka) return;
+      if (kotakPenerima && kotakPenerima.contains(ev.target)) return;
+      daftarDibuka = false;
+      perbaruiHitung();
+    };
+    document.addEventListener('pointerdown', tutupBilaDiLuar);
+    /* Esc menutup juga, dan tanpa menyentuh centangannya. */
+    const tutupDenganEsc = (ev) => {
+      if (ev.key !== 'Escape' || !daftarDibuka) return;
+      daftarDibuka = false;
+      perbaruiHitung();
+    };
+    document.addEventListener('keydown', tutupDenganEsc);
+    /* Halaman Broadcast menggambar ulang isinya tanpa memuat ulang peramban,
+       jadi penangan yang dipasang di document harus ikut dilepas. Tanpa ini,
+       tiap kali halaman digambar ulang bertambah satu penangan yang menunjuk
+       ke elemen yang sudah tidak ada. */
+    if (el.__lepasPenerima) el.__lepasPenerima();
+    el.__lepasPenerima = () => {
+      document.removeEventListener('pointerdown', tutupBilaDiLuar);
+      document.removeEventListener('keydown', tutupDenganEsc);
+      el.__lepasPenerima = null;
+    };
     perbaruiHitung();
     perbaruiNama();
 
@@ -1684,8 +1747,14 @@ halaman.massal = {
 
 // ---------------------------------------------------------------- Antrean
 halaman.antrean = {
-  judul: 'Pesan & Antrean',
-  sub: 'Seluruh pesan keluar dan masuk',
+  judul: 'Antrean & Status',
+  /* Halaman ini TIDAK dihapus setelah Percakapan ada, dan bukan karena
+     sayang. Yang dikerjakan di sini tidak ada padanannya di layar
+     percakapan: menyaring per status, mencari di seluruh pesan sekaligus,
+     membatalkan yang masih antre, mengulang yang gagal, dan membersihkan
+     riwayat. Percakapan untuk membaca dan menjawab; halaman ini untuk
+     mengurus pengirimannya. */
+  sub: 'Status pengiriman tiap pesan, antrean, dan yang gagal',
   saring: { status: '', cari: '', halaman: 1 },
   async gambar(el) {
     const s = halaman.antrean.saring;
@@ -1804,6 +1873,544 @@ halaman.antrean = {
 };
 
 // ---------------------------------------------------------------- Kontak
+// ---------------------------------------------------------------- Percakapan
+/* KOTAK MASUK BERBENTUK PERCAKAPAN.
+ *
+ * Yang digantikan: halaman riwayat yang menderetkan SETIAP pesan sebagai baris
+ * tersendiri. Pesan kita, balasan donatur, lalu balasan kita lagi — tiga baris
+ * yang tidak saling mengenal, tersebar di antara sembilan puluh baris lain. Satu
+ * donatur yang bertanya empat kali terlihat seperti empat kejadian terpisah, dan
+ * tidak ada satu pun tempat di layar yang bisa menjawab "ini sudah dijawab
+ * belum". Petugas akhirnya menjawab dari WhatsApp di ponselnya sendiri, dan
+ * sejak itu lembaga tidak punya catatan percakapannya lagi.
+ *
+ * Bentuk yang dipakai di sini sengaja bentuk yang sudah dikenal semua orang:
+ * daftar di kiri satu baris per kontak, utasnya di kanan, gelembung kiri-kanan,
+ * centang di bawah pesan keluar, dan kotak tulis di bawah. Tidak ada yang perlu
+ * dipelajari.
+ *
+ * TIGA HAL YANG DIPUTUSKAN DENGAN SENGAJA:
+ *
+ * 1. GRUP IKUT DI DAFTAR YANG SAMA, tidak dipisah ke tab sendiri. "Grup" di
+ *    aplikasi ini bukan grup WhatsApp — ia label kontak, dan broadcast ke grup
+ *    adalah ratusan pesan pribadi serempak. Jadi utas grup berisi kiriman
+ *    massalnya sebagai gelembung, lengkap dengan angka terkirim/sampai/dibaca,
+ *    ditambah balasan yang datang dari anggotanya. Itu yang membuat "lihat
+ *    broadcast per grup" masuk akal tanpa mengarang grup yang tidak pernah ada.
+ *
+ * 2. DI UTAS GRUP TIDAK ADA KOTAK TULIS. Satu kotak tulis di sana akan terbaca
+ *    sebagai "kirim ke grup", padahal yang terjadi ratusan pesan serempak —
+ *    tanpa jeda aman, tanpa batas harian, tanpa daftar penerima. Itu pekerjaan
+ *    Kiriman Massal, dan di sini cuma ditunjukkan jalannya.
+ *
+ * 3. PENYEGARANNYA MENANYAKAN SATU ANGKA, bukan seluruh daftar. Layar ini
+ *    terbuka sepanjang jam kerja. Kalau tiap beberapa detik ia memuat ratusan
+ *    dokumen pesan hanya untuk menyimpulkan "tidak ada yang berubah", satu tab
+ *    menghabiskan kuota egress Supabase sendirian. Jadi yang ditanyakan adalah
+ *    'inbox.denyut' — satu kunci, satu angka — dan daftarnya baru diminta kalau
+ *    angkanya bergerak. Denyutnya dinaikkan di satu pintu di server
+ *    (antrean.simpanPesan), jadi centang "dibaca" yang datang dari gateway pun
+ *    ikut menggerakkan layar ini.
+ */
+halaman.percakapan = {
+  judul: 'Percakapan',
+  sub: 'Kotak masuk WhatsApp lembaga',
+
+  /* Disimpan di luar gambar() karena halaman ini digambar ulang sendiri setiap
+     ada pesan baru. Kalau utas yang terbuka, kata pencarian, dan naskah yang
+     sedang ditulis ikut lahir ulang tiap kali, petugas akan kehilangan kalimat
+     yang belum selesai diketik persis saat donatur mengirim pesan — yaitu saat
+     yang paling sering terjadi. */
+  keadaan: { kunci: null, cari: '', denyut: 0, gen: 0, draf: {} },
+
+  async gambar(el) {
+    const s = halaman.percakapan.keadaan;
+    const gen = ++s.gen;                 /* penggambaran lama berhenti sendiri */
+
+    let d;
+    try { d = await rpc('inbox.daftar', { cari: s.cari }); }
+    catch (e) { el.innerHTML = galatKotak(e.message); return; }
+    if (gen !== s.gen) return;
+    s.denyut = d.denyut || 0;
+
+    const baris = d.baris || [];
+    /* Utas yang terbuka bisa hilang dari daftar: pesannya dihapus, atau kata
+       pencarian berubah. Yang dibuka tetap dipertahankan kalau masih ada;
+       kalau tidak, layar kanan kembali kosong alih-alih memperlihatkan utas
+       yang tidak ada padanannya di kiri. */
+    const adaKunci = new Set(baris.map((b) => b.kunci));
+    if (s.kunci && !adaKunci.has(s.kunci)) s.kunci = null;
+
+    const terbuka = Boolean(s.kunci);
+    el.innerHTML = `
+      <div class="pc${terbuka ? ' pc-buka' : ''}" id="pc">
+        <aside class="pc-sisi">
+          <div class="pc-cari">
+            <input type="search" id="pcCari" placeholder="Cari nama, nomor, atau isi pesan"
+              value="${H(s.cari)}" aria-label="Cari percakapan">
+          </div>
+          <div class="pc-daftar" id="pcDaftar">${gambarDaftarPercakapan(baris, s.kunci)}</div>
+        </aside>
+        <section class="pc-utas" id="pcUtas">${terbuka ? rangka(6) : kosongUtas(baris.length)}</section>
+      </div>`;
+
+    /* Pencarian tidak menggambar ulang seluruh halaman tiap ketikan: yang
+       diganti cuma daftar di kiri, supaya utas yang sedang dibaca tidak
+       berkedip dan gulirannya tidak melompat ke atas. */
+    const kCari = $('#pcCari', el);
+    let jedaCari = null;
+    kCari.oninput = () => {
+      clearTimeout(jedaCari);
+      jedaCari = setTimeout(async () => {
+        s.cari = kCari.value;
+        try {
+          const h = await rpc('inbox.daftar', { cari: s.cari });
+          const w = $('#pcDaftar', el);
+          if (w) w.innerHTML = gambarDaftarPercakapan(h.baris || [], s.kunci);
+          pasangBarisPercakapan(el);
+        } catch (e) { toast(e.message, 'galat'); }
+      }, 300);
+    };
+
+    pasangTinggiPercakapan(el);
+    pasangBarisPercakapan(el);
+    if (terbuka) await gambarUtasPercakapan(el, s.kunci, gen);
+
+    /* --- denyut: satu angka, ditanyakan berulang ---------------------------
+       Jedanya 6 detik selagi tab dilihat. Tab yang tersembunyi tidak
+       menanyakan apa pun: tidak ada yang melihat hasilnya. */
+    (async function pantau() {
+      while (negara.halaman === 'percakapan' && gen === s.gen) {
+        await new Promise((r) => setTimeout(r, 6000));
+        if (negara.halaman !== 'percakapan' || gen !== s.gen) return;
+        if (document.hidden || $('#modalBg').classList.contains('show')) continue;
+
+        /* Dorongan antrean hanya kalau memang ada yang menunggu dikirim di
+           utas yang sedang terbuka. Tanpa syarat itu, layar yang dibiarkan
+           terbuka memanggil pemroses antrean sepuluh kali per menit tanpa ada
+           satu pun pesan untuk diproses. */
+        if (s.adaTertunda && bisa('pesan.kirim')) {
+          try { await rpc('antrean.proses', { diam: true }); } catch (_) { /* dorongan saja */ }
+          if (gen !== s.gen) return;
+        }
+
+        let h;
+        try { h = await rpc('inbox.denyut'); } catch (_) { continue; }
+        if (gen !== s.gen) return;
+        if (Number(h.denyut || 0) === Number(s.denyut)) continue;
+
+        simpanDrafPercakapan(el);
+        await halaman.percakapan.gambar(el);   /* gen naik, putaran ini berhenti */
+        return;
+      }
+    })();
+  },
+};
+
+/* Naskah yang sedang diketik disimpan sebelum halaman lahir ulang, lalu
+   dipasang kembali. Yang paling sering terjadi justru yang paling menjengkelkan:
+   donatur mengirim pesan tepat saat petugas mengetik jawaban, halaman digambar
+   ulang, dan setengah kalimat itu hilang. */
+function simpanDrafPercakapan(el) {
+  const s = halaman.percakapan.keadaan;
+  const t = $('#pcTeks', el);
+  if (t && s.kunci) s.draf[s.kunci] = t.value;
+}
+
+/* TINGGI PANELNYA DIHITUNG, BUKAN DITEBAK DI CSS.
+ *
+ * Panel ini harus berhenti tepat di dasar layar: yang bergulir isinya, bukan
+ * halamannya, supaya kotak tulis tidak pernah turun ke bawah lipatan. Dengan
+ * CSS saja, angkanya harus ditebak dari tinggi bilah atas dan judul halaman,
+ * dan tebakan itu MELESET KE DUA ARAH sekaligus. Diukur di peramban: kotak
+ * tulisnya jatuh 11 px di bawah layar ponsel, jadi tidak terlihat sama sekali,
+ * sementara di laptop 1280x800 justru tersisa 146 px kosong di bawahnya, yaitu
+ * sepertiga ruang percakapan yang terbuang.
+ *
+ * KENAPA PAKAI ResizeObserver DAN BUKAN SEKALI HITUNG.
+ * Penggambaran PERTAMA terjadi saat layar pemuatan masih menutupi aplikasi:
+ * #appView masih ber-kelas 'hidden', jadi display-nya none dan SELURUH ukuran
+ * yang ditanyakan ke peramban bernilai nol. Jarak ke tepi atas terbaca 0,
+ * tingginya jadi setinggi layar penuh, dan panelnya menjulur 86 px melewati
+ * dasar layar. Gejalanya menipu: halamannya bisa digulir sedikit, isi
+ * percakapannya juga bisa digulir sendiri, dan kotak tulisnya kadang terlihat
+ * kadang tidak tergantung panjang percakapan. ResizeObserver menjawabnya di
+ * sumbernya: begitu aplikasinya benar-benar terlihat, ukurannya berubah dari
+ * nol dan hitungannya diulang dengan angka yang sungguhan.
+ */
+function pasangTinggiPercakapan(el) {
+  const MINIMAL = 380;       /* di bawah ini percakapannya tidak terbaca lagi */
+  const hitung = () => {
+    const pc = $('#pc', el);
+    if (!pc || !pc.isConnected) return;
+    const kotak = pc.getBoundingClientRect();
+    if (!kotak.width) return;                 /* masih tersembunyi, tunggu saja */
+    /* Ruang bawahnya diambil dari padding .main, bukan angka karangan. Kalau
+       dikarang lebih kecil, halamannya bisa digulir belasan piksel padahal
+       isinya sudah bergulir sendiri di dalam panel: dua gulungan bersusun,
+       dan yang bergerak saat orang menggulir jadi tidak bisa ditebak. */
+    const induk = pc.closest('.main');
+    const napas = induk ? (parseFloat(getComputedStyle(induk).paddingBottom) || 18) : 18;
+    const tinggi = Math.max(MINIMAL, Math.round(window.innerHeight - kotak.top - napas));
+    /* Dibandingkan dulu. Menulis nilai yang sama tetap memicu ResizeObserver
+       di sebagian peramban, dan itu berarti putaran yang tidak pernah henti. */
+    if (pc.style.height === tinggi + 'px') return;
+
+    /* Mengubah tinggi panel memendekkan kotak gelembung, dan gulirannya
+       TIDAK ikut bergeser: yang tadinya berhenti di pesan terbaru jadi
+       berhenti di tengah-tengah percakapan. Di layar ponsel itu berarti
+       percakapan selalu terbuka pada pesan lima hari lalu. Jadi posisi
+       "sedang di dasar" dicatat sebelum tingginya diubah, lalu dipulihkan. */
+    const gel = $('#pcGelembung', el);
+    const diDasar = !gel || gel.scrollTop + gel.clientHeight >= gel.scrollHeight - 24;
+    pc.style.height = tinggi + 'px';
+    if (diDasar) gulirKeBawah(el);
+  };
+
+  hitung();
+  /* Halaman ini digambar ulang tiap ada pesan baru, jadi pengamatnya dilepas
+     dulu. Tanpa ini, satu jam membuka layar percakapan meninggalkan ratusan
+     pengamat yang semuanya menghitung hal yang sama. */
+  if (el.__lepasTinggiPc) el.__lepasTinggiPc();
+  window.addEventListener('resize', hitung);
+  let pengamat = null;
+  const induk = $('#pc', el) && $('#pc', el).closest('.main');
+  if (induk && window.ResizeObserver) {
+    pengamat = new ResizeObserver(hitung);
+    pengamat.observe(induk);
+  }
+  el.__lepasTinggiPc = () => {
+    window.removeEventListener('resize', hitung);
+    if (pengamat) pengamat.disconnect();
+    el.__lepasTinggiPc = null;
+  };
+}
+function kosongUtas(jumlah) {
+  return `<div class="pc-hampa">${kosong(jumlah
+    ? 'Pilih satu percakapan di sebelah kiri untuk membacanya.'
+    : 'Belum ada percakapan. Begitu ada pesan masuk atau keluar, ia muncul di sini.',
+    '\u{1F4AC}')}</div>`;
+}
+
+const AWALAN_NAMA = (nama) => String(nama || '?').trim().charAt(0).toUpperCase() || '?';
+
+/* Jam pada baris daftar: pendek seperti WhatsApp. Hari ini cukup jamnya, kemarin
+   cukup kata "Kemarin", lebih lama baru tanggalnya. Menulis tanggal lengkap di
+   setiap baris membuat kolomnya melebar dan nama kontaknya terpotong. */
+function jamRingkas(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hari = (x) => x.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+  const kini = new Date();
+  const kemarin = new Date(Date.now() - 86400000);
+  if (hari(d) === hari(kini)) {
+    return d.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+  }
+  if (hari(d) === hari(kemarin)) return 'Kemarin';
+  return d.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function gambarDaftarPercakapan(baris, aktif) {
+  if (!baris.length) {
+    return `<p class="pc-tak-ada">Tidak ada percakapan yang cocok.</p>`;
+  }
+  return baris.map((b) => {
+    const grup = b.jenis === 'grup';
+    /* Centang hanya di depan cuplikan pesan KELUAR. Memberi centang pada pesan
+       masuk akan terbaca sebagai "sudah dibaca donatur", padahal artinya
+       terbalik: itu pesan dari dia. */
+    const tanda = !grup && b.arahTerakhir === 'keluar' && CENTANG[b.statusTerakhir]
+      ? CENTANG[b.statusTerakhir] + ' ' : '';
+    const gagal = !grup && b.arahTerakhir === 'keluar' && b.statusTerakhir === 'gagal'
+      ? '<span class="pc-gagal" title="Pesan terakhir gagal terkirim">!</span> ' : '';
+    return `
+      <button type="button" class="pc-baris${b.kunci === aktif ? ' aktif' : ''}"
+        data-utas="${H(b.kunci)}">
+        <span class="pc-ava${grup ? ' grup' : ''}" aria-hidden="true">${grup
+          ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 6.2a3 3 0 0 1 0 5.6"/><path d="M17.4 14.6A5.5 5.5 0 0 1 20.5 19"/></svg>'
+          : H(AWALAN_NAMA(b.nama))}</span>
+        <span class="pc-isi">
+          <span class="pc-atas">
+            <span class="pc-nama">${H(b.nama)}</span>
+            <span class="pc-jam">${H(jamRingkas(b.waktu))}</span>
+          </span>
+          <span class="pc-bawah">
+            <span class="pc-cuplik">${gagal}${tanda}${H(b.cuplikan) || '<em>tanpa teks</em>'}</span>
+            ${b.belumDibaca ? `<span class="pc-belum">${b.belumDibaca > 99 ? '99+' : b.belumDibaca}</span>` : ''}
+          </span>
+          <span class="pc-ket">${grup
+            ? `${b.anggota} anggota · ${b.jumlah} broadcast`
+            : H(b.nomor) + (b.diblokir ? ' · diblokir' : b.kantor ? ' · ' + H(b.kantor) : '')}</span>
+        </span>
+      </button>`;
+  }).join('');
+}
+
+function pasangBarisPercakapan(el) {
+  const s = halaman.percakapan.keadaan;
+  $$('[data-utas]', el).forEach((b) => {
+    b.onclick = async () => {
+      simpanDrafPercakapan(el);
+      s.kunci = b.dataset.utas;
+      $$('[data-utas]', el).forEach((x) => x.classList.toggle('aktif', x === b));
+      const pc = $('#pc', el);
+      if (pc) pc.classList.add('pc-buka');
+      const lencanaBelum = $('.pc-belum', b);
+      if (lencanaBelum) lencanaBelum.remove();
+      await gambarUtasPercakapan(el, s.kunci, s.gen);
+      /* Ditandai sudah dibaca SESUDAH utasnya benar-benar tergambar. Kalau
+         ditandai lebih dulu lalu penggambarannya gagal, pesan yang belum
+         terbaca siapa pun sudah dianggap lunas. */
+      try { await rpc('inbox.tandaiDibaca', { kunci: s.kunci }); } catch (_) { /* bukan alasan gagal */ }
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ satu utas */
+
+async function gambarUtasPercakapan(el, kunci, gen) {
+  const s = halaman.percakapan.keadaan;
+  const wadah = $('#pcUtas', el);
+  if (!wadah) return;
+  wadah.innerHTML = rangka(6);
+
+  let d;
+  try { d = await rpc('inbox.utas', { kunci }); }
+  catch (e) { wadah.innerHTML = galatKotak(e.message); return; }
+  if (gen !== s.gen || s.kunci !== kunci) return;
+
+  if (kunci.startsWith('grup:')) { gambarUtasGrup(el, wadah, d); return; }
+
+  s.adaTertunda = (d.pesan || []).some((p) => ['antre', 'diserahkan'].includes(p.status));
+
+  const bolehBalas = bisa('inbox.balas');
+  wadah.innerHTML = `
+    ${kepalaUtas(H(AWALAN_NAMA(d.nama)), false, H(d.nama),
+      [H(d.nomor), d.kantor ? H(d.kantor) : '', d.diblokir ? 'diblokir' : ''].filter(Boolean).join(' · '),
+      (d.grup || []).length ? (d.grup || []).map((g) => `<span class="keping mati">${H(g)}</span>`).join('') : '')}
+    <div class="pc-gelembung" id="pcGelembung">${gambarGelembung(d.pesan || [])}</div>
+    ${bolehBalas ? `
+      <form class="pc-tulis" id="pcTulis" autocomplete="off">
+        <textarea id="pcTeks" rows="1" maxlength="4000"
+          placeholder="Tulis balasan… (Enter mengirim, Shift+Enter baris baru)"
+          aria-label="Isi balasan"></textarea>
+        <button class="btn btn-primary" type="submit" id="pcKirim">Kirim</button>
+      </form>`
+      : `<p class="pc-catatan">Akun Anda boleh membaca percakapan, tetapi belum diberi hak membalas.
+         Superadmin bisa menambahkannya lewat centang modul Broadcast di LAZDigital.</p>`}`;
+
+  gulirKeBawah(el);
+  pasangBalik(el);
+  if (!bolehBalas) return;
+
+  const area = $('#pcTeks', el);
+  area.value = s.draf[kunci] || '';
+  tumbuhkanArea(area);
+  area.oninput = () => { tumbuhkanArea(area); s.draf[kunci] = area.value; };
+  /* Enter mengirim, Shift+Enter baris baru — kebiasaan WhatsApp Web. Tanpa ini
+     petugas menekan Enter, mendapat baris baru, dan mengira kirimnya gagal. */
+  area.onkeydown = (ev) => {
+    if (ev.key === 'Enter' && !ev.shiftKey && !ev.ctrlKey) {
+      ev.preventDefault();
+      $('#pcTulis', el).requestSubmit();
+    }
+  };
+  /* preventScroll: tanpa ini peramban menggulirkan induknya supaya kotak tulis
+     terlihat, dan yang bergeser justru kotak gelembung di atasnya: percakapan
+     terbuka pada pesan tengah, bukan pesan terbaru. */
+  try { area.focus({ preventScroll: true }); } catch (_) { area.focus(); }
+
+  $('#pcTulis', el).onsubmit = async (ev) => {
+    ev.preventDefault();
+    const teks = area.value.trim();
+    if (!teks) return;
+    const tombol = $('#pcKirim', el);
+    tombol.disabled = true;
+    try {
+      await rpc('inbox.balas', { kunci, teks });
+      /* Draf dibuang hanya setelah servernya menerima. Kalau dibuang lebih
+         dulu dan pengirimannya gagal, kalimat yang sudah diketik hilang tanpa
+         terkirim ke mana pun. */
+      s.draf[kunci] = '';
+      area.value = '';
+      await halaman.percakapan.gambar(el);
+    } catch (e) {
+      toast(e.message, 'galat');
+      tombol.disabled = false;
+    }
+  };
+}
+
+function kepalaUtas(inisial, grup, nama, ket, tambahan) {
+  return `
+    <header class="pc-kepala">
+      <button type="button" class="pc-balik" data-balik aria-label="Kembali ke daftar percakapan">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <span class="pc-ava${grup ? ' grup' : ''}" aria-hidden="true">${inisial}</span>
+      <div class="pc-judul">
+        <strong>${nama}</strong>
+        <span class="pc-judul-ket">${ket}</span>
+      </div>
+      <div class="pc-kepala-kanan">${tambahan || ''}</div>
+    </header>`;
+}
+
+function pasangBalik(el) {
+  const b = $('[data-balik]', el);
+  if (!b) return;
+  b.onclick = () => {
+    const pc = $('#pc', el);
+    if (pc) pc.classList.remove('pc-buka');
+    halaman.percakapan.keadaan.kunci = null;
+    const w = $('#pcUtas', el);
+    if (w) w.innerHTML = kosongUtas(1);
+    $$('[data-utas]', el).forEach((x) => x.classList.remove('aktif'));
+  };
+}
+
+function tumbuhkanArea(area) {
+  area.style.height = 'auto';
+  area.style.height = Math.min(area.scrollHeight, 150) + 'px';
+}
+
+/* Digulir SESUDAH peramban selesai menata, bukan pada baris yang sama dengan
+   penggambarannya. Gelembung membungkus ulang ketika lebarnya berubah, jadi
+   tinggi isinya belum final saat baris ini dipanggil: menggulir sekarang
+   berhenti belasan piksel sebelum pesan terbaru, dan yang terpotong justru
+   pesan yang paling ingin dibaca. Diukur di layar 390 px: kurang 17 px. */
+function gulirKeBawah(el) {
+  const g = $('#pcGelembung', el);
+  if (!g) return;
+  g.scrollTop = g.scrollHeight;
+  requestAnimationFrame(() => { if (g.isConnected) g.scrollTop = g.scrollHeight; });
+}
+
+/* Pemisah tanggal. Tanpa ini, percakapan berbulan-bulan terlihat seperti satu
+   pembicaraan panjang tanpa jeda, dan "kemarin dia sudah dijawab" mustahil
+   dibaca dari layarnya. */
+function labelHari(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hari = (x) => x.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+  if (hari(d) === hari(new Date())) return 'Hari ini';
+  if (hari(d) === hari(new Date(Date.now() - 86400000))) return 'Kemarin';
+  return d.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'long', year: 'numeric' });
+}
+const jamSaja = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? ''
+    : d.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+};
+
+function gambarGelembung(pesan) {
+  if (!pesan.length) {
+    return `<p class="pc-tak-ada">Belum ada pesan pada percakapan ini.</p>`;
+  }
+  let hariTerakhir = '';
+  return pesan.map((p) => {
+    const hari = labelHari(p.waktu);
+    const pemisah = hari && hari !== hariTerakhir ? `<div class="pc-hari">${H(hari)}</div>` : '';
+    hariTerakhir = hari || hariTerakhir;
+
+    const keluar = p.arah !== 'masuk';
+    const tanda = keluar
+      ? (p.status === 'gagal'
+        ? `<span class="pc-gagal" title="${H(p.galat || 'Gagal terkirim')}">gagal</span>`
+        : CENTANG[p.status] || (p.status === 'antre' ? '<span class="pc-antre">menunggu</span>' : ''))
+      : '';
+    const lampiran = p.namaBerkas
+      ? `<div class="pc-lampiran">\u{1F4C4} ${H(p.namaBerkas)}</div>` : '';
+    const asal = keluar && p.namaMassal
+      ? `<div class="pc-asal">Kiriman massal · ${H(p.namaMassal)}</div>` : '';
+
+    return pemisah + `
+      <div class="pc-bl ${keluar ? 'keluar' : 'masuk'}">
+        ${asal}${lampiran}
+        <div class="pc-teks">${H(p.teks) || '<em>tanpa teks</em>'}</div>
+        <div class="pc-meta">${H(jamSaja(p.waktu))} ${tanda}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ------------------------------------------------------------------ utas grup */
+
+function gambarUtasGrup(el, wadah, d) {
+  halaman.percakapan.keadaan.adaTertunda = (d.isi || [])
+    .some((x) => x.jenis === 'kiriman' && (x.statistik || {}).antre > 0);
+
+  let hariTerakhir = '';
+  const isi = (d.isi || []).map((x) => {
+    const hari = labelHari(x.waktu);
+    const pemisah = hari && hari !== hariTerakhir ? `<div class="pc-hari">${H(hari)}</div>` : '';
+    hariTerakhir = hari || hariTerakhir;
+
+    if (x.jenis === 'masuk') {
+      return pemisah + `
+        <div class="pc-bl masuk">
+          <div class="pc-dari">${H(x.nama)}</div>
+          <div class="pc-teks">${H(x.teks) || '<em>tanpa teks</em>'}</div>
+          <div class="pc-meta">${H(jamSaja(x.waktu))}</div>
+        </div>`;
+    }
+
+    const st = x.statistik || {};
+    return pemisah + `
+      <div class="pc-bl keluar pc-siar">
+        <div class="pc-siar-nama">${H(x.nama)}</div>
+        ${x.namaBerkas ? `<div class="pc-lampiran">\u{1F4C4} ${H(x.namaBerkas)}</div>` : ''}
+        <div class="pc-teks">${H(x.teks) || '<em>tanpa teks</em>'}</div>
+        <div class="pc-siar-stat">
+          <span>${x.jumlah} penerima</span>
+          <span>${CENTANG.terkirim} ${st.terkirim} terkirim</span>
+          <span>${CENTANG.sampai} ${st.sampai} sampai</span>
+          <span>${CENTANG.dibaca} ${st.dibaca} dibaca</span>
+          ${st.antre ? `<span class="pc-antre">${st.antre} menunggu</span>` : ''}
+          ${st.gagal ? `<span class="pc-gagal">${st.gagal} gagal</span>` : ''}
+        </div>
+        <button type="button" class="pc-siar-lihat" data-siar="${H(x.id)}">Lihat penerimanya</button>
+        <div class="pc-rincian" id="rc_${H(x.id)}" hidden></div>
+        <div class="pc-meta">${H(jamSaja(x.waktu))}</div>
+      </div>`;
+  }).join('');
+
+  wadah.innerHTML = `
+    ${kepalaUtas('<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 6.2a3 3 0 0 1 0 5.6"/><path d="M17.4 14.6A5.5 5.5 0 0 1 20.5 19"/></svg>',
+      true, H(d.grup), `${d.anggota} anggota · ${d.jumlahKiriman} broadcast`, '')}
+    <div class="pc-gelembung" id="pcGelembung">${isi || `<p class="pc-tak-ada">Grup ini belum pernah dikirimi broadcast.</p>`}</div>
+    <p class="pc-catatan">Untuk mengirim ke seluruh anggota grup ini, pakai menu
+      <strong>Kiriman Massal</strong> — di sana jeda aman, batas harian, dan daftar
+      penerimanya tetap berlaku. Untuk menjawab satu orang, buka percakapannya di daftar kiri.</p>`;
+
+  gulirKeBawah(el);
+  pasangBalik(el);
+
+  /* Rincian per penerima baru diminta saat tombolnya ditekan: satu broadcast
+     bisa berisi ratusan baris, dan memuat semuanya untuk setiap gelembung
+     berarti mengunduh ribuan baris yang tidak sedang dilihat siapa pun. */
+  $$('[data-siar]', el).forEach((b) => {
+    b.onclick = async () => {
+      const id = b.dataset.siar;
+      const kotak = $('#rc_' + id, el);
+      if (!kotak) return;
+      if (!kotak.hidden) { kotak.hidden = true; b.textContent = 'Lihat penerimanya'; return; }
+      kotak.hidden = false;
+      b.textContent = 'Sembunyikan penerimanya';
+      kotak.innerHTML = rangka(3);
+      try {
+        const h = await rpc('massal.detail', { id });
+        kotak.innerHTML = (h.baris || []).length ? `
+          <table class="pc-tabel"><tbody>${h.baris.map((r) => `
+            <tr><td>${H(r.nama || r.nomor)}</td><td class="pc-tabel-nomor">${H(r.nomor)}</td>
+            <td>${lencana(r.status)}</td></tr>`).join('')}</tbody></table>`
+          : `<p class="pc-tak-ada">Belum ada satu pun pesan tercatat untuk kiriman ini.</p>`;
+      } catch (e) { kotak.innerHTML = `<p class="pc-tak-ada">${H(e.message)}</p>`; }
+    };
+  });
+}
+
 halaman.kontak = {
   judul: 'Kontak',
   sub: 'Daftar kontak milik aplikasi ini',

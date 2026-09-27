@@ -45,7 +45,7 @@ const JAWABAN = {
     masuk: true, driver: 'mandiri',
     pengguna: { id: 'u1', nama: 'Ahmad Maruf', peran: 'superadmin', kantor: '' },
     izin: ['dasbor.lihat', 'kontak.lihat', 'pesan.lihat', 'kirim.lihat', 'templat.lihat',
-      'perangkat.lihat', 'audit.lihat', 'pengaturan.lihat'],
+      'perangkat.lihat', 'audit.lihat', 'pengaturan.lihat', 'inbox.lihat', 'inbox.balas'],
     akses: { webhook: true, audit: true },
     lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' },
   },
@@ -73,6 +73,34 @@ const JAWABAN = {
     persona: [], pengetahuan: { jumlah: 0, terpotong: false }, upstash: true,
   },
   'sesi.daftar': { baris: [] },
+  /* Kotak masuk percakapan. Layar ini yang paling gawat kalau ukurannya
+     meleset: ia dua kolom, tingginya dipatok ke tinggi layar, dan di dalamnya
+     ada kotak tulis yang harus tetap terlihat. Di layar 360 px salah satu saja
+     yang kelewat lebar sudah membuat halamannya bisa digeser ke samping. */
+  'inbox.daftar': {
+    denyut: 3, belumDibaca: 2,
+    baris: [
+      { kunci: 'nomor:628111000111', jenis: 'kontak', nomor: '628111000111', nama: 'Budi Santosa',
+        kantor: 'KLL Sewon', diblokir: false, jumlah: 3, masuk: 2, belumDibaca: 2,
+        waktu: new Date().toISOString(), cuplikan: 'Bisa minta rincian penyaluran zakat bulan ini?',
+        arahTerakhir: 'masuk', statusTerakhir: 'masuk' },
+      { kunci: 'grup:Panitia Qurban', jenis: 'grup', grup: 'Panitia Qurban', nama: 'Panitia Qurban',
+        nomor: '', anggota: 24, jumlah: 3, dibalas: 5, belumDibaca: 0,
+        waktu: new Date().toISOString(), cuplikan: 'Kajian Ahad pukul 08.00 di kantor daerah.',
+        arahTerakhir: 'keluar', statusTerakhir: 'berjalan' },
+    ],
+  },
+  'inbox.denyut': { denyut: 3 },
+  'inbox.utas': {
+    nomor: '628111000111', nama: 'Budi Santosa', kantor: 'KLL Sewon', diblokir: false,
+    grup: ['Pengurus Harian'],
+    pesan: [
+      { id: 'm1', arah: 'keluar', teks: 'Kwitansi zakat Bapak sudah kami kirim lewat surel.',
+        status: 'dibaca', waktu: new Date(Date.now() - 3600000).toISOString(), namaMassal: '' },
+      { id: 'm2', arah: 'masuk', teks: 'Bisa minta rincian penyaluran zakat bulan ini?',
+        status: 'masuk', waktu: new Date().toISOString() },
+    ],
+  },
 };
 
 /* Dasbor Fundraising butuh bentuk datanya, bukan sekadar {ok:true} — kalau
@@ -135,6 +163,11 @@ const HALAMAN = [
      Itu justru layar yang paling sering dilihat orang di perangkat baru, dan
      ia memakai kerangka gaya yang sama — jadi tetap diperiksa. */
   { url: '/index.html', nama: 'LAZDigital (layar masuk)', siap: 'body' },
+  /* Kotak masuk percakapan diperiksa tersendiri: dua kolom, tinggi dipatok ke
+     tinggi layar, dan kotak tulis di dasarnya. Di layar 360 px salah satu saja
+     yang kelewat lebar sudah membuat halamannya bisa digeser ke samping, dan
+     ini satu-satunya halaman Broadcast yang bentuknya begitu. */
+  { url: '/blast.html#percakapan', nama: 'Broadcast Percakapan', siap: '.pc' },
 ];
 
 /* Langit-langit & lantai. Angka-angka ini adalah janjinya: kalau suatu saat

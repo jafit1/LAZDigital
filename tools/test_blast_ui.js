@@ -6,7 +6,7 @@
    yang tidak ikut berpindah, dan halaman yang melebar di layar HP.
 
    Datanya dipalsukan semua — server tiruan menjawab /api/blast apa adanya,
-   supaya kesebelas halaman bisa digambar tanpa Redis dan tanpa login.
+   supaya kedua belas halaman bisa digambar tanpa Redis dan tanpa login.
 
    jalankan:  node tools/test_blast_ui.js
 */
@@ -55,6 +55,43 @@ const SEGMEN = [
   { kode: 'mustahik', label: 'Mustahik binaan' },
 ];
 const GRUP = [{ nama: 'Panitia Qurban', jumlah: 2 }, { nama: 'Pengurus Harian', jumlah: 1 }];
+
+/* Kotak masuk percakapan. Sengaja dibuat berisi ketiga keadaan yang bentuknya
+   berbeda di layar: percakapan dengan pesan belum dibaca, percakapan yang
+   pesan terakhirnya milik kita (jadi harus bercentang), dan satu baris grup
+   (jadi harus tanpa centang dan tanpa kotak balasan). */
+const IKINI = (geser) => new Date(Date.now() - geser * 60000).toISOString();
+const PERCAKAPAN = [
+  { kunci: 'nomor:628111222333', jenis: 'kontak', nomor: '628111222333', nama: 'Budi Santosa',
+    kontakId: 'k1', kantor: 'KLL Sewon', diblokir: false, jumlah: 4, masuk: 2, belumDibaca: 2,
+    waktu: IKINI(3), cuplikan: 'Bisa minta rincian penyalurannya?', arahTerakhir: 'masuk', statusTerakhir: 'masuk' },
+  { kunci: 'nomor:628444555666', jenis: 'kontak', nomor: '628444555666', nama: 'Siti Aminah',
+    kontakId: 'k2', kantor: '', diblokir: false, jumlah: 1, masuk: 0, belumDibaca: 0,
+    waktu: IKINI(90), cuplikan: 'Info kajian Ahad.', arahTerakhir: 'keluar', statusTerakhir: 'dibaca' },
+  { kunci: 'grup:Panitia Qurban', jenis: 'grup', grup: 'Panitia Qurban', nama: 'Panitia Qurban',
+    nomor: '', anggota: 2, jumlah: 1, dibalas: 1, belumDibaca: 1, waktu: IKINI(240),
+    cuplikan: 'Kajian Ahad pukul 08.00.', arahTerakhir: 'keluar', statusTerakhir: 'berjalan' },
+];
+const UTAS_BUDI = {
+  nomor: '628111222333', nama: 'Budi Santosa', kontakId: 'k1', kantor: 'KLL Sewon',
+  diblokir: false, grup: ['Pengurus Harian'],
+  pesan: [
+    { id: 'm1', arah: 'keluar', teks: 'Kwitansi zakat Bapak sudah kami kirim.', status: 'dibaca', waktu: IKINI(300), namaMassal: '' },
+    { id: 'm2', arah: 'masuk', teks: 'Terima kasih, sudah saya terima.', status: 'masuk', waktu: IKINI(240) },
+    { id: 'm3', arah: 'keluar', teks: 'Alhamdulillah.', status: 'terkirim', waktu: IKINI(10), namaMassal: '' },
+    { id: 'm4', arah: 'masuk', teks: 'Bisa minta rincian penyalurannya?', status: 'masuk', waktu: IKINI(3) },
+  ],
+};
+const UTAS_GRUP = {
+  grup: 'Panitia Qurban', anggota: 2, jumlahKiriman: 1,
+  isi: [
+    { jenis: 'kiriman', id: 'b1', nama: 'Kampanye Qurban', teks: 'Kajian Ahad pukul 08.00.',
+      waktu: IKINI(240), status: 'berjalan', jumlah: 2, namaBerkas: '',
+      statistik: { antre: 0, terkirim: 2, sampai: 2, dibaca: 1, gagal: 0 } },
+    { jenis: 'masuk', id: 'm9', nomor: '628444555666', nama: 'Siti Aminah',
+      teks: 'InsyaAllah hadir.', waktu: IKINI(120) },
+  ],
+};
 const KONTAK = [
   { id: 'k1', nama: 'Budi Santosa', nomor: '628111222333', segmen: ['donatur-rutin'], label: ['Pengurus Harian', 'Panitia Qurban'], langganan: true, daftarHitam: false, kantor: 'KLL Sewon' },
   { id: 'k2', nama: 'Siti Aminah', nomor: '628444555666', segmen: ['simpatisan'], label: ['Panitia Qurban'], langganan: true, daftarHitam: false, kantor: '' },
@@ -143,6 +180,14 @@ const JAWABAN = {
   'grup.hapus': { grup: 'X', kontak: 1, baris: GRUP },
   'antrean.proses': { laporan: { diproses: 0, terkirim: 0, diserahkan: 0, gagal: 0, ditunda: 0, alasan: [] } },
   'berkas.unggah': { berkas: { id: 'f_uji1', nama: 'Panduan Zakat.pdf', tipe: 'application/pdf', jenis: 'dokumen', byte: 204800 } },
+  'inbox.daftar': { baris: PERCAKAPAN, belumDibaca: 2, denyut: 7 },
+  'inbox.denyut': { denyut: 7 },
+  'inbox.tandaiDibaca': { kunci: 'nomor:628111222333', waktu: new Date().toISOString() },
+  'inbox.balas': { pesan: { id: 'm_baru', nomor: '628111222333' }, catatan: 'Balasan masuk antrean.' },
+  'massal.detail': { nama: 'Kampanye Qurban', jumlah: 2, baris: [
+    { id: 'm1', nomor: '628111222333', nama: 'Budi Santosa', status: 'dibaca', galat: '', waktu: new Date().toISOString() },
+    { id: 'm2', nomor: '628444555666', nama: 'Siti Aminah', status: 'sampai', galat: '', waktu: new Date().toISOString() },
+  ] },
 };
 
 const TIPE = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -151,15 +196,25 @@ const server = http.createServer((req, res) => {
     let b = '';
     req.on('data', (d) => { b += d; });
     req.on('end', () => {
-      let t = '';
-      try { t = JSON.parse(b).tindakan; } catch (_) { /* biar jadi tindakan kosong */ }
+      let t = '', dataMasuk = {};
+      try { const j = JSON.parse(b); t = j.tindakan; dataMasuk = j.data || {}; } catch (_) { /* biar jadi tindakan kosong */ }
       hitungTindakan[t] = (hitungTindakan[t] || 0) + 1;
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      /* inbox.utas menjawab BEDA menurut kunci yang diminta. Tanpa ini, membuka
+         baris grup akan dijawab utas perorangan dan uji di bawah akan lulus
+         walau layar grupnya tidak pernah digambar sama sekali. */
+      if (t === 'inbox.utas') {
+        const isiUtas = String(dataMasuk.kunci || '').startsWith('grup:') ? UTAS_GRUP : UTAS_BUDI;
+        res.end(JSON.stringify({ ok: true, ...isiUtas }));
+        return;
+      }
       if (t === '__hitung') {
         return res.end(JSON.stringify({ ok: true,
           sambung: hitungTindakan['perangkat.sambung'] || 0,
           periksa: hitungTindakan['perangkat.periksa'] || 0,
-          unggah: hitungTindakan['berkas.unggah'] || 0 }));
+          unggah: hitungTindakan['berkas.unggah'] || 0,
+          tandaiDibaca: hitungTindakan['inbox.tandaiDibaca'] || 0,
+          balas: hitungTindakan['inbox.balas'] || 0 }));
       }
       /* Peran akun bisa diganti di tengah uji lewat __peran, supaya halaman
          yang sama bisa dilihat sebagai superadmin dan sebagai admin daerah
@@ -199,7 +254,7 @@ const hitungTindakan = {};
 const dinamis = {};
 let PERAN_SEKARANG = 'superadmin';
 
-const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 'templat', 'webhook', 'pengguna', 'audit', 'setelan'];
+const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrean', 'kontak', 'templat', 'webhook', 'pengguna', 'audit', 'setelan'];
 
 (async () => {
   await new Promise((r) => server.listen(0, r));
@@ -254,8 +309,9 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     toast: !!document.querySelector('.toast'),
   }));
   cek('memakai .topnav dan .main seperti halaman utama', kerangka.topnav && kerangka.main, kerangka);
-  cek('kesebelas menu tergambar', kerangka.butirMenu === 11, kerangka.butirMenu);
-  cek('ikon menu berupa SVG garis, bukan emoji', kerangka.ikonSvg === 11 && !kerangka.emoji, kerangka);
+  cek('kedua belas menu tergambar', kerangka.butirMenu === HALAMAN.length, kerangka.butirMenu);
+  cek('ikon menu berupa SVG garis, bukan emoji',
+    kerangka.ikonSvg === HALAMAN.length && !kerangka.emoji, kerangka);
   cek('kerangka modal sama dengan LAZDigital', kerangka.modal, kerangka);
   cek('toast memakai elemen tunggal .toast', kerangka.toast, kerangka);
 
@@ -847,7 +903,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
 
   const menuSuper = await p.evaluate(() =>
     Array.from(document.querySelectorAll('#nav .tn-item')).map((b) => b.id.replace('nav_', '')));
-  cek('superadmin melihat kesebelas menu', menuSuper.length === 11, menuSuper);
+  cek('superadmin melihat seluruh menu', menuSuper.length === HALAMAN.length, menuSuper);
   cek('termasuk Webhook dan Catatan Audit',
     menuSuper.includes('webhook') && menuSuper.includes('audit'), menuSuper);
 
@@ -862,7 +918,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     Array.from(document.querySelectorAll('#nav .tn-item')).map((b) => b.id.replace('nav_', '')));
   cek('admin daerah tidak melihat menu Webhook', !menuAdmin.includes('webhook'), menuAdmin);
   cek('dan tidak melihat menu Catatan Audit', !menuAdmin.includes('audit'), menuAdmin);
-  cek('menu lainnya tetap utuh', menuAdmin.length === 9, menuAdmin);
+  cek('menu lainnya tetap utuh', menuAdmin.length === HALAMAN.length - 2, menuAdmin);
 
   /* Menu yang disembunyikan tetap bisa dicapai dengan mengetik alamatnya. */
   await p.evaluate(() => { location.hash = '#webhook'; });
@@ -937,6 +993,161 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
     /tercatat/i.test(dialogA.teks), dialogA.teks.slice(0, 220));
   await p.keyboard.press('Escape');
   await p.waitForTimeout(300);
+
+  console.log('\n=== P. PERCAKAPAN: SATU BARIS PER KONTAK ===');
+  /* Inilah keluhannya, diuji dari sisi yang dilihat petugas: riwayat lama
+     memperlihatkan setiap pesan sebagai baris tersendiri. Di sini dibuktikan
+     empat pesan dengan Budi menjadi SATU baris, dan bahwa mengkliknya
+     benar-benar memperlihatkan keempatnya. */
+  await p.evaluate(() => { location.hash = '#percakapan'; });
+  await p.waitForTimeout(900);
+  const pc = await p.evaluate(() => ({
+    baris: Array.from(document.querySelectorAll('#isi [data-utas]')).map((b) => ({
+      kunci: b.dataset.utas,
+      nama: (b.querySelector('.pc-nama') || {}).textContent || '',
+      cuplikan: (b.querySelector('.pc-cuplik') || {}).textContent || '',
+      belum: (b.querySelector('.pc-belum') || {}).textContent || '',
+      centang: Boolean(b.querySelector('.pc-cuplik svg')),
+    })),
+    adaCari: Boolean(document.getElementById('pcCari')),
+    utasKosong: (document.getElementById('pcUtas') || {}).textContent || '',
+  }));
+  cek('tiga percakapan, bukan tiga belas pesan', pc.baris.length === 3, pc.baris);
+  cek('satu baris per kontak, memakai namanya',
+    pc.baris[0].nama === 'Budi Santosa' && /rincian penyalurannya/.test(pc.baris[0].cuplikan), pc.baris[0]);
+  cek('pesan belum dibaca diberi lencana angka', pc.baris[0].belum === '2', pc.baris[0]);
+  /* Centang hanya boleh muncul di depan cuplikan pesan KELUAR. Di pesan masuk
+     ia terbaca terbalik: seolah donatur sudah membaca pesan kita, padahal itu
+     pesan dari dia. */
+  cek('cuplikan pesan keluar bercentang', pc.baris[1].centang === true, pc.baris[1]);
+  cek('cuplikan pesan MASUK tidak bercentang', pc.baris[0].centang === false, pc.baris[0]);
+  cek('ada kotak pencarian percakapan', pc.adaCari === true);
+  cek('sebelum ada yang dipilih, panel kanan mengajak memilih',
+    /Pilih satu percakapan/i.test(pc.utasKosong), pc.utasKosong.slice(0, 120));
+
+  await p.click('#isi [data-utas="nomor:628111222333"]');
+  await p.waitForTimeout(700);
+  const utas = await p.evaluate(() => {
+    const bl = Array.from(document.querySelectorAll('#pcGelembung .pc-bl'));
+    return {
+      jumlah: bl.length,
+      arah: bl.map((x) => (x.classList.contains('keluar') ? 'keluar' : 'masuk')),
+      /* Kiri dan kanan diukur, bukan ditebak dari nama kelasnya: kelas yang
+         benar tetapi CSS yang tidak termuat menghasilkan dua-duanya di kiri. */
+      kiri: bl.map((x) => Math.round(x.getBoundingClientRect().left)),
+      kanan: bl.map((x) => Math.round(x.getBoundingClientRect().right)),
+      adaTulis: Boolean(document.getElementById('pcTeks')),
+      adaKirim: Boolean(document.getElementById('pcKirim')),
+      judul: (document.querySelector('.pc-judul strong') || {}).textContent || '',
+      hari: Array.from(document.querySelectorAll('#pcGelembung .pc-hari')).map((x) => x.textContent),
+      teks: bl.map((x) => (x.querySelector('.pc-teks') || {}).textContent || ''),
+      lencanaHilang: !document.querySelector('[data-utas="nomor:628111222333"] .pc-belum'),
+    };
+  });
+  cek('mengklik satu kontak memperlihatkan seluruh riwayatnya', utas.jumlah === 4, utas.jumlah);
+  cek('urutannya masuk dan keluar bergantian sesuai aslinya',
+    utas.arah.join(',') === 'keluar,masuk,keluar,masuk', utas.arah);
+  cek('gelembung keluar benar-benar di kanan, yang masuk di kiri',
+    utas.kiri[1] < utas.kiri[0] && utas.kanan[0] > utas.kanan[1],
+    { kiri: utas.kiri, kanan: utas.kanan });
+  cek('kepala utas menyebut nama kontaknya', utas.judul === 'Budi Santosa', utas.judul);
+  cek('ada pemisah tanggal di dalam utas', utas.hari.length >= 1, utas.hari);
+  cek('lencana belum dibaca hilang begitu percakapannya dibuka', utas.lencanaHilang === true);
+  cek('ada kotak untuk membalas dari web', utas.adaTulis && utas.adaKirim, utas);
+
+  const tandai = await p.evaluate(async (alamat) => {
+    const r = await fetch(alamat + '/api/blast', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tindakan: '__hitung' }) });
+    return (await r.json()).tandaiDibaca;
+  }, A);
+  cek('membuka percakapan menandainya sudah dibaca di server', tandai >= 1, tandai);
+
+  /* MEMBALAS. Yang diperiksa bukan cuma tindakannya terpanggil, tetapi juga
+     Enter mengirim tanpa Shift — kebiasaan WhatsApp Web. Tanpa itu petugas
+     menekan Enter, mendapat baris baru, dan mengira kirimnya gagal. */
+  await p.fill('#pcTeks', 'Siap, kami kirim rinciannya hari ini.');
+  await p.press('#pcTeks', 'Enter');
+  await p.waitForTimeout(800);
+  const sesudahBalas = await p.evaluate(async (alamat) => {
+    const r = await fetch(alamat + '/api/blast', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tindakan: '__hitung' }) });
+    return { balas: (await r.json()).balas, isiKotak: (document.getElementById('pcTeks') || {}).value };
+  }, A);
+  cek('Enter tanpa Shift mengirim balasannya', sesudahBalas.balas >= 1, sesudahBalas);
+  cek('kotak tulis dikosongkan setelah terkirim', sesudahBalas.isiKotak === '', sesudahBalas);
+
+  console.log('\n=== P2. PERCAKAPAN GRUP ===');
+  await p.click('#isi [data-utas="grup:Panitia Qurban"]');
+  await p.waitForTimeout(800);
+  const grupUtas = await p.evaluate(() => ({
+    judul: (document.querySelector('.pc-judul strong') || {}).textContent || '',
+    ket: (document.querySelector('.pc-judul-ket') || {}).textContent || '',
+    siar: document.querySelectorAll('#pcGelembung .pc-siar').length,
+    statistik: (document.querySelector('.pc-siar-stat') || {}).textContent || '',
+    balasanAnggota: Array.from(document.querySelectorAll('#pcGelembung .pc-dari')).map((x) => x.textContent),
+    adaTulis: Boolean(document.getElementById('pcTeks')),
+    catatan: (document.querySelector('.pc-catatan') || {}).textContent || '',
+    tombolRincian: document.querySelectorAll('[data-siar]').length,
+  }));
+  cek('grup bisa dibuka dan menyebut namanya', grupUtas.judul === 'Panitia Qurban', grupUtas.judul);
+  cek('kepalanya menyebut jumlah anggota dan broadcast',
+    /2 anggota/.test(grupUtas.ket) && /1 broadcast/.test(grupUtas.ket), grupUtas.ket);
+  cek('broadcastnya tergambar sebagai gelembung', grupUtas.siar === 1, grupUtas.siar);
+  cek('lengkap dengan angka terkirim, sampai, dan dibaca',
+    /2 terkirim/.test(grupUtas.statistik) && /2 sampai/.test(grupUtas.statistik)
+    && /1 dibaca/.test(grupUtas.statistik), grupUtas.statistik);
+  cek('balasan anggotanya muncul dengan namanya',
+    grupUtas.balasanAnggota.includes('Siti Aminah'), grupUtas.balasanAnggota);
+  /* Ini pengamannya, bukan kekurangan: satu kotak tulis di layar grup adalah
+     cara mengirim ke ratusan orang tanpa jeda aman dan tanpa batas harian. */
+  cek('TIDAK ada kotak balasan di utas grup', grupUtas.adaTulis === false);
+  cek('dan jalannya ditunjukkan: Kiriman Massal',
+    /Kiriman Massal/.test(grupUtas.catatan), grupUtas.catatan.slice(0, 160));
+
+  await p.click('[data-siar]');
+  await p.waitForTimeout(700);
+  const rincian = await p.evaluate(() => ({
+    baris: document.querySelectorAll('.pc-rincian .pc-tabel tr').length,
+    isi: (document.querySelector('.pc-rincian') || {}).textContent || '',
+  }));
+  cek('rincian penerima baru diminta saat tombolnya ditekan',
+    rincian.baris === 2 && /Budi Santosa/.test(rincian.isi), rincian);
+
+  console.log('\n=== P3. SATU PANEL SAJA DI LAYAR SEMPIT ===');
+  /* Dua kolom dipaksakan di lebar 380 px menghasilkan dua kolom yang
+     dua-duanya tidak terbaca. Yang diukur di sini benar-benar lebar dan
+     tampak-tidaknya, bukan ada tidaknya nama kelas. */
+  await p.setViewportSize({ width: 380, height: 760 });
+  await p.waitForTimeout(500);
+  const sempit = await p.evaluate(() => {
+    const sisi = document.querySelector('.pc-sisi');
+    const utasEl = document.querySelector('.pc-utas');
+    const tampak = (x) => Boolean(x) && x.getBoundingClientRect().width > 0;
+    return {
+      sisiTampak: tampak(sisi), utasTampak: tampak(utasEl),
+      balikTampak: tampak(document.querySelector('.pc-balik')),
+      melebar: document.documentElement.scrollWidth > window.innerWidth + 1,
+    };
+  });
+  cek('di layar sempit hanya utas yang terbuka yang terlihat',
+    sempit.utasTampak === true && sempit.sisiTampak === false, sempit);
+  cek('dan ada tombol kembali ke daftarnya', sempit.balikTampak === true, sempit);
+  cek('halamannya tidak melebar sampai harus digeser ke samping',
+    sempit.melebar === false, sempit);
+
+  await p.evaluate(() => { const b = document.querySelector('.pc-balik'); if (b) b.click(); });
+  await p.waitForTimeout(400);
+  const kembali = await p.evaluate(() => ({
+    sisiTampak: (document.querySelector('.pc-sisi') || {}).getBoundingClientRect
+      ? document.querySelector('.pc-sisi').getBoundingClientRect().width > 0 : false,
+    utasTampak: document.querySelector('.pc-utas').getBoundingClientRect().width > 0,
+  }));
+  cek('tombol kembali memperlihatkan daftarnya lagi',
+    kembali.sisiTampak === true && kembali.utasTampak === false, kembali);
+  await p.setViewportSize({ width: 1280, height: 900 });
+  await p.waitForTimeout(400);
 
   console.log('\n=== G. TIDAK ADA GALAT ===');
   cek('tidak ada galat JavaScript sepanjang uji', galat.length === 0, galat.slice(0, 5));

@@ -10,7 +10,7 @@ const db = require('../lib/blast/db');
 const { id, sekarang, normalkanNomor, bersihkanTeks, sukses, gagal, bacaBody } = require('../lib/blast/util');
 const { ambilSetelan } = require('../lib/blast/setelan');
 const { cariBalasan } = require('../lib/blast/balasan');
-const { antrikan, catatKeDaftar, KUNCI_PESAN } = require('../lib/blast/antrean');
+const { antrikan, catatKeDaftar, KUNCI_PESAN, simpanPesan } = require('../lib/blast/antrean');
 const { kirimKejadian } = require('../lib/blast/webhook');
 const kontakLib = require('../lib/blast/kontak');
 
@@ -101,7 +101,7 @@ module.exports = async function penangan(req, res) {
       dibuat: sekarang(),
       sumber: masuk.sumber,
     };
-    await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+    await simpanPesan(pesan);
     await catatKeDaftar(pesan.id);
     await db.tambahKeHimpunan(`percakapan:${masuk.nomor}`, pesan.id);
     await kirimKejadian('masuk', pesan, setelan);

@@ -19,7 +19,7 @@ const {
   bandingAman, sukses, gagal, bacaBody,
 } = require('../lib/blast/util');
 const { ambilSetelan } = require('../lib/blast/setelan');
-const { KUNCI_PESAN, KUNCI_ANTREAN, KUNCI_SERAHAN, catatKeDaftar, prosesAntrean } = require('../lib/blast/antrean');
+const { KUNCI_PESAN, KUNCI_ANTREAN, KUNCI_SERAHAN, catatKeDaftar, prosesAntrean, simpanPesan } = require('../lib/blast/antrean');
 const { kirimKejadian } = require('../lib/blast/webhook');
 const mandiri = require('../lib/blast/pengirim/mandiri');
 const kontakLib = require('../lib/blast/kontak');
@@ -223,7 +223,7 @@ async function lapor({ data }) {
       pesan.idLuar = bersihkanTeks(h.idLuar || '', 120);
       pesan.dikirim = sekarang();
       pesan.galatTerakhir = '';
-      await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+      await simpanPesan(pesan);
       /* Centang sampai dan dibaca datang belakangan, dan WhatsApp hanya
          menyebut id pesannya sendiri — bukan id kita. Indeks ini yang
          menghubungkan keduanya. */
@@ -239,7 +239,7 @@ async function lapor({ data }) {
     if (menyerah) {
       pesan.status = 'gagal';
       pesan.gagalPada = sekarang();
-      await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+      await simpanPesan(pesan);
       await db.tambahKeHimpunan('pesan:gagal', pesan.id);
       await kirimKejadian('gagal', pesan, setelan);
     } else {
@@ -248,7 +248,7 @@ async function lapor({ data }) {
       const tundaMenit = Math.pow(2, pesan.percobaan - 1);
       pesan.status = 'antre';
       pesan.jadwal = new Date(Date.now() + tundaMenit * 60 * 1000).toISOString();
-      await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+      await simpanPesan(pesan);
       await db.tambahKeHimpunan(KUNCI_ANTREAN, pesan.id);
     }
     gagalJml++;
@@ -287,7 +287,7 @@ async function masuk({ data }) {
     dibuat: sekarang(),
     sumber: 'mandiri',
   };
-  await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+  await simpanPesan(pesan);
   await catatKeDaftar(pesan.id);
   await db.tambahKeHimpunan(`percakapan:${nomor}`, pesan.id);
   await kirimKejadian('masuk', pesan, setelan);
@@ -338,7 +338,7 @@ async function laporStatus({ data }) {
     if ((URUTAN[status] || 0) <= (URUTAN[pesan.status] || 0)) { diabaikan++; continue; }
     pesan.status = status;
     pesan[status] = sekarang();
-    await db.simpan(KUNCI_PESAN(pesan.id), pesan);
+    await simpanPesan(pesan);
     await kirimKejadian(status, pesan, setelan);
     naik++;
   }

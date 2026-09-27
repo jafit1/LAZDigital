@@ -14,6 +14,7 @@ const kontakLib = require('../lib/blast/kontak');
 const berkasLib = require('../lib/blast/berkas');
 const antreanLib = require('../lib/blast/antrean');
 const webhookLib = require('../lib/blast/webhook');
+const percakapanLib = require('../lib/blast/percakapan');
 const { pilihDriver, DRIVER } = require('../lib/blast/pengirim');
 const { siapkanAwal, sudahSiap } = require('../lib/blast/siap');
 
@@ -892,6 +893,158 @@ tindakan['pesan.ulangi'] = { izin: 'pesan.kirim', async jalankan({ data, penggun
   const pesan = await antreanLib.ulangi(data.id);
   await auth.catatAudit(pengguna, 'pesan.ulangi', { pesanId: data.id }, req);
   return { pesan };
+} };
+
+/* --- Percakapan (kotak masuk) ---------------------------------------------
+ *
+ * Bentuk yang dipakai orang: satu baris per kontak, dibuka jadi utas, dan bisa
+ * dibalas dari tempat yang sama. Penjelasan lengkap kenapa utasnya disusun dari
+ * dokumen pesan dan bukan dari ringkasan tersendiri ada di lib/blast/percakapan.js.
+ *
+ * Izinnya SENDIRI, bukan menumpang pesan.lihat. Melihat seluruh isi percakapan
+ * donatur berbeda dari melihat daftar status pengiriman: yang pertama memuat apa
+ * yang orang tuliskan tentang keadaannya, yang kedua cuma tabel berhasil-gagal.
+ * Di LAZDigital keduanya diturunkan dari centang modul broadcast (lihat
+ * lib/blast/sesi-laz.js > PETA_IZIN).
+ */
+tindakan['inbox.daftar'] = { izin: 'inbox.lihat', async jalankan({ data, pengguna }) {
+  const hasil = await percakapanLib.daftar({
+    kunciKantor: kantorTerkunci(pengguna),
+    cari: data.cari || '',
+  });
+  /* Denyut ikut dikembalikan supaya layar bisa menanyakan "ada yang baru?"
+     tanpa meminta daftarnya lagi. */
+  return { ...hasil, denyut: await antreanLib.denyutSekarang() };
+} };
+
+/* Satu angka. Inilah yang ditanyakan berulang kali oleh layar percakapan, jadi
+   ia harus tetap murah selamanya: satu kunci, satu pembacaan, tanpa menyentuh
+   satu pun dokumen pesan. */
+tindakan['inbox.denyut'] = { izin: 'inbox.lihat', async jalankan() {
+  return { denyut: await antreanLib.denyutSekarang() };
+} };
+
+tindakan['inbox.utas'] = { izin: 'inbox.lihat', async jalankan({ data, pengguna }) {
+  const kunci = String(data.kunci || '').trim();
+  if (kunci.startsWith('grup:')) {
+    /* Pengurus KLL dikunci ke satu kantor, sedangkan grup memotong kantor:
+       satu grup bisa berisi kontak dari lima kantor. Membukanya berarti
+       melihat percakapan kantor lain, jadi ditutup. */
+    if (kantorTerkunci(pengguna)) {
+      throw new GalatAplikasi('Percakapan grup tidak tersedia untuk akun yang dikunci ke satu kantor', 403);
+    }
+    try {
+      return await percakapanLib.utasGrup(kunci.slice(5));
+    } catch (e) {
+      throw new GalatAplikasi(e.message, e.kode || 400);
+    }
+  }
+  const nomor = kunci.startsWith('nomor:') ? kunci.slice(6) : (data.nomor || '');
+  try {
+    return await percakapanLib.utasKontak(nomor, { kunciKantor: kantorTerkunci(pengguna) });
+  } catch (e) {
+    throw new GalatAplikasi(e.message, e.kode || 400);
+  }
+} };
+
+tindakan['inbox.tandaiDibaca'] = { izin: 'inbox.lihat', async jalankan({ data }) {
+  try {
+    return await percakapanLib.tandaiDibaca(data.kunci);
+  } catch (e) {
+    throw new GalatAplikasi(e.message, 400);
+  }
+} };
+
+/* PERANGKAT MANA YANG DIPAKAI MEMBALAS.
+   Yang benar adalah nomor yang dipakai donatur menghubungi kita — balasan dari
+   nomor lembaga yang lain akan datang sebagai percakapan baru dari orang tak
+   dikenal, dan itu justru membuat donatur curiga. Jadi dicari perangkat yang
+   terakhir dipakai pada utas ini; hanya kalau tidak ada sama sekali, dipakai
+   perangkat mana pun yang tersambung. */
+async function perangkatUntukUtas(nomor) {
+  const utas = await percakapanLib.utasKontak(nomor);
+  const idDaftar = await db.anggotaHimpunan('perangkat:daftar');
+  const perangkatSemua = (await db.ambilBanyak(idDaftar.map((i) => `perangkat:${i}`))).filter(Boolean);
+  const hidup = new Map(perangkatSemua.map((d) => [d.id, d]));
+
+  const semuaPesan = await percakapanLib._internal.semuaPesan();
+  const milik = semuaPesan.filter((p) => String(p.nomor) === utas.nomor)
+    .sort((a, b) => new Date(b.dibuat) - new Date(a.dibuat));
+  for (const p of milik) {
+    const d = p.perangkatId && hidup.get(p.perangkatId);
+    if (d && d.aktif !== false && d.status !== 'terputus') return d;
+  }
+  return perangkatSemua.find((d) => d.status === 'tersambung' && d.aktif !== false)
+    || perangkatSemua.find((d) => d.aktif !== false) || null;
+}
+
+tindakan['inbox.balas'] = { izin: 'inbox.balas', async jalankan({ data, pengguna, req }) {
+  const teks = util.bersihkanTeks(data.teks || '', 4000);
+  if (!teks) throw new GalatAplikasi('Isi balasannya dulu');
+
+  const kunci = String(data.kunci || '');
+  if (kunci.startsWith('grup:')) {
+    /* Sengaja ditolak, bukan dibuat bisa. Satu kotak balasan di layar grup
+       terlihat seperti mengirim ke grup, padahal yang terjadi adalah ratusan
+       pesan pribadi serempak — itu Kiriman Massal, lengkap dengan jeda aman,
+       batas harian, dan daftar siapa saja yang akan menerimanya. Menyediakan
+       jalan pintas di sini berarti menyediakan cara mengirim ke ratusan orang
+       tanpa satu pun pengaman itu. */
+    throw new GalatAplikasi('Untuk mengirim ke seluruh anggota grup, pakai menu Kiriman Massal.'
+      + ' Di sana ada jeda aman, batas harian, dan daftar penerimanya.', 400);
+  }
+
+  const nomor = normalkanNomor(kunci.startsWith('nomor:') ? kunci.slice(6) : (data.nomor || ''));
+  if (!nomor) throw new GalatAplikasi('Nomor tujuan tidak sah');
+
+  const kontak = await kontakLib.cariLewatNomor(nomor);
+  const kunciKantor = kantorTerkunci(pengguna);
+  if (kunciKantor && (!kontak || (kontak.kantor || '') !== kunciKantor)) {
+    throw new GalatAplikasi('Percakapan ini bukan milik kantor Anda', 403);
+  }
+
+  /* KONTAK YANG DIBLOKIR MASIH BISA DIBALAS — KALAU DIA YANG MENYAPA LEBIH DULU.
+     "Diblokir" di aplikasi ini berarti jangan dikirimi kabar dan ajakan; ia
+     tidak berarti orangnya tidak boleh dijawab. Donatur yang pernah menulis
+     BERHENTI lalu bertanya soal kwitansinya tetap harus bisa dijawab, dan
+     menolaknya di sini akan membuat petugas menjawab lewat WhatsApp pribadi —
+     di luar jangkauan catatan lembaga. Yang tetap dijaga: jawabannya harus
+     menjawab sesuatu. Kalau dia tidak pernah menyapa, tidak ada yang perlu
+     dijawab, dan pesan keluar ke nomor yang minta berhenti memang tidak boleh. */
+  if (kontak && kontakLib.diblokir(kontak)) {
+    const utas = await percakapanLib.utasKontak(nomor, { kunciKantor });
+    const adaSapaan = utas.pesan.some((p) => p.arah === 'masuk');
+    if (!adaSapaan) {
+      throw new GalatAplikasi('Kontak ini minta berhenti menerima pesan, dan belum pernah'
+        + ' menghubungi kembali. Jadi tidak ada yang bisa dibalas di sini.', 400);
+    }
+  }
+
+  const perangkat = await perangkatUntukUtas(nomor);
+  if (!perangkat) {
+    throw new GalatAplikasi('Belum ada perangkat WhatsApp yang bisa dipakai. Sambungkan dulu di menu Perangkat.', 400);
+  }
+
+  const berkasSatu = await lampiran(data.berkasId);
+  const pesan = await antreanLib.antrikan({
+    perangkatId: perangkat.id,
+    nomor,
+    nama: (kontak && kontak.nama) || '',
+    kontakId: kontak ? kontak.id : null,
+    isi: { teks, ...berkasSatu },
+    /* Balasan percakapan didahulukan di atas apa pun. Orang sedang menunggu di
+       ujung sana; kiriman massal tidak. */
+    prioritas: 1,
+    oleh: pengguna.id,
+  });
+
+  /* Membalas berarti percakapannya sudah dilihat. Tanpa ini, baris yang baru
+     saja dijawab tetap bertanda merah sampai petugas mengkliknya sekali lagi. */
+  try { await percakapanLib.tandaiDibaca('nomor:' + nomor); } catch (_) { /* bukan alasan gagal */ }
+
+  await auth.catatAudit(pengguna, 'inbox.balas', { nomor, pesanId: pesan.id }, req);
+  await dorongAntrean();
+  return { pesan, catatan: 'Balasan masuk antrean dan dikirim mengikuti jeda aman.' };
 } };
 
 // --- Kiriman massal -------------------------------------------------------

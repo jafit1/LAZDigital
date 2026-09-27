@@ -60,7 +60,34 @@ const KONTAK = [
   { id: 'k3', nama: 'Ani Diblokir', nomor: '628777888999', segmen: [], label: [], langganan: false, daftarHitam: true, kantor: '' },
 ];
 
+const IKINI = (menit) => new Date(Date.now() - menit * 60000).toISOString();
+
 const JAWABAN = {
+  'inbox.daftar': {
+    denyut: 4, belumDibaca: 2,
+    baris: [
+      { kunci: 'nomor:628111222333', jenis: 'kontak', nomor: '628111222333', nama: 'Budi Santosa',
+        kantor: 'KLL Sewon', diblokir: false, jumlah: 4, masuk: 2, belumDibaca: 2, waktu: IKINI(3),
+        cuplikan: 'Bisa minta rincian penyalurannya?', arahTerakhir: 'masuk', statusTerakhir: 'masuk' },
+      { kunci: 'nomor:628444555666', jenis: 'kontak', nomor: '628444555666', nama: 'Siti Aminah',
+        kantor: '', diblokir: false, jumlah: 2, masuk: 0, belumDibaca: 0, waktu: IKINI(95),
+        cuplikan: 'Info kajian Ahad.', arahTerakhir: 'keluar', statusTerakhir: 'dibaca' },
+      { kunci: 'grup:Panitia Qurban', jenis: 'grup', grup: 'Panitia Qurban', nama: 'Panitia Qurban',
+        nomor: '', anggota: 24, jumlah: 3, dibalas: 5, belumDibaca: 0, waktu: IKINI(300),
+        cuplikan: 'Kajian Ahad pukul 08.00.', arahTerakhir: 'keluar', statusTerakhir: 'selesai' },
+    ],
+  },
+  'inbox.denyut': { denyut: 4 },
+  'inbox.utas': {
+    nomor: '628111222333', nama: 'Budi Santosa', kantor: 'KLL Sewon', diblokir: false,
+    grup: ['Pengurus Harian'],
+    pesan: [
+      { id: 'm1', arah: 'keluar', teks: 'Kwitansi zakat Bapak sudah kami kirim.', status: 'dibaca', waktu: IKINI(300), namaMassal: '' },
+      { id: 'm2', arah: 'masuk', teks: 'Terima kasih, sudah saya terima.', status: 'masuk', waktu: IKINI(240) },
+      { id: 'm3', arah: 'keluar', teks: 'Alhamdulillah, semoga menjadi berkah.', status: 'terkirim', waktu: IKINI(10), namaMassal: '' },
+      { id: 'm4', arah: 'masuk', teks: 'Bisa minta rincian penyalurannya?', status: 'masuk', waktu: IKINI(3) },
+    ],
+  },
   'sistem.status': { masuk: true, pengguna: PENGGUNA, izin: IZIN, akses: { webhook: true, audit: true }, driver: 'mandiri', lembaga: { nama: 'LAZISMU Daerah Bantul', singkatan: 'Lazismu Bantul' } },
   'sistem.kesiapan': {
     siapDeploy: true, diVercel: false,
@@ -157,7 +184,7 @@ const server = http.createServer((req, res) => {
 });
 
 
-const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 'setelan'];
+const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrean', 'kontak', 'setelan'];
 (async () => {
   await new Promise((r) => server.listen(0, r));
   const A = 'http://127.0.0.1:' + server.address().port;

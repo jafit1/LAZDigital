@@ -5523,3 +5523,213 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   .app .tn-brand .brand-name,
   .app .tn-brand .logo-img{ transition:none !important; }
 }
+
+/* ================================================================
+   56. PERCAKAPAN: KOTAK MASUK YANG BERBENTUK PERCAKAPAN
+   ================================================================
+   Halaman riwayat yang lama menderetkan setiap pesan sebagai baris tabel.
+   Untuk mengikuti satu donatur, petugas harus memindai sembilan puluh baris
+   dan menyusun urutannya sendiri di kepala. Yang dibangun di sini bentuk yang
+   sudah dikenal semua orang: daftar di kiri, utasnya di kanan.
+
+   TIGA KEPUTUSAN TATA LETAK, DAN ALASANNYA:
+
+   1. TINGGINYA DIKUNCI, YANG BERGULIR HANYA ISINYA. Kalau seluruh halaman
+      yang memanjang, kotak tulis ikut turun ke bawah lipatan — dan yang
+      paling sering dipakai di halaman ini justru kotak tulis itu. Jadi
+      tingginya dipatok ke tinggi layar, lalu daftar dan gelembungnya yang
+      bergulir masing-masing. Dipakai dvh, bukan vh: di peramban ponsel, vh
+      menghitung layar seolah bilah alamatnya tidak ada, sehingga kotak tulis
+      tersembunyi persis di balik bilah itu.
+
+   2. DI LAYAR SEMPIT HANYA SATU PANEL YANG TERLIHAT. Memaksa dua kolom di
+      lebar 360 px menghasilkan dua kolom yang dua-duanya tidak terbaca.
+      Kelas .pc-buka yang menentukan mana yang tampak, dan tombol kembali
+      hanya ada di sana — di layar lebar ia tidak berguna karena daftarnya
+      memang tidak pernah hilang.
+
+   3. GELEMBUNGNYA TIDAK PERNAH SELEBAR PANEL. Baris teks yang terlalu
+      panjang membuat mata kehilangan barisnya saat berpindah baris; 78%
+      dengan batas 44rem menjaga panjang barisnya tetap terbaca, dan
+      sekaligus membuat kiri-kanan percakapan langsung terlihat bedanya.
+   ================================================================ */
+.pc{
+  display:grid; grid-template-columns:minmax(260px,326px) 1fr;
+  height:clamp(430px, calc(100dvh - 232px), 880px);
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;
+}
+/* min-height:0 BUKAN HIASAN. Anak sebuah flex column punya min-height:auto,
+   artinya ia menolak menyusut di bawah tinggi isinya. Begitu percakapannya
+   panjang, .pc-gelembung menolak mengecil, .pc-utas ikut membengkak, dan
+   panel yang tingginya sudah dipatok ternyata memanjang melewati layar: kotak
+   tulisnya turun ke bawah lipatan dan halamannya jadi bisa digulir dua lapis.
+   Diukur sebelum baris ini ada: halamannya bisa digulir 208 px di layar
+   ponsel, persis setinggi bilah atas. */
+.pc-sisi{
+  display:flex; flex-direction:column; min-width:0; min-height:0;
+  border-right:1px solid var(--border); background:var(--surface3);
+}
+.pc-cari{ padding:10px; border-bottom:1px solid var(--border2); background:var(--surface) }
+.pc-cari input{
+  width:100%; height:38px; padding:0 12px; font-size:13px; font-family:inherit;
+  color:var(--text); background:var(--surface2);
+  border:1px solid var(--border); border-radius:999px; outline:none;
+}
+.pc-cari input:focus{ border-color:var(--accent); background:var(--surface) }
+
+.pc-daftar{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain }
+
+/* Barisnya sebuah <button>: bisa dicapai dengan Tab dan dijawab dengan Enter
+   tanpa satu baris JavaScript tambahan. <div onclick> tidak bisa keduanya. */
+.pc-baris{
+  display:flex; gap:11px; align-items:flex-start; width:100%; text-align:left;
+  padding:11px 12px; background:none; border:0; border-bottom:1px solid var(--border2);
+  font:inherit; color:var(--text); cursor:pointer; transition:background-color .12s;
+}
+.pc-baris:hover{ background:var(--surface2) }
+.pc-baris.aktif{ background:var(--accent-soft) }
+.pc-ava{
+  flex:0 0 40px; width:40px; height:40px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-family:var(--head); font-size:15px; font-weight:700; color:#fff;
+  background:linear-gradient(140deg,var(--accent2),var(--accent)); user-select:none;
+}
+.pc-ava.grup{ background:linear-gradient(140deg,#7dd3a8,var(--green)) }
+.pc-isi{ flex:1; min-width:0; display:block }
+.pc-atas{ display:flex; align-items:baseline; gap:8px }
+.pc-nama{
+  flex:1; min-width:0; font-size:13.5px; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.pc-jam{ flex:0 0 auto; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums }
+.pc-bawah{ display:flex; align-items:center; gap:8px; margin-top:2px }
+.pc-cuplik{
+  flex:1; min-width:0; font-size:12.5px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.pc-ket{
+  display:block; margin-top:2px; font-size:11px; color:var(--muted); opacity:.8;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+/* Lencana belum dibaca. Bulat dan hijau seperti yang sudah dikenal semua
+   orang, dan angkanya tidak pernah melebihi tiga karakter supaya lebar
+   barisnya tidak ikut berubah. */
+.pc-belum{
+  flex:0 0 auto; min-width:20px; height:20px; padding:0 6px; border-radius:999px;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--green); color:#fff; font-size:11px; font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.pc-tak-ada{ padding:18px 14px; margin:0; font-size:12.5px; color:var(--muted); text-align:center }
+
+/* ---- panel utas ---- */
+.pc-utas{ display:flex; flex-direction:column; min-width:0; min-height:0; background:var(--surface) }
+.pc-hampa{ margin:auto; padding:24px }
+.pc-kepala{
+  display:flex; align-items:center; gap:11px; padding:10px 14px;
+  border-bottom:1px solid var(--border); background:var(--surface3); flex:0 0 auto;
+}
+.pc-balik{
+  display:none; flex:0 0 32px; width:32px; height:32px; border-radius:50%;
+  align-items:center; justify-content:center; padding:0;
+  background:none; border:0; color:var(--text2); cursor:pointer;
+}
+.pc-balik:hover{ background:var(--surface2) }
+.pc-judul{ flex:1; min-width:0 }
+.pc-judul strong{
+  display:block; font-size:14px; font-weight:650;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.pc-judul-ket{
+  display:block; font-size:11.5px; color:var(--muted);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.pc-kepala-kanan{ display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; max-width:45% }
+
+.pc-gelembung{
+  flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+  padding:16px 18px 20px; display:flex; flex-direction:column; gap:8px;
+  background:var(--surface2);
+}
+.pc-hari{
+  align-self:center; margin:10px 0 4px; padding:3px 12px; border-radius:999px;
+  background:var(--surface); border:1px solid var(--border);
+  font-size:11px; font-weight:600; color:var(--muted);
+}
+.pc-bl{
+  max-width:min(78%,44rem); padding:8px 11px 5px; border-radius:var(--radius-sm);
+  background:var(--surface); border:1px solid var(--border);
+  box-shadow:0 1px 1px rgba(70,45,35,.04); font-size:13.5px; line-height:1.5;
+}
+.pc-bl.masuk{ align-self:flex-start; border-bottom-left-radius:4px }
+.pc-bl.keluar{
+  align-self:flex-end; border-bottom-right-radius:4px;
+  background:var(--accent-soft); border-color:var(--accent-soft2);
+}
+/* white-space:pre-wrap supaya baris baru yang ditulis petugas benar-benar
+   terlihat sebagai baris baru. Tanpa ini, pesan berisi daftar rekening
+   berubah jadi satu paragraf panjang — di sini, tetapi tidak di WhatsApp
+   donatur, sehingga tidak ada yang sadar bentuknya berbeda. */
+.pc-teks{ white-space:pre-wrap; overflow-wrap:anywhere }
+.pc-meta{
+  margin-top:3px; text-align:right; font-size:10.5px; color:var(--muted);
+  display:flex; align-items:center; justify-content:flex-end; gap:5px;
+}
+.pc-dari{ font-size:11.5px; font-weight:700; color:var(--accent-d); margin-bottom:2px }
+.pc-asal{ font-size:10.5px; color:var(--muted); margin-bottom:3px; font-style:italic }
+.pc-lampiran{
+  font-size:12px; color:var(--text2); margin-bottom:4px; padding:4px 7px;
+  background:var(--surface2); border-radius:6px;
+}
+.pc-bl.keluar .pc-lampiran{ background:rgba(255,255,255,.6) }
+.pc-antre{ color:var(--amber); font-weight:600 }
+.pc-gagal{ color:var(--red); font-weight:700 }
+
+/* ---- gelembung broadcast (utas grup) ---- */
+.pc-siar{ max-width:min(88%,46rem) }
+.pc-siar-nama{ font-family:var(--head); font-size:12.5px; font-weight:700; margin-bottom:4px }
+.pc-siar-stat{
+  display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:7px; padding-top:6px;
+  border-top:1px dashed var(--accent-soft2); font-size:11px; color:var(--text2);
+}
+.pc-siar-lihat{
+  margin-top:6px; padding:0; background:none; border:0; font:inherit; font-size:11.5px;
+  font-weight:600; color:var(--accent-d); text-decoration:underline; cursor:pointer;
+}
+.pc-rincian{ margin-top:7px; max-height:220px; overflow-y:auto }
+.pc-tabel{ width:100%; border-collapse:collapse; font-size:11.5px }
+.pc-tabel td{ padding:3px 6px; border-top:1px solid var(--border2); vertical-align:middle }
+.pc-tabel-nomor{ color:var(--muted); font-variant-numeric:tabular-nums }
+
+/* ---- kotak tulis ---- */
+.pc-tulis{
+  flex:0 0 auto; display:flex; align-items:flex-end; gap:9px;
+  padding:10px 12px; border-top:1px solid var(--border); background:var(--surface3);
+}
+.pc-tulis textarea{
+  flex:1; min-height:38px; max-height:150px; resize:none; padding:9px 12px;
+  font:inherit; font-size:13.5px; line-height:1.45; color:var(--text);
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-sm); outline:none;
+}
+.pc-tulis textarea:focus{ border-color:var(--accent) }
+.pc-tulis .btn{ flex:0 0 auto; height:38px }
+.pc-catatan{
+  flex:0 0 auto; margin:0; padding:11px 14px; font-size:12px; line-height:1.55;
+  color:var(--text2); background:var(--surface3); border-top:1px solid var(--border);
+}
+
+/* ---- satu panel saja di layar sempit ---- */
+@media (max-width: 860px){
+  .pc{
+    grid-template-columns:1fr;
+    height:clamp(400px, calc(100dvh - 196px), 880px);
+  }
+  .pc .pc-utas{ display:none }
+  .pc.pc-buka .pc-sisi{ display:none }
+  .pc.pc-buka .pc-utas{ display:flex }
+  .pc-balik{ display:inline-flex }
+  .pc-bl{ max-width:86% }
+  .pc-siar{ max-width:94% }
+}

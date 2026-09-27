@@ -30,6 +30,8 @@ call :jalankan "Batas fungsi Vercel"            tools\uji_batas_vercel.js
 call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
 call :jalankan "Fitur Broadcast"                tools\test_blast_fitur.js
 call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
+call :jalankan "Kotak masuk percakapan"          tools\test_percakapan.js
+call :jalankan "Bentuk layar percakapan"         tools\ukur-percakapan.js
 call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
 call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
 call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
