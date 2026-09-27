@@ -686,6 +686,34 @@ async function buatPerangkat(id = 'p_uji') {
       pra3.tidakSah.length === 1 && pra3.tidakSah[0].nomor === '123', pra3.tidakSah);
   }
 
+  console.log('\n=== M. RINCIAN KIRIMAN MASSAL ===');
+  {
+    /* Daftar riwayat hanya memperlihatkan nama kiriman dan angka ringkasnya;
+       rinciannya diambil saat kartunya dibuka. Yang diuji: rincian itu benar
+       isinya, memakai NAMA kontak bukan nomor telanjang, dan urutannya
+       menaruh yang gagal di atas supaya yang perlu ditindaklanjuti terlihat
+       lebih dulu. */
+    const kA = (await kontakLib.simpanKontak({ nama: 'Pak Rinci A', nomor: '628110000901' }, SUPER)).kontak;
+    const kB = (await kontakLib.simpanKontak({ nama: 'Bu Rinci B', nomor: '628110000902' }, SUPER)).kontak;
+    const kirim = await jalan('massal.kirim', {
+      nama: 'Uji rincian', perangkatId, teks: 'Halo {{nama}}',
+      kontakId: [kA.id, kB.id],
+    });
+    cek('kiriman massal terbentuk', !!kirim.massal && kirim.massal.jumlah === 2, kirim);
+
+    const d = await jalan('massal.detail', { id: kirim.massal.id });
+    cek('rincian memuat kedua penerima', d.baris.length === 2, d.baris);
+    cek('rincian memakai nama kontak, bukan nomor telanjang',
+      d.baris.every((r) => /Rinci/.test(r.nama)), d.baris.map((r) => r.nama));
+    cek('rincian membawa nomor juga',
+      d.baris.every((r) => /^628110000/.test(r.nomor)), d.baris.map((r) => r.nomor));
+    cek('nama kirimannya ikut dikembalikan', d.nama === 'Uji rincian', d.nama);
+
+    const hilang = await tolak('massal.detail', { id: 'tidak-ada' });
+    cek('rincian kiriman yang tidak ada ditolak, bukan dijawab kosong',
+      /tidak ditemukan/i.test(hilang || ''), hilang);
+  }
+
   console.log('\ntest_blast_fitur.js  ' + ok + '/' + (ok + g) + (g ? '  ADA GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);
 })().catch((e) => { console.error('ERROR', e); process.exit(1); });

@@ -463,7 +463,7 @@ function pasangKeping(el, area) {
   });
 }
 
-const JENIS_LAMPIRAN = '.pdf,.jpg,.jpeg,.png,.webp,.mp4,.mp3,.doc,.docx,.xls,.xlsx';
+const JENIS_LAMPIRAN = '.pdf,.jpg,.jpeg,.png,.webp,.mp4,.mov,.3gp,.mp3,.doc,.docx,.xls,.xlsx';
 const BATAS_LAMPIRAN_MB = 3;
 
 const kotakLampiran = (idAwalan) => `
@@ -472,9 +472,93 @@ const kotakLampiran = (idAwalan) => `
     <input type="file" id="${idAwalan}Berkas" accept="${JENIS_LAMPIRAN}">
     <input type="hidden" name="berkasId" id="${idAwalan}BerkasId">
     <div class="muted" id="${idAwalan}BerkasKet" style="font-size:11.5px;margin-top:4px">
-      PDF, gambar, Word, Excel, MP4, MP3 &middot; maksimal ${BATAS_LAMPIRAN_MB} MB.
+      PDF, gambar, Word, Excel, video, MP3 &middot; maksimal ${BATAS_LAMPIRAN_MB} MB.<br>
+      Foto besar dikecilkan sendiri ke HD. Video dikirim utuh, sampai ${BATAS_VIDEO_DETIK} detik.
     </div>
   </div>`;
+
+/* LAMPIRAN GAMBAR DAN VIDEO.
+
+   Batas 3 MB di sini bukan pilihan kami: Vercel menolak badan permintaan di
+   atas ~4,5 MB, dan base64 membengkakkan berkas sekitar sepertiga.
+
+   Dulu foto 5 MB langsung DITOLAK, dan petugas harus mengecilkannya sendiri
+   di aplikasi lain sebelum boleh mengirim. Padahal yang dibutuhkan penerima
+   bukan foto 5 MB, melainkan foto yang jernih. Sekarang fotonya dikecilkan
+   sendiri ke ukuran HD lalu dikirim, dan hanya ditolak kalau sesudah itu pun
+   masih kelewat besar.
+
+   Gambar yang SUDAH cukup kecil tidak disentuh sama sekali. Menyandi ulang
+   gambar yang sudah baik hanya menambah kerusakan tanpa menghemat apa pun.
+
+   Video sengaja TIDAK diturunkan mutunya. Mengubah sandi video di peramban
+   butuh ffmpeg yang ukurannya berpuluh megabita dan memakan waktu
+   menit-menitan; yang bisa dilakukan di sini adalah memastikan durasinya
+   masuk akal lalu mengirimnya utuh, supaya yang sampai sejernih aslinya. */
+const SISI_HD = 1600;            /* sisi terpanjang, satuan piksel */
+const MUTU_HD = 0.92;            /* JPEG; di bawah 0,9 mulai terlihat pecah */
+const BATAS_VIDEO_DETIK = 60;
+const mb = (n) => (n / 1024 / 1024).toFixed(1);
+
+function durasiVideo(berkas) {
+  return new Promise((selesai) => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    const url = URL.createObjectURL(berkas);
+    const bereskan = (nilai) => { URL.revokeObjectURL(url); selesai(nilai); };
+    v.onloadedmetadata = () => bereskan(Number(v.duration) || 0);
+    /* Durasi tidak terbaca bukan alasan menolak: formatnya bisa saja tidak
+       dikenali peramban padahal WhatsApp sanggup memutarnya. Dikembalikan 0
+       supaya pemeriksaan ukurannya saja yang berlaku. */
+    v.onerror = () => bereskan(0);
+    v.src = url;
+  });
+}
+
+async function siapkanGambar(berkas) {
+  const muat = await new Promise((selesai, gagal) => {
+    const img = new Image();
+    const url = URL.createObjectURL(berkas);
+    img.onload = () => { URL.revokeObjectURL(url); selesai(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); gagal(new Error('Gambar tidak terbaca.')); };
+    img.src = url;
+  });
+  const sisi = Math.max(muat.naturalWidth, muat.naturalHeight);
+  const cukupKecil = berkas.size <= BATAS_LAMPIRAN_MB * 1024 * 1024;
+  if (sisi <= SISI_HD && cukupKecil) return berkas;
+
+  const skala = Math.min(1, SISI_HD / sisi);
+  const lebar = Math.round(muat.naturalWidth * skala);
+  const tinggi = Math.round(muat.naturalHeight * skala);
+  const kanvas = document.createElement('canvas');
+  kanvas.width = lebar; kanvas.height = tinggi;
+  const ktx = kanvas.getContext('2d');
+  ktx.imageSmoothingQuality = 'high';
+  ktx.drawImage(muat, 0, 0, lebar, tinggi);
+
+  /* PNG dengan alpha tetap PNG: mengubahnya jadi JPEG membuat latar tembus
+     pandang berubah jadi hitam, dan itu baru terlihat setelah terkirim. */
+  const adaAlpha = /png|webp/i.test(berkas.type) && punyaAlpha(ktx, lebar, tinggi);
+  const tipe = adaAlpha ? 'image/png' : 'image/jpeg';
+  const hasil = await new Promise((selesai) => kanvas.toBlob(selesai, tipe, MUTU_HD));
+  if (!hasil) return berkas;
+  /* Kalau hasil olahannya malah lebih besar, yang asli yang dipakai. */
+  if (hasil.size >= berkas.size && cukupKecil) return berkas;
+  const namaBaru = berkas.name.replace(/\.[^.]+$/, '') + (tipe === 'image/png' ? '.png' : '.jpg');
+  return new File([hasil], namaBaru, { type: tipe });
+}
+
+/* Diperiksa dengan mencicip, bukan seluruh piksel: gambar 12 juta piksel
+   akan membuat halaman membeku sesaat, dan yang dicari cuma ADA TIDAKNYA
+   bagian tembus pandang. */
+function punyaAlpha(ktx, lebar, tinggi) {
+  try {
+    const d = ktx.getImageData(0, 0, lebar, tinggi).data;
+    const langkah = Math.max(4, Math.floor(d.length / 4 / 20000) * 4);
+    for (let i = 3; i < d.length; i += langkah) if (d[i] < 250) return true;
+    return false;
+  } catch (e) { return true; }
+}
 
 /* Mengunggah lampiran begitu dipilih, bukan saat tombol kirim ditekan.
    Unggahan yang menumpang tombol kirim membuat satu klik bisa menggantung
@@ -490,20 +574,50 @@ function pasangLampiran(el, idAwalan) {
     const f = pilih.files && pilih.files[0];
     simpan.value = '';
     if (!f) { ket.innerHTML = bawaan; return; }
-    if (f.size > BATAS_LAMPIRAN_MB * 1024 * 1024) {
-      ket.innerHTML = `<span style="color:var(--red)">Berkas ${(f.size / 1024 / 1024).toFixed(1)} MB melebihi batas ${BATAS_LAMPIRAN_MB} MB. Kecilkan dulu, atau cukup tulis tautannya di dalam pesan.</span>`;
-      pilih.value = '';
-      return;
-    }
-    ket.textContent = 'Mengunggah ' + f.name + '…';
+    const tolak = (pesan) => { ket.innerHTML = '<span style="color:var(--red)">' + pesan + '</span>'; pilih.value = ''; };
     try {
+      let berkas = f;
+
+      if (/^image\//i.test(f.type)) {
+        ket.textContent = 'Menyiapkan gambar…';
+        berkas = await siapkanGambar(f);
+        if (berkas.size > BATAS_LAMPIRAN_MB * 1024 * 1024) {
+          tolak('Gambar ini masih ' + mb(berkas.size) + ' MB setelah dikecilkan ke HD.'
+            + ' Batasnya ' + BATAS_LAMPIRAN_MB + ' MB. Potong gambarnya dulu, atau tulis tautannya di dalam pesan.');
+          return;
+        }
+      } else if (/^video\//i.test(f.type)) {
+        ket.textContent = 'Memeriksa video…';
+        const detik = await durasiVideo(f);
+        if (detik > BATAS_VIDEO_DETIK + 0.5) {
+          tolak('Video ini ' + Math.round(detik) + ' detik. Yang dikirim utuh tanpa diturunkan mutunya hanya sampai '
+            + BATAS_VIDEO_DETIK + ' detik. Potong dulu, atau tulis tautannya di dalam pesan.');
+          return;
+        }
+        if (f.size > BATAS_LAMPIRAN_MB * 1024 * 1024) {
+          /* Video tidak bisa dikecilkan di peramban: mengubah sandi video
+             butuh ffmpeg yang ukurannya berpuluh megabita dan memakan waktu
+             menit-menitan. Jadi yang jujur di sini menolak dengan jelas,
+             bukan mengirim potongan yang rusak. */
+          tolak('Video ' + mb(f.size) + ' MB melebihi batas ' + BATAS_LAMPIRAN_MB + ' MB.'
+            + ' Mutunya tidak diturunkan di sini supaya yang sampai tetap sejernih aslinya.'
+            + ' Ekspor ulang lebih kecil, atau tulis tautannya di dalam pesan.');
+          return;
+        }
+      } else if (f.size > BATAS_LAMPIRAN_MB * 1024 * 1024) {
+        tolak('Berkas ' + mb(f.size) + ' MB melebihi batas ' + BATAS_LAMPIRAN_MB + ' MB.'
+          + ' Kecilkan dulu, atau cukup tulis tautannya di dalam pesan.');
+        return;
+      }
+
+      ket.textContent = 'Mengunggah ' + berkas.name + '…';
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader();
         r.onload = () => res(String(r.result).split(',')[1] || '');
         r.onerror = () => rej(new Error('Berkas tidak terbaca'));
-        r.readAsDataURL(f);
+        r.readAsDataURL(berkas);
       });
-      const h = await rpc('berkas.unggah', { nama: f.name, tipe: f.type || 'application/octet-stream', base64 });
+      const h = await rpc('berkas.unggah', { nama: berkas.name, tipe: berkas.type || 'application/octet-stream', base64 });
       simpan.value = h.berkas.id;
       ket.innerHTML = `Siap dikirim: <strong>${H(h.berkas.nama)}</strong> (${Math.max(1, Math.round(h.berkas.byte / 1024))} KB)`;
     } catch (e) {
@@ -1142,7 +1256,7 @@ halaman.kirim = {
                 <label style="margin-bottom:0;white-space:nowrap">Isi pesan</label>
                 <span style="margin-left:auto;width:220px;max-width:58%">
                 <select id="pilihTemplat">
-                  <option value="">— pakai templat —</option>
+                  <option value="">Template</option>
                   ${templat.baris.map((t) => `<option value="${t.id}">${H(t.nama)}</option>`).join('')}
                 </select>
                 </span>
@@ -1256,8 +1370,9 @@ halaman.massal = {
         ${kartu(`
           <form id="fm">
             <div class="field">
-              <label>Nama kiriman</label>
-              <input name="nama" required placeholder="mis. Ajakan zakat Ramadan 1447">
+              <label>Nama kiriman <span class="muted" style="font-weight:400">(boleh dikosongkan bila memilih grup)</span></label>
+              <input name="nama" placeholder="mis. Ajakan zakat Ramadan 1447">
+              <div class="muted" style="font-size:11.5px;margin-top:4px" id="namaKiriman"></div>
             </div>
             <div class="field">
               <label>Perangkat pengirim</label>
@@ -1280,6 +1395,10 @@ halaman.massal = {
                   <span class="pilih-ket">boleh centang lebih dari satu</span>
                 </label>
                 <div class="penerima-daftar" id="penerimaDaftar" hidden>
+                  <div class="penerima-cari">
+                    <input type="search" id="cariPenerima" placeholder="Cari grup atau segmen…" autocomplete="off">
+                    <span class="muted" id="cariPenerimaKet"></span>
+                  </div>
                   ${pilihan.grup.length ? `
                     <div class="penerima-judul">Grup buatan sendiri</div>
                     ${pilihan.grup.map((g) => `
@@ -1310,7 +1429,7 @@ halaman.massal = {
                 <label style="margin-bottom:0;white-space:nowrap">Isi pesan</label>
                 <span style="margin-left:auto;width:220px;max-width:58%">
                 <select id="pilihTemplat2">
-                  <option value="">— pakai templat —</option>
+                  <option value="">Template</option>
                   ${templat.baris.map((t) => `<option value="${t.id}">${H(t.nama)}</option>`).join('')}
                 </select>
                 </span>
@@ -1336,10 +1455,14 @@ halaman.massal = {
           ${tm.bilah}
           <div style="margin-top:14px;display:grid;gap:12px;max-height:28rem;overflow-y:auto">
             ${daftar.baris.length ? daftar.baris.map((m) => `
-              <div style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
+              <div class="massal-kartu" style="border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
                 <div style="display:flex;align-items:flex-start;gap:8px">
                   ${tm.boleh ? `<input type="checkbox" class="tandai" value="${H(m.id)}" aria-label="Tandai ${H(m.nama)}" style="margin-top:2px;flex:none">` : ''}
-                  <p style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${H(m.nama)}</p>
+                  <button type="button" data-buka="${H(m.id)}" class="massal-judul" aria-expanded="false"
+                    style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;background:none;border:0;padding:0;text-align:left;cursor:pointer;color:inherit;font:inherit">
+                    <span data-panah style="flex:none;transition:transform .18s ease;display:inline-block">&#9656;</span>
+                    <span style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${H(m.nama)}</span>
+                  </button>
                   ${m.status === 'berjalan' ? `<button data-henti="${m.id}" class="btn btn-ghost btn-sm" style="flex-shrink:0;color:var(--red)">hentikan</button>` : ''}
                 </div>
                 <p class="muted" style="font-size:11.5px">${fmtJarak(m.dibuat)} · ${fmtAngka(m.jumlah)} penerima${m.penerimaTertulis ? ' · ' + H(m.penerimaTertulis) : ''}</p>
@@ -1350,6 +1473,7 @@ halaman.massal = {
                   ${m.dibalas ? `<span class="badge purple">dibalas ${m.dibalas}</span>` : ''}
                   ${m.statistik.gagal ? `<span class="badge red">gagal ${m.statistik.gagal}</span>` : ''}
                 </div>
+                <div data-rincian="${H(m.id)}" hidden style="margin-top:10px;border-top:1px solid var(--border2);padding-top:10px"></div>
               </div>`).join('') : '<p class="muted">Belum ada kiriman massal.</p>'}
           </div>`)}
       </div>`;
@@ -1394,10 +1518,110 @@ halaman.massal = {
           + (diblokir ? ` ${fmtAngka(diblokir)} kontak diblokir dan tidak ikut dihitung.` : '');
     };
 
+    /* PENCARIAN DI DALAM DAFTAR PENERIMA.
+       Dengan puluhan grup, menemukan satu nama berarti menggulir sambil
+       membaca satu per satu, dan itu justru saat paling mudah salah centang. */
+    const cari = $('#cariPenerima', el);
+    const cariKet = $('#cariPenerimaKet', el);
+    function saringDaftar() {
+      const q = (cari ? cari.value : '').trim().toLowerCase();
+      let tampil = 0;
+      for (const b of $$('.penerima-daftar .penerima-baris', el)) {
+        const nama = (b.querySelector('.pilih-nama') || {}).textContent || '';
+        const kotak = b.querySelector('input');
+        /* Yang sudah dicentang tidak pernah disembunyikan: menyembunyikannya
+           membuat penerima ikut terkirim tanpa terlihat di layar. */
+        const cocok = !q || nama.toLowerCase().includes(q) || (kotak && kotak.checked);
+        b.hidden = !cocok;
+        if (cocok) tampil++;
+      }
+      /* Judul kelompok ikut disembunyikan kalau tidak ada isinya yang tampil. */
+      $$('.penerima-daftar .penerima-judul', el).forEach((j) => {
+        let ada = false;
+        for (let n = j.nextElementSibling; n && !n.classList.contains('penerima-judul'); n = n.nextElementSibling) {
+          if (n.classList.contains('penerima-baris') && !n.hidden) { ada = true; break; }
+        }
+        j.hidden = !ada;
+      });
+      if (cariKet) cariKet.textContent = q ? tampil + ' cocok' : '';
+    }
+    if (cari) cari.oninput = saringDaftar;
+
+    /* NAMA KIRIMAN MENGIKUTI GRUP YANG DICENTANG.
+       Nama yang diketik petugas TIDAK ditimpa dan kursornya tidak dilompati:
+       nama grup ditambahkan di belakangnya saat dikirim, dan hasil akhirnya
+       diperlihatkan di bawah kotaknya supaya tidak ada kejutan. */
+    const namaEl = $('[name=nama]', el);
+    const namaKet = $('#namaKiriman', el);
+    const labelTerpilih = () => grupTerpilih().concat(segmenTerpilih().map((k) => {
+      const s2 = pilihan.segmen.find((x) => x.kode === k);
+      return s2 ? s2.label : k;
+    }));
+    function namaAkhir() {
+      const diketik = (namaEl.value || '').trim();
+      if (!modePilih()) return diketik;
+      const lab = labelTerpilih();
+      if (!lab.length) return diketik;
+      const gabung = lab.slice(0, 3).join(', ') + (lab.length > 3 ? ' +' + (lab.length - 3) + ' lagi' : '');
+      return diketik ? diketik + ' \u00b7 ' + gabung : gabung;
+    }
+    function perbaruiNama() {
+      if (!namaKet) return;
+      const akhir = namaAkhir();
+      const diketik = (namaEl.value || '').trim();
+      namaKet.innerHTML = (akhir && akhir !== diketik)
+        ? 'Tersimpan sebagai: <strong>' + H(akhir) + '</strong>'
+        : '';
+      /* required dilepas saat grup sudah dicentang: namanya memang boleh
+         dikosongkan, dan nama grup yang dipakai. */
+      namaEl.required = !akhir;
+    }
+    namaEl.addEventListener('input', perbaruiNama);
     $$('[name=carePenerima], [data-grup], [data-segmen]', el).forEach((c) => {
-      c.onchange = perbaruiHitung;
+      c.onchange = () => { perbaruiHitung(); saringDaftar(); perbaruiNama(); };
     });
     perbaruiHitung();
+    perbaruiNama();
+
+    /* RINCIAN DIBUKA SAAT DIKLIK, BUKAN DIMUAT SEMUA DI AWAL.
+       Satu kiriman bisa berisi ratusan penerima; memuat rinciannya untuk
+       setiap kartu di layar berarti mengunduh ribuan baris yang tidak sedang
+       dilihat siapa pun. Sekali dibuka, hasilnya disimpan supaya menutup lalu
+       membuka lagi tidak meminta ulang. */
+    const LENCANA = { dibaca: 'green', sampai: 'blue', terkirim: 'blue', antre: 'grey', gagal: 'red' };
+    $$('[data-buka]', el).forEach((tombol) => {
+      tombol.onclick = async () => {
+        const id = tombol.dataset.buka;
+        const kotak = $('[data-rincian="' + id + '"]', el);
+        const panah = tombol.querySelector('[data-panah]');
+        if (!kotak) return;
+        const buka = kotak.hidden;
+        kotak.hidden = !buka;
+        tombol.setAttribute('aria-expanded', String(buka));
+        if (panah) panah.style.transform = buka ? 'rotate(90deg)' : '';
+        if (!buka || kotak.dataset.terisi) return;
+
+        kotak.innerHTML = '<p class="muted" style="font-size:12px">Memuat rincian…</p>';
+        try {
+          const d = await rpc('massal.detail', { id });
+          if (!d.baris.length) {
+            kotak.innerHTML = '<p class="muted" style="font-size:12px">Rincian per penerima sudah tidak tersimpan.</p>';
+          } else {
+            kotak.innerHTML = '<div style="max-height:16rem;overflow-y:auto;display:grid;gap:6px">'
+              + d.baris.map((r) => '<div style="display:flex;align-items:center;gap:8px;font-size:12px">'
+                + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+                + H(r.nama || r.nomor) + (r.nama ? ' <span class="muted">' + H(r.nomor) + '</span>' : '') + '</span>'
+                + '<span class="badge ' + (LENCANA[r.status] || 'grey') + '" style="flex:none">' + H(r.status) + '</span>'
+                + (r.galat ? '<span class="muted" style="flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + H(r.galat) + '</span>' : '')
+                + '</div>').join('')
+              + '</div>';
+          }
+          kotak.dataset.terisi = '1';
+        } catch (e) {
+          kotak.innerHTML = '<p style="font-size:12px;color:var(--red)">' + H(e.message) + '</p>';
+        }
+      };
+    });
 
     $$('[data-henti]', el).forEach((b) => b.onclick = () => konfirmasi(
       'Hentikan kiriman?', 'Pesan yang belum terkirim akan dibatalkan. Yang sudah terkirim tidak dapat ditarik.',
@@ -1426,6 +1650,11 @@ halaman.massal = {
       ev.preventDefault();
       const data = Object.fromEntries(new FormData(ev.target).entries());
       delete data.carePenerima;
+      /* Nama akhirnya dipakai apa adanya, termasuk saat kotaknya dikosongkan
+         dan nama grup yang jadi namanya. Inilah yang tadi diperlihatkan di
+         bawah kotak nama, jadi yang tersimpan sama dengan yang dibaca. */
+      data.nama = namaAkhir();
+      if (!data.nama) { toast('Isi nama kiriman, atau centang grupnya dulu.', 'galat'); return; }
       if (modePilih()) {
         data.grup = grupTerpilih();
         data.segmen = segmenTerpilih();

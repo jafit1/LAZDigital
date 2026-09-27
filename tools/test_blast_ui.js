@@ -555,6 +555,55 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'massal', 'antrean', 'kontak', 
   cek('mencentang satu grup langsung memperbarui hitungannya',
     /1|2/.test(sesudahPilihGrup) && /dikirimi/i.test(sesudahPilihGrup), sesudahPilihGrup);
 
+  /* JARAK KOTAK CENTANG KE NAMA GRUP, DIUKUR BUKAN DIBACA.
+
+     .penerima-baris menuliskan display:flex dan gap:12px, dan selama berbulan-
+     bulan aturan itu TIDAK pernah berlaku: barisnya sebuah <label> di dalam
+     .field, dan .field label{display:block} lebih spesifik. Hasilnya barisnya
+     tetap block, gap-nya mati, dan kotak centang menempel ke nama grup hanya
+     berjarak satu spasi teks.
+
+     Kekeliruan itu tidak menghasilkan galat apa pun dan terbaca benar saat
+     berkasnya dibaca orang. Satu-satunya yang menangkapnya adalah menanyakan
+     ke peramban berapa jaraknya sesungguhnya. */
+  const jarakPenerima = await p.evaluate(() => {
+    const b = document.querySelector('.penerima-daftar .penerima-baris');
+    if (!b) return null;
+    const k = b.querySelector('input');
+    const n = b.querySelector('.pilih-nama');
+    if (!k || !n) return null;
+    return {
+      display: getComputedStyle(b).display,
+      jarak: Math.round((n.getBoundingClientRect().left - k.getBoundingClientRect().right) * 10) / 10,
+    };
+  });
+  cek('baris penerima benar-benar flex, bukan block',
+    jarakPenerima && jarakPenerima.display === 'flex', jarakPenerima);
+  cek('kotak centang tidak menempel ke nama grup',
+    jarakPenerima && jarakPenerima.jarak >= 8, jarakPenerima);
+
+  const cariPenerima = await p.evaluate(() => {
+    const c = document.getElementById('cariPenerima');
+    if (!c) return null;
+    const semula = document.querySelectorAll('.penerima-daftar .penerima-baris:not([hidden])').length;
+    c.value = 'zzzz-tidak-ada';
+    c.dispatchEvent(new Event('input', { bubbles: true }));
+    const sesudah = Array.from(document.querySelectorAll('.penerima-daftar .penerima-baris'))
+      .filter((b) => !b.hidden);
+    const adaYangTercentang = sesudah.some((b) => { const i = b.querySelector('input'); return i && i.checked; });
+    c.value = '';
+    c.dispatchEvent(new Event('input', { bubbles: true }));
+    const kembali = document.querySelectorAll('.penerima-daftar .penerima-baris:not([hidden])').length;
+    return { semula, sisa: sesudah.length, adaYangTercentang, kembali };
+  });
+  cek('pencarian menyaring daftar grup', cariPenerima && cariPenerima.sisa < cariPenerima.semula, cariPenerima);
+  /* Yang sudah dicentang TIDAK boleh ikut hilang: menyembunyikannya membuat
+     penerima terkirim tanpa terlihat di layar. */
+  cek('grup yang sudah dicentang tetap terlihat walau tidak cocok pencarian',
+    cariPenerima && cariPenerima.adaYangTercentang === true, cariPenerima);
+  cek('mengosongkan pencarian mengembalikan seluruh daftar',
+    cariPenerima && cariPenerima.kembali === cariPenerima.semula, cariPenerima);
+
   console.log('\n=== F1. LAMPIRAN BERKAS ===');
   /* Bagian sebelumnya berpindah ke halaman lain, jadi halamannya dikembalikan
      dulu. Uji yang bergantung pada sisa keadaan uji sebelumnya akan gagal

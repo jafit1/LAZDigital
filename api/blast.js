@@ -1044,6 +1044,40 @@ tindakan['massal.daftar'] = { izin: 'pesan.lihat', async jalankan() {
   return { baris };
 } };
 
+/* RINCIAN SATU KIRIMAN MASSAL.
+
+   Daftar riwayat sengaja hanya memperlihatkan nama kiriman dan angka
+   ringkasnya. Rincian per penerima baru diambil saat kartunya dibuka: satu
+   kiriman bisa berisi ratusan baris, dan memuat semuanya untuk setiap kiriman
+   di layar berarti mengunduh ribuan baris yang tidak sedang dilihat siapa pun.
+
+   Nama penerima diambil dari kontak, bukan dari pesannya: pesan menyimpan
+   nomor, dan nomor saja membuat daftar ini tidak bisa dibaca. */
+tindakan['massal.detail'] = { izin: 'pesan.lihat', async jalankan({ data }) {
+  const massal = await db.ambil(`massal:${data.id}`);
+  if (!massal) throw new GalatAplikasi('Kiriman tidak ditemukan', 404);
+
+  const semuaPesanId = ((await db.ambil('pesan:baru')) || []).slice(0, 4000);
+  const pesan = (await db.ambilBanyak(semuaPesanId.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+  const milik = pesan.filter((p) => p.massalId === massal.id);
+
+  const kontak = await kontakLib.semuaKontak();
+  const namaLewatNomor = new Map(kontak.map((k) => [String(k.nomor), k.nama || '']));
+
+  const URUT = { gagal: 0, antre: 1, terkirim: 2, sampai: 3, dibaca: 4 };
+  const baris = milik.map((p) => ({
+    id: p.id,
+    nomor: p.nomor,
+    nama: namaLewatNomor.get(String(p.nomor)) || '',
+    status: p.status,
+    galat: p.galat || '',
+    waktu: p.dikirim || p.diserahkanPada || p.dibuat || null,
+  })).sort((a, b) => (URUT[a.status] ?? 9) - (URUT[b.status] ?? 9)
+    || String(a.nama).localeCompare(String(b.nama), 'id'));
+
+  return { nama: massal.nama, jumlah: massal.jumlah, baris };
+} };
+
 tindakan['massal.hentikan'] = { izin: 'massal.kelola', async jalankan({ data, pengguna, req }) {
   const massal = await db.ambil(`massal:${data.id}`);
   if (!massal) throw new GalatAplikasi('Kiriman tidak ditemukan', 404);
