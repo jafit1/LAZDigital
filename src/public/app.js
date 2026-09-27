@@ -68,7 +68,13 @@ var NAV_ICONS={
   penghimpunan: navIcon('<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M4 18.5h16"/>'),
   pentasyarufan: navIcon('<path d="M12 21V10"/><path d="m7.5 14.5 4.5-4.5 4.5 4.5"/><path d="M4 5.5h16"/>'),
   donatur: navIcon('<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>'),
-  laporan: navIcon('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 12.5h5"/><path d="M9.5 16.5h5"/>'),
+  /* Lembar dokumennya sengaja lebih lebar dan lebih pendek daripada bentuk
+     kertas yang sebenarnya (14x16, bukan 12x18). Alasannya kelurusan, bukan
+     selera: ikon disamakan lewat sisi terpanjangnya, jadi bentuk yang jangkung
+     akan menyusut lebarnya dan tepi kirinya masuk ke dalam. Dengan bentuk lama
+     ikon ini melesat 3 px ke kanan dari sebelas ikon lainnya, dan deretan itu
+     terbaca tidak rapi. Diukur di tools/ukur-sisi.js. */
+  laporan: navIcon('<path d="M5 4h9l5 5v11H5z"/><path d="M14 4v5h5"/><path d="M8.5 13h7"/><path d="M8.5 16.5h7"/>'),
   users: navIcon('<circle cx="9.5" cy="8" r="3.2"/><path d="M3.5 19.5a6 6 0 0 1 12 0"/><path d="M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18 14.4a6 6 0 0 1 3 5.1"/>'),
   settings: navIcon('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3.4a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 1-1.5V3.4a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"/>'),
   panel: navIcon('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/>'),

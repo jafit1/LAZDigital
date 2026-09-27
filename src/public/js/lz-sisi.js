@@ -1,20 +1,20 @@
-/* js/lz-sisi.js — perilaku bilah menu samping, satu tempat untuk semua halaman
+/* js/lz-sisi.js: perilaku bilah menu samping, satu tempat untuk semua halaman
  *
  * Dua pekerjaan, keduanya kecil, keduanya dulu tidak ada di tiga halaman.
  *
- * 1. MENUTUP TANPA HARUS MENCARI TOMBOLNYA — klik di mana saja di luar bilah,
+ * 1. MENUTUP TANPA HARUS MENCARI TOMBOLNYA: klik di mana saja di luar bilah,
  *    atau tekan Esc. Perilaku ini dulu ditulis di dalam app.js, jadi hanya
  *    berlaku di halaman utama; Broadcast, Fundraising, dan AI Asisten memakai
  *    bilah yang sama persis tetapi tidak punya jalan keluarnya.
  *    Dikecualikan: klik di dalam modal, dropdown, dan pemilih tanggal yang
- *    mengambang — menutup bilah di tengah dialog terasa acak, dan lebih buruk
+ *    mengambang. Menutup bilah di tengah dialog terasa acak, dan lebih buruk
  *    lagi, ia memindahkan hal-hal di belakang dialog yang sedang tidak dilihat.
  *    Hanya di layar >= 1024px; di bawah itu bilahnya berubah jadi bilah atas.
  *
  * 2. MENGUKUR JARAK LOGO KE TENGAH PANEL. Saat bilah dibuka, logo lembaga
  *    berpindah ke tengah panel; saat ciut ia menepi ke kiri sejajar ikon menu.
  *    Perpindahannya memakai transform supaya tidak memicu perhitungan ulang
- *    tata letak (lihat bagian 55 di styles.css) — dan transform butuh ANGKA,
+ *    tata letak (lihat bagian 55 di styles.css), dan transform butuh ANGKA,
  *    sementara jarak ke tengah bergantung pada lebar logo yang diunggah
  *    lembaga. CSS tidak bisa menghitungnya sendiri, jadi diukur di sini lalu
  *    ditaruh sebagai --u-logo-x. Sekali saat halaman siap, sekali lagi kalau
@@ -22,7 +22,7 @@
  *
  * Yang SENGAJA tidak dikerjakan berkas ini: menentukan keadaan awal bilah
  * (ciut atau terbuka). Itu tetap urusan masing-masing halaman seperti
- * sebelumnya — app.js, ai.js, blast.js, dan fund.js sudah membacanya dari
+ * sebelumnya: app.js, ai.js, blast.js, dan fund.js sudah membacanya dari
  * localStorage dengan caranya sendiri.
  *
  * Berkas ini berdiri sendiri: tidak memanggil apa pun dari skrip halaman.
@@ -46,7 +46,7 @@
 
   function simpan(ciut) {
     /* Ditunda sampai animasinya selesai. localStorage.setItem menulis ke
-       cakram secara sinkron — ia menahan utas tampilan beberapa milidetik,
+       cakram secara sinkron: ia menahan utas tampilan beberapa milidetik,
        dan kalau dipanggil bersamaan dengan pergantian class, milidetik itu
        jatuh tepat di frame pertama animasi. Frame pertama justru yang paling
        terasa kalau tersendat. */
@@ -85,7 +85,7 @@
   /* Logo harus jatuh di SUMBU YANG SAMA dengan ikon menu di bawahnya: tengah
      rel saat ciut, tengah panel saat dibuka. Dulu jaraknya dihitung dari
      padding dan margin yang ditulis di CSS, dan hasilnya meleset 3,5 px saat
-     ciut — cukup untuk terlihat goyah berjajar dengan ikon-ikon di bawahnya.
+     ciut, cukup untuk terlihat goyah berjajar dengan ikon-ikon di bawahnya.
      Sekarang diukur langsung dari kotak logonya sendiri.
 
      Dua angka, karena logonya diperkecil saat ciut: geseran yang menengahkan
@@ -108,7 +108,7 @@
        logo yang sudah dikecilkan, bukan lebar sebenarnya.
 
        HARUS dengan tanda penting. Aturan di styles.css memakai !important,
-       dan gaya sebaris tanpa penanda yang sama KALAH melawannya — diam-diam,
+       dan gaya sebaris tanpa penanda yang sama KALAH melawannya, diam-diam,
        tanpa galat. Gejalanya: saat halaman dibuka dalam keadaan ciut, yang
        terukur 56% dari lebar aslinya, dan logonya berakhir jauh meleset.
        Waktu pertama ditulis ini lolos karena halaman ujinya kebetulan selalu
@@ -120,7 +120,7 @@
     var lebar = kotak.width;
     var x0 = kotak.left - kotakNav.left;          /* relatif tepi kiri panel */
     img.style.removeProperty('transform');
-    /* Transisi dinyalakan lagi pada frame berikutnya — kalau langsung, nilai
+    /* Transisi dinyalakan lagi pada frame berikutnya, karena kalau langsung, nilai
        transform yang baru saja dipulihkan ikut dianimasikan dari "none". */
     requestAnimationFrame(function () { img.style.removeProperty('transition'); });
 
@@ -143,12 +143,12 @@
   /* --- ikon disamakan ukuran optisnya -------------------------------- */
   /* Tiap ikon digambar di kanvas 24x24, tapi isinya berbeda-beda besar: tanda
      dokumen hanya mengisi 11 satuan, roda gigi mengisi 20. Kotaknya sama, jadi
-     ikonnya memang sejajar — tapi JARAK ke teks di sebelahnya jadi berbeda
+     ikonnya memang sejajar, tapi JARAK ke teks di sebelahnya jadi berbeda
      sampai 4,5 px dari satu baris ke baris lain, dan deretan itu terbaca
      sebagai tidak rapi.
      Di sini tiap ikon diukur lalu diskalakan supaya sisi terpanjangnya sama,
-     dengan titik tengah yang sama pula. Perbandingan bentuknya tidak diubah —
-     yang bulat tetap bulat — dan ketebalan garisnya dijaga lewat
+     dengan titik tengah yang sama pula. Perbandingan bentuknya tidak diubah,
+     yang bulat tetap bulat, dan ketebalan garisnya dijaga lewat
      vector-effect:non-scaling-stroke di styles.css. */
   var SASARAN = 16.5;      /* satuan viewBox; sisa 24 - 16.5 untuk garis & napas */
 
@@ -161,9 +161,15 @@
     if (!bb || !bb.width || !bb.height) return;
 
     var s = SASARAN / Math.max(bb.width, bb.height);
-    /* Dibatasi: ikon yang bentuknya memang kecil tidak dipaksa melar sampai
-       kehilangan karakternya, dan yang besar tidak dikerdilkan berlebihan. */
-    s = Math.max(0.82, Math.min(1.3, s));
+    /* Dibatasi supaya ikon yang bentuknya memang kecil tidak dipaksa melar
+       sampai kehilangan karakternya.
+
+       Batas bawahnya 0,74 dan bukan 0,82: roda gigi Pengaturan digambar
+       setinggi 21,9 satuan, hampir memenuhi kanvasnya, sehingga dengan batas
+       lama ia tidak pernah sampai ke ukuran sasaran dan tetap 1,2 px lebih
+       lebar daripada ikon lain. Tepi kirinya menonjol keluar dari deretan,
+       dan itu terlihat. Diukur di tools/ukur-sisi.js. */
+    s = Math.max(0.74, Math.min(1.3, s));
 
     var px = vb.x + vb.width / 2, py = vb.y + vb.height / 2;
     var cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
@@ -190,7 +196,7 @@
     var img = a.querySelector('.tn-brand .logo-img');
     if (img && !img.complete) img.addEventListener('load', ukurLogo, { once: true });
 
-    /* Logonya digambar ulang tiap applyBranding() dipanggil — saat lembaga
+    /* Logonya digambar ulang tiap applyBranding() dipanggil, saat lembaga
        mengganti logo, misalnya. Pengamat ini yang menangkapnya; tanpa itu
        logo baru akan memakai jarak milik logo lama. */
     var kotak = document.getElementById('brandBox');
@@ -202,7 +208,7 @@
       }).observe(kotak, { childList: true, subtree: true });
     }
 
-    /* Menu digambar belakangan — setelah masuk, dan digambar ulang tiap kali
+    /* Menu digambar belakangan: setelah masuk, dan digambar ulang tiap kali
        hak akses berubah. Pengamat ini yang menangkapnya; tanpa itu ikon yang
        baru digambar tidak ikut diratakan. */
     ratakanIkon();

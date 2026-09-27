@@ -42,6 +42,7 @@ call :jalankan "Alat ekspor Redis"              tools\test_ekspor_redis.js
 call :jalankan "Lambang & ikon situs"            tools\test_ikon.js
 call :jalankan "Bilah menu: logo & tombol keluar" tools\test_sidebar_ui.js
 call :jalankan "Gerak buka/tutup bilah menu"     tools\test_sidebar_gerak.js
+call :jalankan "Kelurusan ikon bilah menu"       tools\ukur-sisi.js
 call :jalankan "Skala tampilan di semua perangkat" tools\test_skala_ui.js
 call :jalankan "Apa yang sudah sampai di server" tools\uji_cek_deploy.js
 
