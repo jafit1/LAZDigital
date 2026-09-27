@@ -140,6 +140,8 @@ function ikonNav(isi) {
   return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + isi + '</svg>';
 }
 const IKON = {
+  /* Dua orang: yang dilihat di sini memang orangnya, bukan uangnya. */
+  fundraiser: ikonNav('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.8 5.8 0 0 1 11 0"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.2"/><path d="M17.6 14a5.8 5.8 0 0 1 2.9 5.5"/>'),
   dasbor: ikonNav('<rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8"/>'),
   donatur: ikonNav('<circle cx="9.5" cy="8" r="3.2"/><path d="M3.5 19.5a6 6 0 0 1 12 0"/><path d="M16.5 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M18 14.4a6 6 0 0 1 3 5.1"/>'),
   himpunan: ikonNav('<path d="M12 3v18"/><path d="M16 7a3 3 0 0 0-3-2h-2a2.5 2.5 0 0 0 0 5h2a2.5 2.5 0 0 1 0 5h-2a3 3 0 0 1-3-2"/>'),
@@ -153,11 +155,15 @@ const MENU = [
   { kode: 'dasbor', label: 'Dashboard', izin: 'fund.dasbor' },
   { kode: 'donatur', label: 'Donatur', izin: 'donatur.lihat' },
   { kode: 'himpunan', label: 'Penghimpunan', izin: 'himpunan.lihat' },
+  /* Hanya untuk pengawas, dan yang menegakkannya server (wajibLihatSemua di
+     api/fund.js). Penyembunyian menu di sini cuma supaya tidak ada yang
+     menekan pintu yang memang terkunci. */
+  { kode: 'fundraiser', label: 'Fundraiser', izin: 'himpunan.lihat', pengawas: true },
   { kode: 'cocok', label: 'Cocokkan', izin: 'cocok.lihat' },
   { kode: 'laporan', label: 'Laporan', izin: 'laporan.lihat' },
   { kode: 'akun', label: 'Pengaturan', izin: 'akun.lihat' },
 ];
-const menuBoleh = (m) => bisa(m.izin);
+const menuBoleh = (m) => bisa(m.izin) && (!m.pengawas || negara.lihatSemua);
 
 function gambarMenu() {
   const nav = $('#nav');
@@ -814,7 +820,7 @@ function formJadwal(k, el) {
 halaman.himpunan = {
   judul: 'Penghimpunan',
   sub: 'Catatan tiap donasi yang diambil di lapangan',
-  saring: { dari: '', sampai: '', status: '', cari: '', halaman: 1 },
+  saring: { dari: '', sampai: '', status: '', cari: '', fundraiser: '', halaman: 1 },
   async gambar(el) {
     const s = halaman.himpunan.saring;
     el.innerHTML = `
@@ -828,6 +834,7 @@ halaman.himpunan = {
             <option value="diambil" ${s.status === 'diambil' ? 'selected' : ''}>Berisi</option>
             <option value="kosong" ${s.status === 'kosong' ? 'selected' : ''}>Kosong</option>
           </select></span>
+          ${kotakPilihFundraiser('fundraiserH', s.fundraiser)}
         </div>
         <div id="tabelH">${rangka(6)}</div>
       </div>`;
@@ -836,6 +843,9 @@ halaman.himpunan = {
     try { d = await rpc('himpunan.daftar', s); } catch (e) { $('#tabelH', el).innerHTML = galatKotak(e.message); return; }
 
     $('#statusH', el).onchange = (ev) => { s.status = ev.target.value; s.halaman = 1; halaman.himpunan.gambar(el); };
+    isiPilihFundraiser(el, 'fundraiserH', s.fundraiser, (v) => {
+      s.fundraiser = v; s.halaman = 1; halaman.himpunan.gambar(el);
+    });
     $('#dariH', el).onchange = (ev) => { s.dari = ev.target.value; s.halaman = 1; halaman.himpunan.gambar(el); };
     $('#sampaiH', el).onchange = (ev) => { s.sampai = ev.target.value; s.halaman = 1; halaman.himpunan.gambar(el); };
     let jeda;
@@ -877,15 +887,233 @@ halaman.himpunan = {
 };
 
 // ------------------------------------------------------------ Cocokkan
+/* ============================================================ PENYARING FUNDRAISER
+ *
+ * Satu daftar, dipakai empat halaman. Diambil sekali lalu disimpan, karena
+ * daftar orang tidak berubah sepanjang satu kali buka halaman, sedangkan
+ * berpindah tanggal bisa terjadi sepuluh kali semenit.
+ *
+ * Yang TIDAK dilakukan: menyaring di sisi tampilan. Penyaringnya dikirim ke
+ * server dan server yang mempersempit lingkupnya. Menyaring di sini berarti
+ * data seluruh fundraiser tetap diunduh ke peramban siapa pun yang membuka
+ * halaman, dan "tidak ditampilkan" bukan pengaman.
+ */
+let daftarFundraiserTersimpan = null;
+
+async function daftarFundraiser() {
+  if (daftarFundraiserTersimpan) return daftarFundraiserTersimpan;
+  try {
+    const d = await rpc('fundraiser.daftar', {});
+    daftarFundraiserTersimpan = d.baris || [];
+  } catch (_) {
+    /* Bukan alasan menggagalkan halamannya: penyaringnya saja yang tidak
+       muncul, dan halaman tetap memperlihatkan seluruh data seperti biasa. */
+    daftarFundraiserTersimpan = [];
+  }
+  return daftarFundraiserTersimpan;
+}
+
+function kotakPilihFundraiser(id, terpilih) {
+  if (!negara.lihatSemua) return '';
+  return `<span style="width:190px;flex:none"><select id="${id}">
+    <option value="">Semua fundraiser</option>
+  </select></span>`;
+}
+
+async function isiPilihFundraiser(el, id, terpilih, saatUbah) {
+  const kotak = $('#' + id, el);
+  if (!kotak) return;
+  const baris = await daftarFundraiser();
+  kotak.innerHTML = '<option value="">Semua fundraiser</option>'
+    + baris.map((b) => `<option value="${H(b.userId)}" ${b.userId === terpilih ? 'selected' : ''}>${H(b.nama)}</option>`).join('');
+  kotak.onchange = (ev) => saatUbah(ev.target.value);
+}
+
+// ------------------------------------------------------------ Fundraiser
+/* DAFTAR PENGGALANG DANA, SATU BARIS PER ORANG.
+ *
+ * Superadmin sebenarnya sudah melihat data semua orang di halaman Donatur,
+ * Penghimpunan, dan Cocokkan. Masalahnya semua tercampur jadi satu daftar
+ * panjang, sehingga pertanyaan yang paling sering ditanyakan pengurus tidak
+ * bisa dijawab tanpa memindai ratusan baris sambil menghitung sendiri: "Pak
+ * Slamet bulan ini dapat berapa, dan apakah setorannya sudah masuk buku kas?"
+ *
+ * ANGKA YANG DITARUH PALING MENONJOL adalah rupiah yang BELUM cocok, bukan
+ * total yang terkumpul. Total yang besar tidak berarti apa-apa kalau
+ * setengahnya belum bisa dipertanggungjawabkan ke buku kas, dan angka itulah
+ * yang perlu ditindaklanjuti hari ini.
+ */
+halaman.fundraiser = {
+  judul: 'Fundraiser',
+  sub: 'Semua penggalang dana beserta setorannya',
+  saring: { dari: '', sampai: '', buka: '' },
+
+  async gambar(el) {
+    const s = halaman.fundraiser.saring;
+    el.innerHTML = rangka(6);
+
+    let d;
+    try { d = await rpc('fundraiser.daftar', { dari: s.dari, sampai: s.sampai }); }
+    catch (e) { el.innerHTML = galatKotak(e.message); return; }
+    daftarFundraiserTersimpan = d.baris || [];
+
+    const r = d.ringkas || {};
+    el.innerHTML = `
+      <div class="toolbar fund-alat" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <input type="date" id="dariF" class="search" value="${H(s.dari)}" style="width:auto" title="Dari tanggal">
+        <input type="date" id="sampaiF" class="search" value="${H(s.sampai)}" style="width:auto" title="Sampai tanggal">
+        <span class="muted" style="font-size:12px">${fmtAngka(r.orang || 0)} orang</span>
+      </div>
+      ${d.galatUsers ? `<div class="card" style="border-color:var(--amber,#d97706)">
+        <strong>Daftar akun tidak terbaca:</strong> <span class="muted">${H(d.galatUsers)}.
+        Angkanya tetap benar, hanya nama lengkapnya yang mungkin kurang.</span></div>` : ''}
+      <div class="fund-kpi">
+        <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Terkumpul</div>
+          <div style="font-size:20px;font-weight:800">${rupiah(r.total || 0)}</div></div>
+        <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Belum cocok</div>
+          <div style="font-size:20px;font-weight:800;color:${(r.nilaiBelumCocok || 0) > 0 ? 'var(--red)' : 'var(--green,#059669)'}">${rupiah(r.nilaiBelumCocok || 0)}</div>
+          <div class="muted" style="font-size:11px">${fmtAngka(r.belumCocok || 0)} catatan</div></div>
+        <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Sudah cocok</div>
+          <div style="font-size:20px;font-weight:800">${fmtAngka(r.sudahCocok || 0)}</div></div>
+        <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Belum menyetor</div>
+          <div style="font-size:20px;font-weight:800">${fmtAngka(r.belumMenyetor || 0)}</div>
+          <div class="muted" style="font-size:11px">dari ${fmtAngka(r.orang || 0)} akun</div></div>
+      </div>
+      ${kartu(`
+        <h3>Penggalang dana</h3>
+        <div class="desc">Klik satu baris untuk melihat seluruh transaksinya.
+          Akun yang sudah dibuatkan tetapi belum menyetor tetap ditampilkan.</div>
+        ${(d.baris || []).length ? `<div class="table-wrap"><table>
+          <thead><tr>
+            <th>Nama</th><th>Nama fundraising</th>
+            <th style="text-align:right">Kunjungan</th>
+            <th style="text-align:right">Terkumpul</th>
+            <th style="text-align:right">Belum cocok</th>
+            <th>Terakhir</th><th></th>
+          </tr></thead>
+          <tbody>${d.baris.map((b) => `<tr data-buka="${H(b.userId)}" style="cursor:pointer">
+            <td style="font-weight:600">${H(b.nama)}
+              ${!b.aktif ? '<span class="badge grey" title="Akun dinonaktifkan">nonaktif</span>' : ''}
+              ${!b.punyaAkun ? '<span class="badge amber" title="Akunnya sudah tidak ada, catatannya masih">akun terhapus</span>'
+      : (!b.dicentang ? '<span class="badge amber" title="Centang modul fundraising sudah dicabut">akses dicabut</span>' : '')}
+            </td>
+            <td class="muted" style="font-size:12px">${H(b.namaFundraising || '—')}</td>
+            <td style="text-align:right">${fmtAngka(b.berhasil)}<span class="muted" style="font-size:11px">/${fmtAngka(b.kunjungan)}</span></td>
+            <td style="text-align:right;font-weight:600">${rupiah(b.total)}</td>
+            <td style="text-align:right;font-weight:600;color:${b.nilaiBelumCocok > 0 ? 'var(--red)' : 'var(--muted)'}">
+              ${b.nilaiBelumCocok > 0 ? rupiah(b.nilaiBelumCocok) : '—'}
+              ${b.belumCocok ? `<div class="muted" style="font-size:11px">${fmtAngka(b.belumCocok)} catatan</div>` : ''}</td>
+            <td class="muted" style="font-size:12px">${b.terakhir ? fmtTanggal(b.terakhir) : '—'}</td>
+            <td style="text-align:right"><button class="btn btn-sm btn-ghost" data-buka2="${H(b.userId)}">lihat</button></td>
+          </tr>`).join('')}</tbody></table></div>`
+      : kosong('Belum ada akun fundraising yang dicentang.', '\u{1F465}')}
+      `)}
+      <div id="rincianF"></div>`;
+
+    $('#dariF', el).onchange = (ev) => { s.dari = ev.target.value; halaman.fundraiser.gambar(el); };
+    $('#sampaiF', el).onchange = (ev) => { s.sampai = ev.target.value; halaman.fundraiser.gambar(el); };
+    $$('[data-buka], [data-buka2]', el).forEach((x) => {
+      x.onclick = (ev) => {
+        ev.stopPropagation();
+        const uid = x.dataset.buka || x.dataset.buka2;
+        s.buka = s.buka === uid ? '' : uid;
+        gambarRincianFundraiser(el);
+      };
+    });
+
+    if (s.buka) await gambarRincianFundraiser(el);
+  },
+};
+
+async function gambarRincianFundraiser(el) {
+  const s = halaman.fundraiser.saring;
+  const wadah = $('#rincianF', el);
+  if (!wadah) return;
+  if (!s.buka) { wadah.innerHTML = ''; return; }
+  wadah.innerHTML = rangka(4);
+
+  let d;
+  try { d = await rpc('fundraiser.detail', { userId: s.buka, dari: s.dari, sampai: s.sampai }); }
+  catch (e) { wadah.innerHTML = galatKotak(e.message); return; }
+
+  const f = d.fundraiser;
+  wadah.innerHTML = kartu(`
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      ${f.foto ? `<img src="${H(f.foto)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover">`
+    : `<span class="fund-awal">${H(String(f.nama || '?').trim().charAt(0).toUpperCase())}</span>`}
+      <div style="flex:1;min-width:150px">
+        <h3 style="margin:0">${H(f.nama)}</h3>
+        <div class="muted" style="font-size:12px">${H(f.namaFundraising || '—')}${f.telepon ? ' · ' + H(f.telepon) : ''}</div>
+      </div>
+      <button class="btn btn-sm" id="tutupF" type="button">Tutup</button>
+    </div>
+    <div class="fund-kpi" style="margin-top:12px">
+      <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Terkumpul</div>
+        <div style="font-size:18px;font-weight:800">${rupiah(f.total)}</div></div>
+      <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Kunjungan</div>
+        <div style="font-size:18px;font-weight:800">${fmtAngka(f.berhasil)}<span class="muted" style="font-size:12px">/${fmtAngka(f.kunjungan)}</span></div></div>
+      <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Cocok otomatis</div>
+        <div style="font-size:18px;font-weight:800">${fmtAngka(f.cocokOtomatis)}</div>
+        <div class="muted" style="font-size:11px">${fmtAngka(f.cocokManual)} ditandai petugas</div></div>
+      <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Belum cocok</div>
+        <div style="font-size:18px;font-weight:800;color:${f.nilaiBelumCocok > 0 ? 'var(--red)' : 'var(--green,#059669)'}">${rupiah(f.nilaiBelumCocok)}</div></div>
+    </div>
+    ${(d.baris || []).length ? `<div class="table-wrap" style="margin-top:12px"><table>
+      <thead><tr><th>Tanggal</th><th>Donatur</th><th>Peruntukan</th>
+        <th style="text-align:right">Nominal</th><th>Cocok</th></tr></thead>
+      <tbody>${d.baris.map((b) => `<tr>
+        <td class="muted" style="font-size:12px">${fmtTanggal(b.tanggal)}</td>
+        <td style="font-weight:600">${H(b.donaturNama)}</td>
+        <td>${H(b.peruntukan || '—')}</td>
+        <td style="text-align:right;font-weight:600">${b.status === 'diambil' ? rupiah(b.jumlah) : '<span class="muted">kosong</span>'}</td>
+        <td>${lencanaCocok(b)}</td>
+      </tr>`).join('')}</tbody></table></div>`
+    : kosong('Belum ada catatan pada rentang ini.', '\u{1F9FE}')}`);
+
+  const t = $('#tutupF', el);
+  if (t) t.onclick = () => { s.buka = ''; gambarRincianFundraiser(el); };
+  wadah.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* Lencana status cocok, dipakai halaman Fundraiser dan Cocokkan.
+   Yang otomatis SENGAJA dibedakan warnanya dari yang ditandai petugas: kalau
+   suatu saat aturan pencocokannya keliru, yang perlu diperiksa ulang harus
+   bisa dikenali sekilas, bukan dengan membuka satu per satu. */
+function lencanaCocok(b) {
+  const c = b.cocok || {};
+  if (!c.sudah) return '<span class="badge grey">belum</span>';
+  if (c.otomatis) return `<span class="badge blue" title="Dicocokkan sistem: nama, nominal, dan tanggal sama persis">otomatis · ${H(c.ref || '')}</span>`;
+  return `<span class="badge green" title="Ditandai ${H(c.oleh || 'petugas')}">✓ ${H(c.ref || 'cocok')}</span>`;
+}
+
 halaman.cocok = {
   judul: 'Cocokkan',
   sub: 'Pertemukan catatan fundraising dengan buku penghimpunan utama',
-  saring: { dari: '', sampai: '' },
+  saring: { dari: '', sampai: '', fundraiser: '' },
+  /* Rentang yang pencocokan otomatisnya sudah dijalankan. Tanpa penanda ini,
+     tiap penggambaran ulang memanggil pencocokan lagi — dan penggambaran ulang
+     terjadi setiap kali satu baris ditandai. */
+  sudahOtomatis: new Set(),
   async gambar(el) {
     const s = halaman.cocok.saring;
     el.innerHTML = rangka(5);
     let d;
     try { d = await rpc('cocok.daftar', s); } catch (e) { el.innerHTML = galatKotak(e.message); return; }
+
+    /* PENCOCOKAN OTOMATIS DIJALANKAN SEKALI PER RENTANG, bukan dari dalam
+       tindakan baca. Memindahkannya ke server di dalam cocok.daftar akan
+       membuat sekadar MEMBUKA halaman mengubah pembukuan, dan pengguna yang
+       hanya boleh melihat ikut menuliskannya tanpa pernah diberi hak itu. */
+    const kunciRentang = [s.dari, s.sampai, s.fundraiser].join('|');
+    if (bisa('cocok.tandai') && d.ringkas.siapOtomatis > 0
+        && !halaman.cocok.sudahOtomatis.has(kunciRentang)) {
+      halaman.cocok.sudahOtomatis.add(kunciRentang);
+      try {
+        const h = await rpc('cocok.otomatis', s);
+        if (h.ditandai) toast(h.pesan);
+        d = await rpc('cocok.daftar', s);
+      } catch (e) { toast(e.message, 'galat'); }
+    }
 
     const r = d.ringkas;
     const selisihWarna = r.selisih === 0 ? 'var(--green,#059669)' : 'var(--red)';
@@ -893,27 +1121,37 @@ halaman.cocok = {
       <div class="toolbar fund-alat" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <input type="date" id="dariC" class="search" value="${H(s.dari)}" style="width:auto" title="Dari tanggal">
         <input type="date" id="sampaiC" class="search" value="${H(s.sampai)}" style="width:auto" title="Sampai tanggal">
+        ${kotakPilihFundraiser('fundraiserC', s.fundraiser)}
         <span class="muted" style="font-size:12px">Nama fundraising: <strong>${H(d.namaFundraising || '—')}</strong></span>
+        ${bisa('cocok.tandai') && d.ringkas.cocokOtomatis
+    ? '<button class="btn btn-sm btn-ghost" id="batalOto" type="button" title="Hanya yang ditandai sistem; penandaan petugas tidak disentuh">Batalkan '
+      + d.ringkas.cocokOtomatis + ' cocok otomatis</button>' : ''}
       </div>
       ${d.galatMain ? `<div class="card" style="border-color:var(--amber,#d97706)"><strong>Buku utama tidak terbaca:</strong> <span class="muted">${H(d.galatMain)}. Sisi fundraising di bawah tetap berguna.</span></div>` : ''}
       <div class="fund-kpi">
         <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Total sisi fundraising</div><div style="font-size:20px;font-weight:800">${rupiah(r.totalFund)}</div><div class="muted" style="font-size:11px">${fmtAngka(r.jumlahFund)} catatan</div></div>
         <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Total di buku utama</div><div style="font-size:20px;font-weight:800">${rupiah(r.totalMain)}</div><div class="muted" style="font-size:11px">${fmtAngka(r.jumlahMain)} baris</div></div>
         <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Selisih</div><div style="font-size:20px;font-weight:800;color:${selisihWarna}">${rupiah(Math.abs(r.selisih))}</div></div>
-        <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Sudah dicocokkan</div><div style="font-size:20px;font-weight:800">${fmtAngka(r.sudahCocok)}<span class="muted" style="font-size:13px">/${fmtAngka(r.jumlahFund)}</span></div></div>
+        <div class="kpi-v2 kpi-diam"><div class="muted" style="font-size:12px">Sudah dicocokkan</div>
+          <div style="font-size:20px;font-weight:800">${fmtAngka(r.sudahCocok)}<span class="muted" style="font-size:13px">/${fmtAngka(r.jumlahFund)}</span></div>
+          <div class="muted" style="font-size:11px">${fmtAngka(r.cocokOtomatis)} otomatis · ${fmtAngka(r.cocokManual)} petugas</div></div>
       </div>
       ${kartu(`
         <h3>Catatan fundraising</h3>
-        <div class="desc">Tandai baris yang sudah masuk buku kas resmi. Usulan padanan dari buku utama muncul otomatis, tapi penandaan tetap manual.</div>
+        <div class="desc">Yang nama, nominal, dan tanggalnya cocok persis ditandai sendiri oleh sistem
+          dan diberi label <span class="badge blue">otomatis</span>. Sisanya diberi alasan kenapa belum cocok,
+          dan ditandai sendiri oleh petugas. Yang kemungkinannya lebih dari satu sengaja TIDAK
+          dicocokkan sistem: salah cocok pada uang orang tidak membuat totalnya terlihat salah.</div>
         ${d.fund.length ? `<div class="table-wrap"><table><thead><tr><th>Donatur</th><th>Peruntukan</th><th style="text-align:right">Nominal</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
         <tbody>${d.fund.map((f) => `<tr>
           <td style="font-weight:600">${H(f.donaturNama)}</td>
           <td>${H(f.peruntukan)}</td>
           <td style="text-align:right;font-weight:600">${rupiah(f.jumlah)}</td>
           <td class="muted" style="font-size:12px">${fmtTanggal(f.tanggal)}</td>
-          <td>${f.cocok.sudah
-      ? `<span class="badge green">✓ ${H(f.cocok.ref || 'cocok')}</span>`
-      : (f.usul ? `<span class="badge amber" title="Usulan padanan">usul: ${H(f.usul.noKwitansi || f.usul.id)}</span>` : '<span class="badge grey">belum</span>')}</td>
+          <td>${f.cocok.sudah ? lencanaCocok(f)
+      : (f.usul ? `<span class="badge amber" title="Usulan padanan">usul: ${H(f.usul.noKwitansi || f.usul.id)}</span>`
+        : `<span class="badge grey" title="${H(f.alasanTeks || '')}">belum</span>`)}
+      ${!f.cocok.sudah && f.alasanTeks ? `<div class="muted" style="font-size:11px;margin-top:2px">${H(f.alasanTeks)}</div>` : ''}</td>
           <td class="actions-cell" style="text-align:right;white-space:nowrap">
             ${f.cocok.sudah
       ? `<button data-batal="${f.id}" class="btn btn-ghost btn-sm">batal</button>`
@@ -923,6 +1161,20 @@ halaman.cocok = {
 
     $('#dariC', el).onchange = (ev) => { s.dari = ev.target.value; halaman.cocok.gambar(el); };
     $('#sampaiC', el).onchange = (ev) => { s.sampai = ev.target.value; halaman.cocok.gambar(el); };
+    isiPilihFundraiser(el, 'fundraiserC', s.fundraiser, (v) => { s.fundraiser = v; halaman.cocok.gambar(el); });
+    const bo = $('#batalOto', el);
+    if (bo) bo.onclick = () => konfirmasi('Batalkan pencocokan otomatis',
+      'Hanya penandaan yang dibuat sistem pada rentang ini yang dibatalkan.'
+      + ' Yang ditandai petugas tidak disentuh.', async () => {
+        try {
+          const h = await rpc('cocok.batalOtomatis', s);
+          /* Penanda rentang dilepas juga, kalau tidak pencocokan otomatisnya
+             tidak akan pernah jalan lagi sampai halaman dimuat ulang. */
+          halaman.cocok.sudahOtomatis.clear();
+          toast(h.pesan);
+          halaman.cocok.gambar(el);
+        } catch (e) { toast(e.message, 'galat'); }
+      }, 'Ya, batalkan');
     $$('[data-tandai]', el).forEach((b) => b.onclick = () => {
       const f = d.fund.find((x) => x.id === b.dataset.tandai);
       modal('Tandai sudah masuk buku utama', `
@@ -948,7 +1200,7 @@ halaman.cocok = {
 halaman.laporan = {
   judul: 'Laporan',
   sub: 'Rekap penghimpunan lapangan',
-  saring: { dari: '', sampai: '' },
+  saring: { dari: '', sampai: '', fundraiser: '' },
   async gambar(el) {
     const s = halaman.laporan.saring;
     el.innerHTML = rangka(5);
@@ -965,6 +1217,7 @@ halaman.laporan = {
       <div class="toolbar fund-alat" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <input type="date" id="dariL" class="search" value="${H(s.dari)}" style="width:auto" title="Dari tanggal">
         <input type="date" id="sampaiL" class="search" value="${H(s.sampai)}" style="width:auto" title="Sampai tanggal">
+        ${kotakPilihFundraiser('fundraiserL', s.fundraiser)}
         <button id="cetakL" class="btn btn-sm">Cetak / PDF</button>
       </div>
       <div class="fund-kpi">
@@ -984,6 +1237,7 @@ halaman.laporan = {
 
     $('#dariL', el).onchange = (ev) => { s.dari = ev.target.value; halaman.laporan.gambar(el); };
     $('#sampaiL', el).onchange = (ev) => { s.sampai = ev.target.value; halaman.laporan.gambar(el); };
+    isiPilihFundraiser(el, 'fundraiserL', s.fundraiser, (v) => { s.fundraiser = v; halaman.laporan.gambar(el); });
     $('#cetakL', el).onclick = () => window.print();
   },
 };

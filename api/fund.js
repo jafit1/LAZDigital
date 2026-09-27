@@ -14,6 +14,8 @@ const himpunanLib = require('../lib/fund/himpunan');
 const akunLib = require('../lib/fund/akun');
 const sesi = require('../lib/fund/sesi-laz');
 const fu = require('../lib/fund/util');
+const pencocok = require('../lib/fund/pencocok');
+const fundraiserLib = require('../lib/fund/fundraiser');
 const rpc = require('./rpc.js');
 
 const { sukses, gagal, bacaBody, GalatAplikasi } = util;
@@ -26,6 +28,29 @@ const tindakan = {};
    pustaka, supaya tidak ada tindakan yang lupa menyaring lalu bocor. */
 function lingkup(pengguna) {
   return { pemilik: String(pengguna.id), lihatSemua: sesi.lihatSemua(pengguna) };
+}
+
+/* Menyempitkan lingkup ke SATU fundraiser, dipakai penyaring di halaman
+ * Penghimpunan, Cocokkan, dan Laporan.
+ *
+ * Yang dijaga: penyaring ini hanya boleh MEMPERSEMPIT, tidak pernah
+ * memperluas. Fundraiser biasa yang mengirimkan id rekannya tetap melihat
+ * datanya sendiri, karena lihatSemua-nya tidak ikut dinyalakan. Kalau
+ * penyaringnya dipercaya begitu saja, satu parameter di alamat sudah cukup
+ * untuk membaca setoran orang lain. */
+function lingkupTersaring(pengguna, data) {
+  const l = lingkup(pengguna);
+  const pilih = String((data && data.fundraiser) || '').trim();
+  if (!pilih || !l.lihatSemua) return l;
+  return { pemilik: pilih, lihatSemua: false, disaring: pilih };
+}
+
+/* Halaman yang memang hanya untuk pengawas. Ditolak di server, bukan sekadar
+   disembunyikan menunya. */
+function wajibLihatSemua(pengguna) {
+  if (!sesi.lihatSemua(pengguna)) {
+    throw new GalatAplikasi('Bagian ini hanya untuk koordinator dan superadmin.', 403);
+  }
 }
 
 // ---------------------------------------------------------------- pembantu hapus
@@ -209,7 +234,7 @@ tindakan['ambil.reschedule'] = { izin: 'donatur.ubah', async jalankan({ data, pe
 
 // ================================================================ PENGHIMPUNAN
 tindakan['himpunan.daftar'] = { izin: 'himpunan.lihat', async jalankan({ data, pengguna }) {
-  const l = lingkup(pengguna);
+  const l = lingkupTersaring(pengguna, data);
   const isi = await himpunanLib.saring({
     ...l,
     dari: fu.tglValid(data.dari) ? data.dari : '',
@@ -224,6 +249,7 @@ tindakan['himpunan.daftar'] = { izin: 'himpunan.lihat', async jalankan({ data, p
     ringkas: himpunanLib.ringkas(isi),
     halaman, perHalaman,
     baris: isi.slice((halaman - 1) * perHalaman, halaman * perHalaman),
+    disaring: l.disaring || '',
   };
 } };
 
@@ -251,25 +277,23 @@ function bacaSheet(dbLaz, nama) {
 
 const samakan = (s) => String(s || '').trim().toLowerCase();
 
-tindakan['cocok.daftar'] = { izin: 'cocok.lihat', async jalankan({ data, pengguna }) {
-  const l = lingkup(pengguna);
-  const dari = fu.tglValid(data.dari) ? data.dari : '';
-  const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
-
-  /* Sisi fundraising: hanya kunjungan berisi (diambil). Kunjungan kosong tidak
-     punya padanan di buku kas, jadi tidak ikut dicocokkan. */
-  const fund = (await himpunanLib.saring({ ...l, dari, sampai, status: 'diambil' }));
-
-  /* Sisi buku utama: baris Penghimpunan LAZDigital yang kolom fundraising-nya
-     cocok dengan nama fundraising akun ini. Koordinator melihat semua nama. */
-  const namaKu = await akunLib.namaFundraising(pengguna);
-  let mainRows = [];
+/* Sisi buku utama: baris Penghimpunan LAZDigital yang kolom fundraising-nya
+ * cocok dengan nama fundraising akun ini. Koordinator dan superadmin melihat
+ * semua nama, tetapi kalau penyaring per orang sedang aktif, yang dibaca juga
+ * dipersempit ke nama fundraising orang itu — kalau tidak, satu setoran bisa
+ * dicocokkan dengan kwitansi milik rekannya.
+ *
+ * Dipisah jadi fungsi karena dipakai dua kali: menampilkan daftar, dan
+ * menjalankan pencocokan otomatis. Dua salinan cara membaca buku kas adalah
+ * dua kesempatan untuk berbeda tanpa ada yang sadar. */
+async function bacaBukuUtama({ dari, sampai, lingkup: l, namaKu, namaSaring = '' }) {
   try {
     const r = await rpc._internal.muat();
     const semua = bacaSheet(r.db, 'Penghimpunan');
-    mainRows = semua.filter((row) => {
+    const baris = semua.filter((row) => {
       if (dari && String(row.tanggal) < dari) return false;
       if (sampai && String(row.tanggal) > sampai) return false;
+      if (namaSaring) return samakan(row.fundraising) === samakan(namaSaring);
       if (l.lihatSemua) return String(row.fundraising || '').trim() !== '';
       return samakan(row.fundraising) === samakan(namaKu);
     }).map((row) => ({
@@ -281,34 +305,52 @@ tindakan['cocok.daftar'] = { izin: 'cocok.lihat', async jalankan({ data, penggun
       jenisDana: row.jenisDana,
       fundraising: row.fundraising,
     }));
+    return { baris, galat: '' };
   } catch (e) {
     /* Buku utama tak terbaca (mis. basis data LAZDigital belum tersambung di
-       lingkungan ini) BUKAN alasan menggagalkan halaman — sisi fundraising
-       tetap berguna sendiri. Kesalahannya disampaikan, tidak ditelan. */
-    mainRows = [];
-    var galatMain = e.message || 'Buku utama tidak terbaca';
+       lingkungan ini) BUKAN alasan menggagalkan halaman: sisi fundraising tetap
+       berguna sendiri. Kesalahannya disampaikan, tidak ditelan. */
+    return { baris: [], galat: e.message || 'Buku utama tidak terbaca' };
   }
+}
 
-  /* Tebakan padanan untuk baris fundraising yang BELUM ditandai cocok: satu
-     baris buku utama dengan nominal sama dan nama mirip dalam rentang ±3 hari.
-     Hanya usulan — penandaan tetap manual, karena salah cocok pada uang orang
-     bukan hal yang boleh ditebak lalu ditulis diam-diam. */
-  const dipakai = new Set();
+tindakan['cocok.daftar'] = { izin: 'cocok.lihat', async jalankan({ data, pengguna }) {
+  const l = lingkupTersaring(pengguna, data);
+  const dari = fu.tglValid(data.dari) ? data.dari : '';
+  const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
+
+  /* Sisi fundraising: hanya kunjungan berisi (diambil). Kunjungan kosong tidak
+     punya padanan di buku kas, jadi tidak ikut dicocokkan. */
+  const fund = (await himpunanLib.saring({ ...l, dari, sampai, status: 'diambil' }));
+
+  const namaKu = await akunLib.namaFundraising(pengguna);
+  const buku = await bacaBukuUtama({ dari, sampai, lingkup: l, namaKu });
+  const mainRows = buku.baris;
+  const galatMain = buku.galat;
+
+  /* Padanan dihitung oleh satu mesin yang sama dengan yang dipakai pencocokan
+     otomatis (lib/fund/pencocok.js). Dulu aturannya ditulis dua kali, di sini
+     dan di tempat penandaan, dan dua salinan aturan uang adalah dua kesempatan
+     untuk berbeda tanpa ada yang sadar. */
+  const hasil = pencocok.padankan(fund, mainRows);
+  const usulLewatId = new Map(hasil.pasangan.map((x) => [x.fundId, x.main]));
   const fundOut = fund.map((f) => {
-    let usul = null;
-    if (!f.cocok.sudah) {
-      const kandidat = mainRows.filter((m) => !dipakai.has(m.id)
-        && m.jumlah === Number(f.jumlah)
-        && samakan(m.nama) === samakan(f.donaturNama)
-        && Math.abs(new Date(m.tanggal) - new Date(f.tanggal)) <= 3 * 864e5);
-      if (kandidat.length === 1) { usul = kandidat[0]; dipakai.add(kandidat[0].id); }
-    }
-    return { ...f, usul };
+    const kode = hasil.alasan.get(f.id) || '';
+    return {
+      ...f,
+      usul: usulLewatId.get(f.id) || null,
+      /* Yang TIDAK cocok diberi sebabnya, bukan dibiarkan kosong. Daftar
+         "belum cocok" tanpa alasan cuma memindahkan pekerjaan menebak dari
+         mesin ke petugas. */
+      alasan: kode,
+      alasanTeks: kode ? (pencocok.KETERANGAN[kode] || '') : '',
+    };
   });
 
   const totalFund = fund.reduce((s, f) => s + (Number(f.jumlah) || 0), 0);
   const totalMain = mainRows.reduce((s, m) => s + m.jumlah, 0);
   const sudahCocok = fund.filter((f) => f.cocok.sudah).length;
+  const otomatis = fund.filter((f) => f.cocok.sudah && f.cocok.otomatis).length;
 
   return {
     fund: fundOut,
@@ -317,8 +359,10 @@ tindakan['cocok.daftar'] = { izin: 'cocok.lihat', async jalankan({ data, penggun
       totalFund, totalMain, selisih: totalFund - totalMain,
       jumlahFund: fund.length, jumlahMain: mainRows.length,
       sudahCocok, belumCocok: fund.length - sudahCocok,
+      cocokOtomatis: otomatis, cocokManual: sudahCocok - otomatis,
+      siapOtomatis: hasil.pasangan.length,
     },
-    galatMain: typeof galatMain !== 'undefined' ? galatMain : '',
+    galatMain,
     namaFundraising: namaKu,
   };
 } };
@@ -337,9 +381,146 @@ tindakan['cocok.batal'] = { izin: 'cocok.tandai', async jalankan({ data, penggun
   return { pesan: 'Penandaan cocok dibatalkan.' };
 } };
 
+/* --- PENCOCOKAN OTOMATIS ---------------------------------------------------
+ *
+ * Menandai cocok SEMUA baris yang padanannya benar-benar tunggal: nama sama
+ * persis, nominal sama persis, tanggal terpaut paling jauh tiga hari, dan
+ * hanya ada satu kemungkinan di kedua arah. Aturannya ada di
+ * lib/fund/pencocok.js, lengkap dengan alasan kenapa "tunggal dua arah" itu
+ * yang menjaga uang orang tidak tertulis ke tempat yang salah.
+ *
+ * TINDAKAN INI MENULIS, JADI IZINNYA IZIN MENULIS. Ia sengaja dipisah dari
+ * cocok.daftar yang hanya melihat. Kalau penandaannya dikerjakan diam-diam di
+ * dalam tindakan baca, maka membuka halaman saja sudah mengubah pembukuan,
+ * dan pengguna yang cuma boleh melihat ikut menuliskannya tanpa pernah diberi
+ * hak itu. */
+tindakan['cocok.otomatis'] = { izin: 'cocok.tandai', async jalankan({ data, pengguna }) {
+  const l = lingkupTersaring(pengguna, data);
+  const dari = fu.tglValid(data.dari) ? data.dari : '';
+  const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
+
+  const fund = await himpunanLib.saring({ ...l, dari, sampai, status: 'diambil' });
+  const namaKu = await akunLib.namaFundraising(pengguna);
+  const buku = await bacaBukuUtama({ dari, sampai, lingkup: l, namaKu });
+  if (buku.galat) {
+    throw new GalatAplikasi('Buku utama tidak terbaca, jadi tidak ada yang bisa dicocokkan: ' + buku.galat, 503);
+  }
+
+  const hasil = pencocok.padankan(fund, buku.baris);
+  let ditandai = 0;
+  for (const pasang of hasil.pasangan) {
+    await himpunanLib.tandaiCocok(pasang.fundId, pasang.ref, pengguna, { otomatis: true });
+    ditandai++;
+  }
+
+  const sisa = fund.length - fund.filter((f) => f.cocok && f.cocok.sudah).length - ditandai;
+  return {
+    ditandai,
+    sisa: Math.max(0, sisa),
+    pesan: ditandai
+      ? `${ditandai} catatan dicocokkan otomatis.` + (sisa ? ` ${sisa} sisanya perlu diperiksa sendiri.` : '')
+      : 'Tidak ada yang cocok persis. Semua perlu diperiksa sendiri.',
+  };
+} };
+
+/* Membatalkan seluruh penandaan OTOMATIS dalam rentang yang sedang dilihat.
+   Yang ditandai petugas tidak ikut terbawa: kesalahan mesin datang
+   berombongan, kesalahan orang tidak. */
+tindakan['cocok.batalOtomatis'] = { izin: 'cocok.tandai', async jalankan({ data, pengguna }) {
+  const l = lingkupTersaring(pengguna, data);
+  const dari = fu.tglValid(data.dari) ? data.dari : '';
+  const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
+  const fund = await himpunanLib.saring({ ...l, dari, sampai, status: 'diambil' });
+  const dibatalkan = await himpunanLib.batalCocokOtomatis(fund);
+  return {
+    dibatalkan,
+    pesan: dibatalkan
+      ? `${dibatalkan} penandaan otomatis dibatalkan. Penandaan oleh petugas tidak disentuh.`
+      : 'Tidak ada penandaan otomatis pada rentang ini.',
+  };
+} };
+
+// ================================================================ FUNDRAISER
+/* Daftar penggalang dana beserta angkanya, satu baris per orang.
+ *
+ * Hanya untuk koordinator dan superadmin, dan itu ditegakkan di sini — bukan
+ * dengan menyembunyikan menunya, karena menu yang disembunyikan tetap bisa
+ * dibuka dengan mengetik alamatnya. */
+tindakan['fundraiser.daftar'] = { izin: 'himpunan.lihat', async jalankan({ data, pengguna }) {
+  wajibLihatSemua(pengguna);
+  const dari = fu.tglValid(data.dari) ? data.dari : '';
+  const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
+
+  const catatan = await himpunanLib.saring({ pemilik: null, lihatSemua: true, dari, sampai });
+
+  /* Users milik LAZDigital, bukan modul ini. Kalau tak terbaca, daftarnya
+     tetap disusun dari catatan yang ada: lebih baik memperlihatkan angka
+     tanpa nama lengkap daripada halaman kosong yang tidak menjelaskan apa-apa. */
+  let daftarUsers = [];
+  let galatUsers = '';
+  try {
+    const r = await rpc._internal.muat();
+    daftarUsers = bacaSheet(r.db, 'Users');
+  } catch (e) {
+    galatUsers = e.message || 'Daftar akun tidak terbaca';
+  }
+
+  /* Profil fundraising disimpan per akun (akun:<id>). Diambil sekaligus, bukan
+     satu per satu di dalam perulangan: dua puluh fundraiser berarti dua puluh
+     perjalanan ke basis data untuk data yang muat dalam satu permintaan. */
+  const idCalon = Array.from(new Set([
+    ...daftarUsers.map((u) => String(u.id || '')),
+    ...catatan.map((r) => String(r.pemilik || '')),
+  ].filter(Boolean)));
+  const profil = await db.ambilBanyak(idCalon.map((i) => akunLib.KUNCI(i)));
+  const akun = {};
+  idCalon.forEach((uid, i) => { if (profil[i]) akun[uid] = profil[i]; });
+
+  const baris = fundraiserLib.susun({ pengguna: daftarUsers, akun, catatan });
+  return { baris, ringkas: fundraiserLib.ringkasSemua(baris), galatUsers, dari, sampai };
+} };
+
+/* Satu fundraiser: profilnya, angkanya, dan seluruh transaksinya. */
+tindakan['fundraiser.detail'] = { izin: 'himpunan.lihat', async jalankan({ data, pengguna }) {
+  wajibLihatSemua(pengguna);
+  const uid = String(data.userId || '').trim();
+  if (!uid) throw new GalatAplikasi('Fundraiser mana yang mau dilihat?', 400);
+  const dari = fu.tglValid(data.dari) ? data.dari : '';
+  const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
+
+  const catatan = await himpunanLib.saring({ pemilik: uid, lihatSemua: false, dari, sampai });
+  const profil = (await db.ambil(akunLib.KUNCI(uid))) || {};
+
+  let akunLaz = null;
+  try {
+    const r = await rpc._internal.muat();
+    akunLaz = bacaSheet(r.db, 'Users').find((u) => String(u.id) === uid) || null;
+  } catch (_) { /* nama lengkapnya saja yang hilang, angkanya tetap benar */ }
+
+  const nama = profil.namaTampil || (akunLaz && akunLaz.nama)
+    || (catatan[0] && catatan[0].olehNama) || 'Fundraiser';
+
+  return {
+    fundraiser: {
+      userId: uid,
+      nama,
+      username: (akunLaz && akunLaz.username) || '',
+      namaFundraising: profil.namaFundraising || (akunLaz && akunLaz.nama) || '',
+      foto: profil.foto || '',
+      telepon: profil.telepon || '',
+      catatanProfil: profil.catatan || '',
+      aktif: akunLaz ? String(akunLaz.aktif) !== 'false' : false,
+      punyaAkun: Boolean(akunLaz),
+      ...fundraiserLib.hitung(catatan),
+    },
+    baris: catatan,
+    dari, sampai,
+  };
+} };
+
 // ================================================================ LAPORAN
 tindakan['laporan.ringkas'] = { izin: 'laporan.lihat', async jalankan({ data, pengguna }) {
-  const l = lingkup(pengguna);
+  const l = lingkupTersaring(pengguna, data);
   const dari = fu.tglValid(data.dari) ? data.dari : '';
   const sampai = fu.tglValid(data.sampai) ? data.sampai : '';
   const isi = await himpunanLib.saring({ ...l, dari, sampai, status: 'diambil' });
@@ -367,6 +548,7 @@ tindakan['laporan.ringkas'] = { izin: 'laporan.lihat', async jalankan({ data, pe
     perPetugas: keArr(perPetugas),
     perHari: Object.entries(perHari).map(([k, v]) => ({ tanggal: k, jumlah: v }))
       .sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal))),
+    disaring: l.disaring || '',
   };
 } };
 

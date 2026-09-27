@@ -5733,3 +5733,13 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   .pc-bl{ max-width:86% }
   .pc-siar{ max-width:94% }
 }
+
+/* Lencana inisial fundraiser, dipakai saat ia belum mengunggah foto. Bentuknya
+   sama dengan avatar di tempat lain supaya barisnya tidak berubah tinggi
+   tergantung ada tidaknya foto. */
+.fund-awal{
+  flex:0 0 44px; width:44px; height:44px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-family:var(--head); font-size:17px; font-weight:700; color:#fff;
+  background:linear-gradient(140deg,var(--accent2),var(--accent)); user-select:none;
+}

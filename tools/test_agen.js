@@ -498,6 +498,63 @@ async function serahkan(id) { await lepasJeda(); await majukan(id); return antre
       kosong.tubuh.ok !== false && kosong.tubuh.diabaikan === 1, kosong.tubuh);
   }
 
+  console.log('\n=== K4. RIWAYAT DARI HP TIDAK MENGGANDAKAN CATATAN LAMA ===');
+  /* KEADAAN YANG BENAR-BENAR AKAN TERJADI. Untuk menarik percakapan lama,
+     amil harus memindai QR ulang, dan WhatsApp lalu mengirimkan riwayat
+     berbulan-bulan ke belakang — termasuk pesan yang DULU dikirim lewat
+     LAZDigital sendiri.
+
+     Indeks idluar:* tidak menolong di sini: umurnya cuma tujuh hari, karena
+     ia dibuat untuk menangkap centang yang menyusul. Jadi pesan lama datang
+     tanpa pengenal apa pun, dan tanpa penjaga kedua seluruh percakapan muncul
+     dua kali — sekali dari catatan lama, sekali dari HP. */
+  {
+    await lepasJeda();
+    const pLama = await antrean.antrikan({
+      perangkatId: PERANGKAT, nomor: '081255566677', isi: { teks: 'Kwitansi sudah kami kirim ya Pak' },
+    });
+    await serahkan(pLama.id);
+    await hit('ambil', { perangkatId: PERANGKAT, maks: 5 });
+    await hit('lapor', { hasil: [{ pesanId: pLama.id, status: 'terkirim', idLuar: 'WA-LAMA-1' }] });
+
+    /* Indeksnya sengaja dihapus: inilah keadaan sesudah tujuh hari lewat. */
+    await db.hapus('idluar:WA-LAMA-1');
+
+    const m = await pesanDi(pLama.id);
+    const r = await hit('cermin', { pesan: [{
+      perangkatId: PERANGKAT, nomor: '081255566677',
+      teks: 'Kwitansi sudah kami kirim ya Pak', keluar: true,
+      /* Id WhatsApp dari riwayat HP berbeda bentuknya, dan waktunya meleset
+         beberapa detik dari catatan kita. Dua-duanya normal. */
+      idLuar: 'WA-RIWAYAT-BEDA',
+      waktu: new Date(new Date(m.dikirim).getTime() + 3000).toISOString(),
+    }] });
+    cek('pesan yang sudah ada dikenali walau id WhatsApp-nya berbeda',
+      r.tubuh.dicatat === 0 && r.tubuh.kembar === 1, r.tubuh);
+
+    /* Yang BUKAN kembar harus tetap masuk. Penjaga yang terlalu galak sama
+       buruknya: percakapan jadi bolong tanpa ada yang tahu. */
+    const beda = await hit('cermin', { pesan: [{
+      perangkatId: PERANGKAT, nomor: '081255566677',
+      teks: 'Ini pesan yang benar-benar lain', keluar: true,
+      idLuar: 'WA-RIWAYAT-LAIN',
+      waktu: new Date(new Date(m.dikirim).getTime() + 3000).toISOString(),
+    }] });
+    cek('pesan lain pada menit yang sama tetap dicatat',
+      beda.tubuh.dicatat === 1, beda.tubuh);
+
+    /* Kembar di dalam SATU rombongan juga harus tertangkap: riwayat kadang
+       memuat pesan yang sama dua kali karena penyelarasan bertumpuk. */
+    const rombongan = await hit('cermin', { pesan: [
+      { perangkatId: PERANGKAT, nomor: '081255566677', teks: 'Halo dua kali',
+        keluar: false, idLuar: 'WA-R1', waktu: new Date().toISOString() },
+      { perangkatId: PERANGKAT, nomor: '081255566677', teks: 'Halo dua kali',
+        keluar: false, idLuar: 'WA-R2', waktu: new Date().toISOString() },
+    ] });
+    cek('pesan kembar di dalam satu rombongan hanya dicatat sekali',
+      rombongan.tubuh.dicatat === 1 && rombongan.tubuh.kembar === 1, rombongan.tubuh);
+  }
+
   console.log('\n=== L. DRIVER LAMA TIDAK IKUT BERUBAH ===');
   /* Perubahan di antrean.js menambah status 'diserahkan'. Driver yang memang
      mengirim sendiri (sandbox, fonnte, meta) tidak boleh ikut terpengaruh —

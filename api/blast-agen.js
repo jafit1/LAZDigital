@@ -23,6 +23,7 @@ const { KUNCI_PESAN, KUNCI_ANTREAN, KUNCI_SERAHAN, catatKeDaftar, prosesAntrean,
 const { kirimKejadian } = require('../lib/blast/webhook');
 const mandiri = require('../lib/blast/pengirim/mandiri');
 const kontakLib = require('../lib/blast/kontak');
+const percakapanLib = require('../lib/blast/percakapan');
 const berkasLib = require('../lib/blast/berkas');
 const { cariBalasan } = require('../lib/blast/balasan');
 
@@ -356,6 +357,20 @@ async function berkas({ data }) {
   return { berkas: b };
 }
 
+/* Sidik satu pesan untuk membandingkan isinya: nomor, menit terjadinya, arah,
+   dan 80 huruf pertama. Teks dipotong karena pesan panjang sering dirapikan
+   WhatsApp di ujungnya, dan yang dibutuhkan cuma cukup khas untuk membedakan
+   dua pesan berbeda pada menit yang sama ke nomor yang sama. */
+function sidikPesan(p) {
+  if (!p || !p.nomor) return '';
+  const waktu = p.dikirim || p.diserahkanPada || p.dibuat;
+  const t = new Date(waktu || 0).getTime();
+  if (!Number.isFinite(t) || !t) return '';
+  const menit = Math.floor(t / 60000);
+  const teks = String((p.isi && p.isi.teks) || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return `${p.nomor}|${p.arah === 'masuk' ? 'm' : 'k'}|${menit}|${teks}`;
+}
+
 /* Menaikkan status satu pesan. Dipakai laporan centang dan pemasangan
    titipan, supaya aturannya cuma ada di satu tempat: hanya pesan keluar,
    hanya maju, dan selalu mengabarkan webhook. */
@@ -443,6 +458,26 @@ async function cermin({ data }) {
   const daftar = Array.isArray(data.pesan) ? data.pesan.slice(0, CERMIN_MAKS) : [];
   if (!daftar.length) return { dicatat: 0 };
 
+  /* PENJAGA KEDUA: SIDIK ISI, BUKAN CUMA ID WHATSAPP.
+   *
+   * Indeks idluar:* hanya bertahan tujuh hari, karena ia memang dibuat untuk
+   * menangkap centang yang menyusul, dan centang tidak pernah datang seminggu
+   * kemudian. Tetapi riwayat dari HP membawa pesan BERBULAN-BULAN ke belakang,
+   * termasuk pesan yang dulu dikirim lewat LAZDigital sendiri dan indeksnya
+   * sudah lama habis.
+   *
+   * Tanpa penjaga ini, sekali scan ulang QR seluruh percakapan lama muncul
+   * dua kali: satu dari catatan lama, satu dari HP. Dan itu tidak bisa
+   * dibereskan belakangan tanpa menghapusnya satu per satu.
+   *
+   * Sidiknya nomor + menit + awal teks. Menit, bukan detik: waktu yang
+   * tercatat di LAZDigital adalah saat pesannya diserahkan ke gateway,
+   * sedangkan yang dibawa riwayat HP adalah saat WhatsApp menerimanya, dan
+   * keduanya lazim berselisih beberapa detik.
+   */
+  const jendela = await percakapanLib._internal.semuaPesan();
+  const sidik = new Set(jendela.map(sidikPesan).filter(Boolean));
+
   let dicatat = 0, kembar = 0, diabaikan = 0;
   for (const p of daftar) {
     const nomor = normalkanNomor(p && p.nomor);
@@ -456,6 +491,9 @@ async function cermin({ data }) {
 
     const teks = bersihkanTeks((p && p.teks) || '', 4000);
     const keluar = Boolean(p && p.keluar);
+    const waktuIni = waktuSah(p && p.waktu) || sekarang();
+    const sidikIni = sidikPesan({ nomor, isi: { teks }, dibuat: waktuIni, dikirim: keluar ? waktuIni : null, arah: keluar ? 'keluar' : 'masuk' });
+    if (sidikIni && sidik.has(sidikIni)) { kembar++; continue; }
     /* Pesan tanpa teks (stiker, lokasi, pesan suara) tetap dicatat supaya
        urutan percakapannya utuh, tetapi hanya kalau ada id-nya — tanpa id ia
        tidak bisa dijaga dari kembar, dan percakapan akan penuh baris kosong
@@ -472,7 +510,7 @@ async function cermin({ data }) {
       kontak = hasil.kontak;
     }
 
-    const waktu = waktuSah(p && p.waktu) || sekarang();
+    const waktu = waktuIni;
     const lama = Date.now() - new Date(waktu).getTime() > 5 * 60 * 1000;
     const pesan = {
       id: id('m_'),
@@ -502,6 +540,7 @@ async function cermin({ data }) {
          sampai ke sini. Titipannya dipasang sekarang. */
       if (keluar) await pasangTitipan(pesan, await ambilSetelan());
     }
+    if (sidikIni) sidik.add(sidikIni);
     dicatat++;
   }
 

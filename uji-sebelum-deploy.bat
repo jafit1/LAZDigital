@@ -33,6 +33,7 @@ call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
 call :jalankan "Kotak masuk percakapan"          tools\test_percakapan.js
 call :jalankan "Bentuk layar percakapan"         tools\ukur-percakapan.js
 call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
+call :jalankan "Fundraiser & pencocokan"        tools\test_fundraiser.js
 call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
 call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
 call :jalankan "Tampilan halaman AI Asisten"    tools\test_ai_ui.js

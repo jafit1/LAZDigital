@@ -71,11 +71,57 @@ const JAWABAN = {
   },
   'cocok.daftar': {
     namaFundraising: 'Tim Bantul Kota', galatMain: '',
-    ringkas: { totalFund: 150000, totalMain: 150000, selisih: 0, jumlahFund: 1, jumlahMain: 1, sudahCocok: 0, belumCocok: 1 },
-    fund: [{ id: 'h1', donaturNama: 'Budi Santosa', peruntukan: 'Zakat', jumlah: 150000, tanggal: HARI, cocok: { sudah: false, ref: '' }, usul: { id: 'p1', noKwitansi: 'KW-001' } }],
+    ringkas: { totalFund: 350000, totalMain: 150000, selisih: 200000, jumlahFund: 3, jumlahMain: 1,
+      sudahCocok: 1, belumCocok: 2, cocokOtomatis: 1, cocokManual: 0, siapOtomatis: 0 },
+    fund: [
+      { id: 'h1', donaturNama: 'Budi Santosa', peruntukan: 'Zakat', jumlah: 150000, tanggal: HARI,
+        cocok: { sudah: false, ref: '' }, usul: { id: 'p1', noKwitansi: 'KW-001' }, alasan: '', alasanTeks: '' },
+      { id: 'h2', donaturNama: 'Siti Aminah', peruntukan: 'Infak', jumlah: 100000, tanggal: HARI,
+        cocok: { sudah: false, ref: '' }, usul: null,
+        alasan: 'ganda', alasanTeks: 'Ada lebih dari satu kemungkinan, perlu diperiksa sendiri' },
+      { id: 'h3', donaturNama: 'Joko Widodo', peruntukan: 'Zakat', jumlah: 100000, tanggal: HARI,
+        cocok: { sudah: true, ref: 'KW-009', otomatis: true, oleh: 'Sistem' }, usul: null, alasan: 'sudah', alasanTeks: '' },
+    ],
     main: [{ id: 'p1', noKwitansi: 'KW-001', tanggal: HARI, nama: 'Budi Santosa', jumlah: 150000, jenisDana: 'Zakat', fundraising: 'Tim Bantul Kota' }],
   },
   'cocok.tandai': { pesan: 'Ditandai.' },
+  'cocok.otomatis': { ditandai: 0, sisa: 1, pesan: 'Tidak ada yang cocok persis.' },
+  'cocok.batalOtomatis': { dibatalkan: 1, pesan: '1 penandaan otomatis dibatalkan.' },
+  /* Daftar fundraiser: sengaja memuat ketiga keadaan yang bentuknya berbeda di
+     layar — yang sudah menyetor dan semuanya cocok, yang punya sisa belum
+     cocok, dan akun yang dibuatkan tetapi belum jalan sama sekali. */
+  'fundraiser.daftar': {
+    galatUsers: '',
+    ringkas: { orang: 3, aktif: 3, belumMenyetor: 1, total: 850000, sudahCocok: 3, belumCocok: 1, nilaiBelumCocok: 200000 },
+    baris: [
+      { userId: 'u_slamet', nama: 'Slamet Riyadi', username: 'slamet', namaFundraising: 'Tim Bantul Kota',
+        foto: '', telepon: '', peran: 'staff', aktif: true, dicentang: true, punyaAkun: true,
+        kunjungan: 5, berhasil: 4, kosong: 1, total: 650000, sudahCocok: 3, cocokOtomatis: 2, cocokManual: 1,
+        belumCocok: 1, nilaiBelumCocok: 200000, terakhir: HARI },
+      { userId: 'u_rina', nama: 'Rina Wati', username: 'rina', namaFundraising: 'Tim Sewon',
+        foto: '', telepon: '', peran: 'staff', aktif: true, dicentang: true, punyaAkun: true,
+        kunjungan: 2, berhasil: 2, kosong: 0, total: 200000, sudahCocok: 0, cocokOtomatis: 0, cocokManual: 0,
+        belumCocok: 0, nilaiBelumCocok: 0, terakhir: HARI },
+      { userId: 'u_baru', nama: 'Fundraiser Baru', username: 'baru', namaFundraising: 'Fundraiser Baru',
+        foto: '', telepon: '', peran: 'staff', aktif: true, dicentang: true, punyaAkun: true,
+        kunjungan: 0, berhasil: 0, kosong: 0, total: 0, sudahCocok: 0, cocokOtomatis: 0, cocokManual: 0,
+        belumCocok: 0, nilaiBelumCocok: 0, terakhir: '' },
+    ],
+  },
+  'fundraiser.detail': {
+    fundraiser: { userId: 'u_slamet', nama: 'Slamet Riyadi', username: 'slamet',
+      namaFundraising: 'Tim Bantul Kota', foto: '', telepon: '628120001111', catatanProfil: '',
+      aktif: true, punyaAkun: true, kunjungan: 5, berhasil: 4, kosong: 1, total: 650000,
+      sudahCocok: 3, cocokOtomatis: 2, cocokManual: 1, belumCocok: 1, nilaiBelumCocok: 200000, terakhir: HARI },
+    baris: [
+      { id: 'h9', tanggal: HARI, donaturNama: 'Budi Santosa', peruntukan: 'Zakat', jumlah: 250000,
+        status: 'diambil', cocok: { sudah: true, ref: 'KW-001', otomatis: true, oleh: 'Sistem' } },
+      { id: 'h8', tanggal: HARI, donaturNama: 'Siti Aminah', peruntukan: 'Infak', jumlah: 200000,
+        status: 'diambil', cocok: { sudah: false, ref: '', otomatis: false, oleh: '' } },
+      { id: 'h7', tanggal: HARI, donaturNama: 'Joko Widodo', peruntukan: 'Zakat', jumlah: 200000,
+        status: 'diambil', cocok: { sudah: true, ref: 'KW-002', otomatis: false, oleh: 'Ahmad Maruf' } },
+    ],
+  },
   'laporan.ringkas': {
     ringkas: { kunjungan: 40, berhasil: 33, kosong: 7, total: 7250000 },
     perPeruntukan: [{ nama: 'Zakat', jumlah: 5000000 }, { nama: 'Infak', jumlah: 2250000 }],
@@ -143,8 +189,12 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
 
   console.log('=== A. RANGKA & MENU ===');
   const menu = await p.$$eval('.tn-item', (n) => n.map((x) => x.title));
-  cek('enam menu tergambar', menu.length === 6, menu);
+  cek('tujuh menu tergambar untuk pengawas', menu.length === 7, menu);
   cek('menu inti ada', ['Dashboard', 'Donatur', 'Penghimpunan', 'Cocokkan', 'Laporan', 'Pengaturan'].every((m) => menu.includes(m)), menu);
+  /* Halaman Fundraiser hanya untuk koordinator dan superadmin. Yang
+     menegakkannya server (wajibLihatSemua di api/fund.js); menu di sini cuma
+     supaya tidak ada yang menekan pintu yang memang terkunci. */
+  cek('pengawas melihat menu Fundraiser', menu.includes('Fundraiser'), menu);
   /* Teksnya pendek supaya muat di bilah atas HP; keterangan panjangnya pindah
      ke title, bukan hilang. */
   const lenc = await p.$eval('#lencanaLingkup', (e) => ({ teks: e.textContent, judul: e.title }));
@@ -421,6 +471,75 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
   await p.waitForTimeout(500);
   cek('pengaturan memuat nama fundraising (kunci pencocokan)', /Tim Bantul Kota/.test(await p.$eval('#isiHalaman [name=namaFundraising]', (e) => e.value)));
   await p.screenshot({ path: path.join(LUAR, 'fund-akun.png') });
+
+  console.log('\n=== E2. HALAMAN FUNDRAISER ===');
+  /* Pertanyaan yang halaman ini harus jawab dalam sekali lihat: siapa
+     mengumpulkan berapa, dan berapa uang yang BELUM bisa dipertanggungjawabkan
+     ke buku kas. Angka kedua itu yang ditaruh menonjol, bukan totalnya. */
+  await p.evaluate(() => { location.hash = '#fundraiser'; });
+  await p.waitForTimeout(800);
+  const fr = await p.evaluate(() => {
+    const baris = Array.from(document.querySelectorAll('#isi [data-buka]'));
+    return {
+      jumlahBaris: baris.length,
+      isi: baris.map((b) => b.textContent.replace(/\s+/g, ' ').trim()),
+      kpi: Array.from(document.querySelectorAll('#isi .kpi-v2')).map((k) => k.textContent.replace(/\s+/g, ' ').trim()),
+      adaTanggal: Boolean(document.getElementById('dariF')),
+    };
+  });
+  cek('tiga fundraiser tergambar', fr.jumlahBaris === 3, fr.jumlahBaris);
+  cek('akun yang belum pernah menyetor tetap terlihat',
+    fr.isi.some((t) => /Fundraiser Baru/.test(t)), fr.isi);
+  cek('rupiah yang belum cocok ditampilkan, bukan cuma jumlah barisnya',
+    fr.kpi.some((t) => /Belum cocok/.test(t) && /200\.000/.test(t)), fr.kpi);
+  cek('ada penyaring tanggal', fr.adaTanggal === true);
+
+  await p.click('#isi [data-buka="u_slamet"]');
+  await p.waitForTimeout(700);
+  const rinci = await p.evaluate(() => {
+    const w = document.getElementById('rincianF');
+    const lencana = Array.from(w.querySelectorAll('.badge')).map((b) => b.textContent.trim());
+    return {
+      ada: Boolean(w && w.textContent.trim()),
+      baris: w.querySelectorAll('tbody tr').length,
+      teks: w.textContent.replace(/\s+/g, ' ').trim(),
+      lencana,
+      adaTutup: Boolean(document.getElementById('tutupF')),
+    };
+  });
+  cek('mengklik satu fundraiser memperlihatkan transaksinya', rinci.baris === 3, rinci.baris);
+  cek('namanya muncul di kepala rincian', /Slamet Riyadi/.test(rinci.teks), rinci.teks.slice(0, 120));
+  /* INI YANG PALING PENTING DI HALAMAN INI. Hasil sistem harus bisa dikenali
+     sekilas dari hasil petugas: kalau suatu saat aturan pencocokannya keliru,
+     yang perlu diperiksa ulang adalah yang bercap otomatis. */
+  cek('cocok otomatis dibedakan dari cocok yang ditandai petugas',
+    rinci.lencana.some((t) => /otomatis/.test(t)) && rinci.lencana.some((t) => /KW-002/.test(t)),
+    rinci.lencana);
+  cek('yang belum cocok tetap terlihat sebagai belum',
+    rinci.lencana.some((t) => /^belum$/.test(t)), rinci.lencana);
+  cek('ada tombol menutup rinciannya', rinci.adaTutup === true);
+  await p.screenshot({ path: path.join(LUAR, 'fund-fundraiser.png'), fullPage: true });
+
+  console.log('\n=== E3. ALASAN BELUM COCOK ===');
+  await p.evaluate(() => { location.hash = '#cocok'; });
+  await p.waitForTimeout(800);
+  const ck = await p.evaluate(() => {
+    const tubuh = document.querySelector('#isi tbody');
+    return {
+      teks: tubuh ? tubuh.textContent.replace(/\s+/g, ' ').trim() : '',
+      adaPenyaring: Boolean(document.getElementById('fundraiserC')),
+      adaBatalOto: Boolean(document.getElementById('batalOto')),
+      lencana: Array.from(document.querySelectorAll('#isi tbody .badge')).map((b) => b.textContent.trim()),
+    };
+  });
+  /* Daftar "belum cocok" tanpa sebab cuma memindahkan pekerjaan menebak dari
+     mesin ke petugas. */
+  cek('yang belum cocok menyebutkan ALASANNYA',
+    /lebih dari satu kemungkinan/i.test(ck.teks), ck.teks.slice(0, 200));
+  cek('penyaring per fundraiser tersedia untuk pengawas', ck.adaPenyaring === true);
+  cek('ada tombol membatalkan pencocokan otomatis saja', ck.adaBatalOto === true);
+  cek('baris yang dicocokkan sistem bercap otomatis',
+    ck.lencana.some((t) => /otomatis/.test(t)), ck.lencana);
 
   console.log('\n=== E. TATA LETAK HP (tema terang, seperti web utama) ===');
   await ctx.close();
