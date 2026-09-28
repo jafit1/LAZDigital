@@ -334,6 +334,100 @@ async function pesanLangsung(p) {
   cek('inbox.balas diturunkan dari centang "create", bukan "view"',
     peta['inbox.balas'] === 'create', peta['inbox.balas']);
 
+  console.log('\n=== K. RUANG UNTUK RIWAYAT DARI HP ===');
+  /* KEGAGALAN YANG DIUJI DI SINI TIDAK BERBUNYI SAMA SEKALI.
+   *
+   * Riwayat lama dari HP dicatat di EKOR daftar 'pesan:baru', supaya
+   * percakapan bulan lalu tidak melompat ke puncak halaman Antrean & Status.
+   * Tetapi barisnya dulu berbunyi push() lalu slice(0, 2000): kalau daftarnya
+   * sudah penuh, yang terpotong justru pesan yang baru saja didorong ke ekor.
+   * Jadi riwayatnya tersimpan sebagai dokumen, tidak pernah masuk daftar
+   * tampilan, dan pemanggilnya tetap menerima kabar berhasil. Di layar, satu-
+   * satunya gejalanya adalah percakapan yang kosong tanpa sebab.
+   *
+   * Sekarang daftarnya dilonggarkan supaya riwayat 30 kontak muat, DAN
+   * kegagalannya dikatakan kalau tetap tidak muat. */
+  const batas = antreanLib.BATAS_DAFTAR;
+  cek('daftar tampilan cukup untuk riwayat 30 kontak (30 x 100) plus lalu lintas harian',
+    batas >= 30 * 100 + 3000, batas);
+  cek('percakapan membaca sepanjang daftar itu, bukan angkanya sendiri',
+    percakapanLib.BATAS_PESAN === batas, { percakapan: percakapanLib.BATAS_PESAN, antrean: batas });
+
+  const simpanan = (await db.ambil('pesan:baru')) || [];
+  try {
+    const hampir = [];
+    for (let i = 0; i < batas - 1; i++) hampir.push('m_isi' + i);
+    await db.simpan('pesan:baru', hampir);
+    const muat = await antreanLib.catatKeDaftar('m_riwayat_muat', { akhir: true });
+    const isi1 = (await db.ambil('pesan:baru')) || [];
+    cek('riwayat masuk selama masih ada ruang',
+      muat === true && isi1.includes('m_riwayat_muat'), { muat, panjang: isi1.length });
+
+    const penuh = [];
+    for (let i = 0; i < batas; i++) penuh.push('m_penuh' + i);
+    await db.simpan('pesan:baru', penuh);
+    const tolak = await antreanLib.catatKeDaftar('m_riwayat_tolak', { akhir: true });
+    const isi2 = (await db.ambil('pesan:baru')) || [];
+    cek('daftar penuh: penolakannya dikatakan, bukan dilaporkan berhasil',
+      tolak === false, tolak);
+    cek('dan memang tidak ikut tersimpan', !isi2.includes('m_riwayat_tolak'));
+    cek('daftar tidak melar melewati batasnya', isi2.length === batas, isi2.length);
+
+    /* Pesan BARU tetap diterima walau penuh: yang di depan yang dipakai layar,
+       dan yang terdorong keluar adalah yang paling lama. */
+    const pesanBaru = await antreanLib.catatKeDaftar('m_baru_sekali');
+    const isi3 = (await db.ambil('pesan:baru')) || [];
+    cek('pesan baru tetap masuk walau daftarnya penuh',
+      pesanBaru === true && isi3[0] === 'm_baru_sekali', { pesanBaru, depan: isi3[0] });
+
+    /* --- SATU TULIS UNTUK BANYAK PESAN ------------------------------------
+     *
+     * Daftar ini satu nilai utuh: tiap pencatatan menariknya seluruhnya lalu
+     * menuliskannya kembali. Pada 6000 id itu sekitar 65 KB turun dan 65 KB
+     * naik untuk menambah sepuluh karakter. Sehari-hari tidak terasa, karena
+     * pesannya datang satu-satu. Tetapi riwayat HP datang tiga ribu sekaligus,
+     * dan versi satu-satu berarti ratusan megabyte lalu lintas untuk pekerjaan
+     * yang hasilnya cuma tiga ribu baris. */
+    const setengah = [];
+    for (let i = 0; i < Math.floor(batas / 2); i++) setengah.push('m_awal' + i);
+    await db.simpan('pesan:baru', setengah);
+    let bacaTulis = 0;
+    const simpanAsli = db.simpan;
+    db.simpan = async (...a) => { if (a[0] === 'pesan:baru') bacaTulis++; return simpanAsli.apply(db, a); };
+    let hasilBanyak;
+    try {
+      hasilBanyak = await antreanLib.catatBanyakKeDaftar(['m_r1', 'm_r2', 'm_r3'], { akhir: true });
+    } finally { db.simpan = simpanAsli; }
+    const isi4 = (await db.ambil('pesan:baru')) || [];
+    cek('mencatat tiga pesan sekaligus hanya menulis daftarnya SEKALI',
+      bacaTulis === 1, bacaTulis);
+    cek('ketiganya masuk, urut di ekor',
+      isi4.slice(-3).join(',') === 'm_r1,m_r2,m_r3', isi4.slice(-3));
+    cek('jumlah yang masuk dilaporkan apa adanya',
+      hasilBanyak.masuk === 3 && hasilBanyak.ditolak === 0, hasilBanyak);
+
+    /* Kalau ruangnya cuma cukup untuk sebagian, sisanya DIHITUNG, bukan
+       dibuang diam-diam. */
+    const kurangDua = [];
+    for (let i = 0; i < batas - 2; i++) kurangDua.push('m_hampir' + i);
+    await db.simpan('pesan:baru', kurangDua);
+    const sebagian = await antreanLib.catatBanyakKeDaftar(['m_s1', 'm_s2', 'm_s3', 'm_s4'], { akhir: true });
+    cek('ruang tinggal dua: dua masuk, dua ditolak dan dihitung',
+      sebagian.masuk === 2 && sebagian.ditolak === 2, sebagian);
+
+    /* Tanpa opsi akhir, yang terakhir diserahkan harus berakhir paling depan,
+       persis seperti kalau dipanggil satu per satu. */
+    await db.simpan('pesan:baru', ['m_lamaSekali']);
+    await antreanLib.catatBanyakKeDaftar(['m_d1', 'm_d2', 'm_d3']);
+    const isi5 = (await db.ambil('pesan:baru')) || [];
+    cek('pesan baru berombongan tetap urut seperti dicatat satu per satu',
+      isi5.slice(0, 4).join(',') === 'm_d3,m_d2,m_d1,m_lamaSekali', isi5.slice(0, 4));
+    cek('daftar kosong tidak menulis apa-apa dan tidak melempar galat',
+      (await antreanLib.catatBanyakKeDaftar([])).masuk === 0);
+  } finally {
+    await db.simpan('pesan:baru', simpanan);
+  }
+
   console.log('\n=== HASIL ===');
   console.log(`${ok} lulus, ${gagal} gagal.`);
   if (gagal) { console.log('\nJANGAN dideploy: kotak masuk percakapan belum benar.\n'); process.exit(1); }

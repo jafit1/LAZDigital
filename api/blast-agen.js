@@ -19,7 +19,7 @@ const {
   bandingAman, sukses, gagal, bacaBody,
 } = require('../lib/blast/util');
 const { ambilSetelan } = require('../lib/blast/setelan');
-const { KUNCI_PESAN, KUNCI_ANTREAN, KUNCI_SERAHAN, catatKeDaftar, prosesAntrean, simpanPesan } = require('../lib/blast/antrean');
+const { KUNCI_PESAN, KUNCI_ANTREAN, KUNCI_SERAHAN, catatKeDaftar, catatBanyakKeDaftar, prosesAntrean, simpanPesan } = require('../lib/blast/antrean');
 const { kirimKejadian } = require('../lib/blast/webhook');
 const mandiri = require('../lib/blast/pengirim/mandiri');
 const kontakLib = require('../lib/blast/kontak');
@@ -478,7 +478,12 @@ async function cermin({ data }) {
   const jendela = await percakapanLib._internal.semuaPesan();
   const sidik = new Set(jendela.map(sidikPesan).filter(Boolean));
 
-  let dicatat = 0, kembar = 0, diabaikan = 0;
+  let dicatat = 0, kembar = 0, diabaikan = 0, penuh = 0;
+  /* Id ditumpuk dulu, daftarnya ditulis sekali di akhir. Lihat alasannya di
+     catatBanyakKeDaftar: menulis daftar 6000 id sekali per pesan berarti
+     ratusan megabyte lalu lintas untuk menambah beberapa puluh baris. */
+  const keDepan = [];
+  const keBelakang = [];
   for (const p of daftar) {
     const nomor = normalkanNomor(p && p.nomor);
     const idLuar = bersihkanTeks((p && p.idLuar) || '', 120);
@@ -532,7 +537,8 @@ async function cermin({ data }) {
     if (keluar) pesan.dikirim = waktu;
 
     await simpanPesan(pesan);
-    await catatKeDaftar(pesan.id, { akhir: lama });
+    if (lama) keBelakang.push(pesan.id);
+    else keDepan.push(pesan.id);
     if (!keluar) await db.tambahKeHimpunan(`percakapan:${nomor}`, pesan.id);
     if (idLuar) {
       await db.simpan(KUNCI_LUAR(idLuar), pesan.id, { detik: LUAR_DETIK });
@@ -544,7 +550,19 @@ async function cermin({ data }) {
     dicatat++;
   }
 
-  return { dicatat, kembar, diabaikan, diproses: daftar.length };
+  if (keDepan.length) await catatBanyakKeDaftar(keDepan);
+  if (keBelakang.length) {
+    /* Daftar tampilan bisa penuh. Kalau itu terjadi pada riwayat lama, pesannya
+       tersimpan tetapi tidak akan pernah terlihat di layar Percakapan, dan itu
+       harus terhitung: 'tidak muncul' tanpa sebab adalah keluhan yang paling
+       sulit ditelusuri belakangan. */
+    penuh += (await catatBanyakKeDaftar(keBelakang, { akhir: true })).ditolak;
+  }
+  if (penuh) {
+    console.warn(`[blast-agen] ${penuh} pesan riwayat tidak masuk daftar tampilan: `
+      + 'daftar pesan sudah penuh.');
+  }
+  return { dicatat, kembar, diabaikan, penuh, diproses: daftar.length };
 }
 
 const TINDAKAN = { halo, 'lapor-perangkat': laporPerangkat, ambil, lapor, masuk, cermin, berkas, 'lapor-status': laporStatus };
