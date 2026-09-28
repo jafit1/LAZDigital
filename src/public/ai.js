@@ -1820,9 +1820,28 @@ async function muatStatus() {
   const ll = $('#lencanaLingkup');
   if (ll) {
     if (!s.adaPenyedia) {
-      ll.textContent = 'belum ada provider';
-      ll.title = 'Superadmin perlu menambahkan provider AI';
-      ll.className = 'badge grey';
+      /* IKON DULU, TULISAN BELAKANGAN.
+       *
+       * Dulu ini .badge berisi teks telanjang. Di bilah menu yang dikuncupkan
+       * jadi 84 px, "belum ada provider" membungkus jadi TIGA baris setinggi
+       * 54 px — diukur, bukan ditebak — dan terbaca seperti sisa elemen yang
+       * lupa dirapikan, bukan sebagai kabar.
+       *
+       * Bentuknya sekarang .lingkup, komponen yang sama dengan lencana cakupan
+       * di modul Fundraising: ikon plus label, dan saat dikuncupkan labelnya
+       * menyingkir sehingga tinggal ikonnya. Persis perlakuan butir menu lain,
+       * jadi tidak ada satu pun teks yang terpotong di tengah kata. Kabarnya
+       * sendiri tidak hilang: ia pindah ke tooltip, sama seperti tiap ikon
+       * menu di bilah itu. */
+      ll.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"'
+        + ' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + '<path d="M9 2.8v5.4"/><path d="M15 2.8v5.4"/>'
+        + '<path d="M6.2 8.2h11.6v2.9a5.8 5.8 0 0 1-11.6 0z"/><path d="M12 16.9v4.3"/></svg>'
+        + '<span class="lingkup-teks">belum ada provider</span>';
+      ll.title = negara.superadmin
+        ? 'Belum ada provider AI. Tambahkan di menu Provider AI.'
+        : 'Belum ada provider AI. Hubungi superadmin.';
+      ll.className = 'lingkup';
       ll.hidden = false;
     } else {
       ll.hidden = true;

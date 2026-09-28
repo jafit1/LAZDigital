@@ -210,8 +210,68 @@ async function buatPerangkat(id = 'p_uji') {
   cek('tiap penerima mendapat NAMANYA SENDIRI, bukan nama yang sama',
     /Budi Santosa/.test(keBudi.isi.teks) && /Siti Aminah/.test(keSiti.isi.teks),
     [keBudi.isi.teks, keSiti.isi.teks]);
-  cek('penanda {{kantor}} ikut terisi', /KLL Sewon/.test(keBudi.isi.teks), keBudi.isi.teks);
+  cek('penanda {{kantor}} lama tetap terisi, templat lama tidak rusak',
+    /KLL Sewon/.test(keBudi.isi.teks), keBudi.isi.teks);
   cek('tidak ada penanda mentah yang lolos ke pesan', !/\{\{/.test(keBudi.isi.teks), keBudi.isi.teks);
+
+  /* --- PENANDA {{keterangan}} -------------------------------------------
+   *
+   * Keterangan adalah catatan bebas milik tiap kontak, dan sejak impor
+   * memakai kolom itu, dialah yang benar-benar terisi. Yang diuji: ia terbaca
+   * di KEDUA jalur kirim. Penanda yang bekerja di kirim satuan tetapi tidak di
+   * kiriman massal adalah kegagalan yang paling mahal bentuknya: pratinjaunya
+   * benar, satu pesan percobaan benar, lalu tulisan "{{keterangan}}" apa
+   * adanya terkirim ke ratusan donatur sekaligus. */
+  await lepasJeda(perangkatId);
+  await kontakLib.simpanKontak({
+    id: dibuat['Budi Santosa'].id, nama: 'Budi Santosa', nomor: '081234567801',
+    catatan: 'donatur rutin sejak 2023',
+  });
+  await jalan('pesan.kirim', {
+    perangkatId, teks: 'Halo {{nama}}, catatan kami: {{keterangan}}',
+    kontakId: [dibuat['Budi Santosa'].id],
+  });
+  const idKet = (await db.ambil('pesan:baru')) || [];
+  const isiKet = (await db.ambilBanyak(idKet.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+  const ketSatuan = isiKet.filter((x) => /catatan kami/.test(x.isi.teks))[0];
+  cek('{{keterangan}} terisi di kirim satuan',
+    /donatur rutin sejak 2023/.test(ketSatuan.isi.teks), ketSatuan.isi.teks);
+
+  await lepasJeda(perangkatId);
+  await jalan('massal.kirim', {
+    nama: 'Uji keterangan', perangkatId,
+    teks: 'Halo {{nama}}, catatan: {{keterangan}}',
+    kontakId: [dibuat['Budi Santosa'].id],
+  });
+  const idKet2 = (await db.ambil('pesan:baru')) || [];
+  const isiKet2 = (await db.ambilBanyak(idKet2.map(antreanLib.KUNCI_PESAN))).filter(Boolean);
+  const ketMassal = isiKet2.filter((x) => /^Halo .*catatan: /.test(x.isi.teks))[0];
+  cek('{{keterangan}} juga terisi di kiriman massal',
+    ketMassal && /donatur rutin sejak 2023/.test(ketMassal.isi.teks),
+    ketMassal && ketMassal.isi.teks);
+  cek('dan tidak ada penanda mentah yang lolos',
+    ketMassal && !/\{\{/.test(ketMassal.isi.teks), ketMassal && ketMassal.isi.teks);
+
+  /* Kontak tanpa keterangan tidak boleh menghasilkan tulisan "undefined". */
+  await lepasJeda(perangkatId);
+  await jalan('pesan.kirim', {
+    perangkatId, teks: 'Uji kosong: [{{keterangan}}]',
+    kontakId: [dibuat['Siti Aminah'].id],
+  });
+  const idKos = (await db.ambil('pesan:baru')) || [];
+  const kos = (await db.ambilBanyak(idKos.map(antreanLib.KUNCI_PESAN))).filter(Boolean)
+    .filter((x) => /Uji kosong/.test(x.isi.teks))[0];
+  cek('kontak tanpa keterangan menghasilkan kosong, bukan "undefined"',
+    kos && kos.isi.teks === 'Uji kosong: []', kos && kos.isi.teks);
+
+  /* Pemilih kontak membawa keterangannya, kalau tidak pratinjau di layar
+     tidak punya apa-apa untuk ditampilkan dan diam-diam memperlihatkan "—". */
+  const pil = await jalan('kontak.pilihan');
+  const pilBudi = pil.baris.find((x) => x.id === dibuat['Budi Santosa'].id);
+  cek('daftar pilihan kontak membawa keterangannya untuk pratinjau',
+    pilBudi && pilBudi.keterangan === 'donatur rutin sejak 2023', pilBudi);
+  cek('dan membawa tanda anonim, supaya pratinjaunya menyapa seperti aslinya',
+    pilBudi && pilBudi.anonim === false, pilBudi);
 
   const anonim = await kontakLib.simpanKontak({ nama: 'Hamba Allah', nomor: '081234567805', anonim: true });
   await lepasJeda(perangkatId);
@@ -684,6 +744,61 @@ async function buatPerangkat(id = 'p_uji') {
       pra3.sah === 1 && pra3.tidakSahJumlah === 1, pra3);
     cek('pratinjau memberi contoh yang akan dilewati',
       pra3.tidakSah.length === 1 && pra3.tidakSah[0].nomor === '123', pra3.tidakSah);
+
+    /* --- URUTAN KOLOM: NAMA, NO, KETERANGAN, GRUP -------------------------
+     *
+     * Kolom ketiga adalah KETERANGAN BEBAS, bukan kantor layanan. Bedanya
+     * bukan soal nama: kantor adalah medan terikat yang dipakai mengunci
+     * pengurus KLL ke kantornya sendiri dan muncul sebagai penanda {{kantor}}
+     * di isi pesan. Kalau tempelan Excel yang isinya "belum bayar" jatuh ke
+     * sana, sampah itu masuk ke medan yang dipakai menyaring hak akses, dan
+     * penanda {{kantor}} di pesan berikutnya berbunyi "dari belum bayar". */
+    await bersihkanKontak();
+    /* Nomor dan nama yang BELUM pernah dipakai di bagian mana pun sebelumnya.
+       bersihkanKontak() hanya mengosongkan daftar dan indeksnya, dokumen
+       kontaknya sendiri masih ada — dan mengimpor nomor lama berarti MENYUNTING
+       kontak lama, yang kantornya memang tidak boleh ikut terhapus. Itu
+       perilaku yang benar, tetapi bukan yang sedang diuji di sini. */
+    const urut = [
+      ['Warsito Baru', '6285700011221', 'donatur rutin sejak 2023', 'JH-L-01'],
+      ['Nurhayati Baru', '6285700011222', 'kenalan Pak Budi', 'JH-L-01'],
+    ].map((r) => r.join('\t')).join('\n');
+
+    const praU = (await jalan('kontak.praimpor', { teks: urut })).pratinjau;
+    cek('pratinjau menyebut kolom keterangan di posisi ketiga',
+      praU.kolom.keterangan === 3, praU.kolom);
+    cek('dan grup tetap di posisi keempat', praU.kolom.grup === 4, praU.kolom);
+    cek('kantor TIDAK ditebak dari posisi', !praU.kolom.kantor, praU.kolom);
+    cek('contohnya memperlihatkan keterangannya',
+      praU.contoh[0].keterangan === 'donatur rutin sejak 2023', praU.contoh[0]);
+
+    await jalan('kontak.impor', { teks: urut });
+    const kU = await kontakLib.semuaKontak();
+    const ash = kU.find((x) => x.nama === 'Warsito Baru');
+    cek('keterangan tersimpan apa adanya, tanpa dicocokkan dengan apa pun',
+      ash && ash.catatan === 'donatur rutin sejak 2023', ash && ash.catatan);
+    cek('dan TIDAK masuk ke kantor', ash && !ash.kantor, ash && ash.kantor);
+    cek('grupnya tetap terbentuk',
+      (await kontakLib.daftarGrup()).some((g) => g.nama === 'JH-L-01'));
+
+    /* Keterangan boleh berisi apa saja, termasuk yang mirip nama kantor.
+       Tidak ada daftar sah, jadi tidak ada yang bisa "salah". */
+    await bersihkanKontak();
+    await jalan('kontak.impor', { teks: 'Slamet Baru\t6285700011223\tKLL Sewon tapi pindah\tA' });
+    const kBebas = (await kontakLib.semuaKontak()).find((x) => x.nama === 'Slamet Baru');
+    cek('keterangan yang mirip nama kantor tetap jadi keterangan',
+      kBebas.catatan === 'KLL Sewon tapi pindah' && !kBebas.kantor, kBebas);
+
+    /* Baris judul tetap berkuasa: berkas yang MENYEBUT kantor tetap mengisi
+       kantor, dan yang menyebut keterangan mengisi keterangan. */
+    await bersihkanKontak();
+    await jalan('kontak.impor', { teks: ['Nama\tNomor\tKantor\tKeterangan\tGrup',
+      'Rina Baru\t6285700011224\tKLL Bantul\tbendahara\tB'].join('\n') });
+    const kJudul = (await kontakLib.semuaKontak()).find((x) => x.nama === 'Rina Baru');
+    cek('baris judul yang menyebut kantor tetap mengisi kantor',
+      kJudul.kantor === 'KLL Bantul', kJudul.kantor);
+    cek('dan keterangannya masuk ke tempatnya sendiri',
+      kJudul.catatan === 'bendahara', kJudul.catatan);
   }
 
   console.log('\n=== M. RINCIAN KIRIMAN MASSAL ===');

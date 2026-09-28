@@ -439,9 +439,16 @@ function tandaiMenu(kode) {
  * tidak ada adalah sesuatu yang MEMBERITAHU petugas bahwa penandanya ada.
  * Tanpa itu, fiturnya sama saja dengan tidak ada.
  */
+/* Penanda yang bisa dipanggil di isi pesan, ditulis dalam kurung kurawal dua.
+ *
+ * {{kantor}} TIDAK lagi ditawarkan di sini, tetapi masih dimengerti server.
+ * Kantor adalah medan terikat yang dipakai mengunci pengurus KLL ke kantornya
+ * sendiri, dan sejak impor kontak memakai kolom Keterangan, yang benar-benar
+ * diisi petugas adalah keterangan. Templat lama yang terlanjur memakai
+ * {{kantor}} tetap berjalan; lihat penandaKontak() di api/blast.js. */
 const PENANDA = [
   { tulis: '{{nama}}', jelas: 'nama kontak' },
-  { tulis: '{{kantor}}', jelas: 'kantor kontak' },
+  { tulis: '{{keterangan}}', jelas: 'keterangan kontak' },
 ];
 
 const kepingPenanda = () => `
@@ -1309,7 +1316,11 @@ halaman.kirim = {
         : `Tampilan yang diterima ${contoh.nama}` + (dipilih.length > 1 ? ` (dan ${dipilih.length - 1} lainnya, masing-masing dengan namanya sendiri)` : '');
       pratinjau.textContent = isi
         ? isi
-          .replace(/\{\{\s*nama\s*\}\}/g, contoh ? contoh.nama : 'Bapak/Ibu')
+          /* Kontak anonim disapa "Bapak/Ibu" saat dikirim, jadi pratinjaunya
+             harus menyapa begitu juga. Memperlihatkan namanya di sini lalu
+             mengirim yang lain adalah pratinjau yang berbohong. */
+          .replace(/\{\{\s*nama\s*\}\}/g, contoh ? (contoh.anonim ? 'Bapak/Ibu' : contoh.nama) : 'Bapak/Ibu')
+          .replace(/\{\{\s*keterangan\s*\}\}/g, (contoh && contoh.keterangan) || '—')
           .replace(/\{\{\s*kantor\s*\}\}/g, (contoh && contoh.kantor) || '—')
           .replace(/\{\{\s*lembaga\s*\}\}/g, 'LAZISMU Bantul')
         : 'Isi pesan akan tampil di sini…';
@@ -2564,8 +2575,9 @@ halaman.kontak = {
           <div class="muted" style="font-size:11.5px;margin-top:4px">Pisahkan dengan koma. Grup inilah yang dipilih saat kiriman massal.</div>
         </div>
         <div class="field">
-          <label>Catatan</label>
-          <textarea name="catatan" rows="2">${H(k ? k.catatan : '')}</textarea>
+          <label>Keterangan</label>
+          <textarea name="catatan" rows="2" placeholder="Catatan bebas, mis. donatur rutin sejak 2023">${H(k ? k.catatan : '')}</textarea>
+          <div class="muted" style="font-size:11.5px;margin-top:4px">Inilah kolom ketiga saat mengimpor dari Excel.</div>
         </div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400">
@@ -2673,13 +2685,15 @@ halaman.kontak = {
     const ti = $('#imporK', el);
     if (ti) ti.onclick = () => modal('Impor kontak', `
       <p class="muted">Pilih berkas <b>Excel</b> (.xlsx/.xls) atau <b>CSV</b>, atau tempel langsung dari Excel.
-         Kolomnya: <code>nama, nomor, kantor, grup</code>. Satu kontak boleh masuk beberapa grup,
-         pisahkan dengan tanda <code>|</code>.</p>
+         Urutan kolomnya: <code>Nama, No. WA, Keterangan, Grup</code>. Satu kontak boleh masuk
+         beberapa grup, pisahkan dengan tanda <code>|</code>.</p>
+      <p class="muted"><b>Keterangan bebas diisi apa saja</b> &mdash; catatan Anda sendiri, apa adanya
+         seperti yang ditempel. Tidak perlu cocok dengan data mana pun di aplikasi ini.</p>
       <p class="muted">Baris judul boleh ada boleh tidak. Kalau tidak ada, kolomnya ditebak dari isinya,
          dan tebakannya diperlihatkan di pratinjau sebelum apa pun tersimpan.</p>
       <div class="field" style="margin-top:12px"><input type="file" id="berkasK" accept=".xlsx,.xls,.csv,.txt,.tsv"></div>
       <div class="field">
-        <textarea id="teksK" rows="8" placeholder="nama,nomor,kantor,grup&#10;Budi,081234567890,KLL Sewon,Pengurus|Panitia Qurban" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"></textarea>
+        <textarea id="teksK" rows="8" placeholder="Nama&#9;No. WA&#9;Keterangan&#9;Grup&#10;Budi Santosa&#9;081234567890&#9;donatur rutin sejak 2023&#9;Pengurus|Panitia Qurban" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace"></textarea>
       </div>
       <div id="pratinjauK" class="muted" style="font-size:12.5px"></div>`, (wadah) => {
       $('#fiBatal').onclick = tutupModal;
@@ -2730,8 +2744,12 @@ halaman.kontak = {
             + `.</div>`
             + `<div style="margin-top:6px">Baris judul: <b>${p.adaJudul ? 'ada, tidak ikut diimpor' : 'tidak ada'}</b>`
             + (p.ditebak ? ' (kolom ditebak dari isinya)' : '') + '</div>'
-            + `<div style="margin-top:4px">${kol('Nama', p.kolom.nama)} &middot; ${kol('Nomor', p.kolom.nomor)}`
-            + ` &middot; ${kol('Kantor', p.kolom.kantor)} &middot; ${kol('Grup', p.kolom.grup)}</div>`
+            + `<div style="margin-top:4px">${kol('Nama', p.kolom.nama)} &middot; ${kol('No. WA', p.kolom.nomor)}`
+            + ` &middot; ${kol('Keterangan', p.kolom.keterangan)} &middot; ${kol('Grup', p.kolom.grup)}`
+            /* Kantor cuma disebut kalau memang ada baris judulnya. Menyebut
+               "Kantor: tidak ada" pada tempelan biasa hanya membuat orang
+               mengira ada yang kurang. */
+            + (p.kolom.kantor ? ` &middot; ${kol('Kantor', p.kolom.kantor)}` : '') + `</div>`
             + (p.grup.length
               ? `<div style="margin-top:6px">Grup: `
                 + p.grup.slice(0, 12).map((g) => `${H(g.nama)} (${g.jumlah}${g.baru ? ', baru' : ''})`).join(', ')

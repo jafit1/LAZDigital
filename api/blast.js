@@ -63,6 +63,30 @@ async function bolehKhusus(pengguna, bagian) {
   return daftar.map(String).includes(String(pengguna.id));
 }
 
+/* PENANDA YANG BISA DIPANGGIL DI ISI PESAN, ditulis dalam kurung kurawal dua:
+ * {{nama}}, {{keterangan}}, {{lembaga}}.
+ *
+ * Disusun di SATU tempat karena dipakai tiga jalur yang berbeda: kirim satuan,
+ * kiriman massal, dan pratinjau di layar. Dulu daftarnya ditulis ulang di tiap
+ * jalur, dan itu bukan sekadar berulang: penanda yang ditambahkan di satu
+ * tempat lalu terlupa di tempat lain membuat pesannya terkirim dengan tulisan
+ * "{{keterangan}}" apa adanya ke ratusan donatur, sesudah pratinjaunya
+ * memperlihatkan hasil yang benar.
+ *
+ * {{kantor}} SENGAJA MASIH ADA walau sudah tidak ditawarkan lagi di layar.
+ * Templat yang sudah tersimpan sejak sebelum ini memakainya, dan membuangnya
+ * berarti templat lama mendadak mengirim tulisan mentah itu ke donatur.
+ */
+function penandaKontak(kontak) {
+  const k = kontak || {};
+  return {
+    nama: k.anonim ? 'Bapak/Ibu' : (k.nama || 'Bapak/Ibu'),
+    keterangan: k.catatan || '',
+    kantor: k.kantor || '',
+    lembaga: 'LAZISMU Bantul',
+  };
+}
+
 // Dorongan sekali jalan setelah pesan diantrekan, supaya pengiriman kecil
 // terasa langsung tanpa menunggu cron. Kegagalannya tidak boleh menggagalkan
 // permintaan — antrean tetap akan disapu cron berikutnya.
@@ -463,6 +487,10 @@ tindakan['kontak.pilihan'] = { izin: 'kontak.lihat', async jalankan({ pengguna }
   return {
     baris: isi.map((k) => ({
       id: k.id, nama: k.nama, nomor: k.nomor, kantor: k.kantor || '',
+      /* Dibawa supaya pratinjau bisa memperlihatkan {{keterangan}} dengan isi
+         yang SUNGGUHAN, bukan contoh karangan. */
+      keterangan: k.catatan || '',
+      anonim: Boolean(k.anonim),
       grup: k.label || [], segmen: k.segmen || [],
       /* Kontak yang diblokir tetap DIKIRIM ke tampilan, tidak disembunyikan:
          petugas yang mencari "Budi" dan tidak menemukannya akan menyangka
@@ -745,11 +773,7 @@ tindakan['pesan.kirim'] = { izin: 'pesan.kirim', async jalankan({ data, pengguna
       nama: kontak.nama,
       kontakId: kontak.id,
       isi: {
-        teks: isiPlaceholder(bersih.teks, {
-          nama: kontak.anonim ? 'Bapak/Ibu' : (kontak.nama || 'Bapak/Ibu'),
-          kantor: kontak.kantor || '',
-          lembaga: 'LAZISMU Bantul',
-        }),
+        teks: isiPlaceholder(bersih.teks, penandaKontak(kontak)),
         berkasUrl: bersih.berkasUrl,
         namaBerkas: bersih.namaBerkas,
         ...berkasSatu,
@@ -1135,11 +1159,7 @@ tindakan['massal.kirim'] = { izin: 'massal.kelola', async jalankan({ data, pengg
       nama: k.nama,
       kontakId: k.id,
       isi: {
-        teks: isiPlaceholder(bersih.teks, {
-          nama: k.anonim ? 'Bapak/Ibu' : (k.nama || 'Bapak/Ibu'),
-          kantor: k.kantor || '',
-          lembaga: 'LAZISMU Bantul',
-        }),
+        teks: isiPlaceholder(bersih.teks, penandaKontak(k)),
         ...berkasMassal,
       },
       prioritas: 6,

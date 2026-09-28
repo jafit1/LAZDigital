@@ -142,6 +142,15 @@ const server = http.createServer(async (req, res) => {
     if (t === 'chat.alir') server.badanTerakhir = badan;
     if (t !== 'chat.alir') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
+      /* Satu-satunya keadaan yang perlu dipalsukan terpisah: belum ada
+         provider sama sekali. Itulah saat lencana di bilah kiri menyala, dan
+         bagian M di bawah memeriksa bentuknya. */
+      if (t === 'ai.status' && server.tanpaPenyedia) {
+        return res.end(JSON.stringify({
+          ok: true, ...JAWABAN['ai.status'],
+          adaPenyedia: false, penyediaAktif: null, model: [],
+        }));
+      }
       return res.end(JSON.stringify({ ok: true, ...(JAWABAN[t] || {}) }));
     }
     res.writeHead(200, {
@@ -670,7 +679,90 @@ const server = http.createServer(async (req, res) => {
   await p2.screenshot({ path: path.join(LUAR, 'ai-hp-jawaban.png'), fullPage: false });
   await ctxHp.close();
 
-  console.log('\n=== M. TIDAK ADA GALAT JS ===');
+  console.log('\n=== M. LENCANA "BELUM ADA PROVIDER" ===');
+  /* KENAPA DIUJI SAMPAI KE PIKSELNYA.
+   *
+   * Lencana ini pernah berupa teks telanjang di dalam .badge. Di bilah menu
+   * yang dikuncupkan jadi 84 px, "belum ada provider" membungkus menjadi TIGA
+   * baris setinggi 54 px dan terbaca seperti sisa elemen yang lupa dirapikan.
+   * Tidak ada galat, tidak ada yang rusak — cuma jelek, dan yang cuma jelek
+   * tidak pernah tertangkap uji yang hanya memeriksa "ada atau tidak".
+   *
+   * Maka yang diperiksa di sini bukan keberadaannya, melainkan bentuknya:
+   * saat dikuncupkan HARUS tinggal ikon (teksnya benar-benar nol lebar, bukan
+   * sekadar terpotong), dan saat dilebarkan ikon plus label itu harus muat
+   * dalam SATU baris. Kabarnya sendiri tidak boleh hilang: ia pindah ke
+   * tooltip, jadi title-nya wajib menyebut apa yang harus dilakukan. */
+  server.tanpaPenyedia = true;
+  const ukurLencana = () => {
+    const e = document.getElementById('lencanaLingkup');
+    if (!e || e.hidden) return { ada: false };
+    const r = e.getBoundingClientRect();
+    const svg = e.querySelector('svg');
+    const tk = e.querySelector('.lingkup-teks');
+    const rs = svg ? svg.getBoundingClientRect() : null;
+    const rt = tk ? tk.getBoundingClientRect() : null;
+    const ikonMenu = document.querySelector('.tn-item svg');
+    const ri = ikonMenu ? ikonMenu.getBoundingClientRect() : null;
+    return {
+      ada: true,
+      tinggi: Math.round(r.height),
+      barisTeks: Math.round(parseFloat(getComputedStyle(e).lineHeight) || 16),
+      svgTampak: !!(rs && rs.width > 0 && rs.height > 0),
+      adaTeks: !!tk,
+      teksLebar: rt ? Math.round(rt.width) : 0,
+      teks: tk ? tk.textContent.trim() : e.textContent.trim(),
+      judul: e.title,
+      /* Sejajar dengan ikon menu lain, bukan melayang sendiri. */
+      pusatIkon: rs ? Math.round(rs.left + rs.width / 2) : 0,
+      pusatIkonMenu: ri ? Math.round(ri.left + ri.width / 2) : 0,
+    };
+  };
+
+  for (const kuncup of [true, false]) {
+    const ctxL = await b.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
+    const pl = await ctxL.newPage();
+    pl.on('pageerror', (e) => galat.push('lencana: ' + String(e)));
+    await pl.addInitScript((k) => {
+      try {
+        localStorage.setItem('laz_token', 'uji');
+        localStorage.setItem('laz_theme', 'light');
+        localStorage.setItem('sidebar_collapsed', k ? 'true' : 'false');
+      } catch (_) {}
+    }, kuncup);
+    await pl.goto(A + '/ai.html');
+    await pl.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
+    await pl.waitForTimeout(500);
+    const m = await pl.evaluate(ukurLencana);
+    const sebutan = kuncup ? 'dikuncupkan' : 'dilebarkan';
+
+    cek('lencana menyala saat belum ada provider (' + sebutan + ')', m.ada, m);
+    cek('berupa ikon, bukan teks telanjang (' + sebutan + ')', m.svgTampak, m);
+    cek('tidak pernah lebih dari satu baris (' + sebutan + ')',
+      m.ada && m.tinggi <= m.barisTeks * 2 + 6, m);
+    cek('kabarnya tetap ada di tooltip (' + sebutan + ')',
+      /provider/i.test(String(m.judul)) && String(m.judul).length > 20, m.judul);
+
+    if (kuncup) {
+      /* INI baris yang dulu gagal: teksnya harus benar-benar menyingkir. */
+      /* Labelnya harus tetap ADA di DOM (pembaca layar dan tampilan lebar
+         memakainya) tetapi nol lebar. Kalau sekadar diperiksa "tidak ada
+         teks", bentuk lama yang tanpa label ikut lolos. */
+      cek('dikuncupkan: tinggal ikon, tulisannya menyingkir sepenuhnya',
+        m.adaTeks && m.teksLebar === 0, m);
+      cek('dikuncupkan: ikonnya sejajar dengan ikon menu lain',
+        Math.abs(m.pusatIkon - m.pusatIkonMenu) <= 2, m);
+    } else {
+      cek('dilebarkan: tulisannya kembali muncul di samping ikon',
+        m.teksLebar > 40 && /belum ada provider/i.test(m.teks), m);
+    }
+    await pl.screenshot({ path: path.join(LUAR, 'ai-lencana-' + (kuncup ? 'kuncup' : 'lebar') + '.png'),
+      clip: { x: 0, y: 0, width: kuncup ? 120 : 260, height: 820 } });
+    await ctxL.close();
+  }
+  server.tanpaPenyedia = false;
+
+  console.log('\n=== N. TIDAK ADA GALAT JS ===');
   cek('tidak ada galat JavaScript sepanjang uji', galat.length === 0, galat.slice(0, 4));
 
   await b.close();

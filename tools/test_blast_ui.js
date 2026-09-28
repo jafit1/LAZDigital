@@ -93,7 +93,7 @@ const UTAS_GRUP = {
   ],
 };
 const KONTAK = [
-  { id: 'k1', nama: 'Budi Santosa', nomor: '628111222333', segmen: ['donatur-rutin'], label: ['Pengurus Harian', 'Panitia Qurban'], langganan: true, daftarHitam: false, kantor: 'KLL Sewon' },
+  { id: 'k1', nama: 'Budi Santosa', nomor: '628111222333', segmen: ['donatur-rutin'], label: ['Pengurus Harian', 'Panitia Qurban'], langganan: true, daftarHitam: false, kantor: 'KLL Sewon', catatan: 'donatur rutin sejak 2023' },
   { id: 'k2', nama: 'Siti Aminah', nomor: '628444555666', segmen: ['simpatisan'], label: ['Panitia Qurban'], langganan: true, daftarHitam: false, kantor: '' },
   { id: 'k3', nama: 'Ani Diblokir', nomor: '628777888999', segmen: [], label: [], langganan: false, daftarHitam: true, kantor: '' },
 ];
@@ -137,6 +137,7 @@ const JAWABAN = {
   },
   'kontak.pilihan': { baris: KONTAK.map((k) => ({
     id: k.id, nama: k.nama, nomor: k.nomor, kantor: k.kantor || '',
+    keterangan: k.catatan || '', anonim: false,
     grup: k.label || [], segmen: k.segmen || [],
     diblokir: Boolean(k.daftarHitam || k.langganan === false),
   })), grup: GRUP, segmen: SEGMEN },
@@ -180,6 +181,12 @@ const JAWABAN = {
   'grup.hapus': { grup: 'X', kontak: 1, baris: GRUP },
   'antrean.proses': { laporan: { diproses: 0, terkirim: 0, diserahkan: 0, gagal: 0, ditunda: 0, alasan: [] } },
   'berkas.unggah': { berkas: { id: 'f_uji1', nama: 'Panduan Zakat.pdf', tipe: 'application/pdf', jenis: 'dokumen', byte: 204800 } },
+  'kontak.praimpor': { pratinjau: {
+    total: 2, sah: 2, tidakSahJumlah: 0, tidakSah: [], adaJudul: false, ditebak: true,
+    kolom: { nama: 1, nomor: 2, keterangan: 3, grup: 4, kantor: null },
+    grup: [{ nama: 'JH-L-01', jumlah: 2, baru: true }],
+    contoh: [{ nama: 'Warsito', nomor: '6285700011221', keterangan: 'donatur rutin sejak 2023', kantor: '', grup: 'JH-L-01' }],
+  } },
   'inbox.daftar': { baris: PERCAKAPAN, belumDibaca: 2, denyut: 7 },
   'inbox.denyut': { denyut: 7 },
   'inbox.tandaiDibaca': { kunci: 'nomor:628111222333', waktu: new Date().toISOString() },
@@ -420,7 +427,12 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   await p.waitForTimeout(800);
   const keping = await p.evaluate(() => Array.from(document.querySelectorAll('#isi .keping')).map((k) => k.textContent.trim()));
   cek('ada keping {{nama}} di komposer', keping.includes('{{nama}}'), keping);
-  cek('ada keping {{kantor}}', keping.includes('{{kantor}}'), keping);
+  /* {{keterangan}} menggantikan {{kantor}} sebagai penanda yang ditawarkan.
+     Kantor adalah medan terikat yang dipakai mengunci pengurus KLL ke
+     kantornya sendiri; sejak impor kontak memakai kolom Keterangan, yang
+     benar-benar terisi petugas adalah keterangan. */
+  cek('ada keping {{keterangan}}', keping.includes('{{keterangan}}'), keping);
+  cek('keping {{kantor}} tidak ditawarkan lagi', !keping.includes('{{kantor}}'), keping);
 
   const sisip = await p.evaluate(() => {
     const t = document.querySelector('#isi [name=teks]');
@@ -487,6 +499,19 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     /Budi Santosa/.test(sesudahCentang.pratinjau), sesudahCentang.pratinjau);
   cek('dan mengingatkan bahwa yang lain menerima namanya sendiri',
     /namanya sendiri/i.test(sesudahCentang.kepala), sesudahCentang.kepala);
+
+  /* Pratinjau harus memperlihatkan isi keterangan yang SUNGGUHAN. Pratinjau
+     yang menampilkan contoh karangan membuat penandanya terlihat berfungsi
+     walau datanya kosong, dan itu baru ketahuan sesudah terkirim. */
+  const pratinjauKet = await p.evaluate(() => {
+    const t = document.querySelector('#isi [name=teks]');
+    t.value = 'Halo {{nama}}, catatan: {{keterangan}}';
+    t.dispatchEvent(new Event('input', { bubbles: true }));
+    return (document.getElementById('pratinjau') || {}).textContent || '';
+  });
+  cek('pratinjau mengganti {{keterangan}} dengan isi sungguhan',
+    /donatur rutin sejak 2023/.test(pratinjauKet), pratinjauKet);
+  cek('dan tidak menyisakan penanda mentah', !/\{\{/.test(pratinjauKet), pratinjauKet);
   await p.keyboard.press('Escape');
   await p.waitForTimeout(200);
 
@@ -991,6 +1016,39 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('mengosongkan audit menuntut kata kunci diketik ulang', dialogA.adaKetik === true, dialogA.adaKetik);
   cek('dan menjelaskan bahwa pengosongannya sendiri ikut tercatat',
     /tercatat/i.test(dialogA.teks), dialogA.teks.slice(0, 220));
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(300);
+
+  console.log('\n=== O. IMPOR KONTAK: NAMA, NO, KETERANGAN, GRUP ===');
+  /* Urutan kolom yang tertulis di layar HARUS sama dengan urutan yang
+     sesungguhnya dibaca. Kalau layarnya menyebut satu urutan dan kodenya
+     memakai urutan lain, yang terjadi bukan galat melainkan keterangan yang
+     diam-diam masuk ke kolom kantor — dan kantor itulah yang dipakai mengunci
+     pengurus KLL ke kantornya sendiri. */
+  await p.evaluate(() => { location.hash = '#kontak'; });
+  await p.waitForTimeout(800);
+  await p.click('#imporK');
+  await p.waitForTimeout(400);
+  const dlg = await p.evaluate(() => ({
+    teks: (document.getElementById('modalBody') || {}).textContent || '',
+    contoh: (document.getElementById('teksK') || {}).placeholder || '',
+  }));
+  cek('dialog menyebut urutan Nama, No. WA, Keterangan, Grup',
+    /Nama,\s*No\. WA,\s*Keterangan,\s*Grup/.test(dlg.teks), dlg.teks.slice(0, 200));
+  cek('dan menegaskan keterangannya bebas diisi',
+    /bebas diisi apa saja/i.test(dlg.teks), dlg.teks.slice(0, 260));
+  cek('contoh di kotak tempelnya ikut urutan yang sama',
+    /Nama\tNo\. WA\tKeterangan\tGrup/.test(dlg.contoh), dlg.contoh);
+
+  await p.evaluate(() => {
+    const t = document.getElementById('teksK');
+    t.value = 'Warsito\t6285700011221\tdonatur rutin\tJH-L-01';
+    t.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await p.waitForTimeout(700);
+  const pra = await p.evaluate(() => (document.getElementById('pratinjauK') || {}).textContent || '');
+  cek('pratinjau menyebut kolom Keterangan, bukan Kantor',
+    /Keterangan: kolom 3/.test(pra) && !/Kantor/.test(pra), pra.slice(0, 260));
   await p.keyboard.press('Escape');
   await p.waitForTimeout(300);
 
