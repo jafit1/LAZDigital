@@ -246,6 +246,61 @@ async function serahkan(id) { await lepasJeda(); await majukan(id); return antre
   cek('langganannya dimatikan', kontak2.langganan === false, kontak2.langganan);
   cek('yang berhenti tidak dibalas otomatis', !r.tubuh.balas, r.tubuh);
 
+  /* --- TIDAK ADA BALASAN OTOMATIS, APA PUN YANG DITULIS DONATUR -------------
+   *
+   * Dulu server menjalankan aturan balasan dan mengembalikan jawabannya ke
+   * gateway untuk dikirim seketika. Itu dimatikan atas permintaan pengelola:
+   * pesan yang masuk ke nomor lembaga dijawab amil, bukan mesin.
+   *
+   * Yang diuji di sini kata-kata yang DULU memicu jawaban, termasuk jaring
+   * pengaman lama yang membalas apa pun yang berbau permohonan bantuan, dan
+   * aturan cadangan yang membalas kalimat apa saja. Kalau salah satunya
+   * kembali menjawab, uji ini gagal sebelum ada donatur yang menerimanya.
+   *
+   * Ini juga menjaga dari kemunduran yang paling gampang: menghidupkan lagi
+   * cariBalasan "cuma untuk kata kunci tertentu". Tidak ada kata kunci yang
+   * dikecualikan; yang dijanjikan adalah tidak ada balasan mesin sama sekali. */
+  for (const contoh of [
+    'zakat',                       /* dulu: menu layanan zakat */
+    'rekening',                    /* dulu: nomor rekening resmi */
+    'PETUGAS',                     /* dulu: alih ke petugas */
+    'saya butuh bantuan biaya sekolah anak',  /* dulu: jaring pengaman */
+    'assalamualaikum pak, mau tanya',         /* dulu: aturan cadangan */
+    'halo',
+  ]) {
+    const jawab = await hit('masuk', {
+      perangkatId: PERANGKAT, nomor: '081234567891', teks: contoh, nama: 'Penanya',
+    });
+    cek(`"${contoh.slice(0, 28)}" tidak dibalas mesin`,
+      jawab.tubuh.balas === '' && !jawab.tubuh.tindakan,
+      { balas: jawab.tubuh.balas, tindakan: jawab.tubuh.tindakan });
+  }
+
+  /* Dan tidak ada pesan keluar yang diam-diam masuk antrean untuk nomor itu.
+     Medan 'balas' yang kosong belum membuktikan apa-apa kalau jawabannya
+     ternyata diantrekan lewat jalan lain. */
+  {
+    const antre = await db.anggotaHimpunan(antrean.KUNCI_ANTREAN);
+    const isiAntre = (await db.ambilBanyak(antre.map(antrean.KUNCI_PESAN))).filter(Boolean);
+    cek('tidak ada pesan keluar yang diantrekan untuk penanya itu',
+      !isiAntre.some((x) => x.nomor === '6281234567891'),
+      isiAntre.map((x) => x.nomor));
+  }
+
+  /* Berkasnya memang sudah tidak ada. Diperiksa supaya tidak diam-diam
+     dihidupkan lagi lewat require baru di kemudian hari. */
+  {
+    const fs = require('fs');
+    const path = require('path');
+    cek('mesin balasan otomatis sudah tidak ada di kode',
+      !fs.existsSync(path.join(__dirname, '..', 'lib', 'blast', 'balasan.js')));
+    for (const berkas of ['blast-agen.js', 'blast-masuk.js']) {
+      const isi = fs.readFileSync(path.join(__dirname, '..', 'api', berkas), 'utf8');
+      cek(`api/${berkas} tidak memanggil cariBalasan lagi`,
+        !/cariBalasan\s*\(/.test(isi));
+    }
+  }
+
   console.log('\n=== K. SALAM PERKENALAN GATEWAY ===');
   r = await hit('halo', { agen: 'pc-kantor' });
   cek('gateway mendapat daftar perangkat miliknya',

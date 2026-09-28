@@ -9,8 +9,7 @@
 const db = require('../lib/blast/db');
 const { id, sekarang, normalkanNomor, bersihkanTeks, sukses, gagal, bacaBody } = require('../lib/blast/util');
 const { ambilSetelan } = require('../lib/blast/setelan');
-const { cariBalasan } = require('../lib/blast/balasan');
-const { antrikan, catatKeDaftar, KUNCI_PESAN, simpanPesan } = require('../lib/blast/antrean');
+const { catatKeDaftar, KUNCI_PESAN, simpanPesan } = require('../lib/blast/antrean');
 const { kirimKejadian } = require('../lib/blast/webhook');
 const kontakLib = require('../lib/blast/kontak');
 
@@ -118,28 +117,12 @@ module.exports = async function penangan(req, res) {
       await db.simpan(kontakLib.KUNCI(kontak.id), kontak);
     }
 
-    const balasan = await cariBalasan(masuk.teks, { nama: kontak.anonim ? 'Bapak/Ibu' : kontak.nama });
-    let balasanId = null;
-    if (balasan && perangkat) {
-      const keluar = await antrikan({
-        perangkatId: perangkat.id,
-        nomor: masuk.nomor,
-        nama: kontak.nama,
-        kontakId: kontak.id,
-        isi: { teks: balasan.balasan },
-        prioritas: 1, // balasan percakapan paling didahulukan
-        oleh: 'otomatis',
-        kunciIdempoten: `balas:${pesan.id}`,
-      });
-      balasanId = keluar.id;
-      if (balasan.tindakan === 'alih-ke-petugas') {
-        await db.simpan(`percakapan:status:${masuk.nomor}`, {
-          status: 'terbuka', perluPetugas: true, waktu: sekarang(),
-        });
-      }
-    }
-
-    return sukses(res, { pesanId: pesan.id, balasanId, tindakan: balasan ? balasan.tindakan : '' });
+    /* TIDAK ADA BALASAN OTOMATIS. Lihat alasannya di api/blast-agen.js: pesan
+       yang masuk ke nomor lembaga dijawab amil, bukan mesin. Jalur webhook ini
+       dimatikan bersamaan supaya tidak ada satu pintu pun yang tertinggal
+       menyala, karena pintu yang tertinggal baru ketahuan dari keluhan
+       donatur. balasanId tetap dikirim sebagai null demi pemanggil lama. */
+    return sukses(res, { pesanId: pesan.id, balasanId: null, tindakan: '' });
   } catch (e) {
     console.error('[masuk] gagal memproses:', e);
     // Tetap 200 agar penyedia tidak membanjiri kiriman ulang; galat dicatat di log

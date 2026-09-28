@@ -25,7 +25,6 @@ const mandiri = require('../lib/blast/pengirim/mandiri');
 const kontakLib = require('../lib/blast/kontak');
 const percakapanLib = require('../lib/blast/percakapan');
 const berkasLib = require('../lib/blast/berkas');
-const { cariBalasan } = require('../lib/blast/balasan');
 
 const KUNCI_PERANGKAT = (i) => `perangkat:${i}`;
 /* Kunci klaim per pesan. INCR bersifat atomik di Redis, jadi hanya penarik
@@ -342,10 +341,24 @@ async function masuk({ data }) {
     return { pesanId: pesan.id, berhenti: true, balas: '' };
   }
 
-  const balasan = await cariBalasan(teks, { nama: kontak.anonim ? 'Bapak/Ibu' : kontak.nama });
-  /* Balasan dikembalikan langsung ke gateway, bukan diantrekan, supaya
-     percakapan terasa seketika dan tidak menunggu putaran cron berikutnya. */
-  return { pesanId: pesan.id, balas: balasan ? balasan.balasan : '', tindakan: balasan ? balasan.tindakan : '' };
+  /* TIDAK ADA BALASAN OTOMATIS, dan medan 'balas' sengaja tetap ada.
+   *
+   * Dulu di sini aturan balasan dijalankan dan jawabannya dikembalikan ke
+   * gateway untuk dikirim seketika. Itu dimatikan atas permintaan pengelola:
+   * pesan yang masuk ke nomor lembaga dijawab amil, bukan mesin.
+   *
+   * Alasannya bukan sekadar selera. Balasan otomatis pada nomor lembaga zakat
+   * gampang salah menjawab hal yang menyangkut uang orang, dan donatur yang
+   * menerima jawaban template untuk pertanyaan pribadi cenderung berhenti
+   * bertanya sama sekali. Layar Percakapan sudah menandai pesan yang belum
+   * dibaca, jadi yang hilang cuma mesinnya, bukan jawabannya.
+   *
+   * Medannya tetap dikirim sebagai string kosong karena gateway versi lama
+   * masih membaca jawab.balas. Menghilangkannya sama sekali membuat gateway
+   * yang belum diperbarui membaca undefined, dan itu jalur yang tidak pernah
+   * diuji. Kosong berarti 'tidak ada yang perlu dikirim', dan itu persis
+   * yang diinginkan. */
+  return { pesanId: pesan.id, balas: '', tindakan: '' };
 }
 
 /* --- berkas: isi lampiran, ditarik sekali lalu disimpan gateway ---------- */
