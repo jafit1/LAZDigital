@@ -48,7 +48,7 @@ function keBerkas(alamat) {
 }
 
 // ---------------------------------------------------------------- halaman
-const HALAMAN = ['index.html', 'public.html', 'broadcast.html', 'blast.html', 'fund.html', 'ai.html'];
+const HALAMAN = ['index.html', 'public.html', 'broadcast.html', 'blast.html', 'fund.html', 'ai.html', 'media.html'];
 
 console.log('=== A. TIAP HALAMAN PUNYA IKON ===');
 const dipakai = new Set();

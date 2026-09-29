@@ -19,6 +19,18 @@ let LAMBAT = null;
 function _setLambat(o){ LAMBAT = o || null; }
 function _belumLengkap(n){ return !!(LAMBAT && !LAMBAT.lengkap.has(n)); }
 function _perluLembar(n){ if (_belumLengkap(n)) LAMBAT.minta(n); }
+/* SINYAL PEMUATAN TABEL TIDAK BOLEH DIBUNGKUS.
+ *
+ * LAMBAT.minta() melempar galat khusus yang artinya bukan "gagal" melainkan
+ * "tabel ini belum ada, muat dulu lalu ulangi". api/rpc.js yang menangkapnya.
+ * Kalau sebuah catch di berkas ini membungkusnya jadi pesan lain, artinya
+ * hilang dan yang sampai ke layar adalah kegagalan yang sebenarnya sudah ada
+ * penanganannya. Itu pernah terjadi pada impor jurnal:
+ *
+ *     Gagal memproses teks: Tabel "Penghimpunan" belum dimuat.
+ *
+ * Jadi tiap catch yang membungkus pesan memanggil _lolosLembar(e) lebih dulu. */
+function _lolosLembar(e){ if (e && (e.perluLembar || /Tabel "[^"]+" belum dimuat/.test(String(e.message||'')))) throw e; }
 const ID_M=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const ID_MS=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const TZ = 'Asia/Jakarta';
@@ -82,7 +94,7 @@ var SHEETS = {
    pantas dilihat semua orang, sementara saldo KLL/ULL boleh. Dipisahkan
    sebagai modul supaya diaturnya lewat mekanisme izin yang sama dengan
    fitur lain, bukan lewat saklar tersembunyi. */
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai'];
+var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -91,7 +103,8 @@ var MODUL_LABEL = {
   laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
   log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
-  fundraising:'Fundraising (Penghimpunan Lapangan)', ai:'AI Asisten'
+  fundraising:'Fundraising (Penghimpunan Lapangan)', ai:'AI Asisten',
+  media:'Media & Desain'
 };
 var MODUL_KET = {
   dashboard:'Dashboard, menu Saldo Kas & Bank, dan Saldo KLL & ULL',
@@ -107,7 +120,8 @@ var MODUL_KET = {
   saldodaerah:'Melihat angka Penghimpunan Daerah di menu Saldo KLL & ULL. Hanya "view" yang dipakai.',
   broadcast:'Mengirim pesan WhatsApp massal ke buku kontak broadcast',
   fundraising:'Modul fundraiser lapangan: database donatur, jadwal pengambilan, pencatatan, dan pencocokan dengan buku utama. Centang "hapus" menjadikannya koordinator yang melihat data semua fundraiser.',
-  ai:'AI Asisten: "lihat" membaca percakapan, "tambah" boleh bertanya, "ubah" boleh menyunting pengetahuan & persona, "hapus" boleh menghapus percakapan (percakapan dipakai bersama seluruh tim). Pengaturan provider dan kunci API tetap khusus superadmin.'
+  ai:'AI Asisten: "lihat" membaca percakapan, "tambah" boleh bertanya, "ubah" boleh menyunting pengetahuan & persona, "hapus" boleh menghapus percakapan (percakapan dipakai bersama seluruh tim). Pengaturan provider dan kunci API tetap khusus superadmin.',
+  media:'Permohonan desain ke tim media: "lihat" membuka modul dan melihat permohonan, "tambah" boleh mengajukan permohonan dan meminta revisi atas permohonannya sendiri, "ubah" menjadikannya tim media yang mengerjakan, "hapus" menjadikannya koordinator yang membagi bidang, mengatur anggota tim, dan melihat rekap. Bidang foto/video/desain diatur terpisah di halaman Tim Media.'
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
@@ -3232,24 +3246,42 @@ function jpSeksiHimpun(sec){
 
 /* Kumpulkan baris yang tanggal debet & kreditnya beda (kemungkinan salah ketik),
    untuk ditampilkan sebagai peringatan sebelum data disimpan. */
-function _kumpulAnomaliTgl(himpun, salur){
+/* Baris yang tanggal debet dan kreditnya berbeda. Satu pasangan jurnal
+ * mencatat satu perpindahan uang, jadi dua tanggal berarti salah satunya salah
+ * ketik, dan yang salah biasanya menyeberang bulan: debet 02-02 sementara
+ * kreditnya 01-02 di dalam sheet Januari.
+ *
+ * UMP DAN TRANSFER IKUT DISISIR, dan itu perbaikan. Dulu hanya penghimpunan
+ * dan penyaluran yang diperiksa, padahal uang muka dan mutasi antar rekening
+ * sama-sama menggerakkan saldo. Pada berkas jurnal bank setahun milik
+ * pengelola, satu-satunya salah tanggal justru ada di baris UMP Amil, dan
+ * dengan aturan lama ia lolos tanpa sepatah kata pun. */
+function _kumpulAnomaliTgl(himpun, salur, ump, transfer){
   var out = [];
-  function sisir(rows, jenis){
-    (rows || []).forEach(function(r){
+  /* kumpulan + idx adalah ALAMAT barisnya, dan itu yang membuat tanggalnya
+     bisa dibetulkan langsung di layar Periksa Data. Tanpa alamat, daftar ini
+     cuma bisa memberi tahu ada yang salah lalu menyuruh orang membuka Excel,
+     membetulkan di sana, dan mengunggah ulang seluruh berkas. */
+  function sisir(rows, jenis, kumpulan){
+    (rows || []).forEach(function(r, i){
       if (r && r.tglBeda){
         out.push({
           jenis: jenis,
-          nama: r.namaDonatur || r.namaPenerima || '-',
+          kumpulan: kumpulan,
+          idx: i,
+          nama: r.namaDonatur || r.namaPenerima || r.layanan || r.dariAkun || '-',
           tglDebet: r.tglBeda.debet,
           tglKredit: r.tglBeda.kredit,
-          jumlah: r.jumlah,
+          jumlah: r.jumlah || r.nominal || 0,
           keterangan: r.keterangan || ''
         });
       }
     });
   }
-  sisir(himpun, 'Penghimpunan');
-  sisir(salur, 'Pentasyarufan');
+  sisir(himpun, 'Penghimpunan', 'himpun');
+  sisir(salur, 'Pentasyarufan', 'salur');
+  sisir(ump, 'Uang Muka', 'ump');
+  sisir(transfer, 'Perpindahan', 'transfer');
   return out;
 }
 
@@ -3293,6 +3325,23 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
     if (rawRows[s0] && getSectionHeader(rawRows[s0])) { adaSeksi = true; break; }
   }
 
+  /* TIDAK ADA BARIS YANG BOLEH HILANG TANPA KETERANGAN.
+   *
+   * Fungsi ini menolak baris di belasan tempat dengan `continue`, dan tiap
+   * penolakan itu benar sendiri-sendiri: baris kredit memang pasangannya
+   * baris debet, seksi PENYUSUTAN memang bukan uang berpindah. Yang salah
+   * adalah diamnya. Pengelola menyerahkan berkas berisi 13.151 baris; kalau
+   * yang tercatat 6.439, tiga puluh delapan sisanya lenyap tanpa ada yang
+   * tahu nomornya, dan ketahuannya baru saat saldo rekening tidak cocok
+   * berbulan-bulan kemudian.
+   *
+   * Jadi tiap baris yang BENAR-BENAR dipakai ditandai, dan di ujung fungsi
+   * sisanya dikumpulkan beserta alasannya. Ditandai di tempat pemakaian,
+   * bukan ditebak dari hasilnya: menebak berarti daftar yang dilewati ikut
+   * salah setiap kali aturannya berubah. */
+  var dipakai = {};
+  var seksiBaris = {};
+
   for (var i = 0; i < rawRows.length; i++) {
     var r = rawRows[i];
     if (!r) continue;
@@ -3304,6 +3353,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
       continue;
     }
 
+    seksiBaris[i] = currentSection;
     if (skipSections.indexOf(currentSection) >= 0) continue;
     if (!currentSection && adaSeksi) continue;
 
@@ -3315,6 +3365,10 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
       var pNext = rawRows[i+1];
       if (!pNext || !isValidDateStringOrObject(pNext[0]) || !(parseAmount(pNext[3]) > 0)) continue;
       var pTgl = parseImportDate(r[0]);
+      /* Tanggal pasangannya. Sama alasannya dengan baris penghimpunan:
+         dua tanggal untuk satu perpindahan berarti salah satunya salah ketik. */
+      var pTglK = parseImportDate(pNext[0]);
+      var pBeda = (pTglK && pTglK !== pTgl) ? { debet: pTgl, kredit: pTglK } : null;
       var akunDebet = String(r[1] || '').trim(), akunKredit = String(pNext[1] || '').trim();
       var pUraian = String(r[4] || pNext[4] || '').trim();
       var aD = akunDariLabel(akunDebet, listRek), aK = akunDariLabel(akunKredit, listRek);
@@ -3324,24 +3378,25 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         var dUmp = /ZAKAT/i.test(currentSection) ? 'Zakat' : /AMIL/i.test(currentSection) ? 'Amil' : 'Infak';
         var layU = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian) : null;
         var layNama = layU ? (layU.tipe + ' ' + layU.nama) : (extractLayananFromText(pUraian, listLayanan) ? _layLabel(extractLayananFromText(pUraian, listLayanan)) : '');
-        umpRows.push({ tanggal:pTgl, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
+        umpRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
           akun:aK.label, rekeningId:aK.rekeningId, kasNama:aK.kasNama, nominal:pDebet,
           keterangan:pUraian, section:currentSection, akunDikenal:aK.dikenal });
       } else if (/^PENGEMBALIAN UMP$/i.test(currentSection)) {
         /* debet = rekening/kas yang menerima uang kembali, kredit = akun UMP */
         var dK = /zakat/i.test(akunKredit) ? 'Zakat' : /amil/i.test(akunKredit) ? 'Amil' : 'Infak';
         var layK = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian) : null;
-        umpRows.push({ tanggal:pTgl, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
+        umpRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
           akun:aD.label, rekeningId:aD.rekeningId, kasNama:aD.kasNama, nominal:pDebet,
           keterangan:pUraian, section:currentSection, akunDikenal:aD.dikenal });
       } else {
         var jT = /SETOR/i.test(currentSection) ? 'setor' : /TARIK/i.test(currentSection) ? 'tarik' : 'mutasi';
-        transferRows.push({ tanggal:pTgl, jenis:jT,
+        transferRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:jT,
           dariAkun:aK.label, dariRekeningId:aK.rekeningId, dariKas:aK.kasNama,
           keAkun:aD.label, keRekeningId:aD.rekeningId, keKas:aD.kasNama,
           nominal:pDebet, keterangan:pUraian, section:currentSection,
           akunDikenal: aK.dikenal && aD.dikenal });
       }
+      dipakai[i] = 1; dipakai[i + 1] = 1;
       continue;
     }
 
@@ -3373,6 +3428,8 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         
         var _tglBeda = (_tglPasangan && _tglPasangan !== dateStr)
           ? { debet: dateStr, kredit: _tglPasangan } : null;
+        dipakai[i] = 1;
+        if (bankAccName || _tglPasangan) dipakai[i + 1] = 1;
 
         /* Akun kredit baris pasangannya — dipakai untuk menentukan jenis dana,
            sekaligus untuk mengenali penerimaan pada berkas tanpa judul seksi. */
@@ -3697,11 +3754,54 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
     }
   }
   
+  /* Sisir ulang: baris yang tampak seperti data (bertanggal dan bernominal)
+     tetapi tidak pernah dipakai. Alasannya diturunkan dari keadaannya, bukan
+     dikarang, supaya yang membaca tahu harus berbuat apa. */
+  var dilewati = [];
+  for (var w = 0; w < rawRows.length; w++) {
+    if (dipakai[w]) continue;
+    var rw = rawRows[w];
+    if (!rw || getSectionHeader(rw)) continue;
+    var adaTgl = rw.length >= 3 && isValidDateStringOrObject(rw[0]);
+    var dw = parseAmount(rw[2]), kw = parseAmount(rw[3]);
+    var adaNama = String(rw[1] || '').trim();
+    if (!adaTgl && !dw && !kw) continue;           /* baris kosong / hiasan */
+    if (!adaNama && !dw && !kw) continue;
+    var sk = seksiBaris[w] || '';
+    /* URUTAN ALASAN PENTING. Yang menyangkut SEKSI diperiksa lebih dulu,
+       karena seksi yang memang tidak diimpor akan selalu terlihat seperti
+       "baris debet tanpa pasangan" juga, dan alasan kedua itu menakut-nakuti
+       tanpa sebab: penyusutan memang bukan uang berpindah. */
+    var sebab, sengaja = false;
+    if (skipSections.indexOf(sk) >= 0) { sebab = 'Seksi ' + sk + ' memang tidak diimpor (tidak ada uang berpindah)'; sengaja = true; }
+    else if (!sk && adaSeksi) sebab = 'Berada di luar semua judul seksi';
+    else if (!adaTgl) sebab = 'Tanggalnya kosong atau tidak terbaca';
+    else if (!dw && !kw) sebab = 'Nominalnya kosong di kolom debet maupun kredit';
+    else if (kw > 0 && !dw) sebab = 'Baris kredit tanpa pasangan debet di atasnya';
+    else if (dw > 0 && !kw) sebab = 'Baris debet tanpa pasangan kredit di bawahnya';
+    else sebab = 'Bentuk barisnya tidak dikenali';
+    dilewati.push({
+      baris: w + 1,
+      seksi: sk,
+      tanggal: adaTgl ? parseImportDate(rw[0]) : String(rw[0] || ''),
+      akun: adaNama,
+      debet: dw, kredit: kw,
+      keterangan: String(rw[4] || '').trim(),
+      sebab: sebab,
+      /* sengaja = aturan yang memang begitu, bukan data yang perlu dibetulkan.
+         Dipisahkan supaya daftar yang perlu diperiksa orang tidak tenggelam
+         di antara puluhan baris penyusutan yang memang dilewati. */
+      sengaja: sengaja
+    });
+  }
+
   return {
     himpunRows: himpunRows,
     salurRows: salurRows,
     umpRows: umpRows,
-    transferRows: transferRows
+    transferRows: transferRows,
+    dilewati: dilewati,
+    jumlahBarisSumber: rawRows.length
   };
 }
 
@@ -3799,7 +3899,9 @@ async function apiParseImportUrl(t, url, type) {
         salurValid: salurValid,
         salurInvalid: salurInvalid,
         bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
-        anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid),
+        anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid, resultJurnal.umpRows, resultJurnal.transferRows),
+        dilewati: resultJurnal.dilewati || [],
+        jumlahBarisSumber: resultJurnal.jumlahBarisSumber || 0,
         sheetTerbaca: (typeof sheetTerbaca !== 'undefined') ? sheetTerbaca : [],
         umpValid: resultJurnal.umpRows || [],
         transferValid: resultJurnal.transferRows || [],
@@ -3876,6 +3978,7 @@ async function apiParseImportUrl(t, url, type) {
       };
     }
   } catch (e) {
+    _lolosLembar(e);
     throw new Error('Gagal membaca Spreadsheet/Excel dari URL: ' + (e.message || String(e)));
   }
 }
@@ -4267,7 +4370,9 @@ async function apiParseImportText(t, text, type) {
         salurValid: salurValid,
         salurInvalid: salurInvalid,
         bedaDana: himpunValid.filter(function(x){ return x.bedaDana; }).length,
-        anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid),
+        anomaliTanggal: _kumpulAnomaliTgl(himpunValid, salurValid, resultJurnal.umpRows, resultJurnal.transferRows),
+        dilewati: resultJurnal.dilewati || [],
+        jumlahBarisSumber: resultJurnal.jumlahBarisSumber || 0,
         umpValid: resultJurnal.umpRows || [],
         transferValid: resultJurnal.transferRows || [],
         akunAsing: _kumpulAkunAsing(resultJurnal, listRek),
@@ -4359,6 +4464,7 @@ async function apiParseImportText(t, text, type) {
       totalCount: parsed2.length
     };
   } catch (e) {
+    _lolosLembar(e);
     throw new Error('Gagal memproses teks: ' + (e.message || String(e)));
   }
 }

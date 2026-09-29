@@ -84,7 +84,8 @@ var NAV_ICONS={
   kll:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>',
   broadcast: navIcon('<path d="M4 11.5a7.5 7.5 0 1 1 3.2 6.15L3.5 20l1-3.4A7.4 7.4 0 0 1 4 11.5z"/><path d="M8.5 10.5h7"/><path d="M8.5 13.5h4.5"/>'),
   fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>'),
-  ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>')};
+  ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>'),
+  media: navIcon('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M3.5 17.5 9 12.5l3.5 3 3-2.5 5 4.5"/>')};
 var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
   {id:'penghimpunan',label:'Penghimpunan',ic:NAV_ICONS.penghimpunan,mod:'penghimpunan'},
@@ -98,6 +99,7 @@ var MENU=[
   {id:'broadcast',label:'Broadcast',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/blast.html'},
   {id:'fundraising',label:'Fundraising',ic:NAV_ICONS.fundraising,mod:'fundraising',url:'/fund.html'},
   {id:'ai',label:'AI Asisten',ic:NAV_ICONS.ai,mod:'ai',url:'/ai.html'},
+  {id:'media',label:'Media & Desain',ic:NAV_ICONS.media,mod:'media',url:'/media.html'},
   {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
 function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }
@@ -4384,6 +4386,125 @@ function tarikImportData() {
     promise = gas('apiParseImportUrl')(TOKEN, url, IMPORT_TEMP_TYPE);
   }
   
+/* Membetulkan tanggal satu baris, lalu menggambar ulang blok tanggalnya saja.
+
+   Yang diubah objek barisnya SENDIRI di window.IMPORT_TEMP_*_ROWS, bukan
+   salinan di daftar anomali: daftar itu cuma potret, dan yang dikirim ke
+   server saat menyimpan adalah objek barisnya. Kalau yang diubah potretnya,
+   layar memperlihatkan tanggal yang benar sementara yang tersimpan tetap
+   yang salah, dan itu jenis kekeliruan yang tidak pernah ketahuan. */
+function imporBetulkanTanggal(kunci, tgl) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(tgl || ''))) return toast('Tanggalnya belum lengkap', true);
+  var res = window.IMPORT_TEMP_RES;
+  if (!res) return;
+  var p = String(kunci).split(':');
+  var peta = {
+    himpun: window.IMPORT_TEMP_HIMPUN_ROWS,
+    salur: window.IMPORT_TEMP_SALUR_ROWS,
+    ump: window.IMPORT_TEMP_UMP_ROWS,
+    transfer: window.IMPORT_TEMP_TRANSFER_ROWS,
+  };
+  var baris = (peta[p[0]] || [])[Number(p[1])];
+  if (!baris) return;
+  baris.tanggal = tgl;
+  baris.tglBeda = null;
+  (res.anomaliTanggal || []).forEach(function(a){
+    if (a.kumpulan === p[0] && Number(a.idx) === Number(p[1])) { a.beres = true; a.tglBaru = tgl; }
+  });
+  var kotak = el('imporTanggalBlok');
+  if (kotak) {
+    kotak.outerHTML = '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
+    imporPasangPerbaikanTanggal();
+  }
+  toast('Tanggal dibetulkan jadi ' + tglIndo(tgl));
+}
+
+function imporPasangPerbaikanTanggal() {
+  document.querySelectorAll('.imp-tgl-cepat').forEach(function(b){
+    b.onclick = function(){ imporBetulkanTanggal(b.getAttribute('data-k'), b.getAttribute('data-tgl')); };
+  });
+  document.querySelectorAll('.imp-tgl-isi').forEach(function(i){
+    i.onchange = function(){ imporBetulkanTanggal(i.getAttribute('data-k'), i.value); };
+  });
+  if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
+}
+/* --- Periksa Data: dua blok yang bisa ditindaklanjuti ---------------------
+
+   Keduanya menjawab pertanyaan yang sama, 'apa yang perlu saya periksa
+   sebelum menyimpan', dan keduanya dulu tidak ada jawabannya di layar.  */
+
+/* Tanggal debet dan kredit yang berbeda. Satu pasangan jurnal mencatat satu
+   perpindahan uang, jadi dua tanggal berarti salah satunya salah ketik. */
+function imporBlokTanggal(res) {
+  var anom = (res.anomaliTanggal || []).filter(function(a){ return !a.beres; });
+  var beres = (res.anomaliTanggal || []).filter(function(a){ return a.beres; }).length;
+  if (!anom.length) {
+    return beres ? '<div class="imp-note" style="margin-bottom:12px"><b>' + beres
+      + ' tanggal sudah dibetulkan.</b> Yang tersimpan nanti tanggal yang baru.</div>' : '';
+  }
+  var h = '<details class="imp-note imp-warn imp-det" open><summary><b>' + anom.length
+    + ' kemungkinan salah tanggal</b> &middot; tanggal debet dan kredit berbeda'
+    + (beres ? ' &middot; ' + beres + ' sudah dibetulkan' : '') + '</summary>'
+    + '<div class="imp-det-b"><div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+    + '<th>Jenis</th><th>Nama</th><th>Jumlah</th><th>Debet</th><th>Kredit</th><th>Pakai tanggal</th>'
+    + '</tr></thead><tbody>';
+  anom.forEach(function(a) {
+    var kunci = a.kumpulan + ':' + a.idx;
+    h += '<tr>'
+      + '<td>' + esc(a.jenis) + '</td>'
+      + '<td>' + esc(a.nama) + (a.keterangan ? '<div class="muted" style="font-size:10.5px">' + esc(a.keterangan.slice(0, 60)) + '</div>' : '') + '</td>'
+      + '<td>' + rp(a.jumlah) + '</td>'
+      + '<td style="color:var(--red);font-weight:700">' + esc(tglIndo(a.tglDebet)) + '</td>'
+      + '<td style="color:var(--red);font-weight:700">' + esc(tglIndo(a.tglKredit)) + '</td>'
+      + '<td style="white-space:nowrap">'
+        + '<button type="button" class="cbtn imp-tgl-cepat" data-k="' + esc(kunci) + '" data-tgl="' + esc(a.tglDebet) + '" style="width:auto;padding:0 8px">Debet</button> '
+        + '<button type="button" class="cbtn imp-tgl-cepat" data-k="' + esc(kunci) + '" data-tgl="' + esc(a.tglKredit) + '" style="width:auto;padding:0 8px">Kredit</button> '
+        + '<input type="date" class="imp-tgl-isi" data-k="' + esc(kunci) + '" value="' + esc(a.tglDebet) + '" style="width:150px;display:inline-block">'
+      + '</td></tr>';
+  });
+  return h + '</tbody></table></div></div></details>';
+}
+
+/* Baris sumber yang tidak ikut terbawa. Yang disengaja dipisahkan dari yang
+   perlu diperiksa, supaya daftar yang benar-benar butuh perhatian tidak
+   tenggelam di antara puluhan baris penyusutan yang memang dilewati. */
+function imporBlokDilewati(res) {
+  var d = res.dilewati || [];
+  var sumber = res.jumlahBarisSumber || 0;
+  var perlu = d.filter(function(x){ return !x.sengaja; });
+  var sengaja = d.filter(function(x){ return x.sengaja; });
+  if (!d.length) {
+    return sumber ? '<div class="imp-note" style="margin-bottom:12px"><b>Seluruh '
+      + sumber + ' baris berkas terbaca.</b> Tidak ada yang dilewati.</div>' : '';
+  }
+  var ringkas = {};
+  sengaja.forEach(function(x){ ringkas[x.sebab] = (ringkas[x.sebab] || 0) + 1; });
+  var h = '<details class="imp-note' + (perlu.length ? ' imp-warn' : '') + ' imp-det"' + (perlu.length ? ' open' : '')
+    + '><summary><b>' + d.length + ' dari ' + sumber + ' baris tidak ikut terbawa</b>'
+    + (perlu.length ? ' &middot; <b style="color:var(--red)">' + perlu.length + ' perlu diperiksa</b>' : ' &middot; semuanya memang begitu aturannya')
+    + '</summary><div class="imp-det-b">';
+  if (perlu.length) {
+    h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+      + '<th>Baris</th><th>Tanggal</th><th>Akun</th><th>Debet</th><th>Kredit</th><th>Sebab</th>'
+      + '</tr></thead><tbody>'
+      + perlu.slice(0, 40).map(function(x){
+          return '<tr><td>' + x.baris + '</td><td>' + esc(x.tanggal || '-') + '</td>'
+            + '<td>' + esc(x.akun || '-') + (x.keterangan ? '<div class="muted" style="font-size:10.5px">' + esc(x.keterangan.slice(0, 50)) + '</div>' : '') + '</td>'
+            + '<td>' + (x.debet ? rp(x.debet) : '-') + '</td>'
+            + '<td>' + (x.kredit ? rp(x.kredit) : '-') + '</td>'
+            + '<td>' + esc(x.sebab) + '</td></tr>';
+        }).join('')
+      + '</tbody></table></div>'
+      + (perlu.length > 40 ? '<div class="muted" style="margin-top:6px">… dan ' + (perlu.length - 40) + ' lagi</div>' : '');
+  }
+  var kunci = Object.keys(ringkas);
+  if (kunci.length) {
+    h += '<div style="margin-top:' + (perlu.length ? '10px' : '0') + '">'
+      + kunci.map(function(k){ return '<div><b>' + ringkas[k] + ' baris</b> &middot; ' + esc(k) + '</div>'; }).join('')
+      + '</div>';
+  }
+  return h + '</div></details>';
+}
   promise.then(function(res) {
     btn.disabled = false;
     btn.textContent = 'Tarik Ulang';
@@ -4391,6 +4512,10 @@ function tarikImportData() {
     if (res && res.success) {
       if (res.isJurnal) {
         window.IMPORT_TEMP_IS_JURNAL = true;
+        /* Disimpan supaya pratinjau bisa digambar ulang tanpa menarik dan
+           menguraikan berkasnya lagi. Dipakai sesudah tanggal dibetulkan di
+           layar Periksa Data. */
+        window.IMPORT_TEMP_RES = res;
         window.IMPORT_TEMP_HIMPUN_ROWS = res.himpunValid;
         window.IMPORT_TEMP_SALUR_ROWS = res.salurValid;
         window.IMPORT_TEMP_UMP_ROWS = res.umpValid || [];
@@ -4411,19 +4536,14 @@ function tarikImportData() {
           + ((res.bedaDana || 0) ? ' Baris yang menulis jenis dana berbeda dengan akun kreditnya ditandai di tabel bawah.' : '')
           + '</div></details>';
 
-        /* Peringatan anomali tanggal: baris yang tanggal debet & kreditnya beda. */
-        var anom = res.anomaliTanggal || [];
-        if (anom.length) {
-          h += '<details class="imp-note imp-warn imp-det" open><summary><b>' + anom.length + ' kemungkinan salah tanggal</b> &middot; tanggal debet dan kredit berbeda</summary>'
-            + '<ul class="imp-det-b" style="margin:6px 0 0;padding-left:18px">'
-            + anom.slice(0, 8).map(function(a) {
-                return '<li style="margin:2px 0">' + esc(tglIndo(a.tglDebet)) + ' &ne; ' + esc(tglIndo(a.tglKredit))
-                  + ' &middot; ' + esc(a.nama) + ' &middot; Rp ' + rpCetak(a.jumlah)
-                  + (a.keterangan ? ' <span class="muted">(' + esc(a.keterangan.slice(0, 50)) + ')</span>' : '') + '</li>';
-              }).join('')
-            + (anom.length > 8 ? '<li>… dan ' + (anom.length - 8) + ' lagi</li>' : '')
-            + '</ul></details>';
-        }
+        /* SALAH TANGGAL BISA LANGSUNG DIBETULKAN DI SINI.
+           Dulu daftar ini cuma memberi tahu lalu diam. Yang harus dilakukan
+           orang sesudah membacanya: menutup impor, membuka Excel, mencari
+           barisnya, membetulkan, menyimpan, lalu mengunggah ulang seluruh
+           berkas tiga belas ribu baris. Sekarang tanggalnya diubah di tempat,
+           dan yang disimpan nanti adalah yang sudah dibetulkan. */
+        h += '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
+        h += imporBlokDilewati(res);
         h += '<div class="imp-stat">'
           + '<span class="imp-stat-i ok"><b>' + res.himpunValid.length + '</b> penghimpunan</span>'
           + '<span class="imp-stat-i warn"><b>' + res.salurValid.length + '</b> pentasyarufan</span>'
@@ -4502,6 +4622,7 @@ function tarikImportData() {
         el('importSimpanBtn').classList.remove('hidden');
         el('importSimpanBtn').textContent = 'Simpan Data Jurnal';
         el('importPreview').innerHTML = h;
+        imporPasangPerbaikanTanggal();
       } else {
         IMPORT_TEMP_ROWS = res.valid;
         var h = '<div class="imp-stat">'

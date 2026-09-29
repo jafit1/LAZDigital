@@ -117,6 +117,35 @@ JAWABAN['dasbor.ringkas.fund'] = {
   ],
 };
 
+// ---- Media & Desain
+JAWABAN['media.status'] = {
+  pengguna: { id: 'u1', nama: 'Ahmad Maruf', peran: 'koordinator', kantor: '' },
+  izin: ['media.dasbor', 'permohonan.lihat', 'permohonan.ajukan', 'permohonan.revisi',
+    'kerja.ambil', 'kerja.kirim', 'tim.lihat', 'tim.ubah', 'permohonan.bagi', 'rekap.lihat'],
+  koordinator: true, bidangSaya: ['desain'],
+  jenis: [
+    { kode: 'foto', label: 'Foto', bidang: 'foto', contoh: 'Dokumentasi kegiatan' },
+    { kode: 'flyer', label: 'Flyer / Poster', bidang: 'desain', contoh: 'Pengumuman kegiatan' },
+  ],
+  labelBidang: { foto: 'Foto', video: 'Video', desain: 'Desain Grafis' },
+  labelStatus: {}, labelLangkah: {},
+  hariIni: new Date().toISOString().slice(0, 10), upstash: true,
+};
+JAWABAN['dasbor.ringkas.media'] = {
+  lembaga: { total: 12, baru: 3, diproses: 2, selesai: 7, terlambat: 1, revisi: 4 },
+  saya: { total: 5, baru: 1, diproses: 1, selesai: 3, terlambat: 0, revisi: 2 },
+  kotakSaya: { jumlah: 2, baru: 1, terlambat: 0 },
+  bidangSaya: ['desain'],
+  mendesak: [{
+    id: 'pm1', nomor: 'MD-2609-001', judul: 'Flyer Kajian Ahad Pagi dengan judul yang sengaja panjang sekali',
+    jenis: 'flyer', jenisLabel: 'Flyer / Poster', bidang: 'desain', status: 'baru',
+    pemohonId: 'u2', pemohonNama: 'Rina Humas', pemohonKantor: '', pengerjaId: '', pengerjaNama: '',
+    deadline: new Date(Date.now() + 2 * 86400e3).toISOString().slice(0, 10),
+    sisaHari: 2, terlambat: false, jumlahRevisi: 0, jumlahHasil: 0, hasilTerakhir: '',
+    dibuat: new Date().toISOString(), diubah: new Date().toISOString(),
+  }],
+};
+
 const TIPE = { '.css': 'text/css', '.js': 'text/javascript', '.html': 'text/html', '.png': 'image/png', '.json': 'application/json' };
 const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url.startsWith('/api/')) {
@@ -126,6 +155,7 @@ const server = http.createServer(async (req, res) => {
     try { t = JSON.parse(body).tindakan || ''; } catch (_) {}
     /* "dasbor.ringkas" dipakai dua modul dengan bentuk balasan berbeda. */
     if (t === 'dasbor.ringkas' && req.url.includes('/fund')) t = 'dasbor.ringkas.fund';
+    if (t === 'dasbor.ringkas' && req.url.includes('/media')) t = 'dasbor.ringkas.media';
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ ok: true, ...(JAWABAN[t] || {}) }));
   }
@@ -155,6 +185,7 @@ const HALAMAN = [
   { url: '/blast.html', nama: 'Broadcast', siap: '#appView:not(.hidden)' },
   { url: '/fund.html', nama: 'Fundraising', siap: '#appView:not(.hidden)' },
   { url: '/ai.html', nama: 'AI Asisten', siap: '#appView:not(.hidden)' },
+  { url: '/media.html', nama: 'Media & Desain', siap: '#appView:not(.hidden)' },
   /* Halaman percakapan sengaja tidak punya judul halaman biasa, jadi satu
      halaman turunan ikut diuji supaya batas ukuran judul & tabel tetap
      terperiksa di modul ini juga. */

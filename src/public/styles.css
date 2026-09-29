@@ -5743,3 +5743,120 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   font-family:var(--head); font-size:17px; font-weight:700; color:#fff;
   background:linear-gradient(140deg,var(--accent2),var(--accent)); user-select:none;
 }
+
+/* ================================================================
+   57. MEDIA & DESAIN
+   ================================================================
+   Sengaja pendek. Dashboard modul ini memakai komponen yang sudah ada di
+   dashboard utama, .kpis-v2 dan .wc, bukan komponen baru: satu tampilan yang
+   berdiri sendiri berarti dua tempat yang harus diingat saat temanya berubah,
+   dan yang kedua selalu ketinggalan. Yang ditambahkan di sini hanya tiga hal
+   yang memang belum ada di mana pun.
+   ================================================================ */
+
+/* 0. Lima kartu, bukan empat. .kpis-v2 dipatok empat kolom, dan lima kartu di
+      dalamnya menyisakan satu kartu sendirian di baris kedua: terbaca seperti
+      ada yang lupa dipasangkan. Ringkasan permohonan memang butuh lima angka,
+      jadi kolomnya yang mengikuti, bukan angkanya yang dipaksa berkurang. */
+.kpis-v2.is-lima{ grid-template-columns:repeat(5,1fr); }
+@media(max-width:1250px){ .kpis-v2.is-lima{ grid-template-columns:repeat(3,1fr) } }
+@media(max-width:800px){ .kpis-v2.is-lima{ grid-template-columns:repeat(2,1fr) } }
+@media(max-width:520px){ .kpis-v2.is-lima{ grid-template-columns:1fr } }
+.kpis-v2.is-lima .kpi-v2:nth-child(5){ animation-delay:.18s }
+
+/* 1. Pita perbandingan status. Menggantikan tiga angka dengan satu baris:
+      yang dicari orang di sini perbandingannya, bukan angkanya satu-satu. */
+.md-pita{ display:flex; height:8px; border-radius:999px; overflow:hidden; background:var(--surface2); margin-bottom:10px; }
+.md-pita i{ display:block; height:100%; transition:width .5s cubic-bezier(.22,.7,.2,1); }
+.md-kunci{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text2); }
+.md-kunci span{ display:inline-flex; align-items:center; gap:6px; }
+.md-kunci i{ width:8px; height:8px; border-radius:50%; }
+
+/* 2. BARIS PERMOHONAN. Bentuknya dua baris, dan itu keputusan, bukan
+      kebetulan.
+
+      Versi sebelumnya menaruh judul, keterangan, dan lencana dalam SATU baris
+      mendatar. Di kolom selebar 340 px, lencana "Menunggu" dan "Telat 2 hari"
+      memakan hampir separuh lebar, sisanya dibagi judul dan keterangan, dan
+      keduanya terpotong titik-titik sebelum sempat terbaca. Yang tersisa di
+      layar: nomor permohonan tanpa perkara, dan nama pemohon tanpa nama.
+
+      Sekarang keterangan diberi barisnya sendiri yang membentang penuh, jadi
+      ia tidak pernah berebut tempat dengan apa pun. Yang di kanan tinggal satu
+      hal: kapan dipakai. Status pindah ke bintik warna di kiri, karena warna
+      dibaca lebih cepat daripada kata dan tidak memakan lebar sama sekali. */
+.md-baris{
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto;
+  column-gap:10px; row-gap:2px; align-items:center;
+  width:100%; text-align:left; font:inherit; color:inherit; cursor:pointer;
+  padding:11px 13px; border:1px solid var(--border); border-radius:12px;
+  background:var(--surface); margin-bottom:8px;
+  transition:border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.md-baris:last-child{ margin-bottom:0; }
+.md-baris:hover{ border-color:var(--accent); transform:translateX(2px); box-shadow:0 6px 16px -8px rgba(0,0,0,.16); }
+.md-baris:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.md-baris.is-telat{ border-color:var(--red); background:var(--red-bg); }
+
+.md-baris .md-r-titik{
+  grid-column:1; grid-row:1 / span 2;
+  width:9px; height:9px; border-radius:50%; background:var(--muted);
+  box-shadow:0 0 0 3px color-mix(in srgb, currentColor 10%, transparent);
+}
+.md-baris .md-r-judul{
+  grid-column:2; grid-row:1; min-width:0;
+  font-weight:600; font-size:13.5px; line-height:1.35;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.md-baris .md-r-kanan{
+  grid-column:3; grid-row:1; justify-self:end;
+  font-size:12px; font-weight:600; color:var(--text2); white-space:nowrap;
+}
+.md-baris.is-telat .md-r-kanan{ color:var(--red); }
+/* Keterangan membentang dari kolom judul sampai ujung kanan: inilah yang dulu
+   terpotong, dan inilah satu-satunya tempat nama pemohon muncul. */
+.md-baris .md-r-sub{
+  grid-column:2 / -1; grid-row:2; min-width:0;
+  color:var(--muted); font-size:11.5px; line-height:1.4;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* 3. Kartu beban per bidang. Kecil, sebaris, tanpa judul panjang. */
+.md-bidang{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+.md-bkartu{ border:1px solid var(--border); border-radius:12px; padding:12px 13px; background:var(--surface); }
+.md-bkartu.is-kosong{ border-color:var(--red); background:var(--red-bg); }
+.md-bkartu .md-b-nama{ font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px; }
+.md-bkartu .md-b-nama i{ width:7px; height:7px; border-radius:50%; background:var(--accent); }
+.md-bkartu .md-b-angka{ font-family:var(--head); font-size:22px; font-weight:800; line-height:1.2; margin-top:7px; }
+.md-bkartu .md-b-ket{ color:var(--muted); font-size:11.5px; margin-top:1px; }
+.md-bkartu .md-b-ket b{ color:var(--red); }
+
+/* Widget dashboard masuk berurutan, bukan serentak. Jeda kecil saja: yang
+   dicari kesan rapi, bukan pertunjukan. */
+/* Widget setinggi isinya, bukan setinggi tetangganya. Di dashboard utama tiap
+   widget memang berisi grafik yang tingginya mirip; di sini isinya berbeda
+   jauh, dan meregangkan yang pendek cuma melahirkan ruang kosong selebar
+   kartu di bawah satu baris permohonan. */
+/* !important karena .dgrid mematok stretch dengan !important juga (baris 715).
+   Bukan lomba menang-menangan: di dashboard utama stretch memang benar karena
+   isi tiap widget tingginya mirip, di sini tidak. */
+.md-dgrid{ align-items:start !important; }
+
+/* Kartu angka tanpa grafik mini. .kpi-v2-bottom disediakan setinggi 32 px
+   untuk menampung grafik; kartu di modul ini tidak punya grafik, dan ruang
+   kosong 32 px di bawah angka membuat kartunya setinggi 157 px untuk memuat
+   satu label dan satu angka. Jadi barisnya tidak digambar sama sekali, dan
+   jarak bawah nilainya ikut ditiadakan. */
+.kpi-rapat .kpi-v2-value{ margin-bottom:0; }
+.dgrid .wc{ animation:fadeUp .5s cubic-bezier(.22,.7,.2,1) both; }
+.dgrid .wc:nth-child(1){ animation-delay:.04s }
+.dgrid .wc:nth-child(2){ animation-delay:.09s }
+.dgrid .wc:nth-child(3){ animation-delay:.14s }
+.dgrid .wc:nth-child(4){ animation-delay:.19s }
+.dgrid .wc:nth-child(5){ animation-delay:.24s }
+.dgrid .wc:nth-child(n+6){ animation-delay:.28s }
+@media (prefers-reduced-motion:reduce){
+  .dgrid .wc{ animation:none; }
+  .md-pita i{ transition:none; }
+  .md-baris:hover{ transform:none; }
+}
