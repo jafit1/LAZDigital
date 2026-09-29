@@ -263,6 +263,216 @@ const adaPasangan = (daftar, a, b) => (daftar || []).some((x) =>
   cek('nama kantor yang cuma numpang di dalam nama donatur tetap tidak menarik',
     !cari('KLL Sedayu') || cari('KLL Sedayu').nHimpun === 0, cari('KLL Sedayu'));
 
+  console.log('\n=== K. KATA "ACEH" TIDAK BOLEH MEMOTONG NAMA KANTOR ===');
+  /* Ini akar masalahnya, dan letaknya satu kata.
+     _LAY_STOP memuat 'aceh', 'palestina', 'ntt' karena nama kampanye sering
+     ditempel di belakang nama kantor: "KLL Srandakan Aceh" adalah KLL
+     Srandakan yang menghimpun untuk Aceh. Aturan itu benar sampai ada kantor
+     yang namanya memang memuat kata itu. "ULL Masjid Baiturrahman Aceh"
+     terpotong jadi "ULL Masjid Baiturrahman", dan "ULL Masjid Aceh Uang Muka
+     Program Infak" terpotong jadi "ULL Masjid" — dua kantor bayangan lahir
+     dari satu kata, padahal menu Layanan bersih. */
+  {
+    const dbBersih = () => {
+      const t = dbBaru();
+      /* master hanya berisi nama yang benar — persis seperti keadaan
+         sungguhan yang dilaporkan: "di menu KLL ULL tidak ada bayangan" */
+      t.sheets.Layanan = [t.sheets.Layanan[0]].concat([
+        ['x1', 'ULL', '', 'Masjid Baiturrahman Aceh', '', '', '', 'true', HARI],
+        ['x2', 'ULL', '', 'Masjid Sayyidah Qowwiyah KII', '', '', '', 'true', HARI],
+        ['x3', 'KLL', '', 'Srandakan', '', '', '', 'true', HARI],
+      ]);
+      const kol = (tb) => skema.TABEL[tb].kolom.map((k) => k[0]);
+      const br = (tb, o) => kol(tb).map((k) => (o[k] === undefined ? '' : o[k]));
+      /* baris yang SUDAH telanjur tersimpan dengan nama terpotong */
+      t.sheets.UangMuka = [kol('UangMuka'),
+        br('UangMuka', { id: 'u1', tanggal: TGL, jenis: 'keluar', dana: 'Infak',
+          layanan: 'ULL Masjid Baiturrahman', nominal: 105754040,
+          keterangan: 'ULL Masjid Baiturrahman Aceh Uang Muka Program Infak' }),
+        br('UangMuka', { id: 'u2', tanggal: TGL, jenis: 'keluar', dana: 'Infak',
+          layanan: 'ULL Masjid', nominal: 15000000,
+          keterangan: 'ULL Masjid Aceh Uang Muka Program Infak' })];
+      t.sheets.Pentasyarufan = [kol('Pentasyarufan'),
+        br('Pentasyarufan', { id: 'q1', tanggal: TGL, section: 'UMP LPJ',
+          namaPenerima: 'ULL Masjid Baiturrahman Aceh', jumlah: 56703600, sumberDana: 'Infak' })];
+      t.sheets.Penghimpunan = [kol('Penghimpunan'),
+        br('Penghimpunan', { id: 'w1', tanggal: TGL, jenisDana: 'Infak',
+          namaDonatur: 'ULL Masjid Baiturrahman Aceh', jumlah: 2433000 })];
+      return t;
+    };
+    const r = (await engine.runRPC(dbBersih(), 'apiSaldoLayanan', [TOKEN, HARI], {})).result;
+    const ambil = (n) => r.daftar.filter((x) => x.layanan === n)[0] || null;
+    const asli = ambil('ULL Masjid Baiturrahman Aceh');
+    cek('kantor aslinya ada', !!asli, r.daftar.map((x) => x.layanan));
+    cek('uang muka yang namanya terpotong kembali ke kantornya',
+      !!asli && asli.umpKeluar === 105754040, asli && asli.umpKeluar);
+    cek('LPJ-nya bertemu lagi dengan uang mukanya',
+      !!asli && asli.lpj === 56703600, asli && asli.lpj);
+    cek('setorannya ikut di kantor yang sama',
+      !!asli && asli.himpun === 2433000, asli && asli.himpun);
+    cek('belum LPJ-nya jadi angka yang masuk akal, bukan dua angka mustahil',
+      !!asli && asli.belumLPJ === 49050440, asli && asli.belumLPJ);
+    cek('tidak ada lagi baris "ULL Masjid Baiturrahman" yang berdiri sendiri',
+      !ambil('ULL Masjid Baiturrahman'), r.daftar.map((x) => x.layanan));
+
+    /* Yang TIDAK boleh ditebak: "ULL Masjid" cocok dengan dua kantor terdaftar
+       sekaligus. Menebak salah satunya berarti memindahkan Rp 15 juta ke
+       kantor yang keliru, dan itu jauh lebih buruk daripada membiarkannya
+       terlihat menggantung sampai ada orang yang memutuskan. */
+    const gantung = ambil('ULL Masjid');
+    cek('nama yang cocok dengan lebih dari satu kantor TIDAK ditebak',
+      !!gantung && gantung.umpKeluar === 15000000, gantung);
+  }
+
+  console.log('\n=== L. NAMA KAMPANYE TETAP BUKAN NAMA KANTOR ===');
+  /* Perbaikan di atas tidak boleh membatalkan alasan 'aceh' dimasukkan ke
+     daftar kata berhenti. "KLL Srandakan Aceh" harus tetap KLL Srandakan. */
+  {
+    const t = dbBaru();
+    t.sheets.Layanan = [t.sheets.Layanan[0]].concat([
+      ['y1', 'KLL', '', 'Srandakan', '', '', '', 'true', HARI],
+      ['y2', 'ULL', '', 'Masjid Baiturrahman Aceh', '', '', '', 'true', HARI],
+    ]);
+    const kol = (tb) => skema.TABEL[tb].kolom.map((k) => k[0]);
+    const br = (tb, o) => kol(tb).map((k) => (o[k] === undefined ? '' : o[k]));
+    t.sheets.UangMuka = [kol('UangMuka')];
+    t.sheets.Pentasyarufan = [kol('Pentasyarufan')];
+    /* Lewat jalur pembaca nama, yaitu jalur yang dijaga daftar kata berhenti:
+       kwitansi yang ditulis "KLL Srandakan Aceh" adalah KLL Srandakan yang
+       menghimpun untuk Aceh, bukan kantor bernama "Srandakan Aceh". */
+    t.sheets.Penghimpunan = [kol('Penghimpunan'),
+      br('Penghimpunan', { id: 'z1', tanggal: TGL, jenisDana: 'Infak',
+        namaDonatur: 'KLL Srandakan Aceh', jumlah: 1000000 }),
+      br('Penghimpunan', { id: 'z2', tanggal: TGL, jenisDana: 'Infak',
+        namaDonatur: 'ULL Masjid Baiturrahman Aceh Uang Muka Program Infak', jumlah: 2000000 })];
+    const r2 = (await engine.runRPC(t, 'apiSaldoLayanan', [TOKEN, HARI], {})).result;
+    const nama2 = r2.daftar.map((x) => x.layanan);
+    cek('KLL Srandakan Aceh tetap dibaca sebagai KLL Srandakan',
+      nama2.indexOf('KLL Srandakan') >= 0, nama2);
+    cek('tidak lahir kantor bernama "Srandakan Aceh"',
+      !nama2.some((x) => /Srandakan Aceh/i.test(x)), nama2);
+    /* Sebaliknya, kantor yang namanya MEMANG memuat kata itu harus utuh. */
+    cek('kantor yang namanya memang memuat "Aceh" terbaca utuh',
+      nama2.indexOf('ULL Masjid Baiturrahman Aceh') >= 0, nama2);
+    cek('dan tidak terpotong jadi "ULL Masjid Baiturrahman"',
+      nama2.indexOf('ULL Masjid Baiturrahman') < 0, nama2);
+  }
+
+  console.log('\n=== M. RINCIAN TRANSAKSI DI BALIK SEBUAH NAMA ===');
+  /* Angka tidak pernah cukup untuk memutuskan sebuah uang muka sebenarnya
+     milik kantor mana. Yang menentukan adalah keterangannya: "ULL Masjid
+     Aceh Uang Muka Program Infak" menjawabnya, "Rp 15.000.000" tidak. Maka
+     rinciannya harus bisa dibuka, lengkap dengan keterangan dan nama yang
+     benar-benar tertulis di barisnya. */
+  {
+    const rinci = await jalan('apiRincianLayananNama', [TOKEN, 'ULL Masjid', 300]);
+    cek('rincian mengembalikan barisnya', (rinci.baris || []).length > 0, rinci.jumlah);
+    cek('tiap baris menyebut dari mana asalnya',
+      rinci.baris.every((x) => ['himpun', 'ump', 'lpj'].indexOf(x.sumber) >= 0),
+      rinci.baris.map((x) => x.sumber));
+    cek('keterangannya ikut, karena itu yang menjawab kantornya yang mana',
+      rinci.baris.some((x) => /Uang Muka Program Infak/i.test(String(x.keterangan || ''))),
+      rinci.baris.map((x) => x.keterangan));
+    cek('nama yang benar-benar tertulis di baris ikut dibawa',
+      rinci.baris.every((x) => typeof x.nama === 'string'), rinci.baris[0]);
+    cek('barisnya urut menurut tanggal',
+      rinci.baris.every((x, i) => i === 0 || String(rinci.baris[i - 1].tanggal) <= String(x.tanggal)),
+      rinci.baris.map((x) => x.tanggal));
+    cek('ejaan mentahnya diringkas beserta jumlahnya',
+      (rinci.ejaanMentah || []).length > 0 && rinci.ejaanMentah.every((e) => e.n > 0),
+      rinci.ejaanMentah);
+    cek('status terdaftarnya dikatakan', typeof rinci.terdaftar === 'boolean', rinci.terdaftar);
+
+    /* Yang paling menentukan: daftar yang DILIHAT harus sama persis dengan
+       daftar yang akan DIGABUNG. Kalau keduanya memakai pencocokan
+       sendiri-sendiri, orang memeriksa satu daftar lalu menggabungkan daftar
+       yang lain, dan selisihnya baru ketahuan berbulan-bulan kemudian. */
+    const pra = await jalan('apiGabungLayanan', [TOKEN, 'ULL Masjid', 'ULL Masjid Baiturrahman Aceh', false]);
+    const totalRinci = rinci.jumlah.himpun + rinci.jumlah.ump + rinci.jumlah.lpj;
+    cek('jumlah baris yang dilihat sama dengan yang akan digabung',
+      totalRinci === pra.jumlah, { dilihat: totalRinci, digabung: pra.jumlah });
+    cek('rinciannya pun sama per jenis',
+      rinci.jumlah.himpun === pra.rincian.himpun && rinci.jumlah.ump === pra.rincian.ump
+      && rinci.jumlah.lpj === pra.rincian.lpj, { rinci: rinci.jumlah, pra: pra.rincian });
+    cek('nominalnya sama',
+      rinci.nominal.ump === pra.nominal.ump && rinci.nominal.lpj === pra.nominal.lpj,
+      { rinci: rinci.nominal, pra: pra.nominal });
+
+    let tolak = '';
+    try { await jalan('apiRincianLayananNama', [TOKEN, '', 300]); }
+    catch (e) { tolak = e.message; }
+    cek('nama kosong ditolak dengan penjelasan', /belum dipilih/i.test(tolak), tolak);
+  }
+
+  console.log('\n=== N. PERUBAHAN SEJAK PEMERIKSAAN TERAKHIR ===');
+  /* Membetulkan kwitansi satu per satu itu pekerjaan berjam-jam, dan yang
+     melelahkan bukan menyuntingnya melainkan tidak tahu apakah suntingan tadi
+     mengenai sasaran. Daftarnya memang selalu dihitung ulang, tetapi "sudah
+     hilang" tidak terlihat oleh orang yang menatap layar yang sama untuk
+     kelima kalinya. */
+  {
+    const db = dbBaru();
+    const p1 = (await engine.runRPC(db, 'apiPeriksaLayanan', [TOKEN, true], {})).result;
+    cek('pemeriksaan pertama belum punya pembanding', p1.perubahan === null, p1.perubahan);
+
+    /* Petugas membetulkan kwitansinya sendiri: satu baris LPJ yang tadinya
+       atas nama ejaan Qawiyah diganti jadi ejaan yang benar. */
+    const kepala = db.sheets.Pentasyarufan[0];
+    const iNama = kepala.indexOf('namaPenerima');
+    let diubah = 0;
+    db.sheets.Pentasyarufan.slice(1).forEach((b) => {
+      if (String(b[iNama]) === 'ULL Masjid Sayyidah Qawiyah KII') {
+        b[iNama] = 'ULL Masjid Sayyidah Qowwiyah KII'; diubah++;
+      }
+    });
+    cek('ada kwitansi yang disunting untuk diuji', diubah > 0, diubah);
+
+    const p2 = (await engine.runRPC(db, 'apiPeriksaLayanan', [TOKEN, true], {})).result;
+    cek('perubahannya terdeteksi', !!p2.perubahan && p2.perubahan.adaPerubahan, p2.perubahan);
+    cek('nama yang sudah bersih disebut namanya',
+      (p2.perubahan.beres || []).some((x) => x.nama === 'ULL Masjid Sayyidah Qawiyah KII'),
+      (p2.perubahan.beres || []).map((x) => x.nama));
+    cek('nama yang jumlah barisnya bertambah ikut dilaporkan',
+      (p2.perubahan.bergeser || []).some((x) => x.nama === 'ULL Masjid Sayyidah Qowwiyah KII' && x.ke > x.dari),
+      p2.perubahan.bergeser);
+    cek('waktu pembandingnya ikut, supaya jelas dibandingkan dengan kapan',
+      !!p2.perubahan.waktu, p2.perubahan.waktu);
+
+    const p3 = (await engine.runRPC(db, 'apiPeriksaLayanan', [TOKEN, true], {})).result;
+    cek('diperiksa lagi tanpa ada suntingan: dinyatakan tidak ada perubahan',
+      !!p3.perubahan && p3.perubahan.adaPerubahan === false, p3.perubahan);
+
+    /* Melihat saja tidak boleh mengubah apa pun. Kalau pemeriksaan tanpa
+       simpan ikut menulis patokan, suntingan berikutnya tidak akan pernah
+       terlihat sebagai perubahan. */
+    const adaPatokan = (d2) => (d2.sheets.Settings || []).slice(1)
+      .some((b) => String(b[0]) === 'periksaKantorPatokan');
+    const dbB = dbBaru();
+    /* Bukan membandingkan seluruh tabel Settings: pemanggilan RPC pertama
+       memang menulis setelan bawaan lembaga, dan itu wajar. Yang diperiksa
+       satu kunci saja, yaitu patokan pemeriksaan ini. */
+    await engine.runRPC(dbB, 'apiPeriksaLayanan', [TOKEN], {});
+    cek('memeriksa tanpa menyimpan tidak menulis patokan', !adaPatokan(dbB),
+      (dbB.sheets.Settings || []).slice(1).map((b) => b[0]));
+    await engine.runRPC(dbB, 'apiPeriksaLayanan', [TOKEN, true], {});
+    cek('memeriksa dengan menyimpan barulah menulis patokan', adaPatokan(dbB));
+  }
+
+  console.log('\n=== O. TAMPILAN MENYEDIAKAN KEDUANYA ===');
+  {
+    const fs2 = require('fs');
+    const app2 = fs2.readFileSync(path.join(AKAR, 'src', 'public', 'app.js'), 'utf8');
+    cek('ada tombol untuk membuka rincian', /function btnLihat/.test(app2) && /function rincianKantor/.test(app2));
+    cek('rinciannya menampilkan kolom keterangan', /rincianKantor[\s\S]{0,3000}Keterangan/.test(app2));
+    cek('ada blok perubahan sejak pemeriksaan terakhir', /function perubahanKantorHTML/.test(app2));
+    cek('pemeriksaan dari web menyimpan patokannya',
+      /apiPeriksaLayanan'\)\(TOKEN, true\)/.test(app2));
+    cek('tombol Lihat dipasang di daftar yang bertumpuk',
+      /kembar\.forEach[\s\S]{0,1600}btnLihat\(/.test(app2));
+    cek('dan di daftar ejaan yang masih salah',
+      /rapi\.forEach[\s\S]{0,900}btnLihat\(/.test(app2));
+  }
+
   console.log('\n=== HASIL ===');
   console.log(ok + ' lulus, ' + gagal + ' gagal.');
   if (gagal) { console.log('\nJANGAN dideploy: deteksi kantor kembar belum benar.\n'); process.exit(1); }

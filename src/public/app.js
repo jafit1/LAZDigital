@@ -7141,11 +7141,102 @@ function namaKantorHTML(){
 function namaKantorPeriksa(){
   var host = el('namaKantorHasil');
   host.innerHTML = BOXES_SPINNER;
-  gas('apiPeriksaLayanan')(TOKEN).then(function(d){
+  /* true = simpan patokan. Pemeriksaan berikutnya lalu bisa mengatakan apa
+     yang berubah sejak sekarang, termasuk kwitansi yang dibetulkan tangan. */
+  gas('apiPeriksaLayanan')(TOKEN, true).then(function(d){
     window.__namaKantor = d;
     host.innerHTML = namaKantorHasilHTML(d);
   }).catch(function(e){ host.innerHTML = ''; handleErr(e); });
 }
+/* Tombol untuk membuka baris asli di balik sebuah nama. Angka saja tidak
+   cukup untuk memutuskan: yang menentukan sebuah uang muka sebenarnya milik
+   kantor mana adalah keterangannya, bukan jumlahnya. */
+function btnLihat(nama){
+  return '<button class="btn btn-sm btn-ghost" title="Lihat transaksinya" onclick="rincianKantor('
+    + JSON.stringify(String(nama)).replace(/"/g, '&quot;') + ')">Lihat</button>';
+}
+function rincianKantor(nama){
+  gas('apiRincianLayananNama')(TOKEN, nama, 300).then(function(r){
+    var total = r.jumlah.himpun + r.jumlah.ump + r.jumlah.lpj;
+    var labelSumber = { himpun: 'Setoran', ump: 'Uang muka', lpj: 'LPJ' };
+    var h = '<div class="imp-stat">'
+      + '<span class="imp-stat-i"><b>' + total + '</b> baris</span>'
+      + '<span class="imp-stat-i' + (r.terdaftar ? ' ok' : ' warn') + '">'
+        + (r.terdaftar ? 'terdaftar di menu Layanan' : 'belum terdaftar di menu Layanan') + '</span>'
+      + (r.jumlah.himpun ? '<span class="imp-stat-i">setoran ' + r.jumlah.himpun + ' &middot; Rp ' + rpCetak(r.nominal.himpun) + '</span>' : '')
+      + (r.jumlah.ump ? '<span class="imp-stat-i">uang muka ' + r.jumlah.ump + ' &middot; Rp ' + rpCetak(r.nominal.ump) + '</span>' : '')
+      + (r.jumlah.lpj ? '<span class="imp-stat-i">LPJ ' + r.jumlah.lpj + ' &middot; Rp ' + rpCetak(r.nominal.lpj) + '</span>' : '')
+      + '</div>';
+    /* Ejaan mentahnya ditaruh di atas: kalau semua barisnya tertulis "ULL
+       Masjid Aceh ...", asal kantornya sudah hampir terjawab di sini, tanpa
+       perlu membaca seluruh tabel di bawahnya. */
+    if ((r.ejaanMentah || []).length) {
+      h += '<h4 class="imp-h4">Yang benar-benar tertulis di barisnya</h4><div class="imp-tblwrap">'
+        + '<table class="imp-tbl"><thead><tr><th>Tertulis</th><th class="r">Baris</th></tr></thead><tbody>';
+      r.ejaanMentah.forEach(function(e){
+        h += '<tr><td>' + esc(e.nama) + '</td><td class="r jnum">' + e.n + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    if (!total) {
+      h += '<div class="empty" style="padding:22px">Tidak ada baris di bawah nama ini. Mungkin sudah dibetulkan.</div>';
+    } else {
+      h += '<h4 class="imp-h4">Transaksinya</h4><div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+        + '<th>Tanggal</th><th>Jenis</th><th>Bukti</th><th>Tertulis</th><th>Dana</th>'
+        + '<th>Program</th><th>Keterangan</th><th class="r">Nominal</th></tr></thead><tbody>';
+      r.baris.forEach(function(x){
+        h += '<tr><td>' + esc(x.tanggal) + '</td>'
+          + '<td>' + esc(labelSumber[x.sumber] || x.sumber) + '</td>'
+          + '<td>' + esc(x.bukti || '\u2014') + '</td>'
+          + '<td>' + esc(x.nama || '\u2014') + '</td>'
+          + '<td>' + esc(x.dana || '\u2014') + (x.rinci ? '<div class="perm-ket">' + esc(x.rinci) + '</div>' : '') + '</td>'
+          + '<td>' + esc(x.program || '\u2014') + '</td>'
+          + '<td>' + esc(x.keterangan || '\u2014')
+            + (x.fundraising ? '<div class="perm-ket">FR: ' + esc(x.fundraising) + '</div>' : '') + '</td>'
+          + '<td class="r jnum">' + rpCetak(x.jumlah) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      if (r.terpotong) h += '<p class="muted" style="font-size:12px">' + r.terpotong + ' baris lagi tidak ditampilkan.</p>';
+    }
+    openModal('Transaksi di bawah "' + nama + '"', h,
+      '<button class="btn" onclick="closeModal()">Tutup</button>');
+    var mc = el('modalCard'); if (mc) mc.classList.add('import-modal');
+  }).catch(handleErr);
+}
+
+/* Apa yang berubah sejak pemeriksaan terakhir. Dipakai untuk melihat apakah
+   kwitansi yang barusan disunting tangan memang sudah mengenai sasaran. */
+function perubahanKantorHTML(p){
+  if (!p) return '';
+  var waktu = p.waktu ? new Date(p.waktu).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  if (!p.adaPerubahan) {
+    return '<p class="muted" style="font-size:12px;margin:0 0 10px">Tidak ada yang berubah sejak pemeriksaan terakhir'
+      + (waktu ? ' (' + esc(waktu) + ')' : '') + '.</p>';
+  }
+  var h = '<h4 class="imp-h4 ok">Berubah sejak pemeriksaan terakhir'
+    + (waktu ? ' <span>' + esc(waktu) + '</span>' : '') + '</h4>'
+    + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+    + '<th>Nama</th><th>Keadaan</th><th class="r">Baris</th><th></th></tr></thead><tbody>';
+  p.beres.forEach(function(x){
+    h += '<tr><td><b>' + esc(x.nama) + '</b></td>'
+      + '<td><span class="imp-stat-i ok">sudah bersih</span></td>'
+      + '<td class="r jnum">' + x.baris + ' &rarr; 0</td><td></td></tr>';
+  });
+  p.bergeser.forEach(function(x){
+    h += '<tr><td><b>' + esc(x.nama) + '</b></td>'
+      + '<td><span class="imp-stat-i warn">jumlah barisnya berubah</span></td>'
+      + '<td class="r jnum">' + x.dari + ' &rarr; ' + x.ke + '</td>'
+      + '<td class="r">' + btnLihat(x.nama) + '</td></tr>';
+  });
+  p.baru.forEach(function(x){
+    h += '<tr><td><b>' + esc(x.nama) + '</b></td>'
+      + '<td><span class="imp-stat-i bad">baru muncul</span></td>'
+      + '<td class="r jnum">' + x.baris + '</td>'
+      + '<td class="r">' + btnLihat(x.nama) + '</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
 function namaKantorHasilHTML(d){
   var asing = (d.daftar || []).filter(function(x){ return !x.terdaftar; });
   var rapi = d.dirapikan || [];
@@ -7159,6 +7250,8 @@ function namaKantorHasilHTML(d){
     + (kembar.length ? '<span class="imp-stat-i bad"><b>' + kembar.length + '</b> pasangan nama bertumpuk</span>' : '')
     + (rapi.length ? '<span class="imp-stat-i warn"><b>' + rapi.length + '</b> ejaan masih salah di dalam data</span>' : '')
     + '</div>';
+
+  h += perubahanKantorHTML(d.perubahan);
 
   /* Pasangan nama yang mirip satu sama lain. Penggabungan otomatis sengaja
      ketat supaya tidak pernah menyatukan dua kantor yang memang berbeda —
@@ -7179,7 +7272,7 @@ function namaKantorHasilHTML(d){
         + '<td>' + esc(x.banyak) + '</td>'
         + '<td class="r jnum">' + x.nBanyak + '</td>'
         + '<td><span class="imp-stat-i ' + warna + '">' + esc(x.yakin) + '</span></td>'
-        + '<td class="r"><button class="btn btn-sm btn-ghost" onclick="gabungKantor('
+        + '<td class="r">' + btnLihat(x.sedikit) + '<button class="btn btn-sm btn-ghost" onclick="gabungKantor('
         + JSON.stringify(x.sedikit).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.banyak).replace(/"/g, '&quot;') + ')">Gabungkan</button></td></tr>';
     });
     h += '</tbody></table></div>';
@@ -7209,7 +7302,7 @@ function namaKantorHasilHTML(d){
         + '<td><span class="imp-stat-i ' + (x.yakin === 'tinggi' ? 'bad' : x.yakin === 'sedang' ? 'warn' : '') + '">'
         + 'dugaan ' + esc(x.yakin) + ' &middot; ' + sebab
         + (x.diMaster ? ' &middot; dua-duanya terdaftar' : '') + '</span></td>'
-        + '<td class="r"><button class="btn btn-sm btn-ghost" onclick="gabungKantor('
+        + '<td class="r">' + btnLihat(x.sedikit) + '<button class="btn btn-sm btn-ghost" onclick="gabungKantor('
         + JSON.stringify(x.sedikit).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.banyak).replace(/"/g, '&quot;') + ')">Gabungkan</button></td></tr>';
     });
     h += '</tbody></table></div>';
@@ -7239,7 +7332,7 @@ function namaKantorHasilHTML(d){
         + '<td class="r jnum">' + (x.nLpj ? rpCetak(x.lpj) : '—') + '</td>'
         + '<td>' + (x.usul ? '<b>' + esc(x.usul) + '</b><div class="sub muted" style="font-size:11px">' + esc(x.alasan) + '</div>'
                            : '<span class="muted">tidak ada yang mirip</span>') + '</td>'
-        + '<td class="r">' + (x.usul
+        + '<td class="r">' + btnLihat(x.nama) + (x.usul
             ? '<button class="btn btn-sm btn-ghost" onclick="gabungKantor(' + JSON.stringify(x.nama).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.usul).replace(/"/g, '&quot;') + ')">Gabungkan</button>'
             : '<span class="muted" style="font-size:11px">daftarkan di menu Layanan</span>') + '</td></tr>';
     });
@@ -7256,7 +7349,7 @@ function namaKantorHasilHTML(d){
     rapi.forEach(function(x){
       h += '<tr><td>' + esc(x.mentah) + '</td><td><b>' + esc(x.jadi) + '</b></td>'
         + '<td class="r jnum">' + x.n + '</td>'
-        + '<td class="r"><button class="btn btn-sm btn-ghost" onclick="gabungKantor('
+        + '<td class="r">' + btnLihat(x.mentah) + '<button class="btn btn-sm btn-ghost" onclick="gabungKantor('
         + JSON.stringify(x.mentah).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.jadi).replace(/"/g, '&quot;') + ')">Betulkan</button></td></tr>';
     });
     h += '</tbody></table></div>';
@@ -7287,8 +7380,15 @@ function gabungManualHTML(d){
       + '<div class="fld" data-col="5"><label for="gkDari">Kantor yang dilebur</label>' + opsi('gkDari') + '</div>'
       + '<div class="fld" data-col="5"><label for="gkKe">Dilebur ke</label>' + opsi('gkKe') + '</div>'
       + '<div class="fld" data-col="2"><label>&nbsp;</label>'
-        + '<button class="btn btn-primary" onclick="gabungKantorManual()">Gabungkan</button></div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+          + '<button class="btn btn-sm btn-ghost" onclick="rincianKantorPilihan()">Lihat</button>'
+          + '<button class="btn btn-primary" onclick="gabungKantorManual()">Gabungkan</button></div></div>'
     + '</div>';
+}
+function rincianKantorPilihan(){
+  var dari = el('gkDari') ? el('gkDari').value : '';
+  if (!dari) { toast('Pilih dulu kantor yang mau dilihat.', true); return; }
+  rincianKantor(dari);
 }
 function gabungKantorManual(){
   var dari = el('gkDari') ? el('gkDari').value : '';

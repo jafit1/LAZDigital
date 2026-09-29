@@ -26,7 +26,8 @@
  * jalankan:
  *   node tools/periksa-kantor.js
  *   node tools/periksa-kantor.js --cari masjid
- *   node tools/periksa-kantor.js --semua        (cetak juga yang sudah beres)
+ *   node tools/periksa-kantor.js --semua                   (cetak juga yang sudah beres)
+ *   node tools/periksa-kantor.js --rinci "ULL Masjid"      (baris di balik satu nama)
  */
 'use strict';
 const fs = require('fs');
@@ -50,6 +51,7 @@ const arg = process.argv.slice(2);
 const opsi = (n, b) => { const i = arg.indexOf(n); return i >= 0 ? arg[i + 1] : b; };
 const punya = (n) => arg.indexOf(n) >= 0;
 const CARI = String(opsi('--cari', '') || '').toLowerCase();
+const RINCI = String(opsi('--rinci', '') || '').trim();
 const SEMUA = punya('--semua');
 
 if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
@@ -86,9 +88,46 @@ const cocok = (s) => !CARI || String(s || '').toLowerCase().indexOf(CARI) >= 0;
     dibuat: new Date().toISOString(), expiredAt: new Date(Date.now() + 36e5).toISOString() }));
 
   const panggil = async (fn, args) => (await engine.runRPC(db, fn, args, {})).result;
+  /* --rinci menjawab pertanyaan yang berbeda dari laporan penuh: bukan "mana
+     yang bermasalah", melainkan "baris apa saja yang ada di balik nama ini".
+     Keterangannya yang menjawab kantornya yang mana, bukan nominalnya. */
+  if (RINCI) {
+    const r = await panggil('apiRincianLayananNama', [TOK, RINCI, 300]);
+    judul('RINCIAN: ' + r.nama);
+    console.log('  ' + (r.terdaftar ? 'terdaftar di menu Layanan' : 'BELUM terdaftar di menu Layanan'));
+    console.log('  setoran ' + r.jumlah.himpun + ' (' + rp(r.nominal.himpun) + ')'
+      + '  |  uang muka ' + r.jumlah.ump + ' (' + rp(r.nominal.ump) + ')'
+      + '  |  LPJ ' + r.jumlah.lpj + ' (' + rp(r.nominal.lpj) + ')');
+    if ((r.ejaanMentah || []).length) {
+      console.log('\n  Yang benar-benar tertulis di barisnya:');
+      r.ejaanMentah.forEach((e) => console.log('    ' + kanan(e.n, 5) + 'x  ' + e.nama));
+    }
+    if (!r.baris.length) console.log('\n  (tidak ada baris di bawah nama ini)');
+    else {
+      const LBL = { himpun: 'setoran', ump: 'uang muka', lpj: 'LPJ' };
+      console.log('\n  ' + pad('TANGGAL', 12) + pad('JENIS', 11) + pad('TERTULIS', 30)
+        + pad('KETERANGAN', 44) + kanan('NOMINAL', 16));
+      r.baris.forEach((x) => {
+        console.log('  ' + pad(x.tanggal, 12) + pad(LBL[x.sumber] || x.sumber, 11)
+          + pad(x.nama, 30) + pad(x.keterangan || x.program || '-', 44) + kanan(rp(x.jumlah), 16));
+      });
+      if (r.terpotong) console.log('\n  ... ' + r.terpotong + ' baris lagi tidak ditampilkan.');
+    }
+    console.log('');
+    process.exit(0);
+  }
+
   const per = await panggil('apiPeriksaLayanan', [TOK]);
   const hariIni = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
   const saldo = await panggil('apiSaldoLayanan', [TOK, hariIni]);
+
+  if (per.perubahan && per.perubahan.adaPerubahan) {
+    judul('0. BERUBAH SEJAK PEMERIKSAAN TERAKHIR DI WEB');
+    console.log('Dibandingkan dengan patokan ' + (per.perubahan.waktu || '(tidak tercatat)') + '.\n');
+    per.perubahan.beres.forEach((x) => console.log('  SUDAH BERSIH  ' + pad(x.nama, 40) + kanan(x.baris + ' -> 0', 12)));
+    per.perubahan.bergeser.forEach((x) => console.log('  BERGESER      ' + pad(x.nama, 40) + kanan(x.dari + ' -> ' + x.ke, 12)));
+    per.perubahan.baru.forEach((x) => console.log('  BARU MUNCUL   ' + pad(x.nama, 40) + kanan(x.baris + ' baris', 12)));
+  }
 
   /* ---------------- 1. angka yang mustahil ---------------- */
   judul('1. KANTOR YANG ANGKANYA MUSTAHIL');
@@ -201,6 +240,10 @@ const cocok = (s) => !CARI || String(s || '').toLowerCase().indexOf(CARI) >= 0;
   console.log('    Pengaturan -> Periksa Nama Kantor Layanan -> tombol Gabungkan');
   console.log('  Untuk yang tidak muncul di daftar (mis. ULL yang harus dilebur ke KLL');
   console.log('  induknya), pakai formulir "Gabungkan sendiri" di panel yang sama.');
+  console.log('');
+  console.log('  Mau tahu sebuah nama aslinya milik kantor mana? Buka barisnya:');
+  console.log('    node tools/periksa-kantor.js --rinci "ULL Masjid"');
+  console.log('  Keterangan tiap barisnya yang menjawab, bukan nominalnya.');
   console.log('  Tiap penggabungan menampilkan pratinjau dulu dan tercatat di Log Aktivitas.');
   console.log('');
 

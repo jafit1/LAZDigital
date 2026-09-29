@@ -1777,12 +1777,57 @@ var _LAY_STOP = ['pekan','bulan','tanggal','tgl','infak','infaq','zakat','sedeka
 
 /* Tangkap penanda "KLL <nama>" / "ULL <nama>" / "KL <nama>" dari teks asli
    (bukan versi lowercase) supaya kapitalisasi nama tetap seperti yang diketik. */
-function _layFromPrefix(rawText){
+/* Master Layanan untuk jalur impor. Dibaca lewat readAll seperti yang lain,
+   jadi pemuatan bertahap tetap berlaku: kalau tabelnya belum dimuat, galat
+   PerluLembar dilempar dan putaran berikutnya membawanya. Dibungkus supaya
+   pemanggilnya tidak perlu tahu itu. */
+function _layMaster(){
+  try { return readAll(SHEETS.LAYANAN) || []; }
+  catch (e) { if (e && (e.perluLembar || /belum dimuat/.test(String(e.message || '')))) throw e; return []; }
+}
+
+function _layFromPrefix(rawText, layList){
   var m = String(rawText || '').match(/\b(KLL|ULL|KL)\b[\s:.\-]*([^|\n]{2,60})/i);
   if (!m) return null;
   var tipe = m[1].toUpperCase();
   if (tipe === 'KL') tipe = 'KLL';
   var words = String(m[2]).replace(/[^A-Za-z0-9'’. ]/g, ' ').split(/\s+/).filter(function(w){ return w; });
+
+  /* DAFTAR LAYANAN MENANG ATAS DAFTAR KATA BERHENTI.
+     _LAY_STOP memuat 'aceh', 'palestina', 'ntt' dan sebangsanya karena nama
+     kampanye sering ditempel di belakang nama kantor: "KLL Srandakan Aceh"
+     adalah KLL Srandakan yang menghimpun untuk Aceh, bukan kantor bernama
+     "Srandakan Aceh". Aturan itu benar — sampai ada kantor yang namanya
+     memang memuat kata itu.
+
+     "ULL Masjid Baiturrahman Aceh" adalah nama kantornya, apa adanya. Dengan
+     aturan lama ia terpotong jadi "ULL Masjid Baiturrahman", dan yang lebih
+     buruk, "ULL Masjid Aceh Uang Muka Program Infak" terpotong jadi "ULL
+     Masjid". Dua kantor bayangan lahir dari satu kata, tidak satu pun
+     terdaftar di menu Layanan, dan masing-masing membawa sebagian uang muka
+     dan LPJ kantor aslinya. Diukurnya: uang muka Rp 105 juta duduk di satu
+     nama sementara LPJ-nya duduk di nama lain, lalu yang satu tampak positif
+     besar dan yang lain minus besar.
+
+     Jadi sebelum kata berhenti dipakai, deretan kata terpanjang yang SAMA
+     PERSIS dengan sebuah kantor terdaftar dicoba lebih dulu. Bukan tebakan:
+     yang diterima hanya yang cocok bulat-bulat dengan master Layanan. Kalau
+     tidak ada yang cocok, jalur lama di bawah tetap berlaku. */
+  if (layList && layList.length) {
+    for (var n = Math.min(words.length, 8); n >= 1; n--) {
+      var calon = _norm(words.slice(0, n).join(' '));
+      if (!calon) continue;
+      var pas = null;
+      for (var q = 0; q < layList.length; q++) {
+        var l = layList[q];
+        if (!l || !l.nama) continue;
+        if (l.tipe && String(l.tipe).toUpperCase() !== tipe) continue;
+        if (_norm(l.nama) === calon) { pas = l; break; }
+      }
+      if (pas) return { tipe: tipe, nama: String(pas.nama), terdaftar: true };
+    }
+  }
+
   var out = [];
   for (var i = 0; i < words.length && out.length < 4; i++) {
     var w = words[i];
@@ -1879,7 +1924,34 @@ function _padanLayanan(nama, layList){
     if (jarak === null) return;
     if (!terbaik || jarak < terbaik.jarak) terbaik = { lay: l, label: _layLabel(l), jarak: jarak, cara: cara };
   });
-  return terbaik;
+  if (terbaik) return terbaik;
+
+  /* Lapisan terakhir: NAMA YANG TERPOTONG.
+     Baris yang sudah telanjur tersimpan dengan nama terpotong ("ULL Masjid
+     Baiturrahman" untuk kantor "Masjid Baiturrahman Aceh") tidak bisa
+     ditolong jarak edit — selisih panjangnya terlalu jauh, jaraknya
+     dikembalikan 99. Padahal namanya bukan salah ketik, melainkan potongan
+     awal nama yang benar.
+
+     Syaratnya sengaja diperketat sampai tidak ada ruang menebak: potongannya
+     harus berhenti di batas kata, dan harus ada TEPAT SATU kantor terdaftar
+     yang namanya diawali potongan itu. Begitu ada dua, ia dibiarkan apa
+     adanya — "ULL Masjid" cocok dengan belasan kantor bermula "Masjid", dan
+     menebak salah satu berarti memindahkan uang ke kantor yang keliru. Yang
+     seperti itu digabungkan sendiri lewat Pengaturan. */
+  var cocokAwalan = [];
+  layList.forEach(function(l){
+    if (!l || !l.nama) return;
+    if (tipe && l.tipe && String(l.tipe).toUpperCase() !== tipe) return;
+    var rLay = _ratakanHuruf(l.nama);
+    if (!rLay || rLay === rInti) return;
+    if (rLay.indexOf(rInti + ' ') === 0) cocokAwalan.push(l);
+  });
+  if (cocokAwalan.length === 1 && rInti.length >= 4) {
+    return { lay: cocokAwalan[0], label: _layLabel(cocokAwalan[0]), jarak: 1.5,
+      cara: 'nama terpotong' };
+  }
+  return null;
 }
 
 /* Nama kantor yang sudah dipakai di data, sebagai daftar master cadangan
@@ -1913,7 +1985,7 @@ function resolveLayananName(r, layList, layMap){
   var blob = _norm(rawBlob);
 
   // 2. Penanda eksplisit KLL/ULL.
-  var pre = _layFromPrefix(rawBlob);
+  var pre = _layFromPrefix(rawBlob, layList);
   if (pre) {
     var cand = _norm(pre.nama);
     var hit = null;
@@ -3000,7 +3072,7 @@ function getSectionHeader(r) {
    donatur "SMP N 2 Srandakan" ikut terekap ke KLL Srandakan. */
 function extractLayananFromText(text, listLayanan) {
   if (!text) return null;
-  var pre = _layFromPrefix(String(text));
+  var pre = _layFromPrefix(String(text), readAll(SHEETS.LAYANAN) || []);
   if (!pre) return null;
   var cand = _norm(pre.nama);
   var hit = null;
@@ -3424,7 +3496,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
       if (_seksiUmpKeluar(currentSection)) {
         /* debet = akun UMP (aset), kredit = rekening/kas yang mengeluarkan uang */
         var dUmp = /ZAKAT/i.test(currentSection) ? 'Zakat' : /AMIL/i.test(currentSection) ? 'Amil' : 'Infak';
-        var layU = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian) : null;
+        var layU = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian, _layMaster()) : null;
         var layNama = layU ? (layU.tipe + ' ' + layU.nama) : (extractLayananFromText(pUraian, listLayanan) ? _layLabel(extractLayananFromText(pUraian, listLayanan)) : '');
         umpRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
           akun:aK.label, rekeningId:aK.rekeningId, kasNama:aK.kasNama, nominal:pDebet,
@@ -3432,7 +3504,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
       } else if (/^PENGEMBALIAN UMP$/i.test(currentSection)) {
         /* debet = rekening/kas yang menerima uang kembali, kredit = akun UMP */
         var dK = /zakat/i.test(akunKredit) ? 'Zakat' : /amil/i.test(akunKredit) ? 'Amil' : 'Infak';
-        var layK = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian) : null;
+        var layK = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian, _layMaster()) : null;
         umpRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
           akun:aD.label, rekeningId:aD.rekeningId, kasNama:aD.kasNama, nominal:pDebet,
           keterangan:pUraian, section:currentSection, akunDikenal:aD.dikenal });
@@ -3545,7 +3617,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
 
           /* KLL / ULL memakai aturan pencocokan yang sama dengan rekap dashboard,
              dijalankan atas nama yang SUDAH dibersihkan dari ekor jenis dana. */
-          var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(_namaBersih) : null;
+          var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(_namaBersih, _layMaster()) : null;
           var _layHit = matchedLay;
           if (_pre && !_layHit) {
             var _c = jpNorm(_pre.nama);
@@ -3726,7 +3798,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           var _isKLLsec = /^UMP\s+LPJ\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection)
                        || /^UMP\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection);
           if (_isKLLsec) {
-            var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(uraian) : null;
+            var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(uraian, _layMaster()) : null;
             var _lay = extractLayananFromText(uraian, listLayanan);
             if (_lay) namaPenerima = (String(_lay.tipe).toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + _lay.nama;
             else if (_pre) namaPenerima = _pre.tipe + ' ' + _pre.nama;
@@ -4306,7 +4378,7 @@ function bkBarisKeHimpun(row, listLayanan, layMap){
   if (m) { nama = m[1].trim(); kategori = m[2].trim(); }
 
   // KLL / ULL memakai aturan pencocokan yang sama dengan rekap dashboard
-  var pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(nama) : null;
+  var pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(nama, _layMaster()) : null;
   var layananId = '', tipeDonatur = 'Perorangan', namaDonatur = nama, adalahLayanan = false;
   if (pre) {
     adalahLayanan = true;
@@ -5495,8 +5567,8 @@ async function apiBersihkanSetorTunai(t, terapkan){
    padanannya. Angka per kantor dipakai untuk membagi dana, jadi satu
    salah ketik yang tidak ketahuan berarti satu kantor kehilangan
    haknya dan satu kantor bayangan menyimpannya. */
-function apiPeriksaLayanan(t){
-  _requirePerm(t, 'settings', 'view');
+function apiPeriksaLayanan(t, simpanPatokan){
+  var _u = _requirePerm(t, 'settings', simpanPatokan ? 'edit' : 'view');
   var layList = readAll(SHEETS.LAYANAN) || [];
   var resmi = {}; layList.forEach(function(l){ if (l && l.nama) resmi[_norm(_layLabel(l))] = _layLabel(l); });
 
@@ -5737,6 +5809,55 @@ function apiPeriksaLayanan(t){
     return (b.nBanyak + b.nSedikit) - (a.nBanyak + a.nSedikit);
   });
 
+  /* ============ APA YANG BERUBAH SEJAK PEMERIKSAAN TERAKHIR ============
+     Membetulkan kwitansi satu per satu itu pekerjaan berjam-jam, dan yang
+     paling melelahkan bukan menyuntingnya melainkan tidak tahu apakah
+     suntingan tadi benar-benar mengenai sasaran. Daftar ini selalu dihitung
+     ulang dari data, jadi baris yang sudah dibetulkan memang langsung hilang
+     — tetapi "hilang" tidak terlihat oleh orang yang sedang menatap layar
+     yang sama untuk kelima kalinya.
+
+     Maka hasil pemeriksaan disimpan sebagai patokan, dan pemeriksaan
+     berikutnya mengatakan apa yang berubah: nama yang sudah bersih, nama
+     yang baru muncul, dan nama yang jumlah barisnya bergeser. Patokannya
+     hanya ditulis kalau pemeriksaannya memang diminta menyimpan — melihat
+     saja tidak boleh mengubah apa pun. */
+  var patokanLama = null;
+  try { patokanLama = JSON.parse(getSetting('periksaKantorPatokan') || 'null'); } catch (e) { patokanLama = null; }
+  var sekarang = {};
+  semua.forEach(function(x){ sekarang[_norm(x.nama)] = { nama: x.nama, baris: x.baris }; });
+
+  var perubahan = null;
+  if (patokanLama && patokanLama.nama) {
+    var beres = [], baruMuncul = [], bergeser = [];
+    Object.keys(patokanLama.nama).forEach(function(k){
+      var lamaX = patokanLama.nama[k];
+      var kiniX = sekarang[k];
+      if (!kiniX) { if (lamaX.baris > 0) beres.push({ nama: lamaX.nama, baris: lamaX.baris }); return; }
+      if (kiniX.baris === lamaX.baris) return;
+      if (kiniX.baris === 0 && lamaX.baris > 0) { beres.push({ nama: lamaX.nama, baris: lamaX.baris }); return; }
+      bergeser.push({ nama: kiniX.nama, dari: lamaX.baris, ke: kiniX.baris });
+    });
+    Object.keys(sekarang).forEach(function(k){
+      if (patokanLama.nama[k]) return;
+      if (!sekarang[k].baris) return;
+      baruMuncul.push({ nama: sekarang[k].nama, baris: sekarang[k].baris });
+    });
+    var urutBaris = function(a, b){ return (b.baris || 0) - (a.baris || 0); };
+    perubahan = {
+      waktu: patokanLama.waktu || '',
+      beres: beres.sort(urutBaris),
+      baru: baruMuncul.sort(urutBaris),
+      bergeser: bergeser.sort(function(a, b){ return Math.abs(b.ke - b.dari) - Math.abs(a.ke - a.dari); }),
+      adaPerubahan: !!(beres.length || baruMuncul.length || bergeser.length)
+    };
+  }
+  if (simpanPatokan) {
+    try {
+      setSetting('periksaKantorPatokan', JSON.stringify({ waktu: new Date().toISOString(), nama: sekarang }));
+    } catch (e) { /* patokan itu kenyamanan, bukan data lembaga: gagal pun jalan terus */ }
+  }
+
   return {
     total: daftar.length,
     terdaftar: daftar.length - bermasalah.length,
@@ -5746,6 +5867,7 @@ function apiPeriksaLayanan(t){
     dirapikan: dirapikan,
     mirip: mirip,
     kembar: kembar,
+    perubahan: perubahan,
     /* Semua nama yang dikenal, untuk formulir gabung manual di Pengaturan:
        ada kasus yang tidak boleh ditebak mesin sama sekali, mis. sebuah ULL
        yang memang harus dilebur ke KLL induknya. */
@@ -5756,6 +5878,95 @@ function apiPeriksaLayanan(t){
 
 /* Gabungkan satu nama kantor ke nama lain: baris datanya ditulis ulang,
    bukan sekadar disamakan saat menampilkan. Selalu bisa dipratinjau dulu. */
+/* Baris-baris yang berada di bawah sebuah nama kantor.
+   SATU pencocokan dipakai dua tempat: layar rincian dan penggabungan. Kalau
+   keduanya memakai aturan sendiri-sendiri, orang memeriksa satu daftar lalu
+   menggabungkan daftar yang lain — dan selisihnya baru ketahuan berbulan-bulan
+   kemudian, waktu angkanya sudah dipakai membagi hak kantor layanan. */
+function _barisKantor(dari, layList, layMap){
+  layList = layList || (readAll(SHEETS.LAYANAN) || []);
+  if (!layMap) { layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; }); }
+  /* Cocokkan DUA-DUANYA: nama hasil olahan (yang tampil di rekap) dan nama
+     mentah yang tersimpan di baris. Kalau hanya yang tampil, ejaan salah yang
+     kebetulan sudah tertutup pencocokan mirip tetap mengendap di data dan
+     akan muncul lagi begitu master Layanan berubah. */
+  var d = _norm(dari);
+  var samaDari = function(olah, mentah){
+    if (_norm(olah) === d) return true;
+    var m = String(mentah || '').trim();
+    if (!m) return false;
+    if (_norm(m) === d) return true;
+    /* nama mentah sering berupa kalimat ("... Oleh Kll Banguntapaan Utara") */
+    var pre = _layFromPrefix(m, layList);
+    return !!pre && _norm(pre.tipe + ' ' + pre.nama) === d;
+  };
+
+  var kena = { himpun: [], ump: [], lpj: [] };
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!samaDari(resolveLayananName(r, layList, layMap), r.namaDonatur)) return;
+    kena.himpun.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.namaDonatur || '',
+      jumlah:Number(r.jumlah)||0, bukti:r.noKwitansi || '', dana:r.jenisDana || '',
+      rinci:r.subJenis || '', program:r.program || '', keterangan:r.keterangan || '',
+      fundraising:r.fundraising || '', metode:r.metode || '', taut:!!r.layananId });
+  });
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!samaDari(_layananUmp(r.layanan, layList), r.layanan)) return;
+    kena.ump.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.layanan || '',
+      jumlah:Number(r.nominal)||0, bukti:'', dana:r.dana || '', rinci:r.jenis || '',
+      program:'', keterangan:r.keterangan || '', fundraising:'', metode:r.kasNama || '' });
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    if (!samaDari(_layananUmp(r.namaPenerima, layList), r.namaPenerima)) return;
+    kena.lpj.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.namaPenerima || '',
+      jumlah:Number(r.jumlah)||0, bukti:r.noBukti || '', dana:r.sumberDana || '',
+      rinci:r.ashnaf || '', program:r.program || '', keterangan:r.keterangan || '',
+      fundraising:r.fundraising || '', metode:r.metode || '' });
+  });
+  return kena;
+}
+
+/* Rincian baris di balik sebuah nama kantor, untuk dilihat sebelum memutuskan.
+   Angka saja tidak cukup: yang menentukan sebuah uang muka sebenarnya milik
+   kantor mana adalah keterangannya ("ULL Masjid Aceh Uang Muka Program
+   Infak"), bukan jumlahnya. */
+function apiRincianLayananNama(t, nama, batas){
+  _requirePerm(t, 'settings', 'view');
+  nama = String(nama || '').trim();
+  if (!nama) throw new Error('Nama kantor belum dipilih.');
+  batas = Math.max(1, Math.min(Number(batas) || 60, 300));
+
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+  var kena = _barisKantor(nama, layList, layMap);
+
+  var susun = function(arr, sumber){
+    return arr.map(function(x){ x.sumber = sumber; return x; });
+  };
+  var semua = susun(kena.himpun, 'himpun')
+    .concat(susun(kena.ump, 'ump'), susun(kena.lpj, 'lpj'))
+    .sort(function(a, b){ return String(a.tanggal).localeCompare(String(b.tanggal)); });
+
+  var jumlahkan = function(arr){ return arr.reduce(function(a, b){ return a + b.jumlah; }, 0); };
+  return {
+    nama: nama,
+    terdaftar: layList.some(function(l){ return l && l.nama && _norm(_layLabel(l)) === _norm(nama); }),
+    jumlah: { himpun: kena.himpun.length, ump: kena.ump.length, lpj: kena.lpj.length },
+    nominal: { himpun: jumlahkan(kena.himpun), ump: jumlahkan(kena.ump), lpj: jumlahkan(kena.lpj) },
+    baris: semua.slice(0, batas),
+    terpotong: Math.max(0, semua.length - batas),
+    /* Nama-nama mentah yang benar-benar tertulis di baris itu, beserta berapa
+       kali. Inilah yang paling menolong menebak asalnya: kalau semua barisnya
+       tertulis "ULL Masjid Aceh ...", kantornya hampir pasti yang beraceh. */
+    ejaanMentah: (function(){
+      var e = {};
+      semua.forEach(function(x){ var k = String(x.nama || '').trim(); if (k) e[k] = (e[k] || 0) + 1; });
+      return Object.keys(e).map(function(k){ return { nama: k, n: e[k] }; })
+        .sort(function(a, b){ return b.n - a.n; });
+    })()
+  };
+}
+
 function apiGabungLayanan(t, dari, ke, terapkan){
   var u = _requirePerm(t, 'settings', 'edit');
   dari = String(dari || '').trim(); ke = String(ke || '').trim();
@@ -5765,36 +5976,7 @@ function apiGabungLayanan(t, dari, ke, terapkan){
   var layList = readAll(SHEETS.LAYANAN) || [];
   var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
   var tujuanLay = layList.filter(function(l){ return _norm(_layLabel(l)) === _norm(ke); })[0] || null;
-  /* Cocokkan DUA-DUANYA: nama hasil olahan (yang tampil di rekap) dan nama
-     mentah yang tersimpan di baris. Kalau hanya yang tampil, ejaan salah yang
-     kebetulan sudah tertutup pencocokan mirip tetap mengendap di data dan
-     akan muncul lagi begitu master Layanan berubah. */
-  var samaDari = function(olah, mentah){
-    var d = _norm(dari);
-    if (_norm(olah) === d) return true;
-    var m = String(mentah || '').trim();
-    if (!m) return false;
-    if (_norm(m) === d) return true;
-    /* nama mentah sering berupa kalimat ("... Oleh Kll Banguntapaan Utara") */
-    var pre = _layFromPrefix(m);
-    return !!pre && _norm(pre.tipe + ' ' + pre.nama) === d;
-  };
-
-  var kena = { himpun: [], ump: [], lpj: [] };
-
-  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
-    if (!samaDari(resolveLayananName(r, layList, layMap), r.namaDonatur)) return;
-    kena.himpun.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.namaDonatur || '', jumlah:Number(r.jumlah)||0 });
-  });
-  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
-    if (!samaDari(_layananUmp(r.layanan, layList), r.layanan)) return;
-    kena.ump.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.layanan || '', jumlah:Number(r.nominal)||0 });
-  });
-  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
-    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
-    if (!samaDari(_layananUmp(r.namaPenerima, layList), r.namaPenerima)) return;
-    kena.lpj.push({ id:r.id, tanggal:String(r.tanggal||'').slice(0,10), nama:r.namaPenerima || '', jumlah:Number(r.jumlah)||0 });
-  });
+  var kena = _barisKantor(dari, layList, layMap);
 
   var jml = kena.himpun.length + kena.ump.length + kena.lpj.length;
   var out = {
@@ -6617,6 +6799,7 @@ REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
 REGISTRY['apiBersihkanSetorTunai']=apiBersihkanSetorTunai;
 REGISTRY['apiPeriksaLayanan']=apiPeriksaLayanan;
+REGISTRY['apiRincianLayananNama']=apiRincianLayananNama;
 REGISTRY['apiGabungLayanan']=apiGabungLayanan;
 REGISTRY['apiPeriksaDobel']=apiPeriksaDobel;
 REGISTRY['apiResetTransaksi']=apiResetTransaksi;
