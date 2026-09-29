@@ -3687,6 +3687,57 @@ tr.lay-klik:hover td{background:var(--surface2)}
   border:1px solid var(--border);border-radius:var(--radius-sm)}
 .uf-status-j{font-weight:600;font-size:13.5px}
 .uf-status-k{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+/* Kolom kiri diam, kolom kanan yang bergulir.
+   Daftar hak akses sekarang belasan baris sementara data akun cuma enam
+   isian. Kalau seluruh badan modal yang bergulir, nama dan peran akun ikut
+   naik keluar layar justru saat orang sedang mencentang izin — padahal
+   "izin ini untuk siapa" adalah satu-satunya hal yang menentukan centangnya.
+   Jadi badan modal berhenti bergulir, dan tiap kolom mengurus gulirannya
+   sendiri. overscroll-behavior menahan guliran supaya tidak merembet ke
+   halaman di belakang modal begitu sampai di ujung. */
+@media (min-width:901px){
+  .modal.user-modal .modal-body{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  /* align-items:stretch dan baris minmax(0,1fr) BUKAN hiasan. .uf-grid
+     aslinya align-items:start, yang membuat tiap kolom setinggi isinya —
+     dan kolom yang setinggi isinya tidak pernah punya sisa untuk digulir,
+     sehingga overflow-y di bawah tidak berlaku sama sekali. Diukur: kolom
+     kanan punya 0 piksel untuk digulir sampai dua baris ini ditambahkan.
+
+     Tingginya diserahkan ke flex (flex-direction:column di induknya), bukan
+     height:100%. Sempat dicoba height:100% dan hasilnya terukur 1188px di
+     dalam wadah 511px: persen tinggi tidak punya patokan pasti di sini
+     karena tinggi induknya sendiri lahir dari penyusutan flex, jadi ia jatuh
+     ke auto lalu ikut setinggi isinya. */
+  .modal.user-modal .uf-grid{
+    flex:1 1 auto; min-height:0;
+    align-items:stretch; grid-template-rows:minmax(0,1fr);
+  }
+  .modal.user-modal .uf-kiri{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  /* Yang bergulir di kanan adalah kotak tabelnya, bukan seluruh kolom. Dengan
+     begitu judul "Hak akses" dan tombol Centang semua / Kosongkan ikut diam
+     di tempatnya — dua tombol yang justru dicari saat daftarnya panjang.
+     Kebetulan ini juga satu-satunya susunan yang membuat kepala tabel bisa
+     sticky: .tabel-geser punya overflow sendiri, dan elemen sticky selalu
+     menempel pada kotak bergulir TERDEKAT, bukan pada yang kita maksud. */
+  .modal.user-modal .uf-kanan{min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .modal.user-modal .uf-kanan .tabel-geser{
+    flex:1 1 auto; min-height:0; overflow:auto; overscroll-behavior:contain;
+  }
+  /* Kepala tabel izin ikut diam: tanpa ini, begitu digulir sampai baris
+     kesepuluh tidak ada lagi yang memberi tahu kolom mana "Ubah" dan mana
+     "Hapus", dan salah centang di tabel izin tidak menimbulkan galat apa pun
+     sampai ada yang menghapus data yang tidak boleh ia hapus. */
+  .modal.user-modal .perm-table thead th{
+    position:sticky; top:0; z-index:2;
+    /* Latarnya ditulis di sini karena baris 1644 menjadikan seluruh kepala
+       tabel transparan — bagus untuk tabel yang ikut bergulir, mematikan
+       untuk kepala yang diam: baris yang lewat di bawahnya ikut terbaca
+       menembus tulisan kolomnya. Diukur sebagai rgba(0,0,0,0) sebelum ini. */
+    background:var(--surface);
+    box-shadow:0 1px 0 var(--border);
+  }
+}
 @media (max-width:900px){
   .uf-grid{grid-template-columns:1fr;gap:18px}
   .modal.user-modal{max-width:calc(100% - 24px) !important}

@@ -90,8 +90,8 @@ var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
   {id:'penghimpunan',label:'Penghimpunan',ic:NAV_ICONS.penghimpunan,mod:'penghimpunan'},
   {id:'pentasyarufan',label:'Pentasyarufan',ic:NAV_ICONS.pentasyarufan,mod:'pentasyarufan'},
-  {id:'saldo',label:'Saldo Kas & Bank',ic:NAV_ICONS.saldo,mod:'dashboard'},
-  {id:'kll',label:'Saldo KLL & ULL',ic:NAV_ICONS.kll,mod:'dashboard'},
+  {id:'saldo',label:'Saldo Kas & Bank',ic:NAV_ICONS.saldo,mod:'saldo'},
+  {id:'kll',label:'Saldo KLL & ULL',ic:NAV_ICONS.kll,mod:'saldokll'},
   {id:'donatur',label:'Donatur',ic:NAV_ICONS.donatur,mod:'penghimpunan'},
   {id:'laporan',label:'Laporan',ic:NAV_ICONS.laporan,mod:'laporan'},
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
@@ -102,7 +102,20 @@ var MENU=[
   {id:'media',label:'Media & Desain',ic:NAV_ICONS.media,mod:'media',url:'/media.html'},
   {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
-function canDo(mod,act){ if(!ME)return false; if(ME.role==='superadmin')return true; return !!(ME.permissions[mod]&&ME.permissions[mod][act]); }
+/* Kembarannya can() di api/_engine.js, termasuk jembatan MODUL_ASAL-nya.
+   Izin 'dashboard' dulu membuka tiga menu sekaligus; sekarang Saldo Kas &
+   Bank dan Saldo KLL & ULL punya izinnya sendiri. Akun lama belum punya
+   kunci itu, jadi selama kuncinya belum pernah ada, izin asalnya yang
+   dipakai. Tanpa ini menunya hilang dari bilah kiri walau servernya masih
+   mengizinkan, dan itu terbaca sebagai fitur yang raib. */
+var MODUL_ASAL={saldo:'dashboard',saldokll:'dashboard'};
+function canDo(mod,act){
+  if(!ME)return false;
+  if(ME.role==='superadmin')return true;
+  var p=ME.permissions||{};
+  if(!p[mod]&&MODUL_ASAL[mod]&&p[MODUL_ASAL[mod]])return !!p[MODUL_ASAL[mod]][act];
+  return !!(p[mod]&&p[mod][act]);
+}
 
 /* ============ MASTER DATA (cascading) ============ */
 var JENIS_TOP=['Zakat','Infak','Sedekah','Wakaf','Kurban','Fidyah','DSKL','Amil'];

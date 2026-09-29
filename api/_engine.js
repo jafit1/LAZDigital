@@ -94,12 +94,20 @@ var SHEETS = {
    pantas dilihat semua orang, sementara saldo KLL/ULL boleh. Dipisahkan
    sebagai modul supaya diaturnya lewat mekanisme izin yang sama dengan
    fitur lain, bukan lewat saklar tersembunyi. */
-var MODULES = ['dashboard','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media'];
+/* Dashboard, Saldo Kas & Bank, dan Saldo KLL & ULL dulu satu izin bernama
+   'dashboard'. Satu centang membuka ketiganya sekaligus, padahal ketiganya
+   menjawab pertanyaan yang berbeda: dashboard memperlihatkan ringkasan, saldo
+   kas & bank memperlihatkan isi tiap rekening, dan saldo KLL/ULL
+   memperlihatkan uang yang dipegang tiap kantor layanan. Staff yang cuma
+   perlu melihat ringkasan jadi ikut melihat saldo rekening. Sekarang tiga
+   izin sendiri-sendiri. Akun lama dijembatani MODUL_ASAL di bawah. */
+var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
 var MODUL_LABEL = {
-  dashboard:'Dashboard & Saldo', penghimpunan:'Penghimpunan', pentasyarufan:'Pentasyarufan',
+  dashboard:'Dashboard', saldo:'Saldo Kas & Bank', saldokll:'Saldo KLL & ULL',
+  penghimpunan:'Penghimpunan', pentasyarufan:'Pentasyarufan',
   laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
   log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
@@ -107,7 +115,9 @@ var MODUL_LABEL = {
   media:'Media & Desain'
 };
 var MODUL_KET = {
-  dashboard:'Dashboard, menu Saldo Kas & Bank, dan Saldo KLL & ULL',
+  dashboard:'Halaman Dashboard: ringkasan angka, grafik, dan Link Publik. Hanya "lihat" yang dipakai.',
+  saldo:'Menu Saldo Kas & Bank: saldo tiap rekening dan buku besar per akun. Hanya "lihat" yang dipakai.',
+  saldokll:'Menu Saldo KLL & ULL: uang yang dipegang tiap kantor layanan beserta setoran, uang muka, dan LPJ-nya. Hanya "lihat" yang dipakai. Angka Penghimpunan Daerah masih butuh izin tersendiri di bawah.',
   penghimpunan:'Mencatat, mengubah, dan menghapus penerimaan',
   pentasyarufan:'Mencatat, mengubah, dan menghapus penyaluran',
   laporan:'Laporan, rekap pilar, jurnal, dan closing bulanan',
@@ -125,7 +135,19 @@ var MODUL_KET = {
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
-var MODUL_AKSI = { saldodaerah:['view'], log:['view'] };
+var MODUL_AKSI = {
+  dashboard:['view'], saldo:['view'], saldokll:['view'],
+  saldodaerah:['view'], log:['view']
+};
+
+/* Jembatan untuk izin yang dulu satu lalu dipecah. Akun lama tidak punya
+   kunci 'saldo' / 'saldokll' sama sekali di izinnya, dan tanpa jembatan ini
+   mereka kehilangan dua menu begitu pembaruan naik — padahal tidak ada yang
+   mencabut haknya. Aturannya sempit dan disengaja: hanya dipakai kalau
+   kuncinya BELUM PERNAH ADA. Begitu superadmin menyimpan izin akun itu satu
+   kali, kunci barunya tertulis apa adanya dan jembatan ini tidak menyentuh
+   akun tersebut lagi — termasuk saat izinnya justru dicabut. */
+var MODUL_ASAL = { saldo:'dashboard', saldokll:'dashboard' };
 
 /* Daftar nama fundraising/sumber. Disimpan di Settings (kunci fundraisingList)
    supaya bisa ditambah sendiri lewat menu Pengaturan, bukan terkunci di kode. */
@@ -320,7 +342,12 @@ function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.')
   if(!s) throw new Error('AUTH: sesi tidak valid, login ulang.'); if(new Date(s.expired)<new Date()){deleteRowBy(SHEETS.SESSIONS,'token',t);throw new Error('AUTH: sesi berakhir, login ulang.');}
   var u=findById(SHEETS.USERS,s.userId); if(!u) throw new Error('AUTH: user tidak ditemukan.'); return u; }
 function sanitizeUser(u){ return {id:u.id,username:u.username,nama:u.nama,role:u.role,layanan:String(u.layanan||''),permissions:typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{})}; }
-function can(u,m,a){ if(u.role==='superadmin')return true; var p=typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{}); return !!(p[m]&&p[m][a]); }
+function can(u,m,a){
+  if(u.role==='superadmin')return true;
+  var p=typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{});
+  if(!p[m] && MODUL_ASAL[m] && p[MODUL_ASAL[m]]) return !!p[MODUL_ASAL[m]][a];
+  return !!(p[m]&&p[m][a]);
+}
 function _requirePerm(t,m,a){ var u=authUser(t); if(!can(u,m,a)) throw new Error('IZIN: tidak punya akses '+a+' pada modul '+m+'.'); return u; }
 /* Satu catatan aktivitas. `opt` boleh berisi {modul, entitasId, ringkas}.
    IP dan peramban diambil dari konteks permintaan (diisi runRPC). */
@@ -1391,7 +1418,7 @@ function _bolehLihatLayanan(u, nama){
 }
 
 function apiSaldoLayanan(t, sampai){
-  var u = _requirePerm(t, 'dashboard', 'view');
+  var u = _requirePerm(t, 'saldokll', 'view');
   var hasil = hitungSaldoLayanan(sampai);
 
   /* Penghimpunan Daerah disaring DI SERVER, bukan sekadar disembunyikan di
@@ -1421,7 +1448,7 @@ function apiSaldoLayanan(t, sampai){
 
 /* Rincian satu KLL/ULL: setoran, uang muka, dan LPJ-nya baris per baris. */
 function apiDetailSaldoLayanan(t, nama, sampai){
-  var u = _requirePerm(t, 'dashboard', 'view');
+  var u = _requirePerm(t, 'saldokll', 'view');
   nama = String(nama || '').trim();
   if (!nama) throw new Error('Kantor layanan belum dipilih.');
   if (_norm(nama) === _norm(LAYANAN_DAERAH) && !can(u, 'saldodaerah', 'view')) {
@@ -1491,7 +1518,7 @@ function apiDetailSaldoLayanan(t, nama, sampai){
      batas   jumlah baris rincian yang dikirim (sisanya cukup dihitung)
 */
 function apiRincianDaerah(t, sampai, bulan, pilar, cari, batas){
-  var u = _requirePerm(t, 'dashboard', 'view');
+  var u = _requirePerm(t, 'saldokll', 'view');
   if (!can(u, 'saldodaerah', 'view')) throw new Error('IZIN: tidak punya akses melihat Saldo Penghimpunan Daerah.');
   if (_layananSaya(u)) throw new Error('IZIN: pengurus kantor layanan tidak melihat angka daerah.');
 
@@ -1661,9 +1688,9 @@ function bukuAkun(kode, dari, sampai){
   return { kode:kode, akun: akunInfo ? akunInfo.label : kode, dana: akunInfo ? akunInfo.dana : '', dari:dari, sampai:sampai,
     awalTahun:awalTahun, awalPeriode:awalPeriode, masuk:masuk, keluar:keluar, saldoAkhir:saldo, baris:baris, jumlah:baris.length };
 }
-function apiMutasiAkun(t, kode, dari, sampai){ _requirePerm(t, 'dashboard', 'view'); if (!kode) throw new Error('Akun belum dipilih.'); return bukuAkun(String(kode), dari, sampai); }
+function apiMutasiAkun(t, kode, dari, sampai){ _requirePerm(t, 'saldo', 'view'); if (!kode) throw new Error('Akun belum dipilih.'); return bukuAkun(String(kode), dari, sampai); }
 
-function apiSaldo(t, sampai){ _requirePerm(t, 'dashboard', 'view'); return hitungSaldo(sampai); }
+function apiSaldo(t, sampai){ _requirePerm(t, 'saldo', 'view'); return hitungSaldo(sampai); }
 
 /* ---- saldo awal per tahun ---- */
 function apiListSaldoAwal(t, tahun){
@@ -5875,6 +5902,7 @@ var _LOG_AKSES = {
   apiListDonatur:'donatur', apiJurnalData:'laporan', apiBroadcastReport:'laporan',
   apiListUsers:'users', apiListRekening:'rekening', apiListLayanan:'layanan',
   apiGetSettings:'settings', apiListMutasi:'mutasi', apiListAudit:'log',
+  apiSaldo:'saldo', apiSaldoLayanan:'saldokll',
   apiGetRAPBData:'laporan', apiGetDonaturAnalytics:'donatur'
 };
 var _LOG_AKSES_JEDA = 5 * 60 * 1000;
