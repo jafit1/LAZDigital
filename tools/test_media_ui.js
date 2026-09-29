@@ -451,6 +451,121 @@ const cek = (n, s, i) => {
     await ctx.close();
   }
 
+  console.log('\n=== G2. BENTUK UI: DIUKUR, BUKAN DILIHAT SEKILAS ===');
+  /* Tiga kekeliruan di bawah ini pernah benar-benar terjadi sekaligus di satu
+     modal, dan tidak satu pun menimbulkan galat:
+
+       - input{width:100%} di styles.css juga mengenai kotak centang, jadi
+         kotaknya terukur 413px dan tulisan di sebelahnya tinggal 97px lalu
+         patah dua baris;
+       - aturan proporsi kartu KPI dashboard utama (1.24fr/1fr/1fr/0.84fr,
+         ber-!important) ikut mengenai kartu modul ini, jadi empat kartu yang
+         isinya setara terukur 297, 239, dan 201 piksel;
+       - kartu bidang memakai grid auto-fit, jadi kartu di baris terakhir
+         berhenti di tengah dan meninggalkan lubang sampai 236 piksel.
+
+     Ketiganya "terbaca benar" saat kodenya dibaca. Yang menemukan hanya
+     getBoundingClientRect. Karena itu yang diperiksa di sini angka, bukan
+     ada-tidaknya sebuah kelas. */
+  const bentuk = async (p) => p.evaluate(() => {
+    const de = document.documentElement;
+    const hasil = { meluber: [], kotak: [], kpiBeda: [], angkaBeda: [], bidangSisa: [] };
+    document.querySelectorAll('#isi *, .modal-body *').forEach((n) => {
+      const r = n.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      let digeser = false;
+      for (let a = n.parentElement; a && a !== de; a = a.parentElement) {
+        const ax = getComputedStyle(a).overflowX;
+        if (ax === 'auto' || ax === 'scroll' || ax === 'hidden') { digeser = true; break; }
+      }
+      if (!digeser && r.right > de.clientWidth + 1) hasil.meluber.push((n.className || n.tagName) + '@' + Math.round(r.right));
+    });
+    document.querySelectorAll('input[type=checkbox],input[type=radio]').forEach((c) => {
+      const r = c.getBoundingClientRect();
+      if (Math.round(r.width) !== 16 || Math.round(r.height) !== 16) hasil.kotak.push([Math.round(r.width), Math.round(r.height)]);
+    });
+    const perBaris = (induk, ambil) => {
+      const baris = {};
+      [...induk.children].forEach((c) => {
+        const v = ambil(c); if (v === null) return;
+        const t = Math.round(c.getBoundingClientRect().top);
+        (baris[t] = baris[t] || []).push(v);
+      });
+      return Object.values(baris);
+    };
+    document.querySelectorAll('.kpis-v2').forEach((g) => {
+      perBaris(g, (c) => Math.round(c.getBoundingClientRect().width))
+        .forEach((v) => { if (new Set(v).size > 1) hasil.kpiBeda.push(v); });
+    });
+    document.querySelectorAll('.md-bidang').forEach((g) => {
+      perBaris(g, (c) => { const a = c.querySelector('.md-b-angka'); return a ? Math.round(a.getBoundingClientRect().top) : null; })
+        .forEach((v) => { if (new Set(v).size > 1) hasil.angkaBeda.push(v); });
+      const anak = [...g.children].filter((c) => c.getBoundingClientRect().width);
+      if (anak.length) {
+        const gr = g.getBoundingClientRect();
+        const atasTerakhir = Math.max(...anak.map((c) => Math.round(c.getBoundingClientRect().top)));
+        const akhir = anak.filter((c) => Math.round(c.getBoundingClientRect().top) === atasTerakhir);
+        const sisa = Math.round(gr.right - Math.max(...akhir.map((c) => c.getBoundingClientRect().right)));
+        if (sisa > 2) hasil.bidangSisa.push(sisa);
+      }
+    });
+    return hasil;
+  });
+
+  for (const [peran, lebar] of [['koordinator', 1280], ['koordinator', 390], ['timFoto', 900], ['pemohon', 1600]]) {
+    const { ctx, p } = await bukaSebagai(peran, '', { viewport: { width: lebar, height: 900 } });
+    const b1 = await bentuk(p);
+    cek(peran + ' @' + lebar + ': tidak ada yang melewati tepi layar', b1.meluber.length === 0, b1.meluber);
+    cek(peran + ' @' + lebar + ': kartu KPI sebaris sama lebar', b1.kpiBeda.length === 0, b1.kpiBeda);
+    cek(peran + ' @' + lebar + ': angka kartu bidang sejajar', b1.angkaBeda.length === 0, b1.angkaBeda);
+    cek(peran + ' @' + lebar + ': kartu bidang rapat sampai tepi kanan', b1.bidangSisa.length === 0, b1.bidangSisa);
+    await ctx.close();
+  }
+
+  {
+    const { ctx, p } = await bukaSebagai('koordinator', 'tim');
+    await p.click('#tmTambah');
+    /* Bukan #tmAkun: lz-ui menggantinya dengan dropdown bertema dan
+       menyembunyikan select aslinya, jadi ia tidak pernah 'visible'. */
+    await p.waitForSelector('.modal-body .penerima-baris', { timeout: 5000 });
+    await p.waitForTimeout(400);
+    const b2 = await bentuk(p);
+    cek('modal tim: kotak centang berukuran 16x16, tidak melar', b2.kotak.length === 0, b2.kotak);
+    const baris = await p.$$eval('.modal-body .penerima-baris', (n) => n.map((l) => {
+      const nm = l.querySelector('.pilih-nama'), kt = l.querySelector('.pilih-ket');
+      const r = l.getBoundingClientRect();
+      return { tinggi: Math.round(r.height),
+        namaPotong: nm ? nm.scrollWidth > nm.clientWidth + 1 : null,
+        ketPotong: kt ? kt.scrollWidth > kt.clientWidth + 1 : null,
+        namaKiri: nm ? Math.round(nm.getBoundingClientRect().left) : null,
+        ketKanan: kt ? Math.round(kt.getBoundingClientRect().right) : null,
+        barisKanan: Math.round(r.right) };
+    }));
+    cek('modal tim: tiga baris bidang tergambar', baris.length === 3, baris.length);
+    cek('modal tim: tiap baris setinggi satu baris teks, tidak patah dua',
+      baris.every((b) => b.tinggi < 44), baris.map((b) => b.tinggi));
+    cek('modal tim: nama bidang tidak terpotong', baris.every((b) => b.namaPotong === false), baris);
+    cek('modal tim: keterangan jumlah jenis tidak terpotong', baris.every((b) => b.ketPotong === false), baris);
+    cek('modal tim: nama semua mulai di kiri yang sama',
+      new Set(baris.map((b) => b.namaKiri)).size === 1, baris.map((b) => b.namaKiri));
+    cek('modal tim: keterangan semua berakhir di kanan yang sama',
+      new Set(baris.map((b) => b.ketKanan)).size === 1, baris.map((b) => b.ketKanan));
+    /* Label form memakai pola rumah, jadi ikut berubah kalau tema berubah. */
+    const adaFld = await p.$$eval('.modal-body .fld > label', (n) => n.length);
+    cek('modal tim: labelnya memakai pola .fld > label milik form rumah', adaFld === 3, adaFld);
+    await ctx.close();
+  }
+
+  {
+    const { ctx, p } = await bukaSebagai('pemohon', 'ajukan');
+    const kartu = await p.$$eval('#isi .md-form', (n) => n.length);
+    cek('halaman ajukan memakai kartu yang mengikuti lebar, bukan lebar tetap', kartu === 1, kartu);
+    const kolom = await p.$$eval('#isi .fgrid .fld', (n) => n.map((f) => f.getAttribute('data-col')));
+    cek('field ajukan dibagi kolom, tidak semuanya bertumpuk satu-satu',
+      kolom.filter((k) => k === '6').length >= 4, kolom);
+    await ctx.close();
+  }
+
   console.log('\n=== H. TIDAK ADA GALAT JS ===');
   cek('tidak ada galat JavaScript sepanjang uji', galat.length === 0, galat.slice(0, 4));
 

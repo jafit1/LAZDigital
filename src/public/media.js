@@ -232,7 +232,11 @@ function kpi(label, nilai, ikon, warna, kutak) {
       <div class="kpi-v2-icon" style="background:${warna}">${ikon}</div></div>
     <div class="kpi-v2-value">${H(nilai)}</div></div>`;
 }
-const barisKpi = (isi, lima) => `<div class="kpis-v2${lima ? ' is-lima' : ''}">${isi}</div>`;
+/* .kpi-media menandai baris ini milik modul Media. Tanpa penanda itu,
+   aturan proporsi 1.24fr/1fr/1fr/0.84fr milik dashboard utama (seksi 16
+   styles.css, ber-!important) ikut mengenai kartu di sini dan membuat
+   empat kartu yang isinya setara terukur 297, 239, dan 201 piksel. */
+const barisKpi = (isi, lima) => `<div class="kpis-v2 kpi-media${lima ? ' is-lima' : ''}">${isi}</div>`;
 
 /* Widget dashboard utama: kepala berbintik warna, lalu isinya. */
 function wc(judul, dot, isi, ukuran) {
@@ -360,7 +364,7 @@ halaman.dasbor = {
 
       widget.push(wc('Tim Media', 'var(--green)',
         p.perOrang.length
-          ? `<div class="tabel-bungkus"><table class="tabel">
+          ? `<div class="tabel-geser"><table>
               <thead><tr><th>Nama</th><th>Bidang</th><th>Jalan</th><th>Selesai</th></tr></thead>
               <tbody>${p.perOrang.map((o) => `<tr>
                 <td style="font-weight:600">${H(o.nama)}</td>
@@ -385,7 +389,7 @@ function tabelPermohonan(baris, opsi = {}) {
     return kosongKotak('&#128196;', opsi.kosong || 'Belum ada permohonan di sini.');
   }
   const kolomPemohon = !opsi.tanpaPemohon;
-  return `<div class="tabel-bungkus"><table class="tabel">
+  return `<div class="tabel-geser"><table>
     <thead><tr>
       <th>Nomor &amp; judul</th>
       <th>Jenis</th>
@@ -522,11 +526,17 @@ async function gambarDetail(el, id) {
   const bKirim = $('#akKirim');
   if (bKirim) bKirim.onclick = () => {
     modal('Kirim hasil desain', `
-      <p class="muted" style="font-size:13px;margin-top:0;line-height:1.6">Unggah hasilnya ke Google Drive, atur aksesnya supaya bisa dibuka orang lembaga, lalu tempelkan tautannya di sini.</p>
-      <label class="lbl">Tautan Google Drive <b class="req">*</b></label>
-      <input class="inp" id="mTautan" placeholder="https://drive.google.com/..." autocomplete="off">
-      <label class="lbl" style="margin-top:10px">Catatan untuk pemohon</label>
-      <textarea class="inp" id="mCatatan" rows="3" placeholder="Misalnya: ukuran 1080x1350, sudah termasuk versi story"></textarea>`,
+      <p class="fld-ket" style="margin:0 0 12px">Unggah hasilnya ke Google Drive, atur aksesnya supaya bisa dibuka orang lembaga, lalu tempelkan tautannya di sini.</p>
+      <div class="fgrid">
+        <div class="fld" data-col="12">
+          <label for="mTautan">Tautan Google Drive <b class="req">*</b></label>
+          <input id="mTautan" placeholder="https://drive.google.com/..." autocomplete="off">
+        </div>
+        <div class="fld" data-col="12">
+          <label for="mCatatan">Catatan untuk pemohon</label>
+          <textarea id="mCatatan" rows="3" placeholder="Misalnya: ukuran 1080x1350, sudah termasuk versi story"></textarea>
+        </div>
+      </div>`,
       null,
       '<button class="btn" onclick="tutupModal()">Batal</button><button class="btn btn-primary" id="mKirim">Kirim</button>');
     $('#mKirim').onclick = async () => {
@@ -540,9 +550,11 @@ async function gambarDetail(el, id) {
   const bRevisi = $('#akRevisi');
   if (bRevisi) bRevisi.onclick = () => {
     modal('Minta revisi', `
-      <p class="muted" style="font-size:13px;margin-top:0;line-height:1.6">Tuliskan bagian mana yang perlu diperbaiki. Catatan ini masuk ke jalannya proses dan terbaca tim media, jadi tidak perlu diulang lewat WhatsApp.</p>
-      <label class="lbl">Yang perlu diperbaiki <b class="req">*</b></label>
-      <textarea class="inp" id="mAlasan" rows="4" placeholder="Misalnya: logo Lazismu kurang besar, tanggal kegiatan salah ketik"></textarea>`,
+      <p class="fld-ket" style="margin:0 0 12px">Tuliskan bagian mana yang perlu diperbaiki. Catatan ini masuk ke jalannya proses dan terbaca tim media, jadi tidak perlu diulang lewat WhatsApp.</p>
+      <div class="fgrid"><div class="fld" data-col="12">
+        <label for="mAlasan">Yang perlu diperbaiki <b class="req">*</b></label>
+        <textarea id="mAlasan" rows="4" placeholder="Misalnya: logo Lazismu kurang besar, tanggal kegiatan salah ketik"></textarea>
+      </div></div>`,
       null,
       '<button class="btn" onclick="tutupModal()">Batal</button><button class="btn btn-primary" id="mRevisi">Kirim permintaan</button>');
     $('#mRevisi').onclick = async () => {
@@ -558,8 +570,10 @@ async function gambarDetail(el, id) {
     const pil = Object.entries(negara.labelBidang)
       .map(([k, v]) => `<option value="${H(k)}"${k === p.bidang ? ' selected' : ''}>${H(v)}</option>`).join('');
     modal('Pindahkan ke bidang lain', `
-      <label class="lbl">Bidang tujuan</label>
-      <select class="inp" id="mBidang">${pil}</select>`,
+      <div class="fgrid"><div class="fld" data-col="12">
+        <label for="mBidang">Bidang tujuan</label>
+        <select id="mBidang">${pil}</select>
+      </div></div>`,
       null,
       '<button class="btn" onclick="tutupModal()">Batal</button><button class="btn btn-primary" id="mBagi">Pindahkan</button>');
     $('#mBagi').onclick = async () => {
@@ -578,28 +592,37 @@ halaman.ajukan = {
   async gambar(el) {
     const pilJenis = negara.jenis.map((j) =>
       `<option value="${H(j.kode)}" data-contoh="${H(j.contoh)}">${H(j.label)}</option>`).join('');
-    el.innerHTML = `<div class="card" style="max-width:700px">
-      <label class="lbl" style="margin-top:0">Jenis media <b class="req">*</b></label>
-      <select class="inp" id="fJenis"><option value="">Pilih jenis</option>${pilJenis}</select>
-      <div class="muted" id="fContoh" style="font-size:12px;margin-top:5px;min-height:16px"></div>
-
-      <label class="lbl" style="margin-top:14px">Judul <b class="req">*</b></label>
-      <input class="inp" id="fJudul" maxlength="120" placeholder="Flyer Kajian Ahad Pagi 12 Oktober">
-
-      <label class="lbl" style="margin-top:14px">Brief <b class="req">*</b></label>
-      <textarea class="inp" id="fBrief" rows="7" maxlength="4000"
-        placeholder="Teks yang harus muncul, suasana atau warna, logo dan foto yang wajib ada, contoh desain yang disukai."></textarea>
-
-      <label class="lbl" style="margin-top:14px">Dipakai tanggal <b class="req">*</b></label>
-      <input class="inp" type="date" id="fDeadline" min="${H(negara.hariIni)}" value="${H(negara.hariIni)}">
-
-      <label class="lbl" style="margin-top:14px">Bahan di Google Drive</label>
-      <input class="inp" id="fBahan" placeholder="https://drive.google.com/...">
-
-      <label class="lbl" style="margin-top:14px">Keterangan</label>
-      <input class="inp" id="fKeterangan" maxlength="500" placeholder="Opsional">
-
-      <div style="margin-top:20px"><button class="btn btn-primary" id="fKirim">Kirim permohonan</button></div>
+    el.innerHTML = `<div class="card md-form">
+      <div class="fgrid">
+        <div class="fld" data-col="6">
+          <label for="fJenis">Jenis media <b class="req">*</b></label>
+          <select id="fJenis"><option value="">Pilih jenis</option>${pilJenis}</select>
+          <div class="fld-ket" id="fContoh"></div>
+        </div>
+        <div class="fld" data-col="6">
+          <label for="fDeadline">Dipakai tanggal <b class="req">*</b></label>
+          <input type="date" id="fDeadline" min="${H(negara.hariIni)}" value="${H(negara.hariIni)}">
+          <div class="fld-ket">Tanggal desainnya dipakai, bukan tanggal selesai.</div>
+        </div>
+        <div class="fld" data-col="12">
+          <label for="fJudul">Judul <b class="req">*</b></label>
+          <input id="fJudul" maxlength="120" placeholder="Flyer Kajian Ahad Pagi 12 Oktober">
+        </div>
+        <div class="fld" data-col="12">
+          <label for="fBrief">Brief <b class="req">*</b></label>
+          <textarea id="fBrief" rows="7" maxlength="4000"
+            placeholder="Teks yang harus muncul, suasana atau warna, logo dan foto yang wajib ada, contoh desain yang disukai."></textarea>
+        </div>
+        <div class="fld" data-col="6">
+          <label for="fBahan">Bahan di Google Drive</label>
+          <input id="fBahan" placeholder="https://drive.google.com/...">
+        </div>
+        <div class="fld" data-col="6">
+          <label for="fKeterangan">Keterangan</label>
+          <input id="fKeterangan" maxlength="500" placeholder="Opsional">
+        </div>
+      </div>
+      <div class="md-form-aksi"><button class="btn btn-primary" id="fKirim">Kirim permohonan</button></div>
     </div>`;
 
     const sJenis = $('#fJenis');
@@ -629,23 +652,25 @@ halaman.ajukan = {
 // ============================================================ DAFTAR
 function bilahSaring(id) {
   const pilJenis = negara.jenis.map((j) => `<option value="${H(j.kode)}">${H(j.label)}</option>`).join('');
-  return `<div class="card" style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-    <div style="flex:1 1 200px;min-width:170px">
-      <label class="lbl" style="margin-top:0">Cari</label>
-      <input class="inp" id="${id}Cari" placeholder="Nomor, judul, atau nama pemohon">
-    </div>
-    <div style="flex:0 1 160px">
-      <label class="lbl" style="margin-top:0">Status</label>
-      <select class="inp" id="${id}Status">
-        <option value="">Semua status</option>
-        <option value="baru">Menunggu</option>
-        <option value="diproses">Dikerjakan</option>
-        <option value="selesai">Selesai</option>
-      </select>
-    </div>
-    <div style="flex:0 1 180px">
-      <label class="lbl" style="margin-top:0">Jenis</label>
-      <select class="inp" id="${id}Jenis"><option value="">Semua jenis</option>${pilJenis}</select>
+  return `<div class="card md-saring">
+    <div class="fgrid">
+      <div class="fld" data-col="6">
+        <label for="${id}Cari">Cari</label>
+        <input id="${id}Cari" placeholder="Nomor, judul, atau nama pemohon">
+      </div>
+      <div class="fld" data-col="3">
+        <label for="${id}Status">Status</label>
+        <select id="${id}Status">
+          <option value="">Semua status</option>
+          <option value="baru">Menunggu</option>
+          <option value="diproses">Dikerjakan</option>
+          <option value="selesai">Selesai</option>
+        </select>
+      </div>
+      <div class="fld" data-col="3">
+        <label for="${id}Jenis">Jenis</label>
+        <select id="${id}Jenis"><option value="">Semua jenis</option>${pilJenis}</select>
+      </div>
     </div>
   </div>`;
 }
@@ -755,7 +780,7 @@ halaman.tim = {
             <button class="btn btn-primary btn-sm" id="tmTambah">Tambah anggota</button>
           </div>
           ${barisTim
-            ? `<div class="tabel-bungkus"><table class="tabel"><thead><tr><th>Nama</th><th>Bidang</th><th>Status</th><th></th></tr></thead><tbody>${barisTim}</tbody></table></div>`
+            ? `<div class="tabel-geser"><table><thead><tr><th>Nama</th><th>Bidang</th><th>Status</th><th></th></tr></thead><tbody>${barisTim}</tbody></table></div>`
             : kosongKotak('&#128101;', 'Belum ada anggota tim media. Tambahkan dulu, kalau tidak permohonan tidak akan masuk ke kotak siapa pun.')}
         </div>
         <div class="card">
@@ -770,18 +795,31 @@ halaman.tim = {
     const formAnggota = (a) => {
       const pilAkun = d.akun.map((u) =>
         `<option value="${H(u.id)}"${a && a.userId === u.id ? ' selected' : ''}>${H(u.nama)}${u.username ? ` (${H(u.username)})` : ''}</option>`).join('');
-      const cek = bidang.map(([k, v]) => `<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      /* Barisnya memakai komponen .penerima/.penerima-baris milik Broadcast,
+         bukan baris buatan sendiri: nama kiri yang memendek dengan titik-titik,
+         keterangan kanan yang tidak ikut menyusut, dan kotak centang yang tidak
+         melar. Satu komponen dipakai dua modul, jadi berubahnya pun sekali. */
+      const cek = bidang.map(([k, v]) => `<label class="penerima-baris">
         <input type="checkbox" class="tmB" value="${H(k)}"${a && (a.bidang || []).includes(k) ? ' checked' : ''}>
-        <span>${H(v)}<span class="muted" style="font-size:12px"> · ${H((d.jenisPerBidang[k] || []).length)} jenis media</span></span></label>`).join('');
+        <span class="pilih-nama">${H(v)}</span>
+        <span class="pilih-ket">${H((d.jenisPerBidang[k] || []).length)} jenis media</span></label>`).join('');
       modal(a ? 'Ubah anggota tim' : 'Tambah anggota tim', `
-        <label class="lbl">Akun LAZDigital <b class="req">*</b></label>
-        <select class="inp" id="tmAkun"${a ? ' disabled' : ''}><option value="">-- pilih akun --</option>${pilAkun}</select>
-        <div class="muted" style="font-size:12px;margin-top:4px">Akun yang sudah ada. Modul ini tidak membuat akun baru.</div>
-        <label class="lbl" style="margin-top:12px">Bidang yang dipegang</label>
-        ${cek}
-        <div class="muted" style="font-size:12px">Boleh lebih dari satu. Yang memegang kamera sering juga yang mengedit videonya.</div>
-        <label class="lbl" style="margin-top:12px">Catatan</label>
-        <input class="inp" id="tmCatatan" maxlength="200" value="${a ? H(a.catatan || '') : ''}" placeholder="Misalnya: hanya hari Sabtu">`,
+        <div class="fgrid">
+          <div class="fld" data-col="12">
+            <label for="tmAkun">Akun LAZDigital <b class="req">*</b></label>
+            <select id="tmAkun"${a ? ' disabled' : ''}><option value="">-- pilih akun --</option>${pilAkun}</select>
+            <div class="fld-ket">Akun yang sudah ada. Modul ini tidak membuat akun baru.</div>
+          </div>
+          <div class="fld" data-col="12">
+            <label>Bidang yang dipegang</label>
+            <div class="penerima">${cek}</div>
+            <div class="fld-ket">Boleh lebih dari satu. Yang memegang kamera sering juga yang mengedit videonya.</div>
+          </div>
+          <div class="fld" data-col="12">
+            <label for="tmCatatan">Catatan</label>
+            <input id="tmCatatan" maxlength="200" value="${a ? H(a.catatan || '') : ''}" placeholder="Misalnya: hanya hari Sabtu">
+          </div>
+        </div>`,
         null,
         '<button class="btn" onclick="tutupModal()">Batal</button><button class="btn btn-primary" id="tmSimpan">Simpan</button>');
       $('#tmSimpan').onclick = async () => {
@@ -839,7 +877,7 @@ halaman.rekap = {
       </div><div id="rkIsi"></div>`;
 
     const tabelKelompok = (judul, dot, baris, kolom) => wc(judul, dot,
-      baris.length ? `<div class="tabel-bungkus"><table class="tabel">
+      baris.length ? `<div class="tabel-geser"><table>
           <thead><tr><th>${H(kolom)}</th><th>Total</th><th>Selesai</th><th>Telat</th><th>Revisi</th></tr></thead>
           <tbody>${baris.map((b) => `<tr>
             <td>${H(b.label)}</td><td>${fmtAngka(b.total)}</td><td>${fmtAngka(b.selesai)}</td>

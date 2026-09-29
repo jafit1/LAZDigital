@@ -343,6 +343,36 @@ const DRIVE2 = 'https://drive.google.com/file/d/2ZyXwVuTsRqP/view';
   cek('daftar mendesak tidak memuat yang sudah selesai',
     dasStaff.mendesak.every((r) => r.status !== 'selesai'), dasStaff.mendesak.map((r) => r.status));
 
+  console.log('\n=== R. TIDAK ADA KELAS KARANGAN DI media.js ===');
+  /* Kelas CSS yang ditulis di media.js tetapi tidak pernah didefinisikan di
+     styles.css tidak menghasilkan galat apa pun: halamannya tetap terbuka,
+     JS-nya tetap jalan, dan yang muncul cuma tampilan yang "agak aneh". Itu
+     persis yang terjadi pada .lbl, .inp, .tabel dan .tabel-bungkus — empat
+     kelas yang dipakai 35 kali di seluruh form modul ini dan tidak satu pun
+     ada isinya, sehingga setiap label dan setiap kotak isian tampil polos
+     tanpa gaya. Kekeliruan diam seperti ini hanya ketahuan oleh pemeriksaan,
+     bukan oleh membaca. Kelas yang memang cuma pegangan JavaScript
+     didaftarkan di bawah supaya tidak ikut diributkan. */
+  {
+    const fsx = require('fs'), px = require('path');
+    const akarx = px.join(__dirname, '..', 'src', 'public');
+    const jsMedia = fsx.readFileSync(px.join(akarx, 'media.js'), 'utf8');
+    const cssx = fsx.readFileSync(px.join(akarx, 'styles.css'), 'utf8');
+    const PEGANGAN_JS = new Set(['tm-ubah', 'tm-hapus', 'tmB', 'md-buka', 'hidden']);
+    const dipakai = new Set();
+    for (const m of jsMedia.matchAll(/class="([^"$]*)"/g)) {
+      for (const k of m[1].split(/\s+/)) if (k) dipakai.add(k);
+    }
+    const hilang = [...dipakai].filter((k) => !PEGANGAN_JS.has(k)
+      && !new RegExp('\\.' + k.replace(/[-]/g, '\\-') + '(?![\\w-])').test(cssx)).sort();
+    cek('setiap kelas di media.js punya definisinya di styles.css', hilang.length === 0, hilang);
+    cek('jumlah kelas yang diperiksa masuk akal', dipakai.size > 30, dipakai.size);
+    /* Yang sudah pernah salah, dijaga namanya. */
+    for (const mati of ['lbl', 'inp', 'tabel', 'tabel-bungkus']) {
+      cek('kelas "' + mati + '" yang dulu karangan tidak dipakai lagi', !dipakai.has(mati));
+    }
+  }
+
   console.log('\n=== HASIL ===');
   console.log(`${ok} lulus, ${g} gagal.`);
   if (g) { console.log('\nJANGAN dideploy: modul Media belum benar.\n'); process.exit(1); }

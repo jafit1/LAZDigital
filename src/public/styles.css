@@ -98,6 +98,23 @@ html[data-theme="dark"] .tab-btn.active {
 input,select,textarea{width:100%;font-family:var(--sans);font-size:13.5px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;transition:.15s;outline:none;box-shadow:0 1px 2px 0 rgba(0,0,0,0.02)}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(234,106,30,0.12)}
 input::placeholder,textarea::placeholder{color:var(--muted)}
+
+/* Kotak centang dan tombol radio TIDAK boleh ikut aturan di atasnya.
+   input{width:100%} berlaku untuk SEMUA <input>, kotak centang termasuk. Di
+   dalam baris flex kotak itu lalu memanjang mengisi sisa ruang dan tulisan di
+   sebelahnya terdesak sampai terpotong — persis yang terjadi di modal "Tambah
+   anggota tim": kotaknya terukur 413px, tulisannya tinggal 97px lalu patah
+   dua baris. Dua bagian sudah menambalnya sendiri (.pilih-baris, .kol-tandai)
+   dan tambalan itu tetap menang karena lebih khusus; yang di bawah ini
+   menutup sisanya supaya kekeliruan yang sama tidak lahir lagi di halaman
+   berikutnya. Dijaga uji tampilan Media. */
+input[type="checkbox"],input[type="radio"]{
+  width:16px;height:16px;min-width:16px;flex:0 0 auto;
+  margin:0;padding:0;accent-color:var(--accent);cursor:pointer;box-shadow:none;
+}
+input[type="checkbox"]:focus-visible,input[type="radio"]:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;box-shadow:none;
+}
 select{cursor:pointer}
 textarea{resize:vertical;min-height:70px}
 
@@ -341,9 +358,14 @@ html[data-theme="dark"] .dh-hi{color:#f8fafc}
 .dh-quick-btn.primary:hover{box-shadow:0 6px 20px rgba(234,106,30,.32);transform:translateY(-2px)}
 
 /* ===== TREMOR FINANCIAL KPI CARDS ===== */
-.kpis-v2{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-@media(max-width:1100px){.kpis-v2{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.kpis-v2{grid-template-columns:1fr}}
+/* minmax(0,1fr), bukan 1fr. "1fr" sebenarnya minmax(auto,1fr): kolom boleh
+   melar melewati jatahnya kalau isinya panjang. Akibatnya empat kartu yang
+   seharusnya sama lebar terukur 297, 239, dan 201 piksel — terlihat jelas
+   sebagai barisan yang tidak lurus. Dengan minmax(0,1fr) jatahnya mengikat,
+   dan tulisan yang kepanjangan memendek sendiri di dalam kartunya. */
+.kpis-v2{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:24px}
+@media(max-width:1100px){.kpis-v2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.kpis-v2{grid-template-columns:minmax(0,1fr)}}
 .kpi-v2{position:relative;background:var(--surface);border:1px solid var(--border);
   border-radius:16px;padding:22px 20px;cursor:pointer;overflow:hidden;
   box-shadow:0 1px 3px 0 rgba(0,0,0,0.03),0 1px 2px -1px rgba(0,0,0,0.03);
@@ -1956,8 +1978,11 @@ body.rz-active .wc{transition:none !important}
 /* ---------- 16. PROPORSI KARTU KPI ---------- */
 /* Penghimpunan (kartu utama) diberi porsi lebih lebar, Donatur & Mustahik
    yang isinya paling ringkas dipersempit. Total tetap 4 kolom sebaris. */
+/* Hanya untuk baris KPI dashboard utama. Modul lain memakai kartu yang
+   isinya setara, dan proporsi di bawah ini membuat barisannya terlihat
+   tidak lurus di sana. :not() menahannya, bukan !important tandingan. */
 @media (min-width:1101px){
-  .kpis-v2{grid-template-columns:1.24fr 1fr 1fr 0.84fr !important}
+  .kpis-v2:not(.kpi-media):not(.is-lima){grid-template-columns:1.24fr 1fr 1fr 0.84fr !important}
 }
 /* Di bawah itu grid sudah jadi 2 kolom / 1 kolom — biarkan sama rata. */
 
@@ -2047,6 +2072,10 @@ body.rz-active .wc{transition:none !important}
   box-shadow:0 0 0 3px rgba(229,84,75,.13) !important;
 }
 .fld-msg{font-size:11.5px;color:var(--red);font-weight:600}
+/* Keterangan, bukan kesalahan: .fld-msg merah untuk yang salah, .fld-ket
+   redup untuk yang sekadar menjelaskan. Keduanya duduk di tempat yang sama
+   di bawah field, jadi bentuknya dibuat sama supaya tidak melompat. */
+.fld-ket{font-size:11.5px;color:var(--muted);line-height:1.5}
 
 /* Nominal — field utama */
 .money-fld{
@@ -5758,10 +5787,10 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
       dalamnya menyisakan satu kartu sendirian di baris kedua: terbaca seperti
       ada yang lupa dipasangkan. Ringkasan permohonan memang butuh lima angka,
       jadi kolomnya yang mengikuti, bukan angkanya yang dipaksa berkurang. */
-.kpis-v2.is-lima{ grid-template-columns:repeat(5,1fr); }
-@media(max-width:1250px){ .kpis-v2.is-lima{ grid-template-columns:repeat(3,1fr) } }
-@media(max-width:800px){ .kpis-v2.is-lima{ grid-template-columns:repeat(2,1fr) } }
-@media(max-width:520px){ .kpis-v2.is-lima{ grid-template-columns:1fr } }
+.kpis-v2.is-lima{ grid-template-columns:repeat(5,minmax(0,1fr)); }
+@media(max-width:1250px){ .kpis-v2.is-lima{ grid-template-columns:repeat(3,minmax(0,1fr)) } }
+@media(max-width:800px){ .kpis-v2.is-lima{ grid-template-columns:repeat(2,minmax(0,1fr)) } }
+@media(max-width:520px){ .kpis-v2.is-lima{ grid-template-columns:minmax(0,1fr) } }
 .kpis-v2.is-lima .kpi-v2:nth-child(5){ animation-delay:.18s }
 
 /* 1. Pita perbandingan status. Menggantikan tiga angka dengan satu baris:
@@ -5822,8 +5851,21 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
 }
 
 /* 3. Kartu beban per bidang. Kecil, sebaris, tanpa judul panjang. */
-.md-bidang{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
-.md-bkartu{ border:1px solid var(--border); border-radius:12px; padding:12px 13px; background:var(--surface); }
+/* Flex, bukan grid. Grid auto-fit membuat kolom yang sama lebar, jadi kalau
+   tiga kartu tidak muat sebaris yang ketiga turun dan menyisakan lubang
+   selebar satu kolom di kanannya — terukur 167 sampai 236 piksel kosong.
+   Dengan flex-wrap + flex-grow, kartu di baris terakhir melebar mengisi
+   sisanya, jadi kotaknya selalu rapat ke tepi wadah berapa pun lebarnya. */
+.md-bidang{ display:flex; flex-wrap:wrap; gap:10px; }
+/* Kolom, dan namanya yang memanjang mengisi sisa tinggi. Tanpa ini, kartu
+   yang namanya patah dua baris ("Perlu dikerjakan") menaruh angkanya 18px
+   lebih rendah daripada tetangganya yang namanya sebaris — dua angka
+   sebaris yang tidak sejajar, dan itu yang pertama kali terlihat. */
+.md-bkartu{
+  flex:1 1 150px; min-width:0; display:flex; flex-direction:column;
+  border:1px solid var(--border); border-radius:12px; padding:12px 13px; background:var(--surface);
+}
+.md-bkartu .md-b-nama{ flex:1 0 auto; }
 .md-bkartu.is-kosong{ border-color:var(--red); background:var(--red-bg); }
 .md-bkartu .md-b-nama{ font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px; }
 .md-bkartu .md-b-nama i{ width:7px; height:7px; border-radius:50%; background:var(--accent); }
@@ -5833,14 +5875,19 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
 
 /* Widget dashboard masuk berurutan, bukan serentak. Jeda kecil saja: yang
    dicari kesan rapi, bukan pertunjukan. */
-/* Widget setinggi isinya, bukan setinggi tetangganya. Di dashboard utama tiap
-   widget memang berisi grafik yang tingginya mirip; di sini isinya berbeda
-   jauh, dan meregangkan yang pendek cuma melahirkan ruang kosong selebar
-   kartu di bawah satu baris permohonan. */
-/* !important karena .dgrid mematok stretch dengan !important juga (baris 715).
-   Bukan lomba menang-menangan: di dashboard utama stretch memang benar karena
-   isi tiap widget tingginya mirip, di sini tidak. */
-.md-dgrid{ align-items:start !important; }
+
+/* Setinggi tetangga sebaris, seperti dashboard utama. Pernah dibuat setinggi
+   isinya masing-masing supaya tidak ada ruang kosong di dalam kartu; hasilnya
+   justru lubang berundak DI ANTARA kartu, dan itu yang lebih dulu kelihatan.
+   Sekarang tingginya disamakan dan isi kartu yang pendek disebar merata,
+   sehingga tepi atas dan tepi bawah tiap baris kartu benar-benar lurus.
+
+   Isinya tetap menempel ke atas, bukan ditengahkan. Ditengahkan sempat
+   dicoba dan hasilnya tabel di kartu yang tinggi melayang di tengah dengan
+   ruang kosong di atas dan di bawahnya — rapi diukur, aneh dilihat. */
+.md-dgrid .wc{ display:flex; flex-direction:column; }
+.md-dgrid .wc > .wc-b{ flex:1; display:flex; flex-direction:column; justify-content:flex-start; }
+.md-dgrid .wc > .wc-b > :last-child{ margin-bottom:0; }
 
 /* Kartu angka tanpa grafik mini. .kpi-v2-bottom disediakan setinggi 32 px
    untuk menampung grafik; kartu di modul ini tidak punya grafik, dan ruang
@@ -5855,6 +5902,23 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
 .dgrid .wc:nth-child(4){ animation-delay:.19s }
 .dgrid .wc:nth-child(5){ animation-delay:.24s }
 .dgrid .wc:nth-child(n+6){ animation-delay:.28s }
+/* 5. Form dan bilah saring memakai lebar yang tersedia, tidak dipatok di
+   700px lalu menyisakan ruang kosong di kanan. Yang menjaga supaya barisnya
+   tidak terlalu panjang untuk dibaca adalah pembagian kolom .fld[data-col],
+   bukan lebar kartunya: di layar lebar field-nya berdampingan dua-dua. */
+.md-form{ width:100%; }
+.md-form-aksi{ margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; }
+.md-saring{ margin-bottom:14px; }
+/* Contoh jenis media muncul dan hilang saat pilihan berubah. Tanpa tinggi
+   cadangan, seluruh formulir melompat 15px tiap kali orang mengganti
+   pilihannya. */
+#fContoh{ min-height:15px; }
+
+/* 6. Baris tabel yang bisa diklik harus terlihat bisa diklik. Tanpa ini
+   kursornya tetap panah dan orang mengira barisnya cuma tulisan. */
+.baris-klik{ cursor:pointer; }
+.baris-klik:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+
 @media (prefers-reduced-motion:reduce){
   .dgrid .wc{ animation:none; }
   .md-pita i{ transition:none; }
