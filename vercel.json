@@ -7,9 +7,6 @@
     "sin1"
   ],
   "functions": {
-    "api/wa-dispatch.js": {
-      "maxDuration": 60
-    },
     "api/**/*.js": {
       "maxDuration": 30
     }
@@ -18,10 +15,6 @@
     {
       "path": "/api/backup",
       "schedule": "0 19 * * *"
-    },
-    {
-      "path": "/api/wa-dispatch",
-      "schedule": "0 1 * * *"
     }
   ],
   "routes": [

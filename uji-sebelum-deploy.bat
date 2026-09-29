@@ -34,20 +34,20 @@ call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
 call :jalankan "Kotak masuk percakapan"          tools\test_percakapan.js
 call :jalankan "Bentuk layar percakapan"         tools\ukur-percakapan.js
 call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
-call :jalankan "Fundraiser & pencocokan"        tools\test_fundraiser.js
+call :jalankan "Fundraiser dan pencocokan"        tools\test_fundraiser.js
 call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
-call :jalankan "Fitur Media & Desain"           tools\test_media_fitur.js
+call :jalankan "Fitur Media dan Desain"           tools\test_media_fitur.js
 call :jalankan "Tampilan halaman Media"         tools\test_media_ui.js
 call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
 call :jalankan "Tampilan halaman AI Asisten"    tools\test_ai_ui.js
 call :jalankan "Sambungan ke PostgreSQL"         tools\cek-postgres.js
 call :jalankan "Buku besar di PostgreSQL"        tools\test_laz_pg.js
-call :jalankan "Cadangan & pemulihan PostgreSQL" tools\test_cadangan_pg.js
+call :jalankan "Cadangan dan pemulihan PostgreSQL" tools\test_cadangan_pg.js
 call :jalankan "Sesi modul di PostgreSQL"        tools\test_sesi_modul_pg.js
-call :jalankan "Alat ukur & rapikan Redis"       tools\test_alat_redis.js
+call :jalankan "Alat ukur dan rapikan Redis"       tools\test_alat_redis.js
 call :jalankan "Alat ekspor Redis"              tools\test_ekspor_redis.js
-call :jalankan "Lambang & ikon situs"            tools\test_ikon.js
-call :jalankan "Bilah menu: logo & tombol keluar" tools\test_sidebar_ui.js
+call :jalankan "Lambang dan ikon situs"            tools\test_ikon.js
+call :jalankan "Bilah menu: logo dan tombol keluar" tools\test_sidebar_ui.js
 call :jalankan "Gerak buka/tutup bilah menu"     tools\test_sidebar_gerak.js
 call :jalankan "Kelurusan ikon bilah menu"       tools\ukur-sisi.js
 call :jalankan "Skala tampilan di semua perangkat" tools\test_skala_ui.js

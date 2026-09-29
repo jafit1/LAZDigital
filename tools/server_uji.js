@@ -5,10 +5,10 @@ const engine=require('./_engine.js');
 let DB=JSON.parse(fs.readFileSync(process.env.DBFILE||'db-publik.json','utf8'));
 const MIME={'.html':'text/html','.css':'text/css','.js':'text/javascript','.json':'application/json'};
 
-/* ---- jembatan ke endpoint gaya Vercel (api/wa.js, api/wa-dispatch.js) ----
+/* ---- jembatan ke endpoint gaya Vercel ----
    Keduanya membaca basis data lembaga lewat rpc._internal.muat(), yang di sini
    membaca berkas data/laz-db-local.json. Jadi setiap perubahan DB di memori
-   dicerminkan ke berkas itu supaya token login terlihat oleh /api/wa. */
+   dicerminkan ke berkas itu supaya token login terlihat oleh endpoint-endpoint itu. */
 const DBLOKAL=path.join(process.cwd(),'data','laz-db-local.json');
 function cerminkanDB(){
   try{ fs.mkdirSync(path.dirname(DBLOKAL),{recursive:true}); fs.writeFileSync(DBLOKAL,JSON.stringify(DB)); }catch(e){}
@@ -73,15 +73,6 @@ const srv=http.createServer(async (req,res)=>{
   }
   if(req.url.startsWith('/api/ocr')){
     const b=await bacaBadan(req); return lewatkan(require('./ocr.js'), req, res, b);
-  }
-  if(req.url.startsWith('/api/wa-dispatch')){
-    const b=await bacaBadan(req); return lewatkan(require('./wa-dispatch.js'), req, res, b);
-  }
-  if(req.url.startsWith('/api/wa-webhook')){
-    const b=await bacaBadan(req); return lewatkan(require('./wa-webhook.js'), req, res, b);
-  }
-  if(req.url.startsWith('/api/wa')){
-    const b=await bacaBadan(req); return lewatkan(require('./wa.js'), req, res, b);
   }
   if(req.url.startsWith('/api/rpc')&&req.method==='POST'){
     let b=''; req.on('data',c=>b+=c);
