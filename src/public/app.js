@@ -7150,11 +7150,13 @@ function namaKantorHasilHTML(d){
   var asing = (d.daftar || []).filter(function(x){ return !x.terdaftar; });
   var rapi = d.dirapikan || [];
   var mirip = d.mirip || [];
+  var kembar = d.kembar || [];
   var h = '<div class="imp-stat">'
     + '<span class="imp-stat-i"><b>' + d.total + '</b> nama kantor di data</span>'
     + '<span class="imp-stat-i ok"><b>' + d.terdaftar + '</b> terdaftar di menu Layanan</span>'
     + (asing.length ? '<span class="imp-stat-i bad"><b>' + asing.length + '</b> belum terdaftar</span>' : '')
     + (mirip.length ? '<span class="imp-stat-i warn"><b>' + mirip.length + '</b> pasangan nama mirip</span>' : '')
+    + (kembar.length ? '<span class="imp-stat-i bad"><b>' + kembar.length + '</b> pasangan nama bertumpuk</span>' : '')
     + (rapi.length ? '<span class="imp-stat-i warn"><b>' + rapi.length + '</b> ejaan masih salah di dalam data</span>' : '')
     + '</div>';
 
@@ -7183,7 +7185,44 @@ function namaKantorHasilHTML(d){
     h += '</tbody></table></div>';
   }
 
-  if (!asing.length && !rapi.length && !mirip.length) {
+  /* Nama yang bertumpuk: satu nama menjadi awalan nama lain, atau dua nama
+     yang sama persis kecuali awalan KLL/ULL-nya. Ini bukan salah ketik, jadi
+     tidak pernah muncul di daftar di atas — padahal akibatnya lebih parah
+     karena data satu kantor terbelah ke beberapa baris rekap. */
+  if (kembar.length) {
+    h += '<h4 class="imp-h4 bad">Nama yang bertumpuk <span>' + kembar.length + ' pasangan</span></h4>'
+      + '<p class="muted" style="font-size:12px;margin:0 0 8px">Satu nama menjadi awalan nama lain, atau dua nama yang sama persis kecuali awalannya. '
+      + 'Pencocokan memilih padanan <b>terpanjang</b> yang cocok, jadi setoran, uang muka, dan LPJ satu kantor bisa terbelah ke beberapa baris rekap &mdash; '
+      + 'satu kantor lalu tampak bersaldo positif besar tanpa LPJ, satunya minus besar tanpa uang muka. '
+      + '<b>Periksa dulu:</b> kantor yang memang bersaudara (mis. Sedayu dan Sedayu 2) juga berbentuk awalan.</p>'
+      + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
+      + '<th>Nama</th><th class="r">Baris</th><th class="r">Nilai</th>'
+      + '<th>Bertumpuk dengan</th><th class="r">Baris</th><th>Sebab</th><th></th></tr></thead><tbody>';
+    kembar.forEach(function(x){
+      var sebab = x.sebab === 'beda-awalan' ? 'hanya beda awalan KLL/ULL' : 'satu jadi awalan yang lain';
+      h += '<tr><td><b>' + esc(x.sedikit) + '</b>'
+        + (x.terdaftarSedikit ? '' : ' <span class="imp-stat-i warn">belum terdaftar</span>') + '</td>'
+        + '<td class="r jnum">' + x.nSedikit + '</td>'
+        + '<td class="r jnum">' + rpCetak(x.nominal) + '</td>'
+        + '<td>' + esc(x.banyak) + '</td>'
+        + '<td class="r jnum">' + x.nBanyak + '</td>'
+        + '<td><span class="imp-stat-i ' + (x.yakin === 'tinggi' ? 'bad' : x.yakin === 'sedang' ? 'warn' : '') + '">'
+        + 'dugaan ' + esc(x.yakin) + ' &middot; ' + sebab
+        + (x.diMaster ? ' &middot; dua-duanya terdaftar' : '') + '</span></td>'
+        + '<td class="r"><button class="btn btn-sm btn-ghost" onclick="gabungKantor('
+        + JSON.stringify(x.sedikit).replace(/"/g, '&quot;') + ',' + JSON.stringify(x.banyak).replace(/"/g, '&quot;') + ')">Gabungkan</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+    if (kembar.some(function(x){ return x.diMaster; })) {
+      h += '<p class="muted" style="font-size:12px;margin:8px 0 0">Pasangan bertanda <b>dua-duanya terdaftar</b> berarti kembarnya ada di menu Layanan itu sendiri. '
+        + 'Menggabungkan hanya menulis ulang baris datanya; kantor bayangannya tetap ada di menu Layanan dan akan menarik data lagi. '
+        + 'Sesudah digabung, hapus kantor yang tidak dipakai lewat menu <b>Kantor Layanan</b>.</p>';
+    }
+  }
+
+  h += gabungManualHTML(d);
+
+  if (!asing.length && !rapi.length && !mirip.length && !kembar.length) {
     return h + '<div class="empty" style="padding:26px"><div class="big">'+SVG_ICONS.bsrBeres+'</div>'
       + 'Semua nama kantor sudah cocok dengan menu Layanan. Tidak ada kantor bayangan.</div>';
   }
@@ -7223,6 +7262,40 @@ function namaKantorHasilHTML(d){
     h += '</tbody></table></div>';
   }
   return h;
+}
+/* ===== GABUNG MANUAL =====
+   Ada kasus yang tidak boleh ditebak mesin sama sekali. Contohnya sebuah ULL
+   yang secara administrasi memang harus dilebur ke KLL induknya: namanya
+   tidak mirip, bentuknya tidak bertumpuk, dan usulan otomatis sengaja tidak
+   pernah menyeberangkan ULL ke KLL supaya tidak ada uang yang pindah jenis
+   kantor diam-diam. Keputusan seperti itu milik orang, jadi disediakan
+   formulirnya — dengan pratinjau yang sama persis sebelum apa pun ditulis. */
+function gabungManualHTML(d){
+  var nama = d.semuaNama || [];
+  if (nama.length < 2) return '';
+  var opsi = function(id){
+    return '<select id="' + id + '"><option value="">-- pilih kantor --</option>'
+      + nama.map(function(x){
+          return '<option value="' + esc(x.nama) + '">' + esc(x.nama)
+            + ' (' + x.baris + ' baris' + (x.terdaftar ? '' : ', belum terdaftar') + ')</option>';
+        }).join('') + '</select>';
+  };
+  return '<h4 class="imp-h4">Gabungkan sendiri</h4>'
+    + '<p class="muted" style="font-size:12px;margin:0 0 8px">Untuk yang tidak muncul di daftar di atas, misalnya ULL yang memang harus dilebur ke KLL induknya. '
+    + 'Pratinjaunya sama: berapa baris dan berapa nilainya ditampilkan dulu sebelum ada yang ditulis ulang.</p>'
+    + '<div class="fgrid" style="align-items:end">'
+      + '<div class="fld" data-col="5"><label for="gkDari">Kantor yang dilebur</label>' + opsi('gkDari') + '</div>'
+      + '<div class="fld" data-col="5"><label for="gkKe">Dilebur ke</label>' + opsi('gkKe') + '</div>'
+      + '<div class="fld" data-col="2"><label>&nbsp;</label>'
+        + '<button class="btn btn-primary" onclick="gabungKantorManual()">Gabungkan</button></div>'
+    + '</div>';
+}
+function gabungKantorManual(){
+  var dari = el('gkDari') ? el('gkDari').value : '';
+  var ke = el('gkKe') ? el('gkKe').value : '';
+  if (!dari || !ke) { toast('Pilih kantor asal dan tujuannya dulu.', true); return; }
+  if (dari === ke) { toast('Kantor asal dan tujuan sama.', true); return; }
+  gabungKantor(dari, ke);
 }
 function gabungKantor(dari, ke){
   gas('apiGabungLayanan')(TOKEN, dari, ke, false).then(function(d){

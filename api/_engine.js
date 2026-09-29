@@ -1970,6 +1970,27 @@ function resolveLayananName(r, layList, layMap){
     }
   }
 
+  /* 3c. Nama donatur yang SAMA PERSIS dengan nama sebuah kantor terdaftar,
+         hanya awalan KLL/ULL-nya yang lupa ditulis.
+
+         Ini bukan tebakan: yang dibandingkan seluruh namanya, bukan sepotong
+         di dalamnya, jadi aturan di nomor 4 di bawah tetap utuh — "SMP N 2
+         Srandakan" tidak pernah sama persis dengan "Srandakan". Tanpa langkah
+         ini, satu kwitansi yang ditulis "Masjid Baiturrahman Aceh" (tanpa ULL)
+         jatuh ke Penghimpunan Daerah, sementara kwitansi sebelah yang ditulis
+         lengkap masuk ke ULL-nya. Kantor yang sama lalu tampak "0 setoran"
+         padahal setorannya ada, dan selisihnya muncul sebagai saldo minus
+         yang tidak bisa dijelaskan siapa pun. */
+  var _donat = _norm(String(r.namaDonatur || r.namaPenerima || '').trim());
+  if (_donat && _donat.length >= 4) {
+    var _pas = null;
+    layList.forEach(function(l){
+      if (!l || !l.nama || _pas) return;
+      if (_norm(l.nama) === _donat) _pas = l;
+    });
+    if (_pas) return _layLabel(_pas);
+  }
+
   /* 4. Tidak ada penanda KLL/ULL -> penghimpunan tingkat daerah.
         Nama layanan yang kebetulan muncul di dalam nama donatur TIDAK
         dihitung: "SMP N 2 Srandakan" adalah donatur tingkat daerah,
@@ -5504,7 +5525,20 @@ function apiPeriksaLayanan(t){
   var rapi = {};
   var catatRapi = function(mentah, jadi){
     var m = String(mentah || '').trim();
-    if (!m || !/^(KLL|ULL|KL)\b/i.test(m)) return;
+    if (!m) return;
+    if (!/^(KLL|ULL|KL)\b/i.test(m)) {
+      /* Nama tanpa awalan KLL/ULL biasanya nama donatur biasa, dan melaporkan
+         semuanya cuma jadi kebisingan. Satu perkecualian yang aman: kalau
+         nama mentahnya SAMA PERSIS dengan nama kantor tujuan setelah awalan
+         dibuang — "Masjid Baiturrahman Aceh" untuk "ULL Masjid Baiturrahman
+         Aceh". Itu bukan donatur bernama mirip, itu nama kantor yang lupa
+         awalannya, dan ia akan menggigit lagi begitu master Layanan berubah. */
+      var jd = String(jadi || '');
+      if (!/^(KLL|ULL)\b/i.test(jd)) return;
+      var intiM = _ratakanHuruf(m);
+      var intiJ = _ratakanHuruf(jd.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, ''));
+      if (!intiM || intiM !== intiJ) return;
+    }
     if (_norm(m) === _norm(jadi)) return;
     var k = _norm(m);
     if (!rapi[k]) rapi[k] = { mentah: m, jadi: jadi, n: 0 };
@@ -5605,6 +5639,104 @@ function apiPeriksaLayanan(t){
     if (urutan[a.yakin] !== urutan[b.yakin]) return urutan[a.yakin] - urutan[b.yakin];
     return a.nSedikit - b.nSedikit;
   });
+
+  /* ================= NAMA YANG BERTUMPUK =================
+     Daftar `mirip` di atas hanya menangkap SALAH KETIK: dua nama yang
+     panjangnya mirip dan berbeda satu dua huruf. Ia buta terhadap bentuk
+     duplikat yang justru paling sering lahir dari daftar Layanan yang
+     diketik dua kali, dan bentuk itu jauh lebih merusak:
+
+       "ULL Masjid"  -  "ULL Masjid Baiturrahman"  -  "ULL Masjid Baiturrahman Aceh"
+
+     Ketiganya satu kantor yang sama, tetapi _jarakEdit menyerah pada
+     pasangan mana pun di antaranya (selisih panjangnya lebih dari tiga
+     huruf, jadi jaraknya dikembalikan 99) sehingga tidak satu pun pernah
+     dilaporkan. Padahal akibatnya paling parah: pencocokan nama memilih
+     padanan TERPANJANG yang cocok, jadi setoran jatuh ke satu nama, uang
+     muka ke nama kedua, dan LPJ ke nama ketiga. Yang terlihat di menu
+     Saldo KLL adalah satu kantor bersaldo positif besar tanpa LPJ dan satu
+     kantor bersaldo minus besar tanpa uang muka — dua-duanya salah, dan
+     tidak ada satu pun galat yang memberi tahu.
+
+     Bentuk kedua: nama yang sama persis tetapi awalannya berbeda atau
+     hilang — "Masjid Baiturrahman Aceh" di samping "ULL Masjid Baiturrahman
+     Aceh". Pemeriksaan `mirip` sengaja melewati pasangan beda jenis supaya
+     KLL tidak pernah diusulkan bergabung dengan ULL, dan aturan itu ikut
+     menutupi kasus ini.
+
+     Keduanya DILAPORKAN, tidak pernah digabung sendiri: "KLL Sedayu" dan
+     "KLL Sedayu 2" juga berbentuk awalan, dan itu dua kantor yang memang
+     berbeda. Yang memutuskan tetap orang; timpangnya jumlah baris dan
+     status terdaftar disediakan sebagai bahan pertimbangannya. */
+  var _inti = function(n){ return _ratakanHuruf(String(n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
+  var _jenisNama = function(n){ return /^\s*ull\b/i.test(n) ? 'ULL' : /^\s*(kll|kl)\b/i.test(n) ? 'KLL' : '(tanpa awalan)'; };
+
+  /* Kantor yang terdaftar tetapi belum punya satu baris pun ikut disertakan:
+     duplikat di master Layanan harus ketahuan sebelum ada uang yang telanjur
+     masuk ke nama yang salah, bukan sesudahnya. */
+  var semua = daftar.map(function(x){
+    return { nama: x.nama, terdaftar: !!x.terdaftar, baris: berat(x),
+      nominal: x.himpun + x.ump + x.lpj };
+  });
+  var sudahAda = {}; semua.forEach(function(x){ sudahAda[_norm(x.nama)] = true; });
+  layList.forEach(function(l){
+    var lab = _layLabel(l);
+    if (!lab || sudahAda[_norm(lab)]) return;
+    sudahAda[_norm(lab)] = true;
+    semua.push({ nama: lab, terdaftar: true, baris: 0, nominal: 0 });
+  });
+
+  var kembar = [];
+  for (var ia = 0; ia < semua.length; ia++) {
+    for (var ib = ia + 1; ib < semua.length; ib++) {
+      var X = semua[ia], Y = semua[ib];
+      var ix = _inti(X.nama), iy = _inti(Y.nama);
+      if (!ix || !iy) continue;
+      var jx = _jenisNama(X.nama), jy = _jenisNama(Y.nama);
+      var sebab = '';
+      if (ix === iy) {
+        /* nama intinya sama persis: yang beda cuma awalannya */
+        if (jx === jy) continue;                 // sudah ditangani penyatuan ejaan
+        sebab = 'beda-awalan';
+      } else {
+        if (jx !== jy) continue;                 // beda jenis, jangan ditebak
+        var pendek = ix.length < iy.length ? ix : iy;
+        var panjang = pendek === ix ? iy : ix;
+        if (pendek.length < 4) continue;         // "ull m" bukan petunjuk apa pun
+        if (panjang.indexOf(pendek + ' ') !== 0) continue;
+        sebab = 'awalan';
+      }
+      var besarK = X.baris >= Y.baris ? X : Y;
+      var kecilK = besarK === X ? Y : X;
+      kembar.push({
+        sebab: sebab,
+        banyak: besarK.nama, nBanyak: besarK.baris, terdaftarBanyak: besarK.terdaftar,
+        sedikit: kecilK.nama, nSedikit: kecilK.baris, terdaftarSedikit: kecilK.terdaftar,
+        nominal: kecilK.nominal,
+        /* Kalau DUA-DUANYA terdaftar, yang kembar adalah master Layanan-nya,
+           bukan cuma ketikan di jurnal — itu perlu dikatakan terpisah karena
+           menggabungkan barisnya saja tidak menghapus kantor bayangannya. */
+        diMaster: besarK.terdaftar && kecilK.terdaftar,
+        /* Dugaan, bukan vonis. Nama yang intinya sama persis hampir pasti satu
+           kantor. Nama yang berbentuk awalan jauh lebih longgar: "KLL Sedayu"
+           memang awalan "KLL Sedayu 2", dan itu dua kantor. Yang dipakai
+           sebagai petunjuk adalah timpangnya jumlah baris — nama yang tidak
+           dipakai sama sekali di samping nama yang dipakai ratusan kali hampir
+           selalu pendaftaran nyasar, bukan kantor kedua. */
+        yakin: sebab === 'beda-awalan' ? 'tinggi'
+          : (kecilK.baris === 0 && besarK.baris > 0) ? 'tinggi'
+          : (besarK.baris >= kecilK.baris * 10 && besarK.baris > 0) ? 'sedang'
+          : 'rendah'
+      });
+    }
+  }
+  kembar.sort(function(a, b){
+    var ur = { tinggi: 0, sedang: 1, rendah: 2 };
+    if (ur[a.yakin] !== ur[b.yakin]) return ur[a.yakin] - ur[b.yakin];
+    if (a.diMaster !== b.diMaster) return a.diMaster ? -1 : 1;
+    return (b.nBanyak + b.nSedikit) - (a.nBanyak + a.nSedikit);
+  });
+
   return {
     total: daftar.length,
     terdaftar: daftar.length - bermasalah.length,
@@ -5612,7 +5744,13 @@ function apiPeriksaLayanan(t){
     adaUsul: bermasalah.filter(function(x){ return x.usul; }).length,
     daftar: daftar,
     dirapikan: dirapikan,
-    mirip: mirip
+    mirip: mirip,
+    kembar: kembar,
+    /* Semua nama yang dikenal, untuk formulir gabung manual di Pengaturan:
+       ada kasus yang tidak boleh ditebak mesin sama sekali, mis. sebuah ULL
+       yang memang harus dilebur ke KLL induknya. */
+    semuaNama: semua.map(function(x){ return { nama: x.nama, baris: x.baris, terdaftar: x.terdaftar }; })
+      .sort(function(a, b){ return a.nama.localeCompare(b.nama, 'id'); })
   };
 }
 

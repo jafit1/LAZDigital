@@ -31,6 +31,7 @@ call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
 call :jalankan "Impor jurnal"                   tools\test_impor_jurnal.js
 call :jalankan "Pemecahan izin Dashboard"       tools\test_izin_modul.js
 call :jalankan "Dialog Edit User"               tools\test_izin_ui.js
+call :jalankan "Nama kantor layanan kembar"     tools\test_kantor_kembar.js
 call :jalankan "Fitur Broadcast"                tools\test_blast_fitur.js
 call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
 call :jalankan "Kotak masuk percakapan"          tools\test_percakapan.js
