@@ -302,7 +302,7 @@ function _periksaSandi(p){
 }
 var _PESAN_LOGIN_GAGAL = 'Username atau password salah';
 
-function login(u,p){
+function login(u,p,ingat){
   var kU = _kunciLoginKey('u', u), kIP = _kunciLoginKey('ip', (_LOG_CTX && _LOG_CTX.ip) || '-');
   var sisa = Math.max(_sisaKunci(kU), _sisaKunci(kIP));
   if (sisa > 0) {
@@ -330,15 +330,71 @@ function login(u,p){
   }
   _hapusKunciLogin(kU); _hapusKunciLogin(kIP);
   _bersihkanSesiKedaluwarsa();
-  var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); audit(f.id,f.username,'login','',{modul:'sesi'}); return {ok:true,token:token,user:sanitizeUser(f)}; }
-function logout(t){
+  var token=_buatSesi(f); audit(f.id,f.username,'login',ingat===true?'dengan Ingat saya':'',{modul:'sesi'});
+  var hasil={ok:true,token:token,user:sanitizeUser(f)};
+  if (ingat === true) hasil.ingat = _buatTokenIngat(f.id);
+  return hasil; }
+function _buatSesi(f){ var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); return token; }
+
+/* ===== TOKEN "INGAT SAYA" =====
+   Dulu "Ingat saya" menyimpan username dan SANDI ASLI di localStorage
+   (laz_creds, cuma dibungkus base64), lalu mengirimnya ulang setiap sesi
+   12 jam habis. Sandi di peramban bisa dibaca siapa pun yang membuka DevTools
+   di komputer bersama atau oleh satu skrip lewat celah XSS, dan tidak bisa
+   dicabut: mengganti sandi di server tidak menghapus salinan di peramban.
+
+   Penggantinya token acak 256 bit yang berlaku 30 hari. Yang disimpan di
+   tabel Sessions hanya HASH-nya, dengan awalan "ing:", supaya:
+   - tabel Sessions yang bocor tidak memberi token yang bisa dipakai;
+   - authUser menolak apa pun yang berawalan "ing:", jadi baris ini tidak
+     pernah bisa dipakai sebagai sesi biasa;
+   - _matikanSesiLain (ganti sandi) dan pembersihan sesi kedaluwarsa ikut
+     menyapu baris ini tanpa kode tambahan, karena bentuknya sama.
+   Tidak butuh tabel baru, jadi tidak ada perubahan skema PostgreSQL.
+
+   Token ingat TIDAK diputar setiap dipakai. Memutar lebih ketat, tetapi dua
+   tab yang sesinya habis bersamaan akan saling mematikan tokennya, dan amil
+   terlempar ke layar masuk tanpa sebab yang bisa ia pahami. */
+var _AWALAN_INGAT = 'ing:';
+var _UMUR_INGAT_MS = 30 * 864e5;
+function _hashIngat(t){ return _AWALAN_INGAT + crypto.createHash('sha256').update(String(t)).digest('hex'); }
+function _buatTokenIngat(userId){
+  var t = crypto.randomBytes(32).toString('hex');
+  insertRow(SHEETS.SESSIONS,{token:_hashIngat(t),userId:userId,expired:new Date(Date.now()+_UMUR_INGAT_MS).toISOString()});
+  return t;
+}
+function _barisIngat(ti){
+  ti = String(ti || '');
+  if (!ti || ti.indexOf(_AWALAN_INGAT) === 0) return null;
+  var h = _hashIngat(ti), ss = readAll(SHEETS.SESSIONS);
+  for (var i = 0; i < ss.length; i++) if (ss[i].token === h) return ss[i];
+  return null;
+}
+function loginIngat(ti){
+  var tolak = {ok:false, msg:'Sesi tersimpan sudah tidak berlaku. Silakan masuk lagi.'};
+  var s = _barisIngat(ti);
+  if (!s) return tolak;
+  if (new Date(s.expired) < new Date()) { deleteRowBy(SHEETS.SESSIONS,'token',s.token); return tolak; }
+  var f = findById(SHEETS.USERS, s.userId);
+  if (!f || String(f.aktif) !== 'true') { deleteRowBy(SHEETS.SESSIONS,'token',s.token); return tolak; }
+  _bersihkanSesiKedaluwarsa();
+  var token = _buatSesi(f);
+  audit(f.id,f.username,'login','lewat Ingat saya',{modul:'sesi'});
+  return {ok:true, token:token, user:sanitizeUser(f)};
+}
+function logout(t, ti){
   var u=null; try{ u=authUser(t); }catch(e){}
-  deleteRowBy(SHEETS.SESSIONS,'token',t);
+  if(t && String(t).indexOf(_AWALAN_INGAT)!==0) deleteRowBy(SHEETS.SESSIONS,'token',t);
+  /* Token ingat dicabut kalau pemegangnya memang pemilik sesi ini. Kalau
+     sesinya sudah habis (u kosong), memegang token ingat itu sendiri sudah
+     bukti kepemilikan, dan mencabutnya tidak merugikan siapa pun. */
+  var si = ti ? _barisIngat(ti) : null;
+  if (si && (!u || String(si.userId) === String(u.id))) deleteRowBy(SHEETS.SESSIONS,'token',si.token);
   if(u) audit(u.id,u.username,'logout','',{modul:'sesi'});
   return {ok:true};
 }
 function deleteRowBy(name,col,val){ var sh=getSS().getSheetByName(name); var v=sh.getDataRange().getValues(); var c=v[0].indexOf(col); for(var i=v.length-1;i>=1;i--){if(String(v[i][c])===String(val))sh.deleteRow(i+1);} }
-function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.'); var ss=readAll(SHEETS.SESSIONS),s=null; for(var i=0;i<ss.length;i++)if(ss[i].token===t){s=ss[i];break;}
+function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.'); if(String(t).indexOf(_AWALAN_INGAT)===0) throw new Error('AUTH: sesi tidak valid, login ulang.'); var ss=readAll(SHEETS.SESSIONS),s=null; for(var i=0;i<ss.length;i++)if(ss[i].token===t){s=ss[i];break;}
   if(!s) throw new Error('AUTH: sesi tidak valid, login ulang.'); if(new Date(s.expired)<new Date()){deleteRowBy(SHEETS.SESSIONS,'token',t);throw new Error('AUTH: sesi berakhir, login ulang.');}
   var u=findById(SHEETS.USERS,s.userId); if(!u) throw new Error('AUTH: user tidak ditemukan.'); return u; }
 function sanitizeUser(u){ return {id:u.id,username:u.username,nama:u.nama,role:u.role,layanan:String(u.layanan||''),permissions:typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{})}; }
@@ -571,13 +627,87 @@ function apiDeleteLayanan(t,id){ var u=_requirePerm(t,'layanan','delete'); var l
 
 /* ===== USER MGMT ===== */
 function apiListUsers(t){ _requirePerm(t,'users','view'); return readAll(SHEETS.USERS).map(sanitizeUser); }
-function apiSaveUser(t,d){ var a=_requirePerm(t,'users',d.id?'edit':'create');
-  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan'); var up={nama:d.nama,role:d.role,permissions:JSON.stringify(d.permissions||{}),aktif:String(d.aktif)}; if(d.layanan!==undefined) up.layanan=(d.role==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
+/* ===== PENJAGA PENGELOLAAN AKUN =====
+   Dulu apiSaveUser menyalin `role` dan `permissions` dari permintaan apa
+   adanya, dan satu-satunya pemeriksaan adalah "punya izin users:edit?".
+   Akibatnya admin kantor yang cuma diberi hak mengelola akun petugas bisa
+   mengangkat dirinya sendiri jadi superadmin, mengganti sandi superadmin, atau
+   mencentang izin Pengaturan untuk dirinya. Uji tools/test_eskalasi_user.js
+   membuktikannya: sebelum penjaga ini ada, 19 dari 30 pemeriksaannya gagal,
+   termasuk baris Users yang perannya benar-benar berubah jadi superadmin.
+
+   Aturannya:
+   - Selain superadmin, tidak ada yang boleh membuat, mengangkat, menyunting,
+     atau menghapus akun superadmin.
+   - Selain superadmin, orang hanya boleh MEMBERI izin yang ia sendiri punya.
+     Mencabut selalu boleh. Izin lama yang tidak diubah dibiarkan, supaya
+     admin tetap bisa sekadar membetulkan nama petugas yang izinnya lebih
+     luas tanpa ditolak.
+   - Superadmin aktif terakhir tidak boleh diturunkan atau dinonaktifkan.
+     Kalau terjadi, tidak ada lagi yang bisa membuka menu Pengguna. */
+function _izinObj(p){
+  if (typeof p === 'string') { try { return JSON.parse(p || '{}') || {}; } catch (e) { return {}; } }
+  return (p && typeof p === 'object') ? p : {};
+}
+/* Nilai izin dipaksa jadi boolean. can() membaca dengan !!, jadi "ya" atau 1
+   dari permintaan buatan tangan akan terhitung true; kalau tidak dirapikan di
+   sini, penjaga di bawah (yang memeriksa === true) bisa dilewati. */
+function _izinBersih(p){
+  var o = _izinObj(p), out = {};
+  Object.keys(o).forEach(function(m){
+    if (!o[m] || typeof o[m] !== 'object') return;
+    out[m] = {};
+    Object.keys(o[m]).forEach(function(a){ out[m][a] = !!o[m][a]; });
+  });
+  return out;
+}
+/* Izin yang BERLAKU pada akun lama, termasuk lewat jembatan MODUL_ASAL.
+   Tanpa jembatan ini, menyimpan ulang akun lama (yang saldo-nya menumpang
+   izin dashboard) dianggap "memberi izin saldo baru" dan ditolak. */
+function _punyaIzinLama(lama, m, a){
+  if (lama[m]) return !!lama[m][a];
+  var asal = MODUL_ASAL[m];
+  return !!(asal && lama[asal] && lama[asal][a]);
+}
+function _jagaPemberianIzin(aktor, lama, baru){
+  if (aktor.role === 'superadmin') return;
+  lama = _izinObj(lama);
+  Object.keys(baru).forEach(function(m){
+    Object.keys(baru[m]).forEach(function(a){
+      if (baru[m][a] !== true) return;              /* mencabut: selalu boleh */
+      if (_punyaIzinLama(lama, m, a)) return;       /* sudah ada, tidak diubah */
+      if (!can(aktor, m, a)) throw new Error('IZIN: Anda tidak bisa memberi izin "' + a + '" pada modul ' + (MODUL_LABEL[m] || m) + ' karena Anda sendiri tidak memilikinya.');
+    });
+  });
+}
+function _jumlahSuperAktifLain(kecualiId){
+  return readAll(SHEETS.USERS).filter(function(x){
+    return x.role === 'superadmin' && String(x.aktif) === 'true' && String(x.id) !== String(kecualiId);
+  }).length;
+}
+
+function apiSaveUser(t,d){ d = d || {}; var a=_requirePerm(t,'users',d.id?'edit':'create');
+  var aSuper = a.role === 'superadmin';
+  var izinBaru = _izinBersih(d.permissions);
+  if(d.id){ var ex=findById(SHEETS.USERS,d.id); if(!ex) throw new Error('User tidak ditemukan');
+    if(!aSuper && ex.role==='superadmin') throw new Error('IZIN: hanya superadmin yang boleh mengubah akun superadmin.');
+    if(!aSuper && d.role==='superadmin') throw new Error('IZIN: hanya superadmin yang boleh mengangkat akun menjadi superadmin.');
+    var peranBaru = d.role!==undefined ? d.role : ex.role;
+    var aktifBaru = d.aktif!==undefined ? String(d.aktif) : String(ex.aktif);
+    if(ex.role==='superadmin' && String(ex.aktif)==='true' && (peranBaru!=='superadmin' || aktifBaru!=='true') && _jumlahSuperAktifLain(ex.id)===0)
+      throw new Error('Ini satu-satunya Superadmin aktif. Angkat superadmin lain lebih dulu sebelum menurunkan atau menonaktifkan akun ini.');
+    if(d.username && String(d.username).toLowerCase()!==String(ex.username).toLowerCase()
+       && readAll(SHEETS.USERS).some(function(x){ return String(x.id)!==String(ex.id) && String(x.username).toLowerCase()===String(d.username).toLowerCase(); }))
+      throw new Error('Username sudah dipakai');
+    _jagaPemberianIzin(a, ex.permissions, izinBaru);
+    var up={nama:d.nama,role:peranBaru,permissions:JSON.stringify(izinBaru),aktif:aktifBaru}; if(d.layanan!==undefined) up.layanan=(peranBaru==='superadmin')?'':String(d.layanan||'').trim(); if(d.username)up.username=d.username; if(d.password){_periksaSandi(d.password);var s=makeId();up.salt=s;up.passwordHash=hashPassword(d.password,s);} var lamaU=findById(SHEETS.USERS,d.id); updateRowById(SHEETS.USERS,d.id,up); if(d.password) _matikanSesiLain(d.id, null);
     audit(a.id,a.username,'edit_user',d.username||d.id,{modul:'users',entitasId:d.id,
       ringkas:ringkasPerubahan(lamaU,up)+(d.password?(ringkasPerubahan(lamaU,up)?' | ':'')+'password diganti':'')}); }
-  else { if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(d.permissions||{}),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString(),layanan:(d.role==='superadmin')?'':String(d.layanan||'').trim()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
+  else { if(!aSuper && d.role==='superadmin') throw new Error('IZIN: hanya superadmin yang boleh membuat akun superadmin.');
+    _jagaPemberianIzin(a, {}, izinBaru);
+    if(readAll(SHEETS.USERS).some(function(x){return String(x.username).toLowerCase()===String(d.username).toLowerCase();})) throw new Error('Username sudah dipakai'); if(!d.password) throw new Error('Sandi wajib diisi untuk pengguna baru.'); _periksaSandi(d.password); var s2=makeId(); insertRow(SHEETS.USERS,{id:makeId(),username:d.username,passwordHash:hashPassword(d.password,s2),salt:s2,nama:d.nama,role:d.role||'staff',permissions:JSON.stringify(izinBaru),aktif:d.aktif!==undefined?String(d.aktif):'true',dibuat:new Date().toISOString(),layanan:(d.role==='superadmin')?'':String(d.layanan||'').trim()}); audit(a.id,a.username,'create_user',d.username,{modul:'users',ringkas:(d.nama||'')+' · peran '+(d.role||'staff')}); }
   return {ok:true}; }
-function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=findById(SHEETS.USERS,id); if(tg&&tg.role==='superadmin'){ var sup=readAll(SHEETS.USERS).filter(function(x){return x.role==='superadmin'&&String(x.aktif)==='true';}); if(sup.length<=1) throw new Error('Tidak bisa menghapus satu-satunya Superadmin.'); } deleteRowById(SHEETS.USERS,id); audit(a.id,a.username,'delete_user',(tg&&tg.username)||id,{modul:'users',entitasId:id,ringkas:tg?((tg.nama||'')+' · peran '+(tg.role||'')):''}); return {ok:true}; }
+function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=findById(SHEETS.USERS,id); if(tg&&tg.role==='superadmin'){ if(a.role!=='superadmin') throw new Error('IZIN: hanya superadmin yang boleh menghapus akun superadmin.'); var sup=readAll(SHEETS.USERS).filter(function(x){return x.role==='superadmin'&&String(x.aktif)==='true';}); if(sup.length<=1) throw new Error('Tidak bisa menghapus satu-satunya Superadmin.'); } deleteRowById(SHEETS.USERS,id); audit(a.id,a.username,'delete_user',(tg&&tg.username)||id,{modul:'users',entitasId:id,ringkas:tg?((tg.nama||'')+' · peran '+(tg.role||'')):''}); return {ok:true}; }
 /* Setelah sandi diganti, semua sesi lain milik pengguna itu dimatikan —
    kalau sandi diganti karena dicurigai bocor, pemegang sesi lama ikut keluar. */
 function _matikanSesiLain(userId, kecualiToken){
@@ -6749,6 +6879,7 @@ function apiGetDonaturAnalytics(t){
 }
 
 REGISTRY['setup']=setup;
+REGISTRY['loginIngat']=loginIngat;
 REGISTRY['apiVerifyKwitansi']=apiVerifyKwitansi;
 REGISTRY['apiGetRAPBData']=apiGetRAPBData;
 REGISTRY['apiSaveRAPBTarget']=apiSaveRAPBTarget;

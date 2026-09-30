@@ -34,7 +34,18 @@ const AWALAN_KUNCI = 'laz:cadangan:';
 const KUNCI_DAFTAR = 'laz:cadangan:_daftar';
 const DIR_LOKAL = path.join(process.cwd(), 'data', 'cadangan');
 const SIMPAN_HARIAN = 14, SIMPAN_MANUAL = 5, SIMPAN_DRIVE = 30;
-const BATAS_PERINGATAN_BYTE = 800 * 1024;     /* paket gratis Upstash: 1 MB per permintaan */
+/* Ambang peringatan ukuran mengikuti penyimpanan yang BENAR-BENAR dipakai.
+   Angka 800 KB itu warisan zaman Upstash Redis, yang membatasi 1 MB per
+   permintaan. Sejak pindah ke PostgreSQL batas itu tidak berlaku lagi, dan
+   membiarkannya bukan sekadar salah tulis: halaman Perawatan memerahkan
+   ukuran 2,74 MB dengan kalimat "mendekati batas 1 MB" padahal jatahnya 500
+   MB, jadi orang menyangka basis datanya hampir penuh dan datanya terancam.
+   Peringatan palsu lebih berbahaya daripada tidak ada peringatan: sekali
+   orang belajar mengabaikan yang merah, yang merah sungguhan ikut diabaikan. */
+const BATAS_PERINGATAN_REDIS = 800 * 1024;            /* paket gratis Upstash: 1 MB per permintaan */
+const BATAS_PERINGATAN_PG = 400 * 1024 * 1024;        /* paket gratis Supabase: 500 MB per proyek */
+function batasPeringatan(){ return PAKAI_PG() ? BATAS_PERINGATAN_PG : BATAS_PERINGATAN_REDIS; }
+function labelBatas(){ return PAKAI_PG() ? '500 MB paket gratis Supabase' : '1 MB paket gratis Upstash'; }
 
 /* ─── waktu Indonesia (WIB) untuk penamaan ─── */
 function wib(){ return new Date(Date.now() + 7 * 3600 * 1000); }
@@ -163,8 +174,14 @@ async function jalankanCadangan(jenis, oleh){
     status.drive = { ok: false, galat: 'Google Drive belum dikonfigurasi (lihat PANDUAN-CADANGAN.md)' };
   }
 
-  if (!PAKAI_PG() && status.ukuranDB > BATAS_PERINGATAN_BYTE) {
-    status.peringatan.push('Ukuran basis data ' + Math.round(status.ukuranDB / 1024) + ' KB mendekati batas 1 MB paket gratis Upstash. Pertimbangkan naik paket atau mengarsipkan data lama.');
+  if (status.ukuranDB > batasPeringatan()) {
+    status.peringatan.push('Ukuran basis data ' + Math.round(status.ukuranDB / 1024 / 1024) + ' MB mendekati batas ' + labelBatas() + '. Pertimbangkan naik paket atau mengarsipkan data lama.');
+  }
+  /* Salinan cepat dan basis datanya berada di tempat yang SAMA. Selama Drive
+     belum disetel, tidak ada satu pun salinan di luar sana — dan itu justru
+     keadaan yang paling perlu dikatakan, bukan ukuran berkasnya. */
+  if (status.redis && status.redis.ok && !(status.drive && status.drive.ok)) {
+    status.peringatan.push('Cadangan hanya ada di ' + status.redis.tempat + ', satu tempat dengan basis datanya. Kalau basis datanya sendiri yang bermasalah, tidak ada salinan di tempat lain. Setel Google Drive lewat PANDUAN-CADANGAN.md.');
   }
   if (!status.redis.ok && !status.drive.ok) status.peringatan.push('CADANGAN GAGAL DI SEMUA TUJUAN.');
 
@@ -242,7 +259,9 @@ module.exports = async (req, res) => {
         salinan, drive: driveFiles, driveSiap: drive.driveSiap(), driveGalat,
         cronSiap: !!secret, tempat: PAKAI_PG() ? 'PostgreSQL (tabel cadangan)' : (PAKAI_REDIS ? 'Redis' : 'data/cadangan/'),
         status: (r.db.props && r.db.props._cadanganTerakhir) || null,
-        ukuranDB: (r.teks || '').length, batasPeringatan: BATAS_PERINGATAN_BYTE
+        ukuranDB: (r.teks || '').length, batasPeringatan: batasPeringatan(), labelBatas: labelBatas(),
+        /* true = tidak ada satu pun salinan di luar basis data ini */
+        tanpaSalinanLuar: !drive.driveSiap()
       } }); return;
     }
     if (aksi === 'ambil') {

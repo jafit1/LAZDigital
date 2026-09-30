@@ -11,16 +11,53 @@ var IKON_UNGGAH = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" s
    membuat orang mengira keduanya menandakan hal yang berbeda. */
 var BOXES_SPINNER = '<div class="loader-wrap lz"><div class="lz-bar lz-bar-kecil" aria-hidden="true"><i></i><i></i><i></i></div></div>';
 
-function getSavedCreds(){ try{var s=localStorage.getItem('laz_creds');return s?JSON.parse(atob(s)):null;}catch(e){return null;} }
-function setSavedCreds(u,p){ try{localStorage.setItem('laz_creds',btoa(unescape(encodeURIComponent(JSON.stringify({u:u,p:p})))));}catch(e){} }
-function clearSavedCreds(){ try{localStorage.removeItem('laz_creds');}catch(e){} }
+/* "INGAT SAYA" TANPA MENYIMPAN SANDI.
+   Dulu yang disimpan di sini adalah username DAN sandi asli (laz_creds, cuma
+   dibungkus base64), lalu dikirim ulang tiap sesi 12 jam habis. Siapa pun
+   yang membuka DevTools di komputer bersama, atau satu skrip lewat celah XSS,
+   bisa membaca sandinya, dan sandi itu tidak bisa dicabut dari server.
+   Sekarang yang disimpan hanya token ingat dari server (laz_ingat): acak,
+   berlaku 30 hari, bisa dicabut, dan mati sendiri saat sandi diganti.
+   Username disimpan terpisah (laz_user) hanya untuk mengisi kotak masuk.
+   Dijaga oleh tools/test_ingat_saya.js dan tools/test_ingat_saya_ui.js. */
+function getIngat(){ try{ return localStorage.getItem('laz_ingat')||''; }catch(e){ return ''; } }
+function setIngat(t){ try{ if(t) localStorage.setItem('laz_ingat',t); else localStorage.removeItem('laz_ingat'); }catch(e){} }
+function lupakanIngat(){ setIngat(''); hapusCredsWarisan(); }
+/* Sandi warisan dibaca SEKALI untuk ditukar dengan token ingat, lalu
+   langsung dihapus sebelum permintaannya berangkat, apa pun hasilnya. Tanpa
+   penukaran ini, semua amil yang mencentang "Ingat saya" terlempar ke layar
+   masuk pada hari pembaruan naik. */
+function _credsWarisan(){ try{ var s=localStorage.getItem('laz_creds'); if(!s) return null; try{ return JSON.parse(decodeURIComponent(escape(atob(s)))); }catch(e){ return JSON.parse(atob(s)); } }catch(e){ return null; } }
+function hapusCredsWarisan(){ try{ localStorage.removeItem('laz_creds'); }catch(e){} }
+function punyaIngat(){ return !!getIngat() || !!_credsWarisan(); }
 var _reloginPromise=null;
+/* true hanya kalau server MENOLAK token ingat dengan tegas (ok:false).
+   Dibedakan dari gagal jaringan karena akibatnya bertolak belakang: yang
+   ditolak harus keluar, yang terputus cukup diberi tahu. Tanpa pembedaan ini,
+   permintaan yang putus saat halaman dimuat ulang (atau sinyal HP yang hilang
+   sedetik) berujung pada doLogout(), dan doLogout() mencabut token ingat di
+   server. Uji tools/test_ingat_saya_ui.js menangkapnya: 2 dari 6 percobaan
+   berakhir di layar masuk dengan token yang sudah dicabut. */
+var _reloginDitolak=false;
 function reloginSilently(){
   if(_reloginPromise) return _reloginPromise;
-  var c=getSavedCreds(); if(!c) return Promise.resolve(false);
-  _reloginPromise = fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fn:'login',args:[c.u,c.p]})})
+  _reloginDitolak=false;
+  var ti=getIngat(), badan=null;
+  if(ti){ badan={fn:'loginIngat',args:[ti]}; }
+  else {
+    var lama=_credsWarisan(); hapusCredsWarisan();
+    if(!lama||!lama.u||!lama.p) return Promise.resolve(false);
+    try{ localStorage.setItem('laz_user',lama.u); }catch(e){}
+    badan={fn:'login',args:[lama.u,lama.p,true]};
+  }
+  _reloginPromise = fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(badan)})
     .then(function(r){return r.json();})
-    .then(function(j){ var r=j&&j.result; if(r&&r.ok&&r.token){ TOKEN=r.token; localStorage.setItem('laz_token',TOKEN); ME=r.user; return true; } return false; })
+    .then(function(j){ var r=j&&j.result;
+      if(r&&r.ok&&r.token){ TOKEN=r.token; localStorage.setItem('laz_token',TOKEN); ME=r.user; if(r.ingat) setIngat(r.ingat); return true; }
+      /* Hanya penolakan yang tegas (ok:false) yang membuang token ingat.
+         Galat jaringan atau basis data sibuk bukan alasan melupakan orang. */
+      if(r&&r.ok===false){ _reloginDitolak=true; if(ti) setIngat(''); }
+      return false; })
     .catch(function(){ return false; });
   _reloginPromise.finally(function(){ setTimeout(function(){ _reloginPromise=null; },0); });
   return _reloginPromise;
@@ -33,7 +70,7 @@ function _rpcCall(fn,args,retried){
     .then(function(j){ __barHide(); if(j&&j.__error){ throw new Error(j.__error); } return j.result; })
     .catch(function(e){
       var m=(e&&e.message)||String(e);
-      if(!retried && m.indexOf('AUTH:')>=0 && fn!=='login' && fn!=='logout' && getSavedCreds() && TOKEN){
+      if(!retried && m.indexOf('AUTH:')>=0 && fn!=='login' && fn!=='logout' && fn!=='loginIngat' && punyaIngat() && TOKEN){
         return reloginSilently().then(function(ok){
           if(!ok) throw e;
           var na=args.slice(); if(na.length && (na[0]===null || typeof na[0]==='string')) na[0]=TOKEN;
@@ -54,7 +91,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return
 function fdate(d){if(!d)return '-';try{return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return d;}}
 function today(){return new Date().toISOString().slice(0,10);}
 function toast(m,err){var t=el('toast');t.textContent=m;t.className='toast show'+(err?' err':'');setTimeout(function(){t.className='toast';},2800);}
-function handleErr(e){var m=(e&&e.message)||String(e);if(m.indexOf('AUTH:')>=0){ if(getSavedCreds()){ reloginSilently().then(function(ok){ if(ok){toast('Sesi disegarkan, silakan ulangi');} else {clearSavedCreds();toast('Sesi berakhir, login ulang',true);doLogout();} }); } else { toast('Sesi berakhir, login ulang',true); doLogout(); } return; } toast(m.replace(/^(IZIN:|Error:)\s*/,''),true);}
+function handleErr(e){var m=(e&&e.message)||String(e);if(m.indexOf('AUTH:')>=0){ if(punyaIngat()){ reloginSilently().then(function(ok){ if(ok){toast('Sesi disegarkan, silakan ulangi');} else if(!_reloginDitolak&&getIngat()){toast('Koneksi ke server terputus. Coba lagi sebentar.',true);} else {lupakanIngat();toast('Sesi berakhir, login ulang',true);doLogout();} }); } else { toast('Sesi berakhir, login ulang',true); doLogout(); } return; } toast(m.replace(/^(IZIN:|Error:)\s*/,''),true);}
 
 /* Ikon navigasi: satu keluarga SVG garis (stroke currentColor) supaya seragam.
    Sebelumnya campur karakter teks (◫ ↓ ▤ ☰) dengan emoji berwarna (👤), dan
@@ -167,21 +204,26 @@ window.addEventListener('load',function(){
   /* Layar pembuka tidak punya batas waktu sendiri — ia hilang saat datanya
      siap. Yang dipantau cuma: kalau kelamaan, beri keterangan. */
   try{ LZ.bootPantau(); }catch(e){}
-  if(TOKEN){ gas('apiBootstrap')(TOKEN).then(function(b){ME=b.user;SETTINGS=b.settings;startApp();}).catch(function(){ tryAutoLogin(); }); }
-  else { tryAutoLogin(); }
+  /* Sandi warisan ditukar lebih dulu, walau sesinya masih hidup. Kalau
+     menunggu sesi habis, sandi itu masih tinggal di peramban sampai 12 jam. */
+  var tukar = (!getIngat() && _credsWarisan()) ? reloginSilently() : Promise.resolve();
+  tukar.then(function(){
+    if(TOKEN){ gas('apiBootstrap')(TOKEN).then(function(b){ME=b.user;SETTINGS=b.settings;startApp();}).catch(function(){ tryAutoLogin(); }); }
+    else { tryAutoLogin(); }
+  });
 });
 function tryAutoLogin(){
-  var c=getSavedCreds(); if(!c){ showLogin(); return; }
+  if(!punyaIngat()){ showLogin(); return; }
   reloginSilently().then(function(ok){
     if(ok){ gas('apiBootstrap')(TOKEN).then(function(b){ME=b.user;SETTINGS=b.settings;startApp();}).catch(function(){ showLogin(); }); }
     else showLogin();
   });
 }
-function showLogin(){ try{ LZ.bootSelesai(); }catch(e){} el('boot').classList.add('hidden'); el('appView').classList.add('hidden'); el('loginView').classList.remove('hidden'); try{ var c=getSavedCreds(); if(c&&el('lUser')&&!el('lUser').value){ el('lUser').value=c.u; if(el('lRemember'))el('lRemember').checked=true; } }catch(e){} }
+function showLogin(){ try{ LZ.bootSelesai(); }catch(e){} el('boot').classList.add('hidden'); el('appView').classList.add('hidden'); el('loginView').classList.remove('hidden'); try{ var nu=localStorage.getItem('laz_user')||''; if(nu&&el('lUser')&&!el('lUser').value){ el('lUser').value=nu; if(el('lRemember'))el('lRemember').checked=true; } }catch(e){} }
 function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.textContent='Memproses...';el('loginErr').textContent='';
   var u=el('lUser').value.trim(), p=el('lPass').value;
   var remember=el('lRemember')?el('lRemember').checked:true;
-  gas('login')(u,p).then(function(r){
+  gas('login')(u,p,remember).then(function(r){
     if(!r.ok){
       el('loginErr').textContent=r.msg;
       /* Akun terkunci sementara: tombol ikut dikunci dengan hitung mundur,
@@ -196,11 +238,21 @@ function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.
       b.disabled=false;b.textContent='Masuk';return;
     }
     TOKEN=r.token;localStorage.setItem('laz_token',TOKEN);ME=r.user;
-    if(remember){ setSavedCreds(u,p); } else { clearSavedCreds(); }
+    hapusCredsWarisan();
+    if(remember&&r.ingat){ setIngat(r.ingat); try{localStorage.setItem('laz_user',u);}catch(e){} } else { setIngat(''); try{localStorage.removeItem('laz_user');}catch(e){} }
     return gas('apiBootstrap')(TOKEN).then(function(bs){SETTINGS=bs.settings;startApp();});
   }).catch(function(e){el('loginErr').textContent=(e.message||e);b.disabled=false;b.textContent='Masuk';});
   return false;}
-function doLogout(){if(TOKEN)gas('logout')(TOKEN);localStorage.removeItem('laz_token');clearSavedCreds();TOKEN='';ME=null;location.reload();}
+/* Token ingat dicabut di server, bukan cuma dihapus dari peramban: salinan
+   yang mungkin sudah tersalin ke tempat lain ikut mati. keepalive supaya
+   permintaannya tidak dibatalkan oleh location.reload(), dan tunggu paling
+   lama 1,5 detik supaya jaringan lambat tidak menahan orang di layar. */
+function doLogout(){
+  var ti=getIngat(), t=TOKEN;
+  var kirim = (t||ti) ? fetch('/api/rpc',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({fn:'logout',args:[t,ti]})}).catch(function(){}) : Promise.resolve();
+  localStorage.removeItem('laz_token'); lupakanIngat(); TOKEN=''; ME=null;
+  Promise.race([kirim, new Promise(function(r){ setTimeout(r,1500); })]).then(function(){ location.reload(); });
+}
 /* Muat daftar fundraising sekali dan simpan di CACHE; dipakai dropdown pada
    formulir Penghimpunan & Pentasyarufan. Gagal memuat tidak menghentikan app —
    frDaftar() otomatis jatuh ke daftar bawaan. */
@@ -1868,7 +1920,7 @@ function formUser(id){var u=id?CACHE.users.find(function(x){return x.id===id;}):
     +'<div class="field"><label>Nama Lengkap *</label><input id="u_nama" value="'+esc(u.nama||'')+'"></div>'
     +'<div class="field"><label>Username *</label><input id="u_username" value="'+esc(u.username||'')+'"></div>'
     +'<div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div>'
-    +'<div class="field"><label>Role</label>'+selOpt('u_role',['staff','admin','superadmin'],u.role)+'</div>'
+    +'<div class="field"><label>Role</label>'+selOpt('u_role',(ME&&ME.role==='superadmin')||u.role==='superadmin'?['staff','admin','superadmin']:['staff','admin'],u.role)+'</div>'
     +'<div class="field"><label>Batasi ke kantor layanan</label><select id="u_layanan">'+_opsiLayananUser(u.layanan||'')+'</select>'
       +'<div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun ini hanya melihat saldo kantor tersebut. Superadmin selalu melihat semua.</div></div>'
     /* Dulu dropdown berisi teks mentah "true"/"false" — tidak jelas artinya dan
@@ -7676,7 +7728,10 @@ function cadOtoRender(d){
       + (d.driveSiap ? '' : '<div class="muted" style="font-size:11.5px">Ikuti PANDUAN-CADANGAN.md</div>')
       + (d.driveGalat ? '<div style="font-size:11.5px;color:var(--red)">' + esc(d.driveGalat) + '</div>' : '') + '</div>'
     + '<div class="cad-kotak"><div class="muted" style="font-size:11px;font-weight:600">UKURAN BASIS DATA</div>'
-      + '<b>' + _kb(d.ukuranDB) + '</b>' + (d.ukuranDB > d.batasPeringatan ? '<div style="font-size:11.5px;color:var(--red)">Mendekati batas 1 MB paket gratis Upstash</div>' : '') + '</div>'
+      + '<b>' + _kb(d.ukuranDB) + '</b>'
+      + (d.ukuranDB > d.batasPeringatan
+          ? '<div style="font-size:11.5px;color:var(--red)">Mendekati batas ' + esc(d.labelBatas || '') + '</div>'
+          : '<div class="muted" style="font-size:11.5px">dari ' + esc(d.labelBatas || '') + '</div>') + '</div>'
     + '</div>';
 
   h += '<div style="font-size:12.5px;margin-bottom:10px">';
@@ -7686,6 +7741,13 @@ function cadOtoRender(d){
       + 'salinan cepat ' + (st.redis && st.redis.ok ? '<span style="color:var(--green)">berhasil</span>' : '<span style="color:var(--red)">gagal</span>')
       + ', Drive ' + (st.drive && st.drive.ok ? '<span style="color:var(--green)">berhasil</span>' : '<span style="color:var(--red)">gagal</span>');
     if (st.drive && !st.drive.ok && st.drive.galat) h += '<div class="muted" style="font-size:11.5px;margin-top:3px">' + esc(st.drive.galat) + '</div>';
+    /* Yang paling perlu dikatakan bukan ukuran berkasnya, melainkan bahwa
+       salinannya sekamar dengan aslinya. */
+    if (d.tanpaSalinanLuar) {
+      h += '<div class="imp-note imp-warn" style="margin-top:8px">Semua cadangan tersimpan di <b>' + esc(d.tempat || 'basis data yang sama') + '</b>, satu tempat dengan basis datanya. '
+        + 'Kalau basis datanya sendiri yang hilang, tidak ada salinan di tempat lain. Setel Google Drive lewat PANDUAN-CADANGAN.md, '
+        + 'atau unduh salinannya sendiri secara berkala lewat tombol di bawah.</div>';
+    }
     (st.peringatan || []).forEach(function(p){ h += '<div class="imp-note imp-warn" style="margin-top:6px">' + esc(p) + '</div>'; });
   }
   h += '</div>';

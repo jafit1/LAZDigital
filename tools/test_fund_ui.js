@@ -178,6 +178,13 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
   if (adaLeaflet) {
     await p.route('**/leaflet@1.9.4/dist/leaflet.js', (r) => r.fulfill({ path: leafletJs, contentType: 'text/javascript' }));
     await p.route('**/leaflet@1.9.4/dist/leaflet.css', (r) => r.fulfill({ path: path.join(AKAR, 'node_modules/leaflet/dist/leaflet.css'), contentType: 'text/css' }));
+  } else {
+    /* Tanpa Leaflet lokal, yang diuji adalah jalur cadangan. Unpkg HARUS
+       diblokir di sini: dulu uji ini diam-diam mengandalkan komputer yang tidak
+       punya internet. Di komputer yang online, Leaflet asli termuat dari CDN,
+       peta tampil normal, dan pemeriksaan jalur cadangan gagal padahal
+       aplikasinya benar (terjadi 30 September 2026). */
+    await p.route('**/leaflet@1.9.4/**', (r) => r.abort());
   }
   await p.route('**tile.openstreetmap.org/**', (r) => r.fulfill({ body: PNG1x1, contentType: 'image/png' }));
   await p.route('**nominatim.openstreetmap.org/**', (r) => r.fulfill({ body: JSON.stringify({ display_name: 'Jl. Contoh, Bantul' }), contentType: 'application/json' }));
