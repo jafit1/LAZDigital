@@ -20,6 +20,7 @@ const rpc = require('./rpc.js');
 const drive = require('./_drive.js');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const lazpg = require('../lib/laz-pg.js');
 
@@ -190,8 +191,36 @@ async function jalankanCadangan(jenis, oleh){
   return status;
 }
 
+/* ─── izin, diperiksa SEBELUM apa pun disentuh ───
+   Dulu jalur manual memuat SELURUH buku besar lebih dulu, dan pulihkan bahkan
+   menyimpan titik batal "sebelum-pulih" sebelum izin diperiksa. Pemeriksaan
+   di depannya hanya "token tidak kosong", jadi token berisi teks apa saja
+   cukup untuk menimpa titik batal dan membuat server memuat semua data
+   (tools/test_pulihkan_aman.js: 4 dari 15 pemeriksaan gagal).
+   Di PostgreSQL pemeriksaan ini hanya memuat Users, Sessions, dan Settings. */
+async function cekIzinMurah(token, modul, aksi){
+  if (PAKAI_PG()) return lazpg.cekIzin(engine, token, modul, aksi, {});
+  const r = await muat();
+  return engine.cekIzin(r.db, token, modul, aksi, {});
+}
+async function pastikanBolehPulihkan(token, konfirmasi){
+  const u = await cekIzinMurah(token, 'settings', 'view');
+  if (u.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh memulihkan basis data.');
+  if (konfirmasi !== 'PULIHKAN') throw new Error('Ketik PULIHKAN untuk mengonfirmasi.');
+  return u;
+}
+/* Rahasia cron dibandingkan dengan panjang waktu yang tetap, supaya tidak
+   bisa ditebak huruf demi huruf dari lamanya jawaban. */
+function rahasiaCocok(diberikan, seharusnya){
+  const a = Buffer.from(String(diberikan || '')), b = Buffer.from(String(seharusnya || ''));
+  return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+}
+
 /* ─── pulihkan ─── */
 async function jalankanPulihkan(token, sumber, konfirmasi){
+  /* 0. izin dan konfirmasi DULU, sebelum titik batal disentuh */
+  await pastikanBolehPulihkan(token, konfirmasi);
+
   /* 1. ambil isi cadangan DULU: dari salinan tersimpan, atau berkas unggahan.
         Harus sebelum langkah 2 — kalau yang dipulihkan adalah "sebelum-pulih"
         itu sendiri (membatalkan pemulihan), menyimpan lebih dulu akan
@@ -222,7 +251,7 @@ module.exports = async (req, res) => {
   try {
     const auth = String(req.headers['authorization'] || '');
     const secret = process.env.CRON_SECRET || '';
-    const dariCron = !!secret && auth === 'Bearer ' + secret;
+    const dariCron = !!secret && rahasiaCocok(auth, 'Bearer ' + secret);
 
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body || '{}'); } catch (e) { body = {}; } }
@@ -241,17 +270,27 @@ module.exports = async (req, res) => {
       return;
     }
 
-    /* jalur manual — izin diperiksa engine */
-    const r = await muat();
-    async function butuhIzin(modul, aksiIzin){ await engine.runRPC(r.db, 'apiCekIzin', [token, modul, aksiIzin], {}); }
+    /* jalur manual: izin diperiksa LEBIH DULU lewat jalur murah, baru
+       seluruh buku besar dimuat. Aksi yang tidak dikenal ditolak sebelum
+       apa pun dimuat. */
+    const perluIzin = { cadangkan: 'edit', daftar: 'view', ambil: 'edit', pulihkan: 'view' }[aksi];
+    if (!perluIzin) { res.status(200).json({ __error: 'Aksi tidak dikenal: ' + aksi }); return; }
+    const pengguna = await cekIzinMurah(token, 'settings', perluIzin);
 
-    if (aksi === 'cadangkan') {
-      await butuhIzin('settings', 'edit');
-      const who = (await engine.runRPC(r.db, 'apiCekIzin', [token, 'settings', 'edit'], {})).result.username;
-      res.status(200).json({ result: await jalankanCadangan('manual', who) }); return;
+    if (aksi === 'pulihkan') {
+      const hasil = await jalankanPulihkan(token, { nama: body.nama, isi: body.isi }, body.konfirmasi);
+      res.status(200).json({ result: hasil }); return;
     }
+    if (aksi === 'cadangkan') {
+      res.status(200).json({ result: await jalankanCadangan('manual', pengguna.username) }); return;
+    }
+    if (aksi === 'ambil') {
+      const teks = await bacaSalinan(body.nama);
+      if (!teks) { res.status(200).json({ __error: 'Salinan tidak ditemukan.' }); return; }
+      res.status(200).json({ result: { nama: body.nama, isi: teks } }); return;
+    }
+    const r = await muat();
     if (aksi === 'daftar') {
-      await butuhIzin('settings', 'view');
       const salinan = await bacaDaftar();
       let driveFiles = null, driveGalat = '';
       if (drive.driveSiap()) { try { driveFiles = (await drive.daftar('laz-cadangan-')).slice(0, 10); } catch (e) { driveGalat = e.message; } }
@@ -263,16 +302,6 @@ module.exports = async (req, res) => {
         /* true = tidak ada satu pun salinan di luar basis data ini */
         tanpaSalinanLuar: !drive.driveSiap()
       } }); return;
-    }
-    if (aksi === 'ambil') {
-      await butuhIzin('settings', 'edit');
-      const teks = await bacaSalinan(body.nama);
-      if (!teks) { res.status(200).json({ __error: 'Salinan tidak ditemukan.' }); return; }
-      res.status(200).json({ result: { nama: body.nama, isi: teks } }); return;
-    }
-    if (aksi === 'pulihkan') {
-      const hasil = await jalankanPulihkan(token, { nama: body.nama, isi: body.isi }, body.konfirmasi);
-      res.status(200).json({ result: hasil }); return;
     }
     res.status(200).json({ __error: 'Aksi tidak dikenal: ' + aksi });
   } catch (err) {

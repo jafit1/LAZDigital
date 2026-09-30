@@ -34,10 +34,13 @@ call :jalankan "Pemecahan izin Dashboard"       tools\test_izin_modul.js
 call :jalankan "Admin tidak bisa jadi superadmin" tools\test_eskalasi_user.js
 call :jalankan "Ingat saya tanpa menyimpan sandi" tools\test_ingat_saya.js
 call :jalankan "Alur Ingat saya di peramban"   tools\test_ingat_saya_ui.js
+call :jalankan "Akun nonaktif langsung tertutup" tools\test_akun_nonaktif.js
 call :jalankan "Dialog Edit User"               tools\test_izin_ui.js
 call :jalankan "Nama kantor layanan kembar"     tools\test_kantor_kembar.js
 call :jalankan "Peringatan cadangan"            tools\test_cadangan_peringatan.js
+call :jalankan "Pemulihan cadangan hanya superadmin" tools\test_pulihkan_aman.js
 call :jalankan "Fitur Broadcast"                tools\test_blast_fitur.js
+call :jalankan "Pintu pesan masuk WhatsApp"     tools\test_blast_masuk.js
 call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
 call :jalankan "Kotak masuk percakapan"          tools\test_percakapan.js
 call :jalankan "Bentuk layar percakapan"         tools\ukur-percakapan.js

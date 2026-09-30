@@ -53,7 +53,7 @@ menghapusnya karena "kelihatannya tidak perlu".
 
 ## 3. Aturan keras
 
-Sembilan hal di bawah ini kalau dilanggar akan merusak sesuatu, dan sebagian
+Sepuluh hal di bawah ini kalau dilanggar akan merusak sesuatu, dan sebagian
 besar tanpa menimbulkan galat sama sekali.
 
 ### 3.1 Repositori ini PUBLIK
@@ -209,6 +209,36 @@ Simpan ujinya sebagai berkas tetap di `tools/`, dan daftarkan di
 perintah, lalu muncul `'Desain' is not recognized as an internal or external
 command`. Pakai kata "dan" pada label di `uji-sebelum-deploy.bat`, jangan `&`.
 
+### 3.10 Keamanan akun, sesi, dan pintu dari luar
+
+Lima celah ini ditutup pada 30 September 2026. Semuanya lahir dari pola yang
+sama: pemeriksaan ada, tetapi di tempat yang salah atau terlambat. Jangan
+membukanya lagi tanpa sengaja.
+
+- **Hanya superadmin yang menyentuh superadmin.** `apiSaveUser` dan
+  `apiDeleteUser` menolak siapa pun selain superadmin yang membuat, mengangkat,
+  menyunting, atau menghapus akun superadmin. Selain superadmin, orang hanya
+  boleh MEMBERI izin yang ia sendiri punya (mencabut selalu boleh). Superadmin
+  aktif terakhir tidak bisa diturunkan. Dulu 19 dari 30 pemeriksaan gagal dan
+  admin kantor benar-benar bisa mengangkat dirinya jadi superadmin.
+- **Peramban tidak pernah menyimpan sandi.** "Ingat saya" memakai token acak
+  30 hari (`laz_ingat`). Di tabel `Sessions` yang tersimpan hanya hash-nya
+  dengan awalan `ing:`, dan `authUser` menolak apa pun yang berawalan `ing:`.
+  Token ditukar lewat `loginIngat`. Gagal jaringan saat menukar BUKAN alasan
+  memanggil `doLogout()`: hanya penolakan tegas (`ok:false`) yang boleh.
+- **`authUser` memeriksa `aktif` di setiap permintaan**, bukan cuma saat
+  login. Menonaktifkan atau menghapus akun mematikan semua sesi dan token
+  ingatnya. Modul lain ikut tertutup karena memeriksa lewat `engine.cekIzin`.
+- **`/api/blast-masuk` tertutup secara bawaan.** Hanya terbuka kalau
+  `BLAST_MASUK_KUNCI` disetel dan penyedia menyertakannya (`?kunci=` atau
+  header `x-masuk-kunci`). Gateway mandiri tidak lewat sini.
+- **`/api/backup` memeriksa izin sebelum memuat atau menyimpan apa pun.**
+  Pemulihan menolak selain superadmin dan konfirmasi selain `PULIHKAN`
+  SEBELUM titik batal `sebelum-pulih` disentuh.
+
+Aturan umumnya: **izin diperiksa paling depan**, sebelum membaca basis data,
+sebelum menulis apa pun, dan sebelum membuat salinan.
+
 ---
 
 ## 4. Peta berkas
@@ -334,6 +364,12 @@ akan melewati dirinya sendiri dengan kode keluar 2 kalau Playwright belum ada
 | `test_sidebar_ui.js`, `test_sidebar_gerak.js`, `ukur-sisi.js` | bilah menu |
 | `test_skala_ui.js` | tampilan di semua ukuran layar |
 | `uji_cek_deploy.js` | apa yang benar-benar sudah sampai di GitHub |
+| `test_panduan_ai.js` | panduan ini masih cocok dengan kode (akhiran baris, uji terdaftar, tanpa rahasia) |
+| `test_eskalasi_user.js` | admin tidak bisa mengangkat diri jadi superadmin atau membagi izin yang tidak ia punya |
+| `test_ingat_saya.js`, `test_ingat_saya_ui.js` | "Ingat saya" tanpa menyimpan sandi, token bisa dicabut, gagal jaringan tidak mengeluarkan orang |
+| `test_akun_nonaktif.js` | akun nonaktif atau terhapus langsung kehilangan akses |
+| `test_blast_masuk.js` | pintu pesan masuk WhatsApp menolak kiriman tanpa kunci |
+| `test_pulihkan_aman.js` | pemulihan cadangan hanya superadmin, titik batal tidak bisa ditimpa orang luar |
 
 Alat diagnostik yang tidak ikut di `uji-sebelum-deploy.bat` karena menyambung
 ke basis data produksi:
@@ -420,7 +456,8 @@ Per 29 September 2026.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
-(Fonnte), peringatan cadangan.
+(Fonnte), peringatan cadangan, dan (30 September 2026) lima celah keamanan di
+bagian 3.10.
 
 **Perlu dikerjakan pemilik, bukan kode:**
 

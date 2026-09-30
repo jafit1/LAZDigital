@@ -7,7 +7,7 @@
 // "masuk" diteruskan ke webhook keluar (mis. ke LAZDigital).
 
 const db = require('../lib/blast/db');
-const { id, sekarang, normalkanNomor, bersihkanTeks, sukses, gagal, bacaBody } = require('../lib/blast/util');
+const { id, sekarang, normalkanNomor, bersihkanTeks, sukses, gagal, bacaBody, bandingAman } = require('../lib/blast/util');
 const { ambilSetelan } = require('../lib/blast/setelan');
 const { catatKeDaftar, KUNCI_PESAN, simpanPesan } = require('../lib/blast/antrean');
 const { kirimKejadian } = require('../lib/blast/webhook');
@@ -51,6 +51,28 @@ async function cariPerangkat(nomorPerangkat) {
   return isi.find((d) => d.status === 'tersambung') || isi[0] || null;
 }
 
+/* PINTU INI TERTUTUP SECARA BAWAAN.
+   Dulu siapa pun yang tahu alamatnya (dan repositori ini publik) bisa mengirim
+   POST ke sini: pesan palsu masuk ke kotak masuk amil atas nama nomor mana pun,
+   nomor karangan membanjiri daftar kontak, dan satu kiriman "STOP" palsu
+   memasukkan donatur sungguhan ke daftar hitam sehingga ia diam-diam tidak
+   lagi menerima broadcast. tools/test_blast_masuk.js membuktikannya: 12 dari
+   20 pemeriksaannya gagal sebelum penjaga ini dipasang.
+
+   Gateway WhatsApp mandiri milik lembaga tidak lewat sini, melainkan lewat
+   api/blast-agen.js yang dijaga BLAST_AGEN_TOKEN. Pintu ini hanya dipakai
+   penyedia pihak ketiga (Fonnte, Meta), jadi ia dibuka HANYA kalau
+   BLAST_MASUK_KUNCI disetel, dan penyedia menyertakan kunci yang sama di
+   alamat webhook (?kunci=...) atau di header x-masuk-kunci. Kunci di alamat
+   dipilih karena Fonnte tidak bisa menambah header sendiri. */
+function kunciMasukSah(req, url) {
+  const seharusnya = String(process.env.BLAST_MASUK_KUNCI || '');
+  if (!seharusnya) return { ok: false, kode: 403, alasan: 'Pintu pesan masuk ditutup. Setel BLAST_MASUK_KUNCI untuk membukanya.' };
+  const diminta = String((req.headers && req.headers['x-masuk-kunci']) || url.searchParams.get('kunci') || '');
+  if (!diminta || !bandingAman(diminta, seharusnya)) return { ok: false, kode: 401, alasan: 'Kunci pesan masuk tidak sah' };
+  return { ok: true };
+}
+
 module.exports = async function penangan(req, res) {
   // Verifikasi webhook Meta
   if (req.method === 'GET') {
@@ -67,6 +89,11 @@ module.exports = async function penangan(req, res) {
   }
 
   if (req.method !== 'POST') return gagal(res, 405, 'Gunakan metode POST');
+
+  /* Diperiksa SEBELUM badan permintaan dibaca: kiriman tanpa kunci tidak
+     boleh menyentuh basis data sama sekali, termasuk mencatat kontak. */
+  const sah = kunciMasukSah(req, new URL(req.url, 'http://x'));
+  if (!sah.ok) return gagal(res, sah.kode, sah.alasan);
 
   try {
     const badan = await bacaBody(req);
