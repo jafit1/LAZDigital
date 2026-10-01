@@ -377,6 +377,7 @@ akan melewati dirinya sendiri dengan kode keluar 2 kalau Playwright belum ada
 | `uji_batas_vercel.js` | jumlah fungsi masih di bawah 12 |
 | `test_agen.js` | sambungan ke gateway WhatsApp, centang, lampiran |
 | `test_impor_jurnal.js` | impor jurnal, tidak ada baris hilang diam-diam |
+| `test_impor_jurnal_bank.js` | unggah Excel di zona WIB tidak memundurkan tanggal, akun "Penerimaan ..." di seksi mana pun (PERSEDIAAN, TRANSAKSI BANK) terhitung penghimpunan |
 | `test_izin_modul.js` | pemecahan izin Dashboard, akun lama tidak kehilangan menu |
 | `test_izin_ui.js` | dialog Edit User, kolom kiri diam saat kanan digulir |
 | `test_kantor_kembar.js` | nama KLL/ULL bertumpuk, rincian transaksi, pembanding |

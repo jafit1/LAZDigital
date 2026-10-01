@@ -30,6 +30,7 @@ call :jalankan "Batas fungsi Vercel"            tools\uji_batas_vercel.js
 call :jalankan "Panduan AI masih cocok"        tools\test_panduan_ai.js
 call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
 call :jalankan "Impor jurnal"                   tools\test_impor_jurnal.js
+call :jalankan "Impor jurnal bank dan tanggal"  tools\test_impor_jurnal_bank.js
 call :jalankan "Pemecahan izin Dashboard"       tools\test_izin_modul.js
 call :jalankan "Admin tidak bisa jadi superadmin" tools\test_eskalasi_user.js
 call :jalankan "Ingat saya tanpa menyimpan sandi" tools\test_ingat_saya.js

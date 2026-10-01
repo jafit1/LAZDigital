@@ -3627,6 +3627,13 @@ function jpSeksiHimpun(sec){
   return false;
 }
 
+/* Seksi yang isinya dicatat sebagai penyaluran atau operasional. Daftarnya
+   harus sama dengan cabang PENTASYARUFAN di transformJurnalToImportData. */
+function jpSeksiSalur(sec){
+  return /^(OPERASIONAL AMIL VIA (BANK|KAS)|PENGELUARAN OPERASIONAL VIA (BANK|KAS)|PENYALURAN (ZAKAT|INFAK TERIKAT|INFAK UMUM|PERSEDIAAN)|UMP (LPJ )?(ZAKAT|INFAK|AMIL)|BIAYA ADMINISTRASI BANK)$/
+    .test(String(sec || '').toUpperCase().trim());
+}
+
 /* Kumpulkan baris yang tanggal debet & kreditnya beda (kemungkinan salah ketik),
    untuk ditampilkan sebagai peringatan sebelum data disimpan. */
 /* Baris yang tanggal debet dan kreditnya berbeda. Satu pasangan jurnal
@@ -3821,8 +3828,18 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         if (_nx && parseAmount(_nx[3]) > 0 && !parseAmount(_nx[2])) _akunKredit = String(_nx[1] || '').trim();
 
         // Match bank account
+        /* Seksi yang judulnya bukan "PENERIMAAN ..." tetap boleh berisi
+           penerimaan. Jurnal bank Jan-Sep 2026 menaruh barang bantuan
+           kemanusiaan di seksi "PERSEDIAAN" (7 baris, Rp 161.947.850) dan
+           kiriman ke rekening BDW di "TRANSAKSI BANK BDW" (3 baris,
+           Rp 3.816.635). Dulu keduanya dilewati, padahal akun kreditnya
+           jelas "Penerimaan ...", sementara beras zakat fitrah di seksi
+           "PENERIMAAN PERSEDIAAN" ikut terhitung. Pemilik memutuskan semua
+           penerimaan dihitung. Jadi di seksi yang bukan penyaluran, akun
+           kredit "Penerimaan ..." sudah cukup sebagai tanda. */
         var isHimpunSec = currentSection
-          ? jpSeksiHimpun(currentSection)
+          ? (jpSeksiHimpun(currentSection) ||
+             (!jpSeksiSalur(currentSection) && /^penerimaan\b/i.test(_akunKredit)))
           : /^penerimaan\b/i.test(_akunKredit);
         var lookupName = isHimpunSec ? accName : (bankAccName || accName);
         var matchedRek = null;

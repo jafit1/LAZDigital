@@ -4370,7 +4370,17 @@ function onImportFile(e){
       var p2 = function(n){ return ('0' + n).slice(-2); };
       var sel = function(c){
         if (c == null) return '';
-        if (c instanceof Date) return c.getFullYear() + '-' + p2(c.getMonth() + 1) + '-' + p2(c.getDate());
+        if (c instanceof Date) {
+          /* Maju 30 menit dulu baru diambil tanggalnya. Di zona WIB, SheetJS
+             mengubah sel tanggal 1 Maret jadi Date 28 Februari 23:59:48 (sisa
+             selisih jam lokal historis Jakarta), dan getDate() apa adanya
+             membuat SEMUA baris jurnal mundur sehari: 86 dari 2.169 baris
+             jurnal bank Jan-Sep 2026 pindah ke bulan sebelumnya. Jalur
+             tautan Google Sheets tidak kena karena dibaca server UTC. Sel
+             jurnal tidak pernah berjam 23:30 ke atas, jadi geseran ini aman. */
+          var d = new Date(c.getTime() + 18e5);
+          return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+        }
         if (typeof c === 'number') return String(c);
         return String(c).trim();
       };
