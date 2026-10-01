@@ -236,6 +236,34 @@ membukanya lagi tanpa sengaja.
   Pemulihan menolak selain superadmin dan konfirmasi selain `PULIHKAN`
   SEBELUM titik batal `sebelum-pulih` disentuh.
 
+Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
+
+- **Tautan dashboard publik** hanya bisa dinyalakan atau dimatikan pemegang
+  izin ubah Pengaturan. Melihat tautannya cukup izin Dashboard.
+- **Settings ke peramban disaring** lewat `_settingsAman()`: `lg_*` tidak
+  pernah dikirim, `publicToken` hanya ke pemegang izin lihat Pengaturan.
+  `apiSaveSettings` menolak kunci milik sistem (`_kunciSistem()`: `lg_*`,
+  `uf_*`, `publicToken`, `publicEnabled`).
+- **Impor lewat URL** hanya https, dan setiap alamat IP hasil DNS harus
+  publik, termasuk sesudah pengalihan (`_periksaUrlImpor`, `_ambilUrlImpor`,
+  `redirect: 'manual'`). Batas unduhan 20 MB.
+- **Log aktivitas** hanya bisa dibersihkan superadmin.
+- **Verifikasi kwitansi publik** hanya mengirim nominal kalau kode acak di QR
+  (10 huruf pertama `id`) ikut cocok. Nomor saja cuma menyatakan sah.
+- **Header keamanan** dipasang di rute pertama `vercel.json` (`continue: true`).
+  Kamera, mikrofon, dan GPS sengaja diizinkan untuk situs sendiri karena
+  dipakai OCR, AI Asisten, dan Fundraising.
+- **`deploy.bat` membatalkan deploy** kalau ada berkas sensitif di daftar yang
+  akan di-commit, dan melepasnya lagi dari staging. Berkas yang sedang
+  dikeluarkan (`git rm --cached`) tidak ikut diperiksa (`--diff-filter=d`).
+- **Penguncian login** ketat per (username + IP) dan per IP; per username saja
+  hanya longgar (20 dan 40 kali). Dulu penyerang bisa mengunci superadmin
+  asli dari luar dengan 12 tebakan.
+- **Token sesi disimpan sebagai hash** berawalan `h:` (`_hashSesi`,
+  `_cariSesi`). Uji dan alat JANGAN mengambil token dari tabel Sessions;
+  ambil dari hasil `login`. Baris lama yang apa adanya tetap diterima sampai
+  kedaluwarsa.
+
 Aturan umumnya: **izin diperiksa paling depan**, sebelum membaca basis data,
 sebelum menulis apa pun, dan sebelum membuat salinan.
 
@@ -370,6 +398,8 @@ akan melewati dirinya sendiri dengan kode keluar 2 kalau Playwright belum ada
 | `test_akun_nonaktif.js` | akun nonaktif atau terhapus langsung kehilangan akses |
 | `test_blast_masuk.js` | pintu pesan masuk WhatsApp menolak kiriman tanpa kunci |
 | `test_pulihkan_aman.js` | pemulihan cadangan hanya superadmin, titik batal tidak bisa ditimpa orang luar |
+| `test_sesi_kuat.js` | penyerang tidak bisa mengunci superadmin dari luar, token sesi tersimpan sebagai hash |
+| `test_keamanan_lanjutan.js` | tautan publik, Settings yang disaring, SSRF impor URL, hapus log, kwitansi publik, header, pengaman deploy |
 
 Alat diagnostik yang tidak ikut di `uji-sebelum-deploy.bat` karena menyambung
 ke basis data produksi:

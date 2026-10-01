@@ -27,3 +27,12 @@ Thumbs.db
 
 .vercel
 .env*
+
+# Berisi angka keuangan sungguhan / data lokal. Repo ini PUBLIK (30 Sep 2026).
+HASIL-*.md
+.data/
+Claude outputs/
+potret/
+sessions/
+laz.json
+kunci.txt

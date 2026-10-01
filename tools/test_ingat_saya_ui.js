@@ -57,9 +57,12 @@ function barisSesi() {
   const t = DB.sheets.Sessions, h = t[0];
   return t.slice(1).map((r) => { const o = {}; h.forEach((k, j) => { o[k] = r[j]; }); return o; });
 }
+/* Sesi disimpan sebagai hash berawalan "h:" (sejak 30 September 2026), jadi
+   yang dihapus baris hash-nya, atau baris lama yang masih apa adanya. */
 function hapusSesi(token) {
   const t = DB.sheets.Sessions, i = t[0].indexOf('token');
-  DB.sheets.Sessions = [t[0]].concat(t.slice(1).filter((r) => r[i] !== token));
+  const h = 'h:' + crypto.createHash('sha256').update(String(token)).digest('hex');
+  DB.sheets.Sessions = [t[0]].concat(t.slice(1).filter((r) => r[i] !== token && r[i] !== h));
 }
 const hash = (t) => 'ing:' + crypto.createHash('sha256').update(String(t)).digest('hex');
 let catatanRpc = [];

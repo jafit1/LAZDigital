@@ -427,10 +427,11 @@
       r.innerHTML = kepala + verif + angka + layanan + dana + program + tren + kaki;
 
       var kw = new URLSearchParams(location.search).get('kwitansi');
+      var kode = new URLSearchParams(location.search).get('kode') || '';
       if (kw) {
         var inp = document.getElementById('kwInput');
         if (inp) inp.value = kw;
-        verifikasi(kw);
+        verifikasi(kw, kode);
       }
     }
 
@@ -442,11 +443,14 @@
       return false;
     }
 
-    function verifikasi(kw){
+    /* kode = kode acak dari QR kwitansi. Tanpa kode yang cocok, server hanya
+       menyatakan kwitansi sah tanpa nominal dan metode (nomor kwitansi
+       berurutan, jadi nominal tidak boleh bisa disisir dari luar). */
+    function verifikasi(kw, kode){
       var t = document.getElementById('hasilVerif');
       if (!t) return;
       t.innerHTML = '<div class="pub-kotak" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted)">Memeriksa nomor kwitansi…</div>';
-      panggil('apiVerifyKwitansi',[kw]).then(function(res){
+      panggil('apiVerifyKwitansi',[kw, kode||'']).then(function(res){
         if (!res || !res.valid) {
           t.innerHTML = '<div class="pub-kotak no"><b>Tidak ditemukan.</b> '
             + esc((res && res.msg) || 'Nomor kwitansi tidak terdaftar.') + '</div>';
@@ -461,10 +465,14 @@
             + '<div><span class="l">Nama donatur</span><b>'+esc(d.namaDonatur)+'</b></div>'
             + '<div><span class="l">Tanggal</span><b>'+esc(fdate(d.tanggal))+'</b></div>'
             + '<div><span class="l">Jenis dana</span><b>'+esc(d.jenisDana||'-')+' ('+esc(d.pilar||d.subJenis||'-')+')</b></div>'
-            + '<div><span class="l">Nominal</span><b style="color:var(--accent)">'+rp(d.jumlah)+'</b></div>'
-            + '<div><span class="l">Metode</span><b>'+esc(d.metode||'-')+' &middot; '+esc(d.statusBayar||'-')+'</b></div>'
+            + (res.lengkap
+              ? '<div><span class="l">Nominal</span><b style="color:var(--accent)">'+rp(d.jumlah)+'</b></div>'
+                + '<div><span class="l">Metode</span><b>'+esc(d.metode||'-')+' &middot; '+esc(d.statusBayar||'-')+'</b></div>'
+              : '<div><span class="l">Status</span><b>'+esc(d.statusBayar||'-')+'</b></div>')
           + '</div>'
-          + '<div style="font-size:11.5px;color:var(--muted);margin-top:9px">Sebagian nama disamarkan demi menjaga privasi donatur.</div>'
+          + '<div style="font-size:11.5px;color:var(--muted);margin-top:9px">Sebagian nama disamarkan demi menjaga privasi donatur.'
+            + (res.lengkap ? '' : ' Nominal hanya ditampilkan bila kwitansi diperiksa dengan memindai QR Code yang tercetak di kwitansi.')
+          + '</div>'
         + '</div>';
       }).catch(function(e){
         t.innerHTML = '<div class="pub-kotak no">Gagal memeriksa kwitansi: '+esc((e&&e.message)||e)+'</div>';

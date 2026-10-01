@@ -480,8 +480,11 @@ async function tanya(sql, nilai) {
        atas, jadi di sini yang diuji perintahnya sendiri. */
     await tanya('DELETE FROM "Sessions" WHERE "expired" < now()');
     const sisa = (await tanya('SELECT token FROM "Sessions"')).map((r) => r.token);
+    /* Sejak 30 September 2026 token sesi disimpan sebagai hash berawalan
+       "h:" (lihat _hashSesi di _engine.js), jadi yang dicari bentuk itu. */
+    const hashHidup = 'h:' + require('crypto').createHash('sha256').update(String(infoPg.t)).digest('hex');
     cek('sesi kedaluwarsa hilang, sesi hidup tetap',
-      !sisa.includes('sesi-mati') && sisa.includes(infoPg.t), sisa.join(', '));
+      !sisa.includes('sesi-mati') && (sisa.includes(hashHidup) || sisa.includes(infoPg.t)), sisa.join(', '));
   }
 
   console.log('\n================ J. MEMUAT SELURUHNYA (untuk cadangan) ================');

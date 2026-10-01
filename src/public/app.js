@@ -595,7 +595,10 @@ function miniList(arr,type){if(!arr||!arr.length)return '<div class="muted">Belu
 function openPublicLink(){gas('apiGetPublicLinkInfo')(TOKEN).then(function(info){if(info&&info.token){info.url=location.origin+'/public.html?token='+info.token;}var b='<p class="muted" style="margin-bottom:16px">Bagikan dashboard ringkasan (read-only) ke publik. Data pribadi otomatis disembunyikan.</p>';
   if(info.enabled&&info.url){b+='<div class="field"><label>Link Dashboard Publik (Aktif)</label><div class="link-box"><input id="pubUrl" readonly value="'+esc(info.url)+'"><button class="btn btn-sm btn-primary" onclick="copyPub()">Salin</button></div></div><a class="btn btn-ghost btn-sm" href="'+esc(info.url)+'" target="_blank" style="margin-top:8px">Buka di tab baru ↗</a>';}
   else b+='<p class="muted">Link publik belum dibuat.</p>';
-  var f=(info.enabled?'<button class="btn btn-danger" onclick="disablePub()">Nonaktifkan</button>':'')+'<button class="btn btn-primary" onclick="genPub()">'+(info.enabled?'Buat Ulang Link':'Aktifkan & Buat Link')+'</button>';
+  /* Menyalakan/mematikan tautan butuh izin ubah Pengaturan di server; tombolnya
+     disembunyikan dari yang tidak punya supaya tidak berujung pesan IZIN. */
+  var f=canDo('settings','edit')?((info.enabled?'<button class="btn btn-danger" onclick="disablePub()">Nonaktifkan</button>':'')+'<button class="btn btn-primary" onclick="genPub()">'+(info.enabled?'Buat Ulang Link':'Aktifkan & Buat Link')+'</button>'):'';
+  if(!canDo('settings','edit')&&!info.enabled) b+='<p class="muted" style="margin-top:8px">Minta admin yang berwenang atas Pengaturan untuk menyalakannya.</p>';
   openModal('Link Dashboard Publik',b,f);}).catch(handleErr);}
 function genPub(){gas('apiGeneratePublicLink')(TOKEN).then(function(){toast('Link publik dibuat');openPublicLink();}).catch(handleErr);}
 function disablePub(){gas('apiDisablePublicLink')(TOKEN).then(function(){toast('Link dinonaktifkan');closeModal();}).catch(handleErr);}
@@ -844,7 +847,11 @@ function terbilang(n){n=Math.floor(Math.abs(Number(n))||0);var s=['','satu','dua
 function cetakKwitansi(id){gas('apiGetKwitansi')(TOKEN,id).then(function(res){printDoc(buildKwitansiHTML(res.data,res.settings));}).catch(handleErr);}
 function buildKwitansiHTML(d,s){
   var det=(d.subJenis||d.jenisDana)+((String(d.subJenis).toLowerCase().indexOf('pilar')>=0&&d.pilar)?' - '+d.pilar:'');
-  var verifyUrl = window.location.origin + '/public.html?kwitansi=' + encodeURIComponent(d.noKwitansi || d.id);
+  /* Kode acak (10 huruf pertama id) ikut di QR: tanpa kode itu, halaman
+     publik hanya menyatakan kwitansi sah tanpa menampilkan nominal, supaya
+     nomor kwitansi yang berurutan tidak bisa disisir untuk melihat donasi. */
+  var verifyUrl = window.location.origin + '/public.html?kwitansi=' + encodeURIComponent(d.noKwitansi || d.id)
+    + (d.noKwitansi && d.id ? '&kode=' + encodeURIComponent(String(d.id).slice(0, 10)) : '');
   var qrHtml = window.QRCode ? window.QRCode(verifyUrl, { size: 100, colorDark: '#ea6a1e' }).toHTML() : '';
   
   return docShell('Kwitansi '+esc(d.noKwitansi),
@@ -7054,7 +7061,7 @@ function renderLog(d){
 
   var h = '<div class="page-head"><div><h2>Log Aktivitas</h2>'
     + '<div class="desc">Riwayat siapa mengubah apa</div></div>'
-    + (canDo('log','delete') ? '<button class="btn btn-ghost" onclick="logBersihkan()">Bersihkan log</button>' : '')
+    + ((ME&&ME.role==='superadmin') ? '<button class="btn btn-ghost" onclick="logBersihkan()">Bersihkan log</button>' : '')
     + '</div>';
 
   h += '<div class="lap-filter">'

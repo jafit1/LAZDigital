@@ -45,8 +45,11 @@ async function dbBaru() {
   process.env.SETUP_ADMIN_PASSWORD = SANDI;
   db = (await engine.runRPC(db, 'setup', [], {})).db;
   /* satu petugas biasa */
-  db = (await engine.runRPC(db, 'login', ['superadmin', SANDI], {})).db;
-  const tokSuper = sesiTerakhir(db);
+  /* Token diambil dari hasil login, bukan dari tabel Sessions: sejak 30
+     September 2026 tabel itu hanya menyimpan hash-nya. */
+  const masuk = await engine.runRPC(db, 'login', ['superadmin', SANDI], {});
+  db = masuk.db;
+  const tokSuper = masuk.result.token;
   db = (await engine.runRPC(db, 'apiSaveUser', [tokSuper, { username: 'petugas.uji', nama: 'Petugas Uji', role: 'staff', password: SANDI, permissions: { penghimpunan: { view: true } } }], {})).db;
   return db;
 }
@@ -143,7 +146,7 @@ const hash = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
   /* token ingat milik orang lain tidak bisa dihapus lewat logout sembarang */
   let dbL = JSON.parse(JSON.stringify(db));
   r = await rpc(dbL, 'login', ['superadmin', SANDI]);
-  r = await rpc(r.db, 'logout', [sesiTerakhir(r.db), ingat]);
+  r = await rpc(r.db, 'logout', [r.hasil.token, ingat]);
   cek('logout akun lain tidak ikut mencabut token ingat milik petugas',
     barisSesi(r.db).some((b) => b.token === 'ing:' + hash(ingat)));
 

@@ -58,6 +58,29 @@ echo.
 git add -A
 if errorlevel 1 goto gagal
 
+REM --- PENGAMAN: berkas sensitif tidak boleh ikut ke repositori PUBLIK ---
+REM .gitignore saja tidak cukup: berkas yang dulu terlanjur terlacak, atau nama
+REM baru yang belum terdaftar, tetap ikut "git add -A". Daftar yang AKAN
+REM di-commit diperiksa di sini, dan kalau ada yang cocok, semuanya dilepas lagi
+REM dari staging lalu deploy dibatalkan. Tidak ada yang terkirim.
+REM --diff-filter=d: berkas yang sedang DIKELUARKAN dari Git (git rm --cached)
+REM tidak ikut diperiksa. Mengeluarkannya justru tujuannya. Tanpa ini, pengaman
+REM membatalkan langkah perbaikannya sendiri (terjadi 1 Oktober 2026 saat
+REM .data/ai.json dan potret/ dikeluarkan).
+set SENSITIF=
+for /f "delims=" %%F in ('git diff --cached --name-only --diff-filter=d ^| findstr /i /r /c:"^\.env$" /c:"^\.env\.local" /c:"^\.env\.production" /c:"^\.env\.development" /c:"^data/" /c:"^\.data/" /c:"HASIL-" /c:"laz-db-" /c:"\.db\.json$" /c:"^sessions/" /c:"laz\.json$" /c:"kunci\.txt$" /c:"wa-secrets" /c:"deploy-lazwa\.bat" /c:"^Claude outputs/" /c:"^potret/"') do (
+  echo [BATAL] Berkas sensitif akan ikut ter-push: %%F
+  set SENSITIF=1
+)
+if defined SENSITIF (
+  git reset -q
+  echo.
+  echo         Tidak ada yang dikirim. Keluarkan berkas di atas dari Git, misalnya:
+  echo           git rm --cached "nama berkas"
+  echo         lalu pastikan polanya ada di .gitignore, kemudian jalankan deploy.bat lagi.
+  goto akhir
+)
+
 git commit -m "%PESAN%"
 if errorlevel 1 (
   echo [INFO] Tidak ada yang di-commit.

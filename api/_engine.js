@@ -302,18 +302,33 @@ function _periksaSandi(p){
 }
 var _PESAN_LOGIN_GAGAL = 'Username atau password salah';
 
+/* Penguncian per USERNAME dulu memakai ambang yang sama ketatnya dengan per
+   IP, jadi siapa pun cukup salah sandi 12 kali atas nama "superadmin" untuk
+   mengunci superadmin asli 30 menit dari komputer mana pun
+   (tools/test_sesi_kuat.js bagian A). Sekarang ambang ketat berlaku per
+   (username + IP) dan per IP: penyerang hanya mengunci dirinya sendiri.
+   Hitungan per username tetap ada dengan ambang 20 dan 40, supaya tebakan
+   yang disebar dari banyak IP tetap terhenti. */
+function _catatGagalLonggar(key){
+  var k = _bacaKunci(key); k.n = (Number(k.n) || 0) + 1;
+  var detik = k.n >= 40 ? 1800 : k.n >= 20 ? 900 : 0;
+  k.sampai = detik ? Date.now() + detik * 1000 : 0;
+  setSetting(key, JSON.stringify(k));
+  return detik;
+}
 function login(u,p,ingat){
-  var kU = _kunciLoginKey('u', u), kIP = _kunciLoginKey('ip', (_LOG_CTX && _LOG_CTX.ip) || '-');
-  var sisa = Math.max(_sisaKunci(kU), _sisaKunci(kIP));
+  var ipNya = (_LOG_CTX && _LOG_CTX.ip) || '-';
+  var kU = _kunciLoginKey('u', u), kIP = _kunciLoginKey('ip', ipNya), kUI = _kunciLoginKey('ui', String(u||'') + '|' + ipNya);
+  var sisa = Math.max(_sisaKunci(kU), _sisaKunci(kIP), _sisaKunci(kUI));
   if (sisa > 0) {
     audit('', String(u||'').slice(0,40), 'login_dikunci', 'masih terkunci ' + sisa + ' detik', {modul:'sesi'});
     return {ok:false, msg:'Terlalu banyak percobaan. Coba lagi dalam ' + (sisa >= 60 ? Math.ceil(sisa/60) + ' menit' : sisa + ' detik') + '.', terkunci: sisa};
   }
   function gagal(alasan){
-    var d1 = _catatGagalLogin(kU), d2 = _catatGagalLogin(kIP);
+    var d1 = _catatGagalLogin(kUI), d2 = _catatGagalLogin(kIP), d3 = _catatGagalLonggar(kU);
     audit('', String(u||'').slice(0,40), 'login_gagal', alasan, {modul:'sesi'});
-    var kunci = Math.max(d1, d2);
-    return {ok:false, msg:_PESAN_LOGIN_GAGAL + (kunci ? ' — akun dikunci ' + (kunci >= 60 ? Math.ceil(kunci/60) + ' menit' : kunci + ' detik') : ''), terkunci: kunci};
+    var kunci = Math.max(d1, d2, d3);
+    return {ok:false, msg:_PESAN_LOGIN_GAGAL + (kunci ? ', dikunci ' + (kunci >= 60 ? Math.ceil(kunci/60) + ' menit' : kunci + ' detik') : ''), terkunci: kunci};
   }
   var us=readAll(SHEETS.USERS),f=null; for(var i=0;i<us.length;i++){if(String(us[i].username).toLowerCase()===String(u).toLowerCase()){f=us[i];break;}}
   if(!f){ return gagal('username tidak ditemukan'); }
@@ -328,13 +343,31 @@ function login(u,p,ingat){
       return gagal('password salah');
     }
   }
-  _hapusKunciLogin(kU); _hapusKunciLogin(kIP);
+  _hapusKunciLogin(kU); _hapusKunciLogin(kIP); _hapusKunciLogin(kUI);
   _bersihkanSesiKedaluwarsa();
   var token=_buatSesi(f); audit(f.id,f.username,'login',ingat===true?'dengan Ingat saya':'',{modul:'sesi'});
   var hasil={ok:true,token:token,user:sanitizeUser(f)};
   if (ingat === true) hasil.ingat = _buatTokenIngat(f.id);
   return hasil; }
-function _buatSesi(f){ var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:token,userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); return token; }
+/* Token sesi disimpan sebagai HASH (awalan "h:"), bukan apa adanya. Dulu
+   siapa pun yang bisa membaca tabel Sessions bisa langsung memakai sesi
+   siapa saja. Baris lama yang tersimpan apa adanya tetap diterima oleh
+   _cariSesi sampai kedaluwarsa (paling lama 12 jam), supaya tidak ada yang
+   terlempar keluar pada hari deploy. Token acak 122 bit, jadi SHA-256 tanpa
+   garam sudah cukup: tidak ada yang bisa ditebak dari hash-nya. */
+var _AWALAN_SESI = 'h:';
+function _hashSesi(t){ return _AWALAN_SESI + crypto.createHash('sha256').update(String(t)).digest('hex'); }
+function _buatSesi(f){ var token=Utilities.getUuid(); insertRow(SHEETS.SESSIONS,{token:_hashSesi(token),userId:f.id,expired:new Date(Date.now()+12*36e5).toISOString()}); return token; }
+function _cariSesi(t){
+  t = String(t || '');
+  if (!t || t.indexOf(_AWALAN_SESI) === 0 || t.indexOf(_AWALAN_INGAT) === 0) return null;
+  var h = _hashSesi(t), ss = readAll(SHEETS.SESSIONS), warisan = null;
+  for (var i = 0; i < ss.length; i++) {
+    if (ss[i].token === h) return ss[i];
+    if (ss[i].token === t) warisan = ss[i];
+  }
+  return warisan;
+}
 
 /* ===== TOKEN "INGAT SAYA" =====
    Dulu "Ingat saya" menyimpan username dan SANDI ASLI di localStorage
@@ -384,7 +417,7 @@ function loginIngat(ti){
 }
 function logout(t, ti){
   var u=null; try{ u=authUser(t); }catch(e){}
-  if(t && String(t).indexOf(_AWALAN_INGAT)!==0) deleteRowBy(SHEETS.SESSIONS,'token',t);
+  var sl = _cariSesi(t); if (sl) deleteRowBy(SHEETS.SESSIONS,'token',sl.token);
   /* Token ingat dicabut kalau pemegangnya memang pemilik sesi ini. Kalau
      sesinya sudah habis (u kosong), memegang token ingat itu sendiri sudah
      bukti kepemilikan, dan mencabutnya tidak merugikan siapa pun. */
@@ -394,8 +427,8 @@ function logout(t, ti){
   return {ok:true};
 }
 function deleteRowBy(name,col,val){ var sh=getSS().getSheetByName(name); var v=sh.getDataRange().getValues(); var c=v[0].indexOf(col); for(var i=v.length-1;i>=1;i--){if(String(v[i][c])===String(val))sh.deleteRow(i+1);} }
-function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.'); if(String(t).indexOf(_AWALAN_INGAT)===0) throw new Error('AUTH: sesi tidak valid, login ulang.'); var ss=readAll(SHEETS.SESSIONS),s=null; for(var i=0;i<ss.length;i++)if(ss[i].token===t){s=ss[i];break;}
-  if(!s) throw new Error('AUTH: sesi tidak valid, login ulang.'); if(new Date(s.expired)<new Date()){deleteRowBy(SHEETS.SESSIONS,'token',t);throw new Error('AUTH: sesi berakhir, login ulang.');}
+function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.'); var s=_cariSesi(t);
+  if(!s) throw new Error('AUTH: sesi tidak valid, login ulang.'); if(new Date(s.expired)<new Date()){deleteRowBy(SHEETS.SESSIONS,'token',s.token);throw new Error('AUTH: sesi berakhir, login ulang.');}
   var u=findById(SHEETS.USERS,s.userId); if(!u) throw new Error('AUTH: user tidak ditemukan.');
   /* Status aktif diperiksa di SETIAP permintaan, bukan cuma saat login. Dulu
      amil yang dinonaktifkan tetap bisa membaca dan mencatat transaksi lewat
@@ -404,7 +437,7 @@ function authUser(t){ if(!t) throw new Error('AUTH: token kosong, login ulang.')
      oleh akun nonaktif). Aturannya sama dengan login: hanya 'true' yang aktif.
      Karena modul Broadcast, AI, Fundraising, dan Media memeriksa izin lewat
      engine.cekIzin -> authUser, semuanya ikut tertutup dari sini. */
-  if(String(u.aktif)!=='true'){ deleteRowBy(SHEETS.SESSIONS,'token',t); throw new Error('AUTH: akun dinonaktifkan, hubungi admin.'); }
+  if(String(u.aktif)!=='true'){ deleteRowBy(SHEETS.SESSIONS,'token',s.token); throw new Error('AUTH: akun dinonaktifkan, hubungi admin.'); }
   return u; }
 function sanitizeUser(u){ return {id:u.id,username:u.username,nama:u.nama,role:u.role,layanan:String(u.layanan||''),permissions:typeof u.permissions==='string'?JSON.parse(u.permissions||'{}'):(u.permissions||{})}; }
 function can(u,m,a){
@@ -432,7 +465,26 @@ function audit(id,un,ak,d,opt){
 
 /* ===== SESI ===== */
 function apiMe(t){ return sanitizeUser(authUser(t)); }
-function apiBootstrap(t){ var u=authUser(t); return {user:sanitizeUser(u),settings:getAllSettings(),webAppUrl:getWebAppUrl()}; }
+/* Kunci Settings yang hanya boleh diubah sistem lewat jalurnya sendiri:
+   penguncian login (lg_*), token dan saklar dashboard publik, dan foto
+   pengguna (uf_*, diubah lewat apiUpdateMyProfile oleh pemiliknya). Dulu
+   apiSaveSettings menerima semuanya, jadi pemegang izin Pengaturan bisa
+   membuka kunci login orang, mengganti token publik, atau foto orang lain. */
+function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || k === 'publicToken' || k === 'publicEnabled'; }
+/* Settings yang boleh dikirim ke peramban. Catatan penguncian login tidak
+   pernah dikirim; token publik hanya ke pemegang izin lihat Pengaturan (dan
+   lewat apiGetPublicLinkInfo). Dulu apiBootstrap mengirim semuanya ke setiap
+   pengguna yang login. */
+function _settingsAman(semua, bolehToken){
+  var o = {};
+  Object.keys(semua || {}).forEach(function(k){
+    if (/^lg_/.test(k)) return;
+    if (!bolehToken && k === 'publicToken') return;
+    o[k] = semua[k];
+  });
+  return o;
+}
+function apiBootstrap(t){ var u=authUser(t); return {user:sanitizeUser(u),settings:_settingsAman(getAllSettings(), false),webAppUrl:getWebAppUrl()}; }
 function apiGetPermissionMeta(t){ authUser(t); return {modules:MODULES, actions:ACTIONS, label:MODUL_LABEL, ket:MODUL_KET, aksi:MODUL_AKSI}; }
 
 /* ===== PENGHIMPUNAN ===== */
@@ -725,7 +777,8 @@ function apiDeleteUser(t,id){ var a=_requirePerm(t,'users','delete'); var tg=fin
    kalau sandi diganti karena dicurigai bocor, pemegang sesi lama ikut keluar. */
 function _matikanSesiLain(userId, kecualiToken){
   (readAll(SHEETS.SESSIONS) || []).forEach(function(s){
-    if (String(s.userId) === String(userId) && s.token !== kecualiToken) deleteRowBy(SHEETS.SESSIONS, 'token', s.token);
+    var dikecualikan = kecualiToken && (s.token === kecualiToken || s.token === _hashSesi(kecualiToken));
+    if (String(s.userId) === String(userId) && !dikecualikan) deleteRowBy(SHEETS.SESSIONS, 'token', s.token);
   });
 }
 function apiChangeMyPassword(t,o,n){ var u=authUser(t); if(hashPassword(o,u.salt)!==u.passwordHash) throw new Error('Password lama salah'); _periksaSandi(n); var s=makeId(); updateRowById(SHEETS.USERS,u.id,{salt:s,passwordHash:hashPassword(n,s)}); _matikanSesiLain(u.id, t); audit(u.id,u.username,'ganti_sandi','',{modul:'sesi',ringkas:'sesi lain dimatikan'}); return {ok:true}; }
@@ -741,17 +794,24 @@ function apiUpdateMyProfile(t,d){
 }
 
 /* ===== SETTINGS ===== */
-function apiGetSettings(t){ _requirePerm(t,'settings','view'); return getAllSettings(); }
+function apiGetSettings(t){ _requirePerm(t,'settings','view'); return _settingsAman(getAllSettings(), true); }
 function apiSaveSettings(t,d){
   var u=_requirePerm(t,'settings','edit');
+  d = d || {};
+  var terlarang = Object.keys(d).filter(_kunciSistem);
+  if (terlarang.length) throw new Error('IZIN: pengaturan ' + terlarang.join(', ') + ' hanya diubah oleh sistem lewat menunya sendiri.');
   var lama=getAllSettings();
   Object.keys(d).forEach(function(k){setSetting(k,d[k]);});
   audit(u.id,u.username,'edit_settings',Object.keys(d).join(', '),
     {modul:'settings',ringkas:ringkasPerubahan(lama,d)});
-  return getAllSettings();
+  return _settingsAman(getAllSettings(), true);
 }
-function apiGeneratePublicLink(t){ _requirePerm(t,'dashboard','view'); var x=Utilities.getUuid().replace(/-/g,''); setSetting('publicToken',x); setSetting('publicEnabled','true'); return {token:x,url:getWebAppUrl()+'?page=public&token='+x}; }
-function apiDisablePublicLink(t){ _requirePerm(t,'dashboard','view'); setSetting('publicEnabled','false'); return {ok:true}; }
+/* Menyalakan, membuat ulang, dan mematikan tautan publik mengubah apa yang
+   bisa dilihat orang luar, jadi butuh izin ubah Pengaturan. Dulu izin lihat
+   Dashboard saja sudah cukup (tools/test_keamanan_lanjutan.js bagian A).
+   Melihat tautannya untuk dibagikan tetap cukup dengan izin Dashboard. */
+function apiGeneratePublicLink(t){ _requirePerm(t,'settings','edit'); var x=Utilities.getUuid().replace(/-/g,''); setSetting('publicToken',x); setSetting('publicEnabled','true'); return {token:x,url:getWebAppUrl()+'?page=public&token='+x}; }
+function apiDisablePublicLink(t){ _requirePerm(t,'settings','edit'); setSetting('publicEnabled','false'); return {ok:true}; }
 function apiGetPublicLinkInfo(t){ _requirePerm(t,'dashboard','view'); var x=getSetting('publicToken')||''; return {enabled:getSetting('publicEnabled')==='true',token:x,url:x?(getWebAppUrl()+'?page=public&token='+x):''}; }
 /* ===== DASHBOARD ===== */
 function getBankGroupName(name) {
@@ -2665,6 +2725,66 @@ function apiBroadcastReport(t,start,end){
     settings: getAllSettings()
   };
 }
+/* ===== IMPOR LEWAT URL: JANGAN MENJANGKAU JARINGAN INTERNAL =====
+   Server dulu mau mengambil alamat apa saja atas permintaan pengguna yang
+   login, termasuk localhost, jaringan privat, dan 169.254.169.254 (alamat
+   metadata cloud yang di banyak penyedia memberi kredensial server). Itu
+   namanya SSRF. Uji tools/test_keamanan_lanjutan.js bagian C membuktikan
+   server benar-benar mencoba menghubungi alamat-alamat itu.
+   Aturannya: hanya https, nama host tidak boleh localhost atau berujung
+   .local/.internal, dan SEMUA alamat IP hasil DNS-nya harus publik. Setiap
+   pengalihan (redirect) diperiksa ulang dengan aturan yang sama, karena
+   situs publik bisa saja mengalihkan ke alamat internal. */
+var _BATAS_UNDUH_IMPOR = 20 * 1024 * 1024;
+function _ipPrivat(ip){
+  ip = String(ip || '').toLowerCase().replace(/^\[|\]$/g, '');
+  var m4 = ip.match(/^(?:::ffff:)?(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m4) {
+    var a = +m4[1], b = +m4[2];
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  if (ip.indexOf(':') >= 0) {
+    if (ip === '::' || ip === '::1') return true;
+    if (/^::ffff:/.test(ip)) return true;                 /* bentuk hex IPv4-dalam-IPv6 */
+    if (/^f[cd]/.test(ip) || /^fe[89ab]/.test(ip)) return true;
+    return false;
+  }
+  return false;
+}
+async function _periksaUrlImpor(alamat){
+  var u;
+  try { u = new URL(String(alamat)); } catch (e) { throw new Error('URL impor tidak dikenali.'); }
+  if (u.protocol !== 'https:') throw new Error('URL impor tidak diizinkan: hanya alamat https yang boleh dipakai.');
+  var host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || /\.(localhost|local|internal)$/.test(host)) throw new Error('URL impor tidak diizinkan: alamat itu menunjuk ke jaringan internal.');
+  var daftar;
+  if (require('net').isIP(host)) daftar = [host];
+  else {
+    try { daftar = (await require('dns').promises.lookup(host, { all: true })).map(function(x){ return x.address; }); }
+    catch (e) { throw new Error('Alamat ' + host + ' tidak bisa ditemukan.'); }
+  }
+  if (!daftar.length || daftar.some(_ipPrivat)) throw new Error('URL impor tidak diizinkan: alamat itu menunjuk ke jaringan internal.');
+  return u;
+}
+async function _ambilUrlImpor(alamat){
+  var kini = String(alamat);
+  for (var loncat = 0; loncat <= 5; loncat++) {
+    await _periksaUrlImpor(kini);
+    var res = await fetch(kini, { redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      kini = new URL(res.headers.get('location'), kini).toString();
+      continue;
+    }
+    if (!res.ok) throw new Error('Status HTTP ' + res.status);
+    var panjang = Number(res.headers.get('content-length') || 0);
+    if (panjang > _BATAS_UNDUH_IMPOR) throw new Error('Berkas terlalu besar (lebih dari 20 MB).');
+    var buf = await res.arrayBuffer();
+    if (buf.byteLength > _BATAS_UNDUH_IMPOR) throw new Error('Berkas terlalu besar (lebih dari 20 MB).');
+    return buf;
+  }
+  throw new Error('Terlalu banyak pengalihan alamat.');
+}
 function convertGoogleSheetUrl(url) {
   var m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (m) {
@@ -4111,10 +4231,11 @@ async function apiParseImportUrl(t, url, type) {
   var listRek = readAll(SHEETS.REKENING) || [];
   var listLayanan = readAll(SHEETS.LAYANAN) || [];
   
+  /* Diperiksa di LUAR try di bawah, supaya penolakan tidak tersamar menjadi
+     "Gagal membaca Spreadsheet". */
+  await _periksaUrlImpor(downloadUrl);
   try {
-    var res = await fetch(downloadUrl);
-    if (!res.ok) throw new Error('Status HTTP ' + res.status);
-    var buffer = await res.arrayBuffer();
+    var buffer = await _ambilUrlImpor(downloadUrl);
     
     var XLSX = require('xlsx');
     var workbook = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: true });
@@ -6435,8 +6556,12 @@ function apiListAudit(t, opsi){
   };
 }
 
+/* Hanya superadmin. Dulu pemegang izin "hapus log" bisa menghapus seluruh
+   jejak, termasuk jejak perbuatannya sendiri sesaat sebelumnya. Log yang bisa
+   dihapus orang yang diawasinya bukan pengawasan. */
 function apiHapusAudit(t){
-  var u = _requirePerm(t, 'log', 'delete');
+  var u = authUser(t);
+  if (u.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh membersihkan log aktivitas.');
   var sh = getSS().getSheetByName(SHEETS.LOG);
   var jml = sh ? Math.max(sh.getLastRow() - 1, 0) : 0;
   if (sh) { for (var i = 0; i < jml; i++) sh.deleteRow(2); }
@@ -6757,18 +6882,30 @@ function _samarkanNama(nama){
   }).join(' ') || '-';
 }
 
-function apiVerifyKwitansi(noKwitansi){
+/* Nomor kwitansi berurutan (KW/202609/0001, 0002, ...), jadi siapa pun bisa
+   menyisir semuanya. Dulu setiap nomor mengembalikan NOMINAL donasi. Sekarang
+   nominal dan metode hanya dikirim kalau kode acak dari QR kwitansi (10 huruf
+   pertama id-nya) ikut cocok, atau kalau yang dimasukkan id-nya sendiri.
+   Kwitansi lama yang QR-nya belum membawa kode tetap bisa dicek keabsahannya,
+   hanya tanpa nominal. */
+function apiVerifyKwitansi(noKwitansi, kode){
   if(!noKwitansi) return { valid:false, msg:'Nomor kwitansi tidak boleh kosong' };
   var rows = readAll(SHEETS.PENGHIMPUNAN);
   var kw = String(noKwitansi).trim().toUpperCase();
+  var lewatId = false;
   var found = rows.find(function(r){
-    return String(r.noKwitansi || '').trim().toUpperCase() === kw || String(r.id || '').trim() === kw;
+    if (String(r.noKwitansi || '').trim().toUpperCase() === kw) return true;
+    if (String(r.id || '').trim().toUpperCase() === kw) { lewatId = true; return true; }
+    return false;
   });
   if(!found) return { valid:false, msg:'Nomor Kwitansi "' + noKwitansi + '" tidak ditemukan di database' };
+  var kodeAsli = String(found.id || '').slice(0, 10).toLowerCase();
+  var lengkap = lewatId || (kodeAsli.length === 10 && String(kode || '').trim().toLowerCase() === kodeAsli);
   
   var settings = getAllSettings();
-  return {
+  var hasil = {
     valid: true,
+    lengkap: lengkap,
     data: {
       noKwitansi: found.noKwitansi,
       tanggal: found.tanggal,
@@ -6782,6 +6919,8 @@ function apiVerifyKwitansi(noKwitansi){
     },
     lembaga: settings.namaLembaga || 'Lazismu Bantul'
   };
+  if (!lengkap) { delete hasil.data.jumlah; delete hasil.data.metode; }
+  return hasil;
 }
 
 /* ===== API RAPB TARGET & REALISASI ===== */

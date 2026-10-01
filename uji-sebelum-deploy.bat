@@ -39,6 +39,8 @@ call :jalankan "Dialog Edit User"               tools\test_izin_ui.js
 call :jalankan "Nama kantor layanan kembar"     tools\test_kantor_kembar.js
 call :jalankan "Peringatan cadangan"            tools\test_cadangan_peringatan.js
 call :jalankan "Pemulihan cadangan hanya superadmin" tools\test_pulihkan_aman.js
+call :jalankan "Keamanan gelombang kedua"       tools\test_keamanan_lanjutan.js
+call :jalankan "Kunci login dan sesi ter-hash"  tools\test_sesi_kuat.js
 call :jalankan "Fitur Broadcast"                tools\test_blast_fitur.js
 call :jalankan "Pintu pesan masuk WhatsApp"     tools\test_blast_masuk.js
 call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
