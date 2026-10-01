@@ -243,7 +243,9 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
 - **Settings ke peramban disaring** lewat `_settingsAman()`: `lg_*` tidak
   pernah dikirim, `publicToken` hanya ke pemegang izin lihat Pengaturan.
   `apiSaveSettings` menolak kunci milik sistem (`_kunciSistem()`: `lg_*`,
-  `uf_*`, `publicToken`, `publicEnabled`).
+  `uf_*`, `um_*`, `publicToken`, `publicEnabled`, `aliasKantor`).
+  Urutan menu kiri (`um_<id>`) hanya ditulis lewat `apiUpdateMyProfile`
+  `urutanMenu`, berisi daftar id menu berhuruf kecil saja.
 - **Impor lewat URL** hanya https, dan setiap alamat IP hasil DNS harus
   publik, termasuk sesudah pengalihan (`_periksaUrlImpor`, `_ambilUrlImpor`,
   `redirect: 'manual'`). Batas unduhan 20 MB.
@@ -378,6 +380,9 @@ akan melewati dirinya sendiri dengan kode keluar 2 kalau Playwright belum ada
 | `test_agen.js` | sambungan ke gateway WhatsApp, centang, lampiran |
 | `test_impor_jurnal.js` | impor jurnal, tidak ada baris hilang diam-diam |
 | `test_impor_jurnal_bank.js` | unggah Excel di zona WIB tidak memundurkan tanggal, akun "Penerimaan ..." di seksi mana pun (PERSEDIAAN, TRANSAKSI BANK) terhitung penghimpunan |
+| `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan |
+| `test_samakan_rekap.js` | rekap bulanan jadi patokan: angka jurnal sama dengan rekap setelah disamakan, biaya admin bank tidak dilewati, LPJ dan label rekap yang bentrok tidak dipindah diam-diam, Closing menghitung gaji KLL yang dibayar Daerah sebagai Daerah |
+| `test_tampilan_kll_menu.js` | rekap bulanan tidak wajib tetapi ditawarkan di pratinjau, Saldo KLL ringkas (sisa saldo hijau, belum LPJ bertanda merah), urutan menu kiri per akun (tarik atau panah, tersimpan di server, menu teratas jadi halaman pertama) |
 | `test_izin_modul.js` | pemecahan izin Dashboard, akun lama tidak kehilangan menu |
 | `test_izin_ui.js` | dialog Edit User, kolom kiri diam saat kanan digulir |
 | `test_kantor_kembar.js` | nama KLL/ULL bertumpuk, rincian transaksi, pembanding |
@@ -476,6 +481,42 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
 - **KLL dan ULL adalah dua jenis kantor berbeda.** Usulan otomatis tidak boleh
   menyeberangkannya. Penggabungan lintas jenis hanya lewat formulir manual
   yang diminta orang secara tegas.
+- **Milik kantor atau milik Daerah** (ditetapkan pemilik 1 Oktober 2026):
+  keterangan memuat KLL, ULL, KL, UL, atau tulisan lengkap "Kantor Layanan" /
+  "Unit Layanan" berarti milik kantor itu. Selain itu milik Lazismu Daerah,
+  walaupun menyebut nama kecamatan, PCM, atau sekolah. Nama kantornya adalah
+  nama TERDAFTAR yang tertulis paling depan; kata di belakangnya hanya
+  keterangan ("KLL Bambanglipuro Nusa Tenggara Timur" = KLL Bambanglipuro).
+- **Nama kantor yang tidak jelas tidak ditebak.** "ULL Masjid" cocok dengan
+  banyak masjid. Dulu impor diam-diam memilih nama terdaftar yang terpanjang.
+  Sekarang (`_layCocokNama`) awalan hanya diterima kalau kantornya tepat satu;
+  sisanya muncul sebagai temuan di layar impor, orang memilih, dan pilihannya
+  disimpan sebagai nama lain di Settings `aliasKantor` (lihat/hapus di menu
+  Layanan, tombol "Nama lain dari jurnal").
+  Dua pilihan khusus di depan: "Bukan kantor, masuk Daerah" (`__DAERAH__`)
+  dan "Nama sendiri, tidak didaftarkan" (`__SENDIRI__`). Yang kedua untuk
+  mitra seperti Lazismu Kota Yogyakarta: pemilik ingin tetap dihitung di
+  kelompok KLL seperti rekapnya, tetapi tidak didaftarkan di Layanan karena
+  bukan KLL di bawah Lazismu Daerah Bantul (kerja sama program).
+- **Impor Jurnal per Berkas**: satu berkas (Kas atau Bank), satu bulan.
+  `_temuanJurnal` memeriksa sebelum simpan: tanggal di luar bulan, nama kantor
+  tanpa KLL/ULL, kantor tak terdaftar, pilar bertentangan dengan keterangan,
+  rekening jenis dana lain, nominal di bawah Rp 1.000, baris kembar, berkas
+  bank yang hanya berisi sebagian seksi. Tidak ada yang diubah otomatis.
+- **Rekap bulanan pemilik adalah patokan** (1 Oktober 2026). Jurnal tetap
+  diimpor (hanya jurnal yang memuat setor tunai, mutasi, dan biaya admin
+  bank), lalu `apiSamakanRekap` mengusulkan kantor, pilar (dari kolom
+  PROGRAM), sumber dana, tanggal, dan nominal sesuai rekap, menambah yang
+  hanya ada di rekap, dan melewati yang hanya ada di jurnal. Penerimaan
+  dipilah kas/bank lewat kolom MELALUI; penyaluran TIDAK, karena jurnal bank
+  pemilik memuat pengeluaran tunai juga. Rekap September sendiri memuat
+  label yang salah salin ("KL Lazismu Pundong" untuk LPJ yang keterangannya
+  KLL Imogiri), jadi kantor terdaftar yang bentrok tidak pernah dipindah
+  otomatis.
+- **Closing: penyaluran hasil impor jurnal** milik kantor hanya kalau
+  `namaPenerima` diawali KLL/ULL. Keterangan tidak lagi dibaca untuk baris
+  yang punya `section`, supaya "Gaji Amil Kll Pundong" yang dibayar Daerah
+  tetap Daerah seperti di rekap.
 - **Bidang tim media dibekukan saat permohonan diajukan**, supaya memindahkan
   jenis media suatu hari tidak memindahkan ratusan pekerjaan lama secara surut.
 

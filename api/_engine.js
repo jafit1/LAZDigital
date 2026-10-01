@@ -470,7 +470,7 @@ function apiMe(t){ return sanitizeUser(authUser(t)); }
    pengguna (uf_*, diubah lewat apiUpdateMyProfile oleh pemiliknya). Dulu
    apiSaveSettings menerima semuanya, jadi pemegang izin Pengaturan bisa
    membuka kunci login orang, mengganti token publik, atau foto orang lain. */
-function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || k === 'publicToken' || k === 'publicEnabled'; }
+function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || /^um_/.test(k) || k === 'publicToken' || k === 'publicEnabled' || k === 'aliasKantor'; }
 /* Settings yang boleh dikirim ke peramban. Catatan penguncian login tidak
    pernah dikirim; token publik hanya ke pemegang izin lihat Pengaturan (dan
    lewat apiGetPublicLinkInfo). Dulu apiBootstrap mengirim semuanya ke setiap
@@ -790,6 +790,18 @@ function apiUpdateMyProfile(t,d){
   if(d.newPassword){ if(hashPassword(d.oldPassword||'',u.salt)!==u.passwordHash) throw new Error('Password lama salah'); var s=makeId(); up.salt=s; up.passwordHash=hashPassword(d.newPassword,s); }
   if(Object.keys(up).length) updateRowById(SHEETS.USERS,u.id,up);
   if(d.foto!==undefined){ if((''+d.foto).length>48000) throw new Error('Ukuran foto terlalu besar'); setSetting('uf_'+u.id, d.foto); }
+  /* Urutan menu kiri milik akun ini sendiri (permintaan pemilik 1 Oktober
+     2026). Disimpan sebagai Settings um_<id> yang dikirim ke peramban, jadi
+     isinya dijaga ketat: hanya daftar id menu berhuruf kecil. Tanpa saringan
+     ini, siapa pun yang login bisa menitipkan teks sembarang ke Settings yang
+     dibaca peramban semua orang. Daftar kosong = kembali ke urutan bawaan. */
+  if(d.urutanMenu!==undefined){
+    var um=d.urutanMenu;
+    if(!Array.isArray(um) || um.length>40 || um.some(function(x){ return typeof x!=='string' || !/^[a-z]{1,24}$/.test(x); }))
+      throw new Error('Urutan menu tidak sah.');
+    var unik=[]; um.forEach(function(x){ if(unik.indexOf(x)<0) unik.push(x); });
+    setSetting('um_'+u.id, unik.length ? JSON.stringify(unik) : '');
+  }
   return {ok:true};
 }
 
@@ -1989,11 +2001,44 @@ function _layMaster(){
   catch (e) { if (e && (e.perluLembar || /belum dimuat/.test(String(e.message || '')))) throw e; return []; }
 }
 
+/* NAMA LAIN (ALIAS) KANTOR yang dipilih orang di layar impor.
+   "ULL Masjid" cocok dengan belasan kantor berawalan "Masjid", jadi tidak
+   boleh ditebak (lihat _padanLayanan). Tetapi pemilik TAHU yang dimaksud
+   adalah ULL Masjid Baiturrahman Aceh. Pilihannya disimpan sekali di
+   Settings (kunci aliasKantor) supaya impor bulan berikutnya tidak
+   menanyakannya lagi. Kuncinya "tipe nama" yang sudah dinormalkan, isinya
+   { id, tipe, nama } kantor terdaftar. */
+function _aliasKantor(){
+  try {
+    var v = getSetting('aliasKantor');
+    var o = v ? JSON.parse(v) : {};
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch (e) {
+    if (e && (e.perluLembar || /belum dimuat/.test(String(e.message || '')))) throw e;
+    return {};
+  }
+}
+var _ID_DAERAH = '__DAERAH__';
+var _PILIHAN_DAERAH = { id: '__DAERAH__', tipe: '', nama: 'Penghimpunan Daerah', label: 'Bukan kantor, masuk Daerah' };
+/* Mitra yang ikut dihitung di kelompok KLL seperti di rekap pemilik, tetapi
+   sengaja TIDAK didaftarkan di menu Layanan karena bukan KLL di bawah
+   Lazismu Daerah Bantul (Lazismu Kota Yogyakarta, kerja sama program,
+   1 Oktober 2026). Diingat supaya tidak ditanyakan setiap bulan. */
+var _ID_SENDIRI = '__SENDIRI__';
+var _PILIHAN_SENDIRI = { id: '__SENDIRI__', tipe: '', nama: '', label: 'Nama sendiri, tidak didaftarkan (jangan tanya lagi)' };
+function _kunciAlias(tipe, nama){ return String(tipe || '').toLowerCase() + ' ' + _norm(nama); }
+
 function _layFromPrefix(rawText, layList){
-  var m = String(rawText || '').match(/\b(KLL|ULL|KL)\b[\s:.\-]*([^|\n]{2,60})/i);
+  /* Penanda kantor yang diakui pemilik (1 Oktober 2026): KLL, ULL, KL, UL,
+     dan tulisan lengkap "Kantor Layanan" / "Unit Layanan". Dulu "UL" dan
+     tulisan lengkap tidak dikenali, sehingga setoran "Infak Umum Unit
+     Layanan Masjid Baiturrahman Aceh" Rp 8.125.000 di jurnal kas September
+     jatuh ke Penghimpunan Daerah. */
+  var m = String(rawText || '').match(/\b(KLL|ULL|KL|UL|Kantor\s+Layanan|Unit\s+Layanan)\b[\s:.\-]*([^|\n]{2,60})/i);
   if (!m) return null;
-  var tipe = m[1].toUpperCase();
-  if (tipe === 'KL') tipe = 'KLL';
+  var tipe = m[1].toUpperCase().replace(/\s+/g, ' ');
+  if (tipe === 'KL' || tipe === 'KANTOR LAYANAN') tipe = 'KLL';
+  if (tipe === 'UL' || tipe === 'UNIT LAYANAN') tipe = 'ULL';
   var words = String(m[2]).replace(/[^A-Za-z0-9'’. ]/g, ' ').split(/\s+/).filter(function(w){ return w; });
 
   /* DAFTAR LAYANAN MENANG ATAS DAFTAR KATA BERHENTI.
@@ -2028,6 +2073,19 @@ function _layFromPrefix(rawText, layList){
         if (_norm(l.nama) === calon) { pas = l; break; }
       }
       if (pas) return { tipe: tipe, nama: String(pas.nama), terdaftar: true };
+    }
+  }
+
+  /* Belum cocok dengan nama terdaftar: coba nama lain yang pernah dipilih
+     orang. Deretan kata terpanjang dulu, sama seperti di atas. */
+  var alias = _aliasKantor();
+  if (Object.keys(alias).length) {
+    for (var na = Math.min(words.length, 8); na >= 1; na--) {
+      var a = alias[_kunciAlias(tipe, words.slice(0, na).join(' '))];
+      /* Nama yang dipilih orang sebagai "bukan kantor": milik Daerah. */
+      if (a && a.daerah) return null;
+      if (a && a.sendiri) return { tipe: String(a.tipe || tipe).toUpperCase(), nama: String(a.nama), terdaftar: false, sendiri: true };
+      if (a && a.nama) return { tipe: String(a.tipe || tipe).toUpperCase(), nama: String(a.nama), terdaftar: true, alias: true, id: a.id };
     }
   }
 
@@ -3337,17 +3395,9 @@ function extractLayananFromText(text, listLayanan) {
   if (!text) return null;
   var pre = _layFromPrefix(String(text), readAll(SHEETS.LAYANAN) || []);
   if (!pre) return null;
-  var cand = _norm(pre.nama);
-  var hit = null;
-  (listLayanan || []).forEach(function(l){
-    var ln = _norm(l && l.nama), kd = _norm(l && l.kode);
-    if (kd && kd.length >= 2 && (cand === kd || _containsWord(cand, kd))) { if (!hit) hit = l; return; }
-    if (!ln || ln.length < 3) return;
-    if (_containsWord(cand, ln) || cand.indexOf(ln) === 0 || ln.indexOf(cand) === 0) {
-      if (!hit || ln.length > _norm(hit.nama).length) hit = l;
-    }
-  });
-  return hit;
+  /* Aturan cocoknya satu dengan jalur penghimpunan (_layCocokNama), supaya
+     nama yang cocok dengan banyak kantor tidak ditebak di salah satu jalur. */
+  return _layCocokNama(pre, listLayanan);
 }
 
 /* Deteksi pilar dari teks peruntukan. Aturannya disamakan dengan
@@ -3484,6 +3534,32 @@ function jpSeksiBaku(sec){
   if (/^PENYALURAN\s+(INFAK|INFAQ|SEDEKAH)\b/.test(s)) return 'PENYALURAN INFAK UMUM';
   if (/^PENYALURAN\s+PERSEDIAAN\b/.test(s)) return 'PENYALURAN PERSEDIAAN';
   return s;
+}
+
+/* Kantor terdaftar untuk hasil _layFromPrefix. Urutannya: id alias, nama
+   atau kode yang sama persis, lalu nama terdaftar yang menjadi AWAL nama
+   tertulis ("Bambanglipuro Nusa Tenggara Timur" -> Bambanglipuro, ekornya
+   keterangan). Yang sebaliknya, nama tertulis menjadi awal nama terdaftar
+   ("Masjid" untuk "Masjid Baiturrahman Aceh"), hanya diterima kalau
+   kantornya TEPAT SATU. Dulu yang terpanjang yang diambil, jadi "ULL Masjid"
+   diam-diam masuk ke masjid dengan nama terpanjang. */
+function _layCocokNama(pre, listLayanan){
+  if (!pre) return null;
+  var daftar = (listLayanan || []).filter(function(l){
+    return l && l.nama && (!l.tipe || !pre.tipe || String(l.tipe).toUpperCase() === pre.tipe);
+  });
+  if (pre.id) { for (var i = 0; i < daftar.length; i++) if (daftar[i].id === pre.id) return daftar[i]; }
+  var c = jpNorm(pre.nama), hit = null, awalan = [];
+  daftar.forEach(function(l){
+    var ln = jpNorm(l.nama), kd = jpNorm(l.kode);
+    if (kd && kd.length >= 2 && c === kd) { if (!hit) hit = l; return; }
+    if (!ln || ln.length < 3) return;
+    if (c === ln || c.indexOf(ln + ' ') === 0) {
+      if (!hit || ln.length > jpNorm(hit.nama).length) hit = l;
+    } else if (ln.indexOf(c + ' ') === 0) awalan.push(l);
+  });
+  if (hit) return hit;
+  return awalan.length === 1 ? awalan[0] : null;
 }
 
 function jpDanaDariAkun(akunKredit){
@@ -3899,16 +3975,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
              dijalankan atas nama yang SUDAH dibersihkan dari ekor jenis dana. */
           var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(_namaBersih, _layMaster()) : null;
           var _layHit = matchedLay;
-          if (_pre && !_layHit) {
-            var _c = jpNorm(_pre.nama);
-            (listLayanan || []).forEach(function(l){
-              var ln = jpNorm(l.nama), kd = jpNorm(l.kode);
-              if (kd && kd.length >= 2 && _c === kd) { if (!_layHit) _layHit = l; return; }
-              if (ln && ln.length >= 3 && (_c === ln || _c.indexOf(ln) === 0 || ln.indexOf(_c) === 0)) {
-                if (!_layHit || ln.length > jpNorm(_layHit.nama).length) _layHit = l;
-              }
-            });
-          }
+          if (_pre && !_layHit) _layHit = _layCocokNama(_pre, listLayanan);
           if (_layHit) {
             layananId = _layHit.id;
             namaDonatur = (String(_layHit.tipe).toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + _layHit.nama;
@@ -4201,7 +4268,8 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
     umpRows: umpRows,
     transferRows: transferRows,
     dilewati: dilewati,
-    jumlahBarisSumber: rawRows.length
+    jumlahBarisSumber: rawRows.length,
+    seksiDitemukan: (function(){ var o = {}, a = []; Object.keys(seksiBaris).forEach(function(k){ var v = seksiBaris[k]; if (v && !o[v]) { o[v] = 1; a.push(v); } }); return a; })()
   };
 }
 
@@ -4240,7 +4308,7 @@ function markDuplicates(himpunList, salurList) {
   }
 }
 
-async function apiParseImportUrl(t, url, type) {
+async function apiParseImportUrl(t, url, type, opsi) {
   authUser(t);
   if (!url) throw new Error('URL tidak boleh kosong.');
   
@@ -4292,7 +4360,7 @@ async function apiParseImportUrl(t, url, type) {
       
       markDuplicates(himpunValid, salurValid);
       
-      return {
+      return _lengkapiTemuan({
         success: true,
         isJurnal: true,
         himpunValid: himpunValid,
@@ -4310,7 +4378,7 @@ async function apiParseImportUrl(t, url, type) {
         akunTakDikenal: (resultJurnal.umpRows || []).concat(resultJurnal.transferRows || []).filter(function(x){ return x.akunDikenal === false; }).length
           + (resultJurnal.himpunRows || []).concat(resultJurnal.salurRows || []).filter(function(x){ return !x.rekeningId && _tampakRekening(x.bank); }).length,
         totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length + (resultJurnal.umpRows || []).length + (resultJurnal.transferRows || []).length
-      };
+      }, opsi, listLayanan, resultJurnal);
     } else {
       // Check for headerless format
       var isHeaderless = detectHeaderlessTSV(rawRows);
@@ -4722,7 +4790,677 @@ function parseBukuKas(json, listLayanan){
   return { valid: valid, dilewati: dilewati };
 }
 
-async function apiParseImportText(t, text, type) {
+/* ================================================================
+   IMPOR JURNAL PER BERKAS: PEMERIKSAAN SEBELUM DISIMPAN
+   ================================================================
+   Lahir 1 Oktober 2026 dari pembacaan ulang jurnal Kas dan Bank September
+   bersama pemilik. Semua yang di bawah ini dulu baru ketahuan saat rekap
+   bulanan tidak cocok dengan rekap manual, berminggu-minggu sesudah data
+   disimpan:
+     - dua baris bertanggal Juni di sheet September (Rp 2.224.500 hilang
+       dari rekap September);
+     - "Infak Umum Bantul Kota" Rp 28.896.200 yang ternyata setoran KLL
+       Bantul Kota, hanya lupa ditulis "KLL";
+     - "KLL Imoghiri" dan "ULL Masjid" yang melahirkan kantor bayangan;
+     - "Infak Ambulan" Rp 10.000.000 di akun Infak Terikat Pendidikan;
+     - zakat yang masuk ke rekening infak umum;
+     - dua transfer uji Rp 10;
+     - berkas Bank_09 yang ternyata hanya berisi seksi zakat.
+   Tidak ada yang diubah otomatis. Setiap temuan membawa alamat barisnya dan,
+   kalau jelas, usulan perbaikan; layar impor yang menerapkannya setelah
+   orang memilih. Prinsipnya sama dengan pencocokan kantor: kalau ragu,
+   tanyakan, jangan memindahkan uang berdasarkan tebakan. */
+var _NAMA_BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+function _namaBulanIso(b){ var m = String(b || '').match(/^(\d{4})-(\d{2})$/); return m ? _NAMA_BULAN[Number(m[2]) - 1] + ' ' + m[1] : String(b || ''); }
+function _rpTeks(n){ return 'Rp ' + Math.round(Number(n) || 0).toLocaleString('id-ID'); }
+
+/* Pilar yang TEGAS disebut di keterangan. Sengaja sempit: hanya kata yang
+   tidak mungkin berarti lain. "Kekeringan" dan "NTT" tidak dimasukkan
+   karena di jurnal pemilik keduanya sah di akun Kemanusiaan. */
+function _pilarTegasKet(teks){
+  var s = ' ' + String(teks || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  if (/ ambulan\w* | kesehatan | klinik | berobat | donor darah /.test(s)) return 'Kesehatan';
+  if (/ beasiswa | pendidikan /.test(s)) return 'Pendidikan';
+  if (/ qurban | kurban /.test(s)) return 'Qurban';
+  return '';
+}
+
+/* Nama kantor tertulis ("KLL Imoghiri") terdaftar atau tidak. */
+function _pecahNamaKantor(nama){
+  var m = String(nama || '').trim().match(/^(KLL|ULL|KL|UL)\b[\s:.\-]*(.+)$/i);
+  if (!m) return null;
+  var tipe = m[1].toUpperCase(); if (tipe === 'KL') tipe = 'KLL'; if (tipe === 'UL') tipe = 'ULL';
+  return { tipe: tipe, inti: m[2].trim() };
+}
+function _kantorTerdaftar(nama, lay){
+  var p = _pecahNamaKantor(nama);
+  if (!p) return true;
+  var al = _aliasKantor()[_kunciAlias(p.tipe, p.inti)];
+  if (al && (al.sendiri || al.daerah)) return true;
+  var n = _norm(p.inti);
+  return lay.some(function(l){ return _norm(l.nama) === n && (!l.tipe || String(l.tipe).toUpperCase() === p.tipe); });
+}
+
+function _temuanJurnal(res, opsi, listLayanan, hasilJurnal){
+  opsi = opsi || {};
+  var out = [];
+  var kump = { himpun: res.himpunValid || [], salur: res.salurValid || [], ump: res.umpValid || [], transfer: res.transferValid || [] };
+  var lay = (listLayanan || []).filter(function(l){ return l && l.nama; });
+  function info(k, i){
+    var r = kump[k][i];
+    return { kumpulan: k, idx: i, tanggal: r.tanggal, jumlah: Number(r.jumlah != null ? r.jumlah : r.nominal) || 0,
+      nama: k === 'himpun' ? r.namaDonatur : k === 'salur' ? r.namaPenerima : (r.layanan || ''),
+      keterangan: String(r.keterangan || '').slice(0, 100) };
+  }
+  function tambah(o){ o.id = 't' + (out.length + 1); out.push(o); }
+
+  /* 1. Tanggal di luar bulan berkas. */
+  var bulan = /^\d{4}-\d{2}$/.test(String(opsi.bulan || '')) ? String(opsi.bulan) : '';
+  if (bulan) {
+    var akhir = new Date(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)), 0).getDate();
+    Object.keys(kump).forEach(function(k){
+      kump[k].forEach(function(r, i){
+        var tg = String(r.tanggal || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(tg) || tg.slice(0, 7) === bulan) return;
+        var hari = Number(tg.slice(8, 10));
+        var usul = hari >= 1 && hari <= akhir ? bulan + '-' + tg.slice(8, 10) : '';
+        tambah({ jenis: 'luarBulan', tingkat: 'perlu', judul: 'Tanggal di luar ' + _namaBulanIso(bulan),
+          pesan: 'Tercatat ' + tg + ', padahal berkas ini untuk ' + _namaBulanIso(bulan) + '. Kalau dibiarkan, transaksi ini masuk rekap ' + _namaBulanIso(tg.slice(0, 7)) + '.',
+          baris: [info(k, i)], usulan: usul ? { tanggal: usul } : null });
+      });
+    });
+  }
+
+  /* 2. Keterangan yang isinya hanya nama kantor, tanpa KLL/ULL. Aturan
+     pemilik: tanpa KLL/ULL berarti milik Daerah, walaupun menyebut nama
+     kecamatan. Karena itu yang ditandai hanya yang SISA keterangannya,
+     setelah kata jenis dana dibuang, persis sama dengan nama kantor
+     terdaftar. "SMK Muh 1 Bambanglipuro" tidak ditandai. */
+  if (lay.length) {
+    kump.himpun.forEach(function(r, i){
+      if (r.layananId || /KLL|ULL/.test(String(r.tipeDonatur || ''))) return;
+      var sisa = _norm(String(r.keterangan || '').replace(/\b(infa[kq]|zakat|ma+l|umum|terikat|sedekah|shodaqoh|fitrah|profesi|penghasilan)\b/gi, ' '));
+      if (!sisa) return;
+      var cocok = lay.filter(function(l){ return _norm(l.nama) === sisa; });
+      if (cocok.length !== 1) return;
+      var l = cocok[0], label = _layLabel(l);
+      tambah({ jenis: 'kantorTanpaAwalan', tingkat: 'perlu', judul: 'Nama kantor tanpa KLL/ULL',
+        pesan: 'Keterangan "' + r.keterangan + '" hanya berisi nama ' + label + '. Tanpa tulisan KLL/ULL, transaksi ini masuk Penghimpunan Daerah. Kalau ini setoran ' + label + ', pindahkan.',
+        baris: [info('himpun', i)], usulan: { layananId: l.id, tipe: String(l.tipe || '').toUpperCase(), nama: l.nama, label: label } });
+    });
+  }
+
+  /* 3. Nama kantor yang tidak terdaftar. Satu temuan per nama, karena
+     memilih kantornya sekali berlaku untuk semua barisnya dan diingat
+     untuk impor berikutnya. */
+  if (lay.length) {
+    var grup = {}, urut = [];
+    function catat(nama, k, i){
+      if (!nama || _kantorTerdaftar(nama, lay)) return;
+      var key = _norm(nama);
+      if (!grup[key]) { grup[key] = { nama: String(nama).trim(), baris: [] }; urut.push(key); }
+      grup[key].baris.push(info(k, i));
+    }
+    kump.himpun.forEach(function(r, i){ if (/KLL|ULL/.test(String(r.tipeDonatur || '')) && !r.layananId) catat(r.namaDonatur, 'himpun', i); });
+    kump.salur.forEach(function(r, i){ if (/^(KLL|ULL)\s/i.test(String(r.namaPenerima || ''))) catat(r.namaPenerima, 'salur', i); });
+    kump.ump.forEach(function(r, i){ if (/^(KLL|ULL)\s/i.test(String(r.layanan || ''))) catat(r.layanan, 'ump', i); });
+    urut.forEach(function(key){
+      var gr = grup[key], p = _pecahNamaKantor(gr.nama);
+      var pd = _padanLayanan(gr.nama, lay);
+      var pilihan = [_PILIHAN_DAERAH, _PILIHAN_SENDIRI].concat(lay.filter(function(l){ return !l.tipe || String(l.tipe).toUpperCase() === p.tipe; })
+        .map(function(l){ return { id: l.id, tipe: String(l.tipe || p.tipe).toUpperCase(), nama: l.nama, label: _layLabel(l) }; })
+        .sort(function(a, b){ return a.nama.localeCompare(b.nama); }));
+      var total = gr.baris.reduce(function(a, b){ return a + b.jumlah; }, 0);
+      tambah({ jenis: 'kantorTakTerdaftar', tingkat: 'perlu', judul: 'Kantor "' + gr.nama + '" tidak terdaftar',
+        pesan: gr.baris.length + ' transaksi (' + _rpTeks(total) + ') memakai nama ini. '
+          + (pd ? 'Paling dekat: ' + pd.label + ' (' + pd.cara + ').' : 'Namanya cocok dengan lebih dari satu kantor atau tidak mirip kantor mana pun, jadi tidak ditebak.')
+          + ' Pilihan Anda diingat untuk impor berikutnya.',
+        nama: gr.nama, baris: gr.baris, pilihan: pilihan,
+        usulan: pd ? { layananId: pd.lay.id, tipe: String(pd.lay.tipe || p.tipe).toUpperCase(), nama: pd.lay.nama, label: pd.label } : null });
+    });
+  }
+
+  /* 4. Pilar akun bertentangan dengan keterangan. */
+  kump.himpun.forEach(function(r, i){
+    if (r.subJenis !== 'Infak Terikat' || !r.pilar) return;
+    var kata = _pilarTegasKet(r.keterangan);
+    if (!kata || kata === r.pilar) return;
+    tambah({ jenis: 'pilarTakCocok', tingkat: 'perlu', judul: 'Pilar ' + r.pilar + ', keterangan menyebut ' + kata,
+      pesan: 'Akun kreditnya "' + (r.akunKredit || r.pilar) + '", tetapi keterangannya "' + r.keterangan + '".',
+      baris: [info('himpun', i)], usulan: { pilar: kata } });
+  });
+
+  /* 5. Uang masuk ke rekening atau kas jenis dana lain. Hanya diberitahukan:
+     yang salah bisa jurnalnya, bisa juga memang ditransfer donatur ke
+     rekening yang keliru. */
+  kump.himpun.forEach(function(r, i){
+    if (/bagi hasil/i.test(String(r.subJenis || ''))) return;
+    var lb = String(r.bank || '');
+    var danaRek = /zakat/i.test(lb) ? 'Zakat' : /\bamil\b/i.test(lb) ? 'Amil' : /infa[kq]/i.test(lb) ? 'Infak' : '';
+    if (!danaRek || danaRek === r.jenisDana) return;
+    tambah({ jenis: 'rekeningBedaDana', tingkat: 'info', judul: r.jenisDana + ' masuk ke ' + lb,
+      pesan: 'Jenis dananya ' + r.jenisDana + ', tetapi uangnya tercatat masuk ke ' + lb + '. Periksa apakah donatur salah rekening atau jurnalnya yang keliru.',
+      baris: [info('himpun', i)], usulan: null });
+  });
+
+  /* 6. Nominal sangat kecil, biasanya transfer uji. */
+  ['himpun', 'salur'].forEach(function(k){
+    kump[k].forEach(function(r, i){
+      var n = Number(r.jumlah) || 0;
+      if (n > 0 && n < 1000) tambah({ jenis: 'nominalKecil', tingkat: 'info', judul: 'Nominal sangat kecil (' + _rpTeks(n) + ')',
+        pesan: 'Biasanya transfer uji coba. Lewati kalau memang bukan donasi.', baris: [info(k, i)], usulan: { lewati: true } });
+    });
+  });
+
+  /* 7. Baris kembar di dalam berkas yang sama. */
+  ['himpun', 'salur'].forEach(function(k){
+    var g = {}, u = [];
+    kump[k].forEach(function(r, i){
+      var key = [r.tanggal, Math.round(Number(r.jumlah) || 0), _norm(r.keterangan), k === 'himpun' ? r.akunKredit : r.program].join('|');
+      if (!g[key]) { g[key] = []; u.push(key); }
+      g[key].push(i);
+    });
+    u.forEach(function(key){
+      if (g[key].length < 2) return;
+      var b = g[key].map(function(i){ return info(k, i); });
+      tambah({ jenis: 'dobelDalamBerkas', tingkat: 'info', judul: g[key].length + ' baris kembar (' + _rpTeks(b[0].jumlah) + ')',
+        pesan: 'Tanggal, nominal, dan keterangannya sama persis. Bisa memang beberapa donasi, bisa juga tercatat dua kali. Cocokkan dengan bukti.',
+        baris: b, usulan: { lewatiKecualiPertama: true } });
+    });
+  });
+
+  /* 8. Kelengkapan dan jenis berkas. */
+  var seksi = (hasilJurnal && hasilJurnal.seksiDitemukan) || [];
+  var nH = kump.himpun.length, nKas = kump.himpun.filter(function(r){ return /tunai|cash/i.test(String(r.metode || '')); }).length;
+  if (opsi.jenis === 'bank') {
+    if (!kump.salur.length && !kump.ump.length && seksi.length) {
+      tambah({ jenis: 'berkasTakLengkap', tingkat: 'perlu', judul: 'Berkas bank tampak tidak lengkap',
+        pesan: 'Berkas ini hanya berisi seksi ' + seksi.join(', ') + '. Tidak ada penyaluran, uang muka, maupun penerimaan lain. Kalau ini potongan jurnal, impor juga sisanya dari berkas lengkapnya.',
+        baris: [], usulan: null });
+    }
+    if (nH >= 4 && nKas > nH / 2) tambah({ jenis: 'jenisBerkas', tingkat: 'perlu', judul: 'Isinya tampak jurnal kas',
+      pesan: nKas + ' dari ' + nH + ' penerimaan tercatat tunai, padahal yang dipilih Jurnal Bank. Periksa berkasnya.', baris: [], usulan: null });
+  } else if (opsi.jenis === 'kas') {
+    if (nH >= 4 && nKas < nH / 2) tambah({ jenis: 'jenisBerkas', tingkat: 'perlu', judul: 'Isinya tampak jurnal bank',
+      pesan: (nH - nKas) + ' dari ' + nH + ' penerimaan tercatat lewat bank, padahal yang dipilih Jurnal Kas. Periksa berkasnya.', baris: [], usulan: null });
+  }
+  return out;
+}
+
+function _lengkapiTemuan(hasil, opsi, listLayanan, hasilJurnal){
+  try {
+    hasil.temuan = _temuanJurnal(hasil, opsi, listLayanan, hasilJurnal);
+  } catch (e) {
+    if (e && (e.perluLembar || /belum dimuat/.test(String(e.message || '')))) throw e;
+    hasil.temuan = [];
+    hasil.temuanGalat = String(e && e.message || e);
+  }
+  hasil.seksiDitemukan = (hasilJurnal && hasilJurnal.seksiDitemukan) || [];
+  hasil.opsiBerkas = opsi || null;
+  return hasil;
+}
+
+/* Nama lain kantor: dipilih orang di layar impor, diingat untuk impor
+   berikutnya. Butuh izin ubah Layanan, karena efeknya sama dengan
+   menggabungkan nama kantor. Lintas jenis (KLL ke ULL) ditolak: aturan
+   rumah ini, penggabungan lintas jenis hanya lewat formulir manual. */
+function apiSimpanAliasKantor(t, nama, layananId){
+  var u = _requirePerm(t, 'layanan', 'edit');
+  var p = _pecahNamaKantor(nama);
+  if (!p || !p.inti) throw new Error('Nama harus diawali KLL atau ULL, misalnya "ULL Masjid".');
+  if (layananId === _ID_SENDIRI) {
+    var as = _aliasKantor(), tws = p.tipe + ' ' + p.inti;
+    as[_kunciAlias(p.tipe, p.inti)] = { sendiri: true, tipe: p.tipe, nama: p.inti, tertulis: tws, oleh: u.username, waktu: new Date().toISOString() };
+    setSetting('aliasKantor', JSON.stringify(as));
+    audit(u.id, u.username, 'alias_kantor', tws + ' -> nama sendiri', { modul: 'layanan', ringkas: '"' + tws + '" dihitung di kelompok ' + p.tipe + ' tanpa didaftarkan' });
+    return { ok: true, tertulis: tws, label: tws };
+  }
+  if (layananId === _ID_DAERAH) {
+    var al = _aliasKantor(), tw = p.tipe + ' ' + p.inti;
+    al[_kunciAlias(p.tipe, p.inti)] = { daerah: true, tipe: p.tipe, nama: LAYANAN_DAERAH, tertulis: tw, oleh: u.username, waktu: new Date().toISOString() };
+    setSetting('aliasKantor', JSON.stringify(al));
+    audit(u.id, u.username, 'alias_kantor', tw + ' -> Daerah', { modul: 'layanan', ringkas: '"' + tw + '" dibaca sebagai milik Daerah, bukan kantor' });
+    return { ok: true, tertulis: tw, label: 'Daerah' };
+  }
+  var l = findById(SHEETS.LAYANAN, layananId);
+  if (!l) throw new Error('Kantor tujuan tidak ditemukan di daftar Layanan.');
+  var lt = String(l.tipe || '').toUpperCase() || p.tipe;
+  if (lt !== p.tipe) throw new Error('"' + nama + '" adalah ' + p.tipe + ', tidak bisa diarahkan ke ' + lt + ' ' + l.nama + '.');
+  var alias = _aliasKantor();
+  var tertulis = p.tipe + ' ' + p.inti;
+  alias[_kunciAlias(p.tipe, p.inti)] = { id: l.id, tipe: lt, nama: l.nama, tertulis: tertulis, oleh: u.username, waktu: new Date().toISOString() };
+  setSetting('aliasKantor', JSON.stringify(alias));
+  audit(u.id, u.username, 'alias_kantor', tertulis + ' -> ' + lt + ' ' + l.nama, { modul: 'layanan', ringkas: '"' + tertulis + '" dibaca sebagai ' + lt + ' ' + l.nama });
+  return { ok: true, tertulis: tertulis, label: lt + ' ' + l.nama };
+}
+function apiDaftarAliasKantor(t){
+  _requirePerm(t, 'layanan', 'view');
+  var a = _aliasKantor();
+  return Object.keys(a).map(function(k){ var x = a[k]; return { tertulis: x.tertulis || k, id: x.daerah ? _ID_DAERAH : x.sendiri ? _ID_SENDIRI : x.id, daerah: !!x.daerah, sendiri: !!x.sendiri, tipe: x.daerah ? '' : x.tipe, nama: x.nama, oleh: x.oleh || '', waktu: x.waktu || '' }; })
+    .sort(function(x, y){ return String(x.tertulis).localeCompare(String(y.tertulis)); });
+}
+function apiHapusAliasKantor(t, nama){
+  var u = _requirePerm(t, 'layanan', 'edit');
+  var p = _pecahNamaKantor(nama);
+  if (!p) throw new Error('Nama tidak dikenal.');
+  var a = _aliasKantor(), k = _kunciAlias(p.tipe, p.inti);
+  if (!a[k]) return { ok: true, ada: false };
+  delete a[k];
+  setSetting('aliasKantor', JSON.stringify(a));
+  audit(u.id, u.username, 'hapus_alias_kantor', p.tipe + ' ' + p.inti, { modul: 'layanan' });
+  return { ok: true, ada: true };
+}
+
+/* ================================================================
+   SAMAKAN DENGAN REKAP BULANAN
+   ================================================================
+   Pemilik membuat rekap bulanan sendiri (sheet HIMPUN, UMP, PENYALURAN
+   DAERAH, pengeluaran amil, SALUR KLL) dan memutuskan (1 Oktober 2026):
+   REKAP JADI PATOKAN, tetapi jurnal tetap diimpor, karena hanya jurnal yang
+   memuat setor tunai, mutasi antar rekening, dan biaya admin bank, yang
+   menjaga saldo kas dan rekening tetap benar.
+
+   Rekap September dicocokkan baris per baris dengan jurnal: 627 dari 633
+   penerimaan cocok persis. Sisanya yang membuat Daerah web Rp 167.737.430
+   padahal rekap Rp 147.882.126. Fungsi ini menghasilkan temuan berusulan,
+   tidak mengubah apa pun sendiri; layar impor yang menerapkannya.
+
+   Prinsip yang tidak boleh dilanggar:
+   - LPJ uang muka KLL yang di rekap dicatat Daerah TIDAK dipindah
+     otomatis: memindahkannya mengubah sisa "belum LPJ" kantor itu. Ditanyakan
+     (rekapRancu).
+   - Nama kantor rekap yang tidak terdaftar tidak ditebak. Kalau jurnal
+     sudah menunjuk kantor terdaftar, jurnal yang dipakai.
+   - Biaya admin bank tidak pernah diusulkan dilewati walau tidak ada di
+     rekap: ia menggerakkan saldo rekening. */
+function _rkTeks(v){ return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+function _rkKas(melalui){
+  var s = _rkTeks(melalui);
+  if (!s) return false;
+  if (/\d{6,}/.test(s)) return false;
+  return !/\b(bank|bsi|bca|bpd|bni|bri|muamalat|mandiri|bdw|btn|cimb|qris|transfer)\b/i.test(s);
+}
+function _rkCocokBerkas(melalui, jenis){
+  if (jenis === 'kas') return _rkKas(melalui);
+  if (jenis === 'bank') return !_rkKas(melalui);
+  return true;
+}
+/* Kepala kolom dicari, bukan nama sheet: nama sheet rekap tidak tetap
+   ("Sheet5" untuk pengeluaran amil). */
+function _bacaRekap(sheets){
+  var out = { himpun: [], salur: [], ump: [] };
+  (sheets || []).forEach(function(sh){
+    var rows = (sh && sh.rows) || [];
+    for (var h = 0; h < Math.min(rows.length, 6); h++) {
+      var H = (rows[h] || []).map(function(c){ return _rkTeks(c).toUpperCase(); });
+      var kol = function(re){ for (var i = 0; i < H.length; i++) if (re.test(H[i])) return i; return -1; };
+      var cT = kol(/^(TANGGAL|TGL)$/), cJ = kol(/^JUMLAH$/);
+      if (cT < 0 || cJ < 0) continue;
+      var jenis = '', c = {};
+      if (kol(/^PROGRAM PENERIMAAN/) >= 0 && kol(/^NAMA$/) >= 0) {
+        jenis = 'himpun'; c = { nama: kol(/^NAMA$/), ket: kol(/^KETERANGAN/), prog: kol(/^PROGRAM PENERIMAAN/), via: kol(/^MELALUI/), kasir: kol(/^KASIR/) };
+      } else if (kol(/^AKUN DEBET/) >= 0 && kol(/^AKUN KREDIT/) >= 0) {
+        jenis = 'ump'; c = { ket: kol(/^URAIAN/), via: kol(/^AKUN KREDIT/) };
+      } else if (kol(/^NAMA PENERIMA/) >= 0) {
+        jenis = 'salur'; c = { nama: kol(/^NAMA PENERIMA/), prog: kol(/^PROGRAM PENYALURAN/), ket: kol(/^KET/), via: kol(/^MELALUI/) };
+      } else if (kol(/PENGELUARAN AMIL|AKUN PENGELUARAN/) >= 0) {
+        jenis = 'amil'; c = { ket: kol(/^URAIAN/), prog: kol(/^AKUN PENGELUARAN/), via: kol(/^MELALUI/) };
+      }
+      if (!jenis) continue;
+      var ambil = function(r, i){ return i >= 0 ? _rkTeks(r[i]) : ''; };
+      for (var i = h + 1; i < rows.length; i++) {
+        var r = rows[i] || [];
+        /* Baris total di bawah tabel ("", "", "", "", 1120940787) tidak
+           bertanggal. parseImportDate("") mengembalikan tanggal HARI INI,
+           jadi tanpa penjaga ini total satu bulan ikut terbaca sebagai satu
+           transaksi baru bernilai sebesar seluruh rekap. */
+        if (!_rkTeks(r[cT])) continue;
+        var tgl = parseImportDate(r[cT]);
+        var jml = parseAmount(r[cJ]);
+        if (!tgl || !(jml > 0)) continue;
+        var o = { sheet: String(sh.nama || ''), baris: i + 1, tanggal: tgl, jumlah: jml,
+                  nama: ambil(r, c.nama), ket: ambil(r, c.ket), prog: ambil(r, c.prog), via: ambil(r, c.via), kasir: ambil(r, c.kasir) };
+        if (jenis === 'himpun') out.himpun.push(o);
+        else if (jenis === 'ump') out.ump.push(o);
+        else { o.sumber = jenis === 'amil' ? 'AMIL' : (/^(KLL|ULL|KL|UL|Kantor\s+Layanan|Unit\s+Layanan)\b/i.test(o.nama) ? 'KANTOR' : 'DAERAH'); out.salur.push(o); }
+      }
+      break;
+    }
+  });
+  return out;
+}
+/* "KL Lazismu Sewon Selatam" -> { tipe:'KLL', inti:'Sewon Selatam', lay: KLL Sewon Selatan }.
+   null kalau namanya bukan nama kantor (milik Daerah). */
+function _rkKantor(nama, lay){
+  var m = _rkTeks(nama).match(/^(KLL|ULL|KL|UL|Kantor\s+Layanan|Unit\s+Layanan)\b[\s:.\-]*(.*)$/i);
+  if (!m) return null;
+  var tipe = /^(ULL|UL|Unit)/i.test(m[1]) ? 'ULL' : 'KLL';
+  var inti = m[2].replace(/^Lazismu\s+/i, '').trim();
+  if (!inti) return null;
+  /* Rekap menulis "KL Lazismu Kota Yogyakarta" untuk kiriman dari Lazismu
+     lain; pemilik memutuskan itu milik Daerah (1 Oktober 2026). Pilihan
+     "bukan kantor" disimpan sebagai nama lain bertanda daerah. */
+  var al = _aliasKantor(), kata = inti.split(/\s+/);
+  for (var na = kata.length; na >= 1; na--) { var ax = al[_kunciAlias(tipe, kata.slice(0, na).join(' '))]; if (ax && ax.daerah) return null; if (ax) break; }
+  var pre = _layFromPrefix(tipe + ' ' + inti, lay);
+  var l = pre ? _layCocokNama(pre, lay) : null;
+  if (l && _norm(l.nama) !== _norm(inti) && !pre.terdaftar && !pre.alias) l = null;
+  if (!l) { var pd = _padanLayanan(tipe + ' ' + inti, lay); if (pd && pd.cara !== 'nama terpotong') l = pd.lay; }
+  return { tipe: tipe, inti: inti, lay: l || null };
+}
+/* Jenis dana dan pilar dari kolom PROGRAM rekap. Kalau programnya tidak
+   jelas, null: jurnal yang dipakai. */
+function _rkDana(ket, prog){
+  var p = _norm(prog), k = _norm(ket);
+  if (/zakat/.test(p) || (!p && /^zakat/.test(k))) return { jenisDana: 'Zakat' };
+  if (/tanpa pembatasan/.test(p)) return { jenisDana: 'Infak', subJenis: 'Infak Umum', pilar: '' };
+  var pil = /bencana|\baid\b|kemanusiaan/.test(p) ? 'Kemanusiaan'
+    : /lingkungan/.test(p) ? 'Lingkungan'
+    : /kesehatan|ambulan|clinic|klinik/.test(p) ? 'Kesehatan'
+    : /pendidikan|sekolah|filant|beasiswa/.test(p) ? 'Pendidikan'
+    : /sosial dakwah|masjid|dakwah/.test(p) ? 'Sosial Dakwah'
+    : /ekonomi/.test(p) ? 'Ekonomi'
+    : /qurban|kurban/.test(p) ? 'Qurban' : '';
+  if (pil) return { jenisDana: 'Infak', subJenis: 'Infak Terikat', pilar: pil };
+  if (!p && /^infa[kq] umum/.test(k)) return { jenisDana: 'Infak', subJenis: 'Infak Umum', pilar: '' };
+  return null;
+}
+var _RK_KATA_UMUM = { kl:1, kll:1, ull:1, ul:1, lazismu:1, infak:1, infaq:1, terikat:1, umum:1, zakat:1, mal:1, maal:1, unit:1, layanan:1, kantor:1, dan:1, untuk:1, dari:1 };
+function _rkKata(s){ return _norm(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(function(w){ return w && !_RK_KATA_UMUM[w]; }); }
+/* Seberapa banyak kata nama rekap muncul di teks jurnal (0..1). */
+function _rkMirip(nama, teks){
+  var a = _rkKata(nama); if (!a.length) return 0.5;
+  var b = ' ' + _rkKata(teks).join(' ') + ' ';
+  var n = a.filter(function(w){ return b.indexOf(' ' + w + ' ') >= 0 || (w.length >= 5 && b.indexOf(' ' + w.slice(0, w.length - 1)) >= 0); }).length;
+  return n / a.length;
+}
+function _rkHari(a, b){ return Math.abs((new Date(a) - new Date(b)) / 864e5); }
+/* Mencocokkan baris rekap R dengan baris jurnal J. Mengembalikan pasangan
+   { r, j:[indeks jurnal], cara } dan sisa di kedua sisi. */
+function _rkCocokkan(R, J, teksJ, opsi){
+  opsi = opsi || {};
+  var pakai = {}, pasang = [], sisaR = [];
+  var cari = function(r, syarat){
+    var terbaik = -1, skor = -1;
+    J.forEach(function(j, i){
+      if (pakai[i] || !syarat(j, i)) return;
+      var m = _rkMirip(r.nama || r.ket, teksJ(j)) - _rkHari(r.tanggal, j.tanggal) * 0.01;
+      if (m > skor) { skor = m; terbaik = i; }
+    });
+    return terbaik;
+  };
+  var jml = function(j){ return Number(j.jumlah != null ? j.jumlah : j.nominal) || 0; };
+  var lapis = [
+    function(r){ return cari(r, function(j){ return j.tanggal === r.tanggal && Math.abs(jml(j) - r.jumlah) < 1; }); },
+    function(r){ return cari(r, function(j){ return Math.abs(jml(j) - r.jumlah) < 1 && _rkHari(j.tanggal, r.tanggal) <= (opsi.hari || 4); }); },
+    function(r){ return cari(r, function(j){ return j.tanggal === r.tanggal && Math.abs(jml(j) - r.jumlah) <= Math.max(5000, r.jumlah * 0.002) && _rkMirip(r.nama || r.ket, teksJ(j)) >= 0.5; }); }
+  ];
+  var antre = R.slice();
+  lapis.forEach(function(f, li){
+    var lagi = [];
+    antre.forEach(function(r){ var i = f(r); if (i >= 0) { pakai[i] = 1; pasang.push({ r: r, j: [i], cara: li }); } else lagi.push(r); });
+    antre = lagi;
+  });
+  /* Satu baris rekap = gabungan beberapa baris jurnal pada tanggal yang sama
+     untuk nama yang sama (setoran kas KLL Bantul Kota di rekap, lima baris
+     per peruntukan di jurnal). */
+  antre.forEach(function(r){
+    var calon = [];
+    J.forEach(function(j, i){ if (!pakai[i] && j.tanggal === r.tanggal && _rkMirip(r.nama || r.ket, teksJ(j)) >= 0.99) calon.push(i); });
+    var total = calon.reduce(function(a, i){ return a + jml(J[i]); }, 0);
+    var pilih = null;
+    if (calon.length >= 2 && Math.abs(total - r.jumlah) < 1) pilih = calon;
+    else if (calon.length >= 2 && calon.length <= 16) {
+      for (var mask = 1; mask < (1 << calon.length) && !pilih; mask++) {
+        var t = 0, a = [];
+        for (var b = 0; b < calon.length; b++) if (mask & (1 << b)) { t += jml(J[calon[b]]); a.push(calon[b]); }
+        if (a.length >= 2 && Math.abs(t - r.jumlah) < 1) pilih = a;
+      }
+    }
+    if (pilih) { pilih.forEach(function(i){ pakai[i] = 1; }); pasang.push({ r: r, j: pilih, cara: 3 }); }
+    else sisaR.push(r);
+  });
+  var sisaJ = []; J.forEach(function(j, i){ if (!pakai[i]) sisaJ.push(i); });
+  return { pasang: pasang, sisaR: sisaR, sisaJ: sisaJ };
+}
+
+function _samakanRekap(jurnal, rekap, opsi, listLayanan, listRek){
+  opsi = opsi || {};
+  var lay = (listLayanan || []).filter(function(l){ return l && l.nama; });
+  var H = (jurnal && jurnal.himpun) || [], S = (jurnal && jurnal.salur) || [], U = (jurnal && jurnal.ump) || [];
+  var dalam = function(r){ return !r._lewati && (!opsi.bulan || String(r.tanggal || '').slice(0, 7) === opsi.bulan || true); };
+  var RH = rekap.himpun.filter(function(r){ return _rkCocokBerkas(r.via, opsi.jenis); });
+  /* Penyaluran dan uang muka TIDAK dipilah lewat kolom MELALUI. Jurnal bank
+     pemilik ikut memuat seksi "PENGELUARAN OPERASIONAL VIA KAS" dan LPJ
+     tunai, sedangkan jurnal kas tidak memuat penyaluran sama sekali. Dipilah
+     lewat MELALUI, 297 penyaluran tunai September "hilang" dari berkas bank
+     dan "baru" di berkas kas sekaligus. Jadi: berkas yang tidak memuat
+     penyaluran tidak dibandingkan penyalurannya; berkas yang memuatnya
+     dibandingkan dengan SEMUA penyaluran rekap, dan yang hanya ada di rekap
+     baru ditambahkan kalau jalurnya (kas/bank) sesuai berkas. */
+  var adaSalur = S.some(function(r){ return !r._lewati; }), adaUmp = U.some(function(r){ return !r._lewati; });
+  var RS = adaSalur ? rekap.salur.slice() : [];
+  var RU = adaUmp ? rekap.ump.slice() : [];
+  var out = [], no = 0;
+  var tambah = function(o){ o.id = 'r' + (++no); out.push(o); };
+  var info = function(k, i){
+    var r = (k === 'himpun' ? H : k === 'salur' ? S : U)[i];
+    return { kumpulan: k, idx: i, tanggal: r.tanggal, jumlah: Number(r.jumlah != null ? r.jumlah : r.nominal) || 0,
+      nama: k === 'himpun' ? r.namaDonatur : k === 'salur' ? r.namaPenerima : r.layanan, keterangan: String(r.keterangan || '').slice(0, 100) };
+  };
+  var grup = {};
+  var catat = function(jenis, kunci, judul, pesan, b, ubah, tingkat){
+    var key = jenis + '|' + kunci;
+    if (!grup[key]) { grup[key] = { jenis: jenis, tingkat: tingkat || 'perlu', judul: judul, pesan: pesan, baris: [], usulan: { perBaris: [] } }; }
+    grup[key].baris.push(b);
+    grup[key].usulan.perBaris.push({ kumpulan: b.kumpulan, idx: b.idx, ubah: ubah });
+  };
+  /* Jurnal dan rekap sama-sama menunjuk kantor TERDAFTAR, tetapi berbeda.
+     Rekap September memuat 14 baris LPJ berlabel "KL Lazismu Pundong" yang
+     keterangannya sendiri menulis "KLL Imogiri" dan "KLL Srandakan" (sel
+     nama yang ikut tersalin ke bawah). Mengikuti labelnya berarti
+     memindahkan Rp 49 juta LPJ Imogiri dan Srandakan ke Pundong. Jadi:
+     kalau keterangan rekap sendiri menyebut kantor jurnal, rekapnya yang
+     keliru dan jurnal dipakai (dicatat sebagai catatan). Selain itu
+     ditanyakan, tidak diterapkan otomatis. */
+  var _rkKantorBentrok = function(r, namaJ, labelR, b, ubah){
+    var intiJ = String(namaJ || '').replace(/^(KLL|ULL)\s+/i, '');
+    if (_rkMirip(intiJ, r.ket) >= 0.99) {
+      catat('rekapCatatan', 'bentrok:' + _norm(r.nama) + '>' + _norm(namaJ), 'Rekap menulis "' + r.nama + '", keterangannya ' + namaJ,
+        'Label nama di rekap tidak sama dengan keterangannya sendiri. Jurnal (' + namaJ + ') yang dipakai; betulkan rekapnya.', b, {}, 'info');
+      return;
+    }
+    tambah({ jenis: 'rekapRancu', tingkat: 'perlu', judul: 'Jurnal ' + namaJ + ', rekap ' + labelR,
+      pesan: '"' + (b.keterangan || '') + '" ' + _rpTeks(b.jumlah) + '. Jurnal dan rekap menunjuk kantor terdaftar yang berbeda. Memindahkannya mengubah saldo dan sisa LPJ kedua kantor.',
+      baris: [b], usulan: { perBaris: [{ kumpulan: b.kumpulan, idx: b.idx, ubah: ubah }] } });
+  };
+  var rekLabel = function(via){
+    var d = String(via || '').replace(/\D/g, '').replace(/^0+/, '');
+    var hit = null;
+    if (d.length >= 6) (listRek || []).forEach(function(x){ var n = String(x.nomor || '').replace(/\D/g, '').replace(/^0+/, ''); if (n && n === d) hit = x; });
+    return hit;
+  };
+  var labelDana = function(r){ return r.subJenis === 'Infak Terikat' ? 'Infak Terikat ' + (r.pilar || '(tanpa pilar)') : (r.subJenis || r.jenisDana); };
+  var kantorTak = {};
+
+  /* ---------- PENERIMAAN ---------- */
+  var idxH = []; H.forEach(function(r, i){ if (dalam(r)) idxH.push(i); });
+  var JH = idxH.map(function(i){ return H[i]; });
+  var hH = _rkCocokkan(RH, JH, function(j){ return (j.keterangan || '') + ' ' + (j.namaDonatur || ''); }, { hari: 4 });
+  hH.pasang.forEach(function(p){
+    var r = p.r, iJ = p.j.map(function(x){ return idxH[x]; });
+    var rk = _rkKantor(r.nama, lay);
+    iJ.forEach(function(i){
+      var j = H[i], b = info('himpun', i);
+      var kantorJ = /ULL/.test(String(j.tipeDonatur || '')) ? 'ULL' : /KLL/.test(String(j.tipeDonatur || '')) ? 'KLL' : '';
+      if (!rk && kantorJ) {
+        catat('rekapKantor', 'daerah', 'Rekap mencatat Daerah, jurnal mencatat kantor',
+          'Di rekap nama donaturnya bukan KL/UL, jadi transaksi ini milik Lazismu Daerah.', b,
+          { layananId: '', tipeDonatur: 'Perorangan', namaDonatur: r.nama, fundraising: r.nama });
+      } else if (rk && rk.lay && rk.lay.id !== j.layananId) {
+        var lt = String(rk.lay.tipe || rk.tipe).toUpperCase(), label = lt + ' ' + rk.lay.nama;
+        var ubahK = { layananId: rk.lay.id, tipeDonatur: lt === 'ULL' ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)', namaDonatur: label, fundraising: label };
+        if (j.layananId) _rkKantorBentrok(r, j.namaDonatur, label, b, ubahK);
+        else catat('rekapKantor', rk.lay.id, 'Rekap mencatat ' + label,
+          'Rekap menyebut "' + r.nama + '", jurnal mencatat ' + (kantorJ ? j.namaDonatur : 'Daerah') + '. Disamakan dengan rekap.', b, ubahK);
+      } else if (rk && !rk.lay && !j.layananId) {
+        var nm = rk.tipe + ' ' + rk.inti;
+        catat('rekapKantor', 'tak:' + _norm(nm), 'Rekap mencatat ' + nm,
+          'Rekap menyebut "' + r.nama + '" sebagai kantor, jurnal tanpa KLL/ULL. Kantornya belum terdaftar, jadi pilih di temuan "tidak terdaftar".', b,
+          { layananId: '', tipeDonatur: rk.tipe === 'ULL' ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)', namaDonatur: nm, fundraising: nm });
+        var kk = _norm(nm), alS = _aliasKantor()[_kunciAlias(rk.tipe, rk.inti)];
+        if (alS && alS.sendiri) return;
+        if (!kantorTak[kk]) kantorTak[kk] = { nama: nm, tipe: rk.tipe, baris: [] };
+        kantorTak[kk].baris.push(b);
+      }
+      if (p.j.length === 1) {
+        if (r.tanggal !== j.tanggal) catat('rekapTanggal', 'h', 'Tanggal disamakan dengan rekap', 'Jurnal dan rekap mencatat tanggal berbeda untuk transaksi yang sama.', b, { tanggal: r.tanggal, tglBeda: null }, 'info');
+        if (Math.abs(r.jumlah - Number(j.jumlah)) >= 1) catat('rekapJumlah', 'h' + i, 'Nominal beda: jurnal ' + _rpTeks(j.jumlah) + ', rekap ' + _rpTeks(r.jumlah),
+          '"' + r.nama + '" ' + r.tanggal + '. Disamakan dengan rekap.', b, { jumlah: r.jumlah });
+        var d = _rkDana(r.ket, r.prog);
+        if (d && !(d.jenisDana === 'Zakat' && j.jenisDana === 'Zakat') && !/bagi hasil/i.test(String(j.subJenis || ''))) {
+          var baru = { jenisDana: d.jenisDana, subJenis: d.subJenis || j.subJenis, pilar: d.pilar != null ? d.pilar : j.pilar };
+          if (baru.jenisDana !== j.jenisDana || baru.subJenis !== j.subJenis || (baru.pilar || '') !== (j.pilar || '')) {
+            var dari = labelDana(j), ke = labelDana(baru);
+            catat('rekapDana', dari + '>' + ke, dari + ' menjadi ' + ke, 'Jenis dana dan pilar diambil dari kolom program di rekap.', b, baru);
+          }
+        }
+      }
+    });
+  });
+  hH.sisaJ.forEach(function(x){
+    var i = idxH[x], j = H[i];
+    tambah({ jenis: 'rekapHanyaJurnal', tingkat: 'perlu', judul: 'Tidak ada di rekap: ' + _rpTeks(j.jumlah),
+      pesan: '"' + (j.keterangan || j.namaDonatur) + '" ' + j.tanggal + ' tercatat di jurnal tetapi tidak di rekap. Dilewati supaya sama dengan rekap.',
+      baris: [info('himpun', i)], usulan: { lewati: true } });
+  });
+  hH.sisaR.forEach(function(r){
+    var rk = _rkKantor(r.nama, lay), d = _rkDana(r.ket, r.prog) || { jenisDana: 'Infak', subJenis: 'Infak Umum', pilar: '' };
+    var kas = _rkKas(r.via), rek = kas ? null : rekLabel(r.via);
+    var nama = rk ? (rk.lay ? String(rk.lay.tipe || rk.tipe).toUpperCase() + ' ' + rk.lay.nama : rk.tipe + ' ' + rk.inti) : r.nama;
+    var baris = { tanggal: r.tanggal, jenisDana: d.jenisDana, subJenis: d.subJenis || (d.jenisDana === 'Zakat' ? 'Zakat Mal' : 'Infak Umum'), pilar: d.pilar || '',
+      program: '', namaDonatur: nama, tipeDonatur: rk ? (rk.tipe === 'ULL' ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)') : 'Perorangan',
+      layananId: rk && rk.lay ? rk.lay.id : '', telepon: '', email: '', alamat: '', jumlah: r.jumlah,
+      metode: kas ? 'Cash/Tunai' : 'Transfer Bank', rekeningId: rek ? rek.id : '', bank: rek ? (rek.namaBank + ' - ' + rek.nomor) : (kas ? 'Kas' : r.via),
+      statusBayar: 'Lunas', keterangan: _rkTeks(r.ket + ' ' + r.nama), fundraising: nama, akunKredit: '', dariRekap: true };
+    tambah({ jenis: 'rekapHanyaRekap', tingkat: 'perlu', judul: 'Hanya ada di rekap: ' + _rpTeks(r.jumlah) + ' ' + r.nama,
+      pesan: r.tanggal + ', ' + r.ket + ' (sheet ' + r.sheet + ' baris ' + r.baris + '). Tidak ada di jurnal ' + (opsi.jenis || '') + '. Ditambahkan supaya sama dengan rekap.',
+      baris: [], usulan: { tambah: [{ kumpulan: 'himpun', baris: baris }] } });
+  });
+
+  /* ---------- PENYALURAN ---------- */
+  var admin = function(r){ return /^BIAYA ADMINISTRASI BANK$/i.test(String(r.section || '')) || /administrasi bank/i.test(String(r.program || '')); };
+  var idxS = []; S.forEach(function(r, i){ if (dalam(r) && !admin(r)) idxS.push(i); });
+  var JS = idxS.map(function(i){ return S[i]; });
+  var hS = _rkCocokkan(RS, JS, function(j){ return (j.keterangan || '') + ' ' + (j.namaPenerima || ''); }, { hari: 5 });
+  hS.pasang.forEach(function(p){
+    var r = p.r;
+    p.j.map(function(x){ return idxS[x]; }).forEach(function(i){
+      var j = S[i], b = info('salur', i);
+      var lpj = /^UMP\s+LPJ/i.test(String(j.section || ''));
+      var kantorJ = /^(KLL|ULL)\s/i.test(String(j.namaPenerima || ''));
+      if (r.sumber === 'KANTOR') {
+        var rk = _rkKantor(r.nama, lay);
+        if (rk && rk.lay) {
+          var label = String(rk.lay.tipe || rk.tipe).toUpperCase() + ' ' + rk.lay.nama;
+          var kJ = kantorJ ? _rkKantor(j.namaPenerima, lay) : null;
+          if (_norm(j.namaPenerima) !== _norm(label)) {
+            if (kJ && kJ.lay) _rkKantorBentrok(r, j.namaPenerima, label, b, { namaPenerima: label, fundraising: label });
+            else catat('rekapKantor', 's' + rk.lay.id, 'Rekap mencatat penyaluran ' + label,
+              'Rekap menyebut "' + r.nama + '", jurnal mencatat ' + (j.namaPenerima || 'Daerah') + '.', b, { namaPenerima: label, fundraising: label });
+          }
+        }
+      } else if (r.sumber === 'DAERAH' && kantorJ) {
+        var ubah = { namaPenerima: r.nama || 'Lazismu Daerah Bantul', fundraising: '' };
+        if (lpj) tambah({ jenis: 'rekapRancu', tingkat: 'perlu', judul: 'LPJ ' + j.namaPenerima + ', rekap mencatat Daerah',
+          pesan: '"' + j.keterangan + '" ' + _rpTeks(j.jumlah) + ' ada di seksi LPJ uang muka ' + j.namaPenerima + ', tetapi rekap mencatatnya penyaluran Daerah ke "' + r.nama + '". Kalau ikut rekap, sisa belum-LPJ kantor itu bertambah.',
+          baris: [b], usulan: { perBaris: [{ kumpulan: 'salur', idx: i, ubah: ubah }] } });
+        else catat('rekapKantor', 'sdaerah', 'Rekap mencatat penyaluran Daerah', 'Rekap mencatatnya di penyaluran Daerah.', b, ubah);
+      } else if (r.sumber === 'AMIL' && !lpj && !/amil/i.test(String(j.sumberDana || ''))) {
+        catat('rekapDana', 'amil', 'Sumber dana ' + (j.sumberDana || '-') + ' menjadi Amil',
+          'Rekap mencatatnya sebagai pengeluaran amil ("' + r.prog + '").', b, { sumberDana: 'Amil', ashnaf: 'Amil' });
+      }
+      if (p.j.length === 1) {
+        if (r.tanggal !== j.tanggal) catat('rekapTanggal', 's', 'Tanggal disamakan dengan rekap', 'Jurnal dan rekap mencatat tanggal berbeda untuk transaksi yang sama.', b, { tanggal: r.tanggal, tglBeda: null }, 'info');
+        if (Math.abs(r.jumlah - Number(j.jumlah)) >= 1) catat('rekapJumlah', 's' + i, 'Nominal beda: jurnal ' + _rpTeks(j.jumlah) + ', rekap ' + _rpTeks(r.jumlah),
+          '"' + (r.ket || r.nama) + '" ' + r.tanggal + '. Disamakan dengan rekap.', b, { jumlah: r.jumlah });
+      }
+    });
+  });
+  hS.sisaJ.forEach(function(x){
+    var i = idxS[x], j = S[i];
+    tambah({ jenis: 'rekapHanyaJurnal', tingkat: 'perlu', judul: 'Penyaluran tidak ada di rekap: ' + _rpTeks(j.jumlah),
+      pesan: '"' + j.keterangan + '" ' + j.tanggal + '. Dilewati supaya sama dengan rekap.', baris: [info('salur', i)], usulan: { lewati: true } });
+  });
+  var salurLain = hS.sisaR.filter(function(r){ return !_rkCocokBerkas(r.via, opsi.jenis); });
+  if (salurLain.length) tambah({ jenis: 'rekapCatatan', tingkat: 'info', judul: salurLain.length + ' penyaluran rekap tidak ditemukan di berkas ini',
+    pesan: 'Jalurnya ' + (opsi.jenis === 'kas' ? 'bank' : 'kas') + ', jadi tidak ditambahkan dari berkas ini (' + _rpTeks(salurLain.reduce(function(a, r){ return a + r.jumlah; }, 0)) + '). Periksa saat mengimpor berkas yang memuatnya.',
+    baris: [], usulan: null });
+  hS.sisaR.filter(function(r){ return _rkCocokBerkas(r.via, opsi.jenis); }).forEach(function(r){
+    var kas = _rkKas(r.via), rek = kas ? null : rekLabel(r.via);
+    var rk = r.sumber === 'KANTOR' ? _rkKantor(r.nama, lay) : null;
+    var nama = rk ? (rk.lay ? String(rk.lay.tipe || rk.tipe).toUpperCase() + ' ' + rk.lay.nama : rk.tipe + ' ' + rk.inti) : (r.nama || 'Lazismu Daerah Bantul');
+    var baris = { tanggal: r.tanggal, ashnaf: r.sumber === 'AMIL' ? 'Amil' : 'Fi Sabilillah', sumberDana: r.sumber === 'AMIL' ? 'Amil' : 'Infak',
+      program: r.prog || r.ket, namaPenerima: nama, nik: '', telepon: '', alamat: '', jumlah: r.jumlah, bentukBantuan: kas ? 'Tunai' : 'Transfer',
+      metode: kas ? 'Cash/Tunai' : 'Transfer Bank', statusSalur: 'Tersalur', keterangan: r.ket || r.nama, fundraising: rk ? nama : '',
+      rekeningId: rek ? rek.id : '', bank: rek ? (rek.namaBank + ' - ' + rek.nomor) : (kas ? 'Kas' : r.via), section: 'REKAP', dariRekap: true };
+    /* Ditanyakan satu per satu, tidak ikut "Samakan semua": jurnal bank
+       pemilik memuat penyaluran tunai juga, jadi penyaluran yang tidak ada
+       di berkas ini bisa saja ada di berkas yang lain, dan menambahkannya
+       berarti mencatatnya dua kali. */
+    tambah({ jenis: 'rekapHanyaRekap', tingkat: 'perlu', tanya: true, judul: 'Penyaluran hanya ada di rekap: ' + _rpTeks(r.jumlah),
+      pesan: r.tanggal + ', "' + (r.ket || r.nama) + '" (sheet ' + r.sheet + ' baris ' + r.baris + '). Tambahkan hanya kalau tidak ada di berkas jurnal lain bulan ini.',
+      baris: [], usulan: { tambah: [{ kumpulan: 'salur', baris: baris }] } });
+  });
+
+  /* ---------- UANG MUKA: hanya dibandingkan ---------- */
+  var idxU = []; U.forEach(function(r, i){ if (!r._lewati && r.jenis !== 'kembali') idxU.push(i); });
+  var hU = _rkCocokkan(RU.map(function(r){ return { tanggal: r.tanggal, jumlah: r.jumlah, nama: r.ket }; }), idxU.map(function(i){ return U[i]; }),
+    function(j){ return (j.keterangan || '') + ' ' + (j.layanan || ''); }, { hari: 4 });
+  if (hU.sisaR.length || hU.sisaJ.length) tambah({ jenis: 'rekapUmp', tingkat: 'info', judul: 'Uang muka beda dengan rekap',
+    pesan: hU.sisaR.length + ' uang muka hanya ada di rekap (' + _rpTeks(hU.sisaR.reduce(function(a, r){ return a + r.jumlah; }, 0)) + '), '
+      + hU.sisaJ.length + ' hanya ada di jurnal. Uang muka tidak diubah otomatis; periksa jurnalnya.',
+    baris: hU.sisaJ.map(function(x){ return info('ump', idxU[x]); }), usulan: null });
+
+  Object.keys(grup).forEach(function(k){
+    var gr = grup[k];
+    var total = gr.baris.reduce(function(a, b){ return a + b.jumlah; }, 0);
+    if (gr.baris.length > 1) gr.judul += ' (' + gr.baris.length + ' baris, ' + _rpTeks(total) + ')';
+    tambah(gr);
+  });
+  Object.keys(kantorTak).forEach(function(k){
+    var kt = kantorTak[k];
+    tambah({ jenis: 'kantorTakTerdaftar', tingkat: 'perlu', judul: 'Kantor "' + kt.nama + '" tidak terdaftar',
+      pesan: kt.baris.length + ' transaksi dari rekap memakai nama ini. Pilih kantor yang dimaksud, atau daftarkan dulu di menu Layanan. Pilihan Anda diingat untuk impor berikutnya.',
+      nama: kt.nama, baris: kt.baris, usulan: null,
+      pilihan: [_PILIHAN_DAERAH, _PILIHAN_SENDIRI].concat(lay.filter(function(l){ return !l.tipe || String(l.tipe).toUpperCase() === kt.tipe; })
+        .map(function(l){ return { id: l.id, tipe: String(l.tipe || kt.tipe).toUpperCase(), nama: l.nama, label: _layLabel(l) }; })
+        .sort(function(a, b){ return a.nama.localeCompare(b.nama); })) });
+  });
+
+  var sumR = function(a){ return a.reduce(function(x, r){ return x + r.jumlah; }, 0); };
+  var sumJ = function(a){ return a.reduce(function(x, r){ return x + (Number(r.jumlah) || 0); }, 0); };
+  out.unshift({ id: 'r0', jenis: 'rekapRingkas', tingkat: 'info', judul: 'Perbandingan dengan rekap',
+    pesan: 'Rekap' + (opsi.jenis ? ' (penerimaan ' + (opsi.jenis === 'kas' ? 'tunai' : 'non tunai') + ')' : '') + ': penerimaan ' + _rpTeks(sumR(RH)) + ' (' + RH.length + ' baris)'
+      + (adaSalur ? ', penyaluran ' + _rpTeks(sumR(RS)) + ' (' + RS.length + ' baris). ' : '. Berkas ini tidak memuat penyaluran, jadi penyaluran rekap dibandingkan saat berkas yang memuatnya diimpor. ')
+      + 'Jurnal: penerimaan ' + _rpTeks(sumJ(JH)) + ' (' + JH.length + ' baris), penyaluran ' + _rpTeks(sumJ(JS)) + ' (' + JS.length + ' baris, tanpa biaya admin bank). '
+      + (hH.pasang.length + hS.pasang.length) + ' transaksi cocok. Terapkan semua usulan di bawah supaya sama dengan rekap.',
+    baris: [], usulan: null });
+  return out;
+}
+
+async function apiSamakanRekap(t, jurnal, sheets, opsi){
+  _requirePerm(t, 'penghimpunan', 'create');
+  var rekap = _bacaRekap(sheets);
+  if (!rekap.himpun.length && !rekap.salur.length && !rekap.ump.length)
+    throw new Error('Rekap tidak dikenali. Pastikan ada sheet berkolom TANGGAL, NAMA, KETERANGAN, PROGRAM PENERIMAAN, JUMLAH, MELALUI.');
+  var listLayanan = readAll(SHEETS.LAYANAN) || [];
+  var listRek = readAll(SHEETS.REKENING) || [];
+  return { temuan: _samakanRekap(jurnal || {}, rekap, opsi || {}, listLayanan, listRek),
+           jumlahRekap: { himpun: rekap.himpun.length, salur: rekap.salur.length, ump: rekap.ump.length } };
+}
+
+async function apiParseImportText(t, text, type, opsi) {
   authUser(t);
   if (!text) throw new Error('Teks tidak boleh kosong.');
   var listRek = readAll(SHEETS.REKENING) || [];
@@ -4763,7 +5501,7 @@ async function apiParseImportText(t, text, type) {
       
       markDuplicates(himpunValid, salurValid);
       
-      return {
+      return _lengkapiTemuan({
         success: true,
         isJurnal: true,
         himpunValid: himpunValid,
@@ -4780,7 +5518,7 @@ async function apiParseImportText(t, text, type) {
         akunTakDikenal: (resultJurnal.umpRows || []).concat(resultJurnal.transferRows || []).filter(function(x){ return x.akunDikenal === false; }).length
           + (resultJurnal.himpunRows || []).concat(resultJurnal.salurRows || []).filter(function(x){ return !x.rekeningId && _tampakRekening(x.bank); }).length,
         totalCount: resultJurnal.himpunRows.length + resultJurnal.salurRows.length + (resultJurnal.umpRows || []).length + (resultJurnal.transferRows || []).length
-      };
+      }, opsi, listLayanan, resultJurnal);
     }
     
     // Check for headerless TSV (raw copy-paste from simple spreadsheet)
@@ -6688,11 +7426,21 @@ function apiClosingBulanan(t, bulan){
     return false;
   }
 
+  /* Penyaluran hasil impor jurnal (punya kolom section) milik kantor hanya
+     kalau tercatat atas nama kantor (namaPenerima "KLL ..."/"ULL ...").
+     Dulu keterangan ikut dibaca, sehingga "Gaji Amil Kll Pundong" yang
+     dibayar Daerah dari rekening Amil terhitung penyaluran KLL Pundong,
+     padahal rekap pemilik mencatatnya pengeluaran Daerah (September 2026,
+     5 baris, Rp 8.020.000). Data lama tanpa section tetap memakai cara lama. */
+  function salurDaerah(r){
+    if (String(r.section || '').trim()) return !/^(KLL|ULL|KL|UL)\b/i.test(String(r.namaPenerima || '').trim());
+    return isDaerah(r);
+  }
   T.forEach(function(r){
     if (_skipPenyaluranClosing(r)) return;
     var k = _closingKatT(r), n = Number(r.jumlah) || 0;
     seBantul.penyaluran[k] += n; seBantul.penyaluran.total += n;
-    if (isDaerah(r)){ daerah.penyaluran[k] += n; daerah.penyaluran.total += n; }
+    if (salurDaerah(r)){ daerah.penyaluran[k] += n; daerah.penyaluran.total += n; }
   });
 
   // KLL/ULL = SE BANTUL - DAERAH
@@ -7096,6 +7844,10 @@ REGISTRY['apiGetPermissionMeta']=apiGetPermissionMeta;
 REGISTRY['apiPublicDashboard']=apiPublicDashboard;
 REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
+REGISTRY['apiSimpanAliasKantor']=apiSimpanAliasKantor;
+REGISTRY['apiDaftarAliasKantor']=apiDaftarAliasKantor;
+REGISTRY['apiHapusAliasKantor']=apiHapusAliasKantor;
+REGISTRY['apiSamakanRekap']=apiSamakanRekap;
 REGISTRY['apiPerbaikiDataLama']=apiPerbaikiDataLama;
 REGISTRY['apiBersihkanSetorTunai']=apiBersihkanSetorTunai;
 REGISTRY['apiPeriksaLayanan']=apiPeriksaLayanan;

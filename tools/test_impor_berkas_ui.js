@@ -1,0 +1,311 @@
+/* Uji Impor Jurnal per Berkas di peramban sungguhan, zona waktu WIB.
+ *
+ * test_impor_berkas.js memeriksa mesinnya. Berkas ini memeriksa yang dialami
+ * amil: memilih jenis berkas dan bulan, mengunggah Excel, melihat temuan di
+ * atas pratinjau, membetulkan langsung di layar, melihat ringkasan Daerah /
+ * KLL / ULL berubah, lalu menyimpan. Yang tersimpan harus yang sudah
+ * dibetulkan, dan baris yang dilewati tidak boleh ikut.
+ *
+ * Peramban dijalankan dengan zona Asia/Jakarta karena di zona itulah tanggal
+ * dulu mundur satu hari. SheetJS dari CDN diganti salinan lokal di
+ * node_modules; permintaan keluar lainnya ditolak.
+ *
+ * Datanya BUATAN, ditulis ke folder sementara lalu dihapus.
+ *
+ *   node tools/test_impor_berkas_ui.js
+ */
+'use strict';
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const http = require('http');
+
+function muatPlaywright() {
+  for (const p of ['playwright', '/opt/node-tools/node_modules/playwright']) {
+    try { return require(p); } catch (_) { /* coba berikutnya */ }
+  }
+  console.error('\nPlaywright belum terpasang: npm i -D playwright\n'); process.exit(2);
+}
+const { chromium } = muatPlaywright();
+const CHROMIUM = fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {};
+const AKAR = path.join(__dirname, '..');
+const PUBLIK = path.join(AKAR, 'src', 'public');
+const engine = require(path.join(AKAR, 'api', '_engine.js'));
+const skema = require(path.join(AKAR, 'lib', 'laz-skema.js'));
+const XLSX = require(path.join(AKAR, 'node_modules', 'xlsx'));
+const SHEETJS = [path.join(AKAR, 'node_modules', 'xlsx', 'dist', 'xlsx.full.min.js'), path.join(AKAR, 'node_modules', 'xlsx', 'xlsx.js')]
+  .find((f) => fs.existsSync(f));
+
+let ok = 0, gagal = 0;
+const cek = (nama, syarat, info) => {
+  if (syarat) { ok++; console.log('  OK   |', nama); }
+  else { gagal++; console.log('  GAGAL|', nama, info === undefined ? '' : String(JSON.stringify(info)).slice(0, 260)); }
+};
+const SANDI = 'Admin12345';
+let DB = null;
+const LAY = {};
+async function siapkanDB() {
+  const s = {};
+  for (const n of skema.NAMA_TABEL) s[n] = [];
+  process.env.SETUP_ADMIN_PASSWORD = SANDI;
+  DB = (await engine.runRPC({ sheets: s, props: {} }, 'setup', [], {})).db;
+  const r = await engine.runRPC(DB, 'login', ['superadmin', SANDI], {});
+  DB = r.db;
+  for (const [tipe, nama] of [['KLL', 'Bantul Kota'], ['KLL', 'Imogiri'], ['ULL', 'Masjid Baiturrahman Aceh'], ['ULL', 'Masjid Al Ikhlas']]) {
+    DB = (await engine.runRPC(DB, 'apiSaveLayanan', [r.result.token, { tipe, nama, aktif: 'true' }], {})).db;
+  }
+  const t = DB.sheets.Layanan, h = t[0];
+  t.slice(1).forEach((x) => { LAY[x[h.indexOf('nama')]] = x[h.indexOf('id')]; });
+}
+function tabel(n) {
+  const t = DB.sheets[n], h = t[0];
+  return t.slice(1).map((r) => { const o = {}; h.forEach((k, j) => { o[k] = r[j]; }); return o; });
+}
+
+/* Buku kerja buatan: tanggal sebagai nomor seri Excel, persis seperti berkas
+   unduhan Google Sheets, supaya kekeliruan zona waktu ikut teruji. */
+/* Rekap bulanan buatan, bentuk sheetnya sama dengan rekap pemilik. */
+function buatRekap(f) {
+  const seri = (t) => (Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5;
+  const himpun = [
+    ['TANGGAL', 'NAMA', 'KETERANGAN', 'PROGRAM PENERIMAAN', 'JUMLAH', 'MELALUI', 'Kasir'],
+    ['2026-09-01', 'KL Lazismu Imogiri', 'Infak Umum', 'Infak Tanpa Pembatasan', 400000, 'BANTUL', 'Kantor'],
+    ['2026-09-30', 'KL Lazismu Bantul Kota', 'Infak Umum', 'Infak Tanpa Pembatasan', 2500000, 'BANTUL', 'Kantor'],
+    ['2026-09-12', 'Unit Layanan Masjid Baiturrahman Aceh', 'Infak Umum', 'Infak Tanpa Pembatasan', 150000, 'BANTUL', 'Kantor'],
+    ['2026-09-14', 'Donatur Karangan', 'Infak Terikat Kekeringan', 'Infak Pembatasan Lingkungan Lainnya', 75000, 'BANTUL', 'Kantor'],
+    ['2026-09-07', 'Donatur Kedua', 'Zakat Mal', 'Tanpa Pembatasan Zakat Maal', 120000, 'BANTUL', 'Kantor'],
+    ['2026-09-24', 'KL Lazismu Bantul Kota', 'Infak Terikat Ambulan', 'Peduli Kesehatan & Mobile Clinic/Ambulance', 1000000, 'BANTUL', 'Kantor'],
+    ['2026-09-20', 'Donatur Rekap', 'Infak Umum', 'Infak Tanpa Pembatasan', 50000, 'BANTUL', 'Kantor'],
+    ['', '', '', '', 4295000, '', ''],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(himpun.map((r) => r.map((c, j) => (j === 0 ? '' : c))));
+  himpun.forEach((r, i) => { if (i && r[0]) ws['A' + (i + 1)] = { t: 'n', v: seri(r[0]), z: 'd/m/yyyy' }; });
+  ws.A1 = { t: 's', v: 'TANGGAL' };
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'HIMPUN');
+  XLSX.writeFile(wb, f);
+}
+
+function buatBerkas(f) {
+  const seri = (t) => (Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 864e5;
+  const baris = [];
+  const pasang = (tgl, d, k, n, ket) => { baris.push([tgl, d, n, '', ket]); baris.push([tgl, k, '', n, ket]); };
+  baris.push(['', 'PENERIMAAN INFAK UMUM VIA KAS', '', '', '']);
+  pasang('2026-09-01', 'Kas Infak', 'Penerimaan Infak Umum', 400000, 'Infak Umum KLL Imogiri');
+  pasang('2026-09-30', 'Kas Infak', 'Penerimaan Infak Umum', 2500000, 'Infak Umum Bantul Kota');
+  pasang('2026-09-12', 'Kas Infak', 'Penerimaan Infak Umum', 150000, 'Infak Umum ULL Masjid');
+  pasang('2026-09-14', 'Kas Infak', 'Penerimaan Infak Umum', 75000, 'Infak Umum Donatur Karangan');
+  pasang('2026-09-15', 'Kas Infak', 'Penerimaan Infak Umum', 10, 'Infak Umum NN');
+  baris.push(['', 'PENERIMAAN ZAKAT VIA KAS', '', '', '']);
+  pasang('2026-06-07', 'Kas Zakat', 'Penerimaan Zakat Mal', 120000, 'Zakat Mal Donatur Kedua');
+  baris.push(['', 'PENERIMAAN INFAK TERIKAT VIA KAS', '', '', '']);
+  pasang('2026-09-24', 'Kas Infak', 'Penerimaan Infak Terikat - Pendidikan', 1000000, 'KLL Bantul Kota Infak Ambulan');
+  const ws = XLSX.utils.aoa_to_sheet(baris.map((r) => r.map((c, j) => (j === 0 ? '' : c))));
+  baris.forEach((r, i) => { if (r[0]) ws['A' + (i + 1)] = { t: 'n', v: seri(r[0]), z: 'd/m/yyyy' }; });
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  XLSX.writeFile(wb, f);
+}
+
+const MIME = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const srv = http.createServer(async (req, res) => {
+  const url = decodeURIComponent(req.url.split('?')[0]);
+  if (url === '/api/rpc' && req.method === 'POST') {
+    let b = ''; req.on('data', (c) => { b += c; });
+    await new Promise((r) => req.on('end', r));
+    let j = {}; try { j = JSON.parse(b || '{}'); } catch (_) {}
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const out = await engine.runRPC(DB, j.fn, j.args || [], { ip: '127.0.0.1', ua: 'uji' });
+      DB = out.db;
+      res.end(JSON.stringify({ result: out.result }));
+    } catch (e) { res.end(JSON.stringify({ __error: e.message })); }
+    return;
+  }
+  if (url.startsWith('/api/')) { res.statusCode = 404; res.end('{}'); return; }
+  const f = path.join(PUBLIK, url === '/' ? 'index.html' : url);
+  if (!f.startsWith(PUBLIK) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.statusCode = 404; res.end(''); return; }
+  res.setHeader('Content-Type', MIME[path.extname(f)] || 'application/octet-stream');
+  fs.createReadStream(f).pipe(res);
+});
+
+(async () => {
+  if (!SHEETJS) { console.log('SheetJS lokal tidak ada di node_modules/xlsx, uji dilewati.'); process.exit(2); }
+  await siapkanDB();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'uji-impor-berkas-'));
+  const berkas = path.join(tmp, 'Kas_contoh.xlsx');
+  buatBerkas(berkas);
+  const berkasRekap = path.join(tmp, 'Rekap_contoh.xlsx');
+  buatRekap(berkasRekap);
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const ALAMAT = 'http://127.0.0.1:' + srv.address().port;
+  const browser = await chromium.launch(CHROMIUM);
+  const ctx = await browser.newContext({ timezoneId: 'Asia/Jakarta', viewport: { width: 1280, height: 900 } });
+  await ctx.route(/cdn\.sheetjs\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(SHEETJS) }));
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)(?!cdn\.sheetjs\.com)/, (r) => r.abort());
+  await ctx.addInitScript(() => { try { navigator.serviceWorker && (navigator.serviceWorker.register = () => Promise.resolve()); } catch (_) {} });
+  const page = await ctx.newPage();
+  const galatHalaman = [];
+  page.on('pageerror', (e) => galatHalaman.push(e.message));
+  const teksPratinjau = () => page.evaluate(() => (document.getElementById('importPreview') || {}).innerText || '');
+  const klikAksi = async (jenisTeks, aksi) => {
+    const ok_ = await page.evaluate(([j, a]) => {
+      const t = (window.IMPORT_TEMP_RES.temuan || []).find((x) => x.judul.indexOf(j) >= 0);
+      if (!t) return false;
+      const b = document.querySelector('.imp-temu-aksi[data-t="' + t.id + '"][data-aksi="' + a + '"]');
+      if (!b) return false;
+      b.click(); return true;
+    }, [jenisTeks, aksi]);
+    await page.waitForTimeout(150);
+    return ok_;
+  };
+
+  try {
+    console.log('\n=== A. MEMBUKA MENU ===');
+    await page.goto(ALAMAT + '/');
+    await page.waitForSelector('#lUser', { state: 'visible', timeout: 20000 });
+    await page.fill('#lUser', 'superadmin');
+    await page.fill('#lPass', SANDI);
+    await page.click('#loginBtn');
+    await page.waitForFunction(() => !document.getElementById('appView').classList.contains('hidden'), null, { timeout: 20000 });
+    /* Dashboard bawaan bisa selesai digambar SESUDAH halaman Penghimpunan
+       dibuka dan menimpanya, jadi tombolnya dicari dan diklik dalam satu
+       langkah, diulang sampai jendela impor benar-benar terbuka. */
+    await page.waitForTimeout(800);
+    await page.evaluate(() => viewPenghimpunan());
+    let adaTombol = false;
+    for (let i = 0; i < 40 && !(await page.$('#impb_jenis')); i++) {
+      const diklik = await page.evaluate(() => {
+        const b = [...document.querySelectorAll('button')].find((x) => /Impor Jurnal per Berkas/.test(x.textContent));
+        if (!b) { if (!document.querySelector('.table-wrap')) viewPenghimpunan(); return false; }
+        b.click(); return true;
+      });
+      adaTombol = adaTombol || diklik;
+      await page.waitForTimeout(250);
+    }
+    cek('tombol "Impor Jurnal per Berkas" ada di Penghimpunan', adaTombol);
+    await page.waitForSelector('#impb_jenis', { state: 'attached', timeout: 10000 });
+    cek('judul jendelanya "Impor Jurnal per Berkas"', (await page.textContent('#modalTitle')).trim() === 'Impor Jurnal per Berkas');
+    cek('ada pilihan jenis berkas, bulan, dan tahun',
+      await page.evaluate(() => !!(document.getElementById('impb_jenis') && document.getElementById('impb_bulan') && document.getElementById('impb_tahun'))));
+    cek('pilihan metode dan rekening bawaan tidak ditampilkan (jurnal sudah menyebutnya)',
+      await page.evaluate(() => !document.getElementById('import_default_metode') && !document.getElementById('import_default_rekening')));
+    await page.evaluate(() => {
+      const set = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); };
+      set('impb_jenis', 'kas'); set('impb_bulan', '09'); set('impb_tahun', '2026');
+    });
+
+    console.log('\n=== B. UNGGAH, TANGGAL TIDAK MUNDUR, TEMUAN TAMPIL ===');
+    await page.setInputFiles('#import_file', berkas);
+    await page.waitForFunction(() => window.IMPORT_FILE_TSV || (typeof IMPORT_FILE_TSV !== 'undefined' && IMPORT_FILE_TSV), null, { timeout: 15000 });
+    await page.click('#importTarikBtn');
+    await page.waitForSelector('#imporTemuanBlok', { timeout: 20000 });
+    const H = () => page.evaluate(() => (window.IMPORT_TEMP_HIMPUN_ROWS || []).map((r) => ({ t: r.tanggal, j: r.jumlah, n: r.namaDonatur, l: r.layananId, p: r.pilar, x: !!r._lewati })));
+    let rows = await H();
+    const baris = (j) => rows.find((r) => Math.round(r.j) === j) || {};
+    cek('tanggal 1 September tetap 1 September di zona WIB', baris(400000).t === '2026-09-01', baris(400000));
+    cek('tanggal 30 September tetap 30 September', baris(2500000).t === '2026-09-30', baris(2500000));
+    let teks = await teksPratinjau();
+    cek('temuan nama kantor tanpa KLL/ULL tampil', /Nama kantor tanpa KLL\/ULL/.test(teks));
+    cek('temuan kantor tidak terdaftar tampil', /Kantor "ULL Masjid" tidak terdaftar/.test(teks));
+    cek('temuan tanggal di luar bulan tampil', /Tanggal di luar September 2026/.test(teks));
+    cek('temuan pilar tampil', /Pilar Pendidikan, keterangan menyebut Kesehatan/.test(teks));
+    cek('ringkasan Daerah / KLL / ULL tampil', /Ringkasan/.test(teks) && /Daerah/.test(teks) && /KLL/.test(teks));
+    cek('tidak ada em dash di layar impor', !/—/.test(teks + (await page.textContent('#modalTitle'))));
+    const daerahAwal = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.Daerah);
+    cek('sebelum dibetulkan, setoran "Bantul Kota" masih terhitung Daerah', daerahAwal === 2500000 + 75000 + 10 + 120000, daerahAwal);
+
+    console.log('\n=== C. MEMBETULKAN LANGSUNG DI LAYAR ===');
+    cek('klik "Jadikan KLL Bantul Kota"', await klikAksi('Nama kantor tanpa KLL/ULL', 'terap'));
+    rows = await H();
+    cek('baris itu sekarang KLL Bantul Kota', baris(2500000).n === 'KLL Bantul Kota' && baris(2500000).l === LAY['Bantul Kota'], baris(2500000));
+    const daerahSesudah = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.Daerah);
+    cek('ringkasan Daerah turun sebesar setoran itu', daerahAwal - daerahSesudah === 2500000, [daerahAwal, daerahSesudah]);
+    teks = await teksPratinjau();
+    cek('tabel pratinjau ikut berubah', /KLL Bantul Kota/.test(teks));
+
+    await page.evaluate((id) => {
+      const t = window.IMPORT_TEMP_RES.temuan.find((x) => x.jenis === 'kantorTakTerdaftar');
+      const s = document.querySelector('select.imp-temu-pilih[data-t="' + t.id + '"]');
+      s.value = id; s.dispatchEvent(new Event('change', { bubbles: true }));
+    }, LAY['Masjid Baiturrahman Aceh']);
+    cek('pilih kantor untuk "ULL Masjid" lalu Terapkan', await klikAksi('tidak terdaftar', 'pilih'));
+    rows = await H();
+    cek('"ULL Masjid" jadi ULL Masjid Baiturrahman Aceh', baris(150000).l === LAY['Masjid Baiturrahman Aceh'], baris(150000));
+    await page.waitForTimeout(400);
+    const alias = (await engine.runRPC(DB, 'apiDaftarAliasKantor', [await page.evaluate(() => TOKEN)], {})).result;
+    cek('pilihannya diingat di server untuk impor berikutnya', alias.some((a) => a.tertulis === 'ULL Masjid' && a.id === LAY['Masjid Baiturrahman Aceh']), alias);
+
+    cek('klik "Pakai" tanggal usulan', await klikAksi('Tanggal di luar', 'terap'));
+    rows = await H();
+    cek('tanggal Juni jadi September', baris(120000).t === '2026-09-07', baris(120000));
+    cek('klik "Lewati baris ini" untuk nominal Rp 10', await klikAksi('Nominal sangat kecil', 'terap'));
+    rows = await H();
+    cek('baris Rp 10 ditandai dilewati', baris(10).x === true, baris(10));
+    teks = await teksPratinjau();
+    cek('tabel menandai baris yang dilewati', /Dilewati, tidak ikut disimpan/.test(teks));
+
+    console.log('\n=== D. MENYIMPAN ===');
+    /* Temuan pilar sengaja belum diputuskan: klik pertama hanya mengingatkan. */
+    await page.click('#importSimpanBtn');
+    await page.waitForTimeout(300);
+    cek('klik pertama mengingatkan temuan yang belum diputuskan, belum menyimpan',
+      /Tetap simpan \(1 temuan/.test(await page.textContent('#importSimpanBtn')) && tabel('Penghimpunan').length === 0,
+      [await page.textContent('#importSimpanBtn'), tabel('Penghimpunan').length]);
+    await page.click('#importSimpanBtn');
+    await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 15000 });
+    const P = tabel('Penghimpunan');
+    const p = (j) => P.find((r) => Math.round(Number(r.jumlah)) === j) || {};
+    cek('klik kedua menyimpan', P.length === 6, P.length);
+    cek('baris yang dilewati tidak tersimpan', !p(10).id);
+    cek('setoran Bantul Kota tersimpan sebagai KLL Bantul Kota', p(2500000).layananId === LAY['Bantul Kota'] && /KLL/.test(p(2500000).tipeDonatur), p(2500000));
+    cek('tanggal yang dibetulkan yang tersimpan', String(p(120000).tanggal).slice(0, 10) === '2026-09-07', p(120000).tanggal);
+    cek('tanggal unggahan tersimpan tanpa mundur', String(p(400000).tanggal).slice(0, 10) === '2026-09-01', p(400000).tanggal);
+    cek('penanda milik layar (_lewati, _tetapSimpan) tidak ikut tersimpan', !JSON.stringify(DB.sheets.Penghimpunan).includes('_lewati'));
+
+    console.log('\n=== E. SAMAKAN DENGAN REKAP ===');
+    DB.sheets.Penghimpunan = [DB.sheets.Penghimpunan[0]];
+    await page.evaluate(() => openImportJurnalBerkas());
+    await page.waitForSelector('#impb_rekap', { state: 'attached', timeout: 10000 });
+    await page.evaluate(() => {
+      const set = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); };
+      set('impb_jenis', 'kas'); set('impb_bulan', '09'); set('impb_tahun', '2026');
+    });
+    await page.setInputFiles('#impb_rekap', berkasRekap);
+    await page.waitForFunction(() => !!window.IMPORT_REKAP_SHEETS, null, { timeout: 10000 });
+    cek('rekap terbaca di peramban', true);
+    await page.setInputFiles('#import_file', berkas);
+    await page.waitForFunction(() => typeof IMPORT_FILE_TSV !== 'undefined' && IMPORT_FILE_TSV, null, { timeout: 15000 });
+    await page.click('#importTarikBtn');
+    await page.waitForFunction(() => (window.IMPORT_TEMP_RES && (window.IMPORT_TEMP_RES.temuan || []).some((t) => /^rekap/.test(t.jenis))), null, { timeout: 20000 });
+    const jenisRekap = await page.evaluate(() => window.IMPORT_TEMP_RES.temuan.filter((t) => /^rekap/.test(t.jenis)).map((t) => t.jenis));
+    cek('temuan rekap muncul otomatis setelah jurnal dianalisis', jenisRekap.includes('rekapRingkas'), jenisRekap);
+    cek('kekeringan diusulkan pindah ke Lingkungan, ambulan ke Kesehatan',
+      await page.evaluate(() => { const j = JSON.stringify(window.IMPORT_TEMP_RES.temuan.filter((t) => t.jenis === 'rekapDana')); return /Lingkungan/.test(j) && /Kesehatan/.test(j); }));
+    cek('tombol "Samakan semua dengan rekap" tampil', await page.$('#imporSamakanSemua') !== null);
+    await page.click('#imporSamakanSemua');
+    await page.waitForTimeout(300);
+    const R = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []));
+    cek('setelah disamakan, total penerimaan = total rekap', Math.round(R.totalHimpun.total) === 4295000, R.totalHimpun);
+    cek('setelah disamakan, Penghimpunan Daerah = Daerah rekap', Math.round(R.totalHimpun.Daerah) === 245000, R.totalHimpun);
+    teks = await teksPratinjau();
+    cek('ringkasan di layar ikut berubah', /4\.295\.000/.test(teks));
+    await page.click('#importSimpanBtn');
+    await page.waitForTimeout(300);
+    if (await page.evaluate(() => document.getElementById('modalBg').classList.contains('show'))) await page.click('#importSimpanBtn');
+    await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 15000 });
+    const P2 = tabel('Penghimpunan');
+    cek('yang tersimpan sama dengan rekap: 7 baris, Rp 4.295.000', P2.length === 7 && Math.round(P2.reduce((a, x) => a + Number(x.jumlah), 0)) === 4295000,
+      P2.map((x) => [x.tanggal, x.jumlah, x.namaDonatur]));
+    const kek = P2.find((x) => Math.round(Number(x.jumlah)) === 75000) || {};
+    cek('pilar kekeringan tersimpan Lingkungan', kek.pilar === 'Lingkungan', kek);
+    cek('baris yang hanya ada di rekap ikut tersimpan', P2.some((x) => x.namaDonatur === 'Donatur Rekap'));
+    cek('tidak ada galat JavaScript di halaman', galatHalaman.length === 0, galatHalaman);
+  } finally {
+    await browser.close();
+    srv.close();
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+  }
+  console.log('\n=== HASIL ===');
+  console.log(ok + ' lulus, ' + gagal + ' gagal.');
+  if (gagal) { console.log('\nJANGAN dideploy: layar Impor Jurnal per Berkas belum benar.\n'); process.exit(1); }
+  console.log('\ntest_impor_berkas_ui.js  ' + ok + '/' + ok + '  SEMUA LULUS\n');
+})().catch((e) => { console.error('\nGAGAL TOTAL:', (e && e.stack) || e, '\n'); process.exit(1); });

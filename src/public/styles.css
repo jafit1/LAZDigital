@@ -2956,10 +2956,43 @@ html[data-theme="dark"] .kpi-v2:first-child .kpi-v2-value .rp-neg{background:#fe
   font-size:9.5px;font-weight:700;letter-spacing:.05em;margin-left:6px;
   border:1px solid var(--border);border-radius:6px;padding:1px 5px;color:var(--muted);
 }
-.kll-nama-k{font-size:10.5px;color:var(--muted);margin-top:2px}
 .kll-n{text-align:right;font-size:12.5px;color:var(--text2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .kll-n.kuat{font-weight:700;color:var(--text)}
 .kll-n.besar{font-family:var(--head);font-size:14px}
+/* Permintaan pemilik (1 Oktober 2026): sisa saldo hijau dan sedikit lebih
+   besar (15px lawan 12,5px angka lain), belum LPJ bertanda merah. Merahnya
+   hanya dipasang kalau memang ada tunggakan; nol tampil redup. */
+.kll-n.sisa{color:var(--green);font-family:var(--head);font-size:15px;font-weight:800}
+.kll-n.sisa .rp-neg{color:var(--red)}
+.kll-lpj{
+  display:inline-block;background:var(--red-bg);color:var(--red);font-weight:700;
+  border:1px solid color-mix(in srgb,var(--red) 30%,transparent);
+  border-radius:999px;padding:1px 9px;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.kll-baris.ada-lpj{box-shadow:inset 3px 0 0 var(--red)}
+.kpi-v2.kll-kpi-sisa .kpi-v2-value{color:var(--green)}
+.kpi-v2.kll-kpi-lpj .kpi-v2-value{color:var(--red)}
+.kll-lpj-baris{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 12px 10px;font-size:12px;color:var(--text2)}
+
+/* Tawaran rekap bulanan di pratinjau Impor Jurnal per Berkas */
+.imp-tawar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* ---------- ATUR URUTAN MENU KIRI ---------- */
+.tn-item.tn-atur{opacity:.6}
+.tn-item.tn-atur:hover{opacity:1}
+.um-ket{font-size:12px;color:var(--muted);margin-bottom:10px}
+.um-daftar{display:flex;flex-direction:column;gap:6px}
+.um-baris{
+  display:flex;align-items:center;gap:10px;padding:7px 8px;border:1px solid var(--border);
+  border-radius:10px;background:var(--surface);user-select:none;-webkit-user-select:none;
+}
+.um-baris.ditarik{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 10px 22px -14px rgba(0,0,0,.45)}
+.um-pegang{display:inline-flex;padding:4px;color:var(--muted);cursor:grab;touch-action:none}
+.um-baris.ditarik .um-pegang{cursor:grabbing}
+.um-ic{display:inline-flex;width:20px;flex-shrink:0;color:var(--text2)}
+.um-ic svg{width:18px;height:18px}
+.um-nama{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text);overflow-wrap:anywhere}
+.um-baris .icon-btn:disabled{opacity:.35;cursor:default}
 .kll-daerah .cad-baris{cursor:pointer}
 .kll-daerah{border-color:color-mix(in srgb,var(--accent) 35%,var(--border)) !important}
 
@@ -3018,6 +3051,12 @@ html[data-theme="dark"] .kpi-v2:first-child .kpi-v2-value .rp-neg{background:#fe
   .kll-nama{grid-column:1 / -1}
   .kll-n{text-align:left;display:flex;justify-content:space-between;gap:8px;font-size:12px}
   .kll-n::before{content:attr(data-l);color:var(--muted);font-weight:600;font-size:11px}
+  .kll-n.sisa{font-size:14.5px}
+  /* pil merah lebih lebar dari angka biasa: di 390px sempat menjorok 20px
+     keluar kolomnya, jadi boleh turun ke bawah labelnya */
+  .kll-n[data-l="Belum LPJ"]{flex-wrap:wrap}
+  .kll-n .kll-lpj{padding:0 6px;font-size:11.5px}
+  .kll-n.sisa::before{font-family:var(--sans)}
   .kll-baris .pub-lay-c{grid-column:1 / -1;text-align:center;padding-top:2px}
   .kll-alat{gap:8px 12px}
   .kll-cari{flex:1 1 100%}
@@ -3656,7 +3695,8 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 .kll-alur-k.kuat{border-color:var(--accent);background:var(--surface)}
 .kll-alur-l{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.02em}
 .kll-alur-v{font-family:var(--head);font-weight:800;font-size:15px;margin:2px 0 1px}
-.kll-alur-k2{font-size:10.5px;color:var(--muted);line-height:1.35}
+.kll-alur-k.sisa{border-color:var(--green);background:var(--green-bg)}
+.kll-alur-k.sisa .kll-alur-v{color:var(--green)}
 .kll-alur-op{display:flex;align-items:center;font-weight:800;color:var(--muted);font-size:15px}
 .kll-rinci-j{font-weight:700;font-size:12.5px;padding:10px 12px 6px}
 tr.lay-klik{cursor:pointer}
@@ -3950,7 +3990,7 @@ html.plat-sentuh .btn-sm{min-height:36px}
    ============================================================ */
 .kll-baris > *,
 .kll-kepala > *{min-width:0}
-.kll-nama,.kll-nama-k{min-width:0;overflow-wrap:anywhere}
+.kll-nama{min-width:0;overflow-wrap:anywhere}
 .kll-n{min-width:0;overflow-wrap:anywhere}
 .pub-lay-c{min-width:0;overflow-wrap:anywhere}
 

@@ -31,6 +31,10 @@ call :jalankan "Panduan AI masih cocok"        tools\test_panduan_ai.js
 call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
 call :jalankan "Impor jurnal"                   tools\test_impor_jurnal.js
 call :jalankan "Impor jurnal bank dan tanggal"  tools\test_impor_jurnal_bank.js
+call :jalankan "Aturan kantor dan temuan impor" tools\test_impor_berkas.js
+call :jalankan "Layar Impor Jurnal per Berkas" tools\test_impor_berkas_ui.js
+call :jalankan "Samakan jurnal dengan rekap"    tools\test_samakan_rekap.js
+call :jalankan "Tawaran rekap, Saldo KLL, urutan menu"    tools\test_tampilan_kll_menu.js
 call :jalankan "Pemecahan izin Dashboard"       tools\test_izin_modul.js
 call :jalankan "Admin tidak bisa jadi superadmin" tools\test_eskalasi_user.js
 call :jalankan "Ingat saya tanpa menyimpan sandi" tools\test_ingat_saya.js
