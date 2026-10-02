@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const AKAR = path.join(__dirname, '..');
 process.chdir(AKAR);
-fs.rmSync(path.join(AKAR, '.data'), { recursive: true, force: true });
+fs.rmSync(require('./_folder-data.js')(AKAR), { recursive: true, force: true });
 
 delete process.env.UPSTASH_REDIS_REST_URL;
 delete process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -90,7 +90,7 @@ async function bacaSimpanan() {
     } finally { klien.release(); }
   }
   for (let i = 0; i < 40; i++) {
-    try { return JSON.parse(fs.readFileSync('.data/blast.json', 'utf8')); }
+    try { return JSON.parse(fs.readFileSync(path.join(require('./_folder-data.js')(AKAR), 'blast.json'), 'utf8')); }
     catch (_) { await tidur(25); }
   }
   throw new Error('penyimpanan lokal tidak pernah tertulis');

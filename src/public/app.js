@@ -4406,10 +4406,31 @@ function imporOpsiBerkasHTML() {
     + '<option value="kas">Jurnal Kas (tunai)</option><option value="bank">Jurnal Bank (non tunai)</option></select></div>'
     + '<div class="field"><label>Bulan jurnal</label><select id="impb_bulan">' + ob + '</select></div>'
     + '<div class="field"><label>Tahun</label><select id="impb_tahun">' + ot + '</select></div>'
-    + '<div class="field"><label>Rekap bulanan <span class="muted">(opsional, jadi patokan)</span></label>'
-    + '<button type="button" class="btn btn-ghost" onclick="el(\'impb_rekap\').click()">Pilih berkas rekap</button>'
+    + '<div class="field"><label>Rekap bulanan <span class="muted">(opsional)</span></label>'
+    + '<button type="button" class="imp-rekap-btn" id="impb_rekap_btn" onclick="el(\'impb_rekap\').click()">Pilih berkas rekap</button>'
     + '<input type="file" id="impb_rekap" accept=".xlsx,.xls" style="display:none" onchange="onImporRekap(event)">'
     + '<div id="impb_rekap_info" class="imp-hint"></div></div>';
+}
+/* Jurnal kas dan bank pemilik dibedakan dari judul seksi penerimaannya
+   ("PENERIMAAN ZAKAT VIA BANK" / "... VIA KAS"). Seksi pengeluaran tidak
+   dihitung: jurnal bank juga memuat "PENGELUARAN OPERASIONAL VIA KAS".
+   Kalau seksinya tidak menjawab, nama berkas yang dipakai. */
+function imporTebakJenis(baris, namaBerkas) {
+  var nBank = 0, nKas = 0;
+  (baris || []).forEach(function(r){
+    var isi = r.filter(function(c){ return c !== ''; });
+    if (isi.length !== 1) return;
+    var t = String(isi[0]);
+    if (!/^PENERIMAAN\b/i.test(t)) return;
+    if (/\bVIA\s+BANK\b/i.test(t)) nBank++;
+    else if (/\bVIA\s+KAS\b/i.test(t)) nKas++;
+  });
+  if (nBank > nKas) return 'bank';
+  if (nKas > nBank) return 'kas';
+  var n = String(namaBerkas || '');
+  if (/bank/i.test(n)) return 'bank';
+  if (/kas/i.test(n)) return 'kas';
+  return '';
 }
 function imporOpsiBerkas() {
   if (IMPORT_MODE !== 'berkas' || !el('impb_jenis')) return null;
@@ -4442,12 +4463,13 @@ function openImportModal(type, mode) {
   /* Tata letak: bagian sumber data (unggah/tempel/link) dan pilihan bawaan
      dibuat sekecil mungkin — semuanya hanya pengantar. Ruang sisanya milik
      pratinjau, karena di situlah pengguna benar-benar memeriksa datanya. */
-  var b = '<div class="imp-atas">' +
+  var b = '<div class="imp-atas' + (IMPORT_MODE === 'berkas' ? ' imp-atas-berkas' : '') + '">' +
     '<div class="lap-tabs imp-tabs">' +
     '<button class="lap-tab on" id="tab_import_file" onclick="setImportTab(\'file\')">Unggah File</button>' +
     '<button class="lap-tab" id="tab_import_text" onclick="setImportTab(\'text\')">Tempel Teks</button>' +
     '<button class="lap-tab" id="tab_import_link" onclick="setImportTab(\'link\')">Link Spreadsheet</button>' +
     '</div>' +
+    '<div class="imp-baris">' +
     '<div id="group_import_file" class="imp-src">' +
     '<div class="imp-drop" onclick="el(\'import_file\').click()" id="importDrop">' +
     '<span class="imp-drop-ic" aria-hidden="true">' + IKON_UNGGAH + '</span>' +
@@ -4486,6 +4508,7 @@ function openImportModal(type, mode) {
     '</div>' : '') +
     '<div class="field"><label>Nama fundraising bawaan <span class="muted">(opsional)</span></label>' +
     '<input id="import_default_fundraising" placeholder="Dipakai bila kolomnya kosong"></div>') +
+    '</div>' +
     '</div>' +
     '</div>' +
     '<div id="importPreview"><div class="imp-kosong">Pratinjau data akan muncul di sini setelah berkas ditarik &amp; dianalisis.</div></div>';
@@ -4570,10 +4593,21 @@ function onImportFile(e){
       }
       var baris = semua.map(function(r){ return r.join('\t'); });
       IMPORT_FILE_TSV = baris.join('\n');
+      /* Jenis berkas mengikuti isinya. Pemilik pernah mengunggah jurnal bank
+         dengan pilihan bawaan "Jurnal Kas": pencocokan rekap memilah
+         penerimaan lewat kolom MELALUI, jadi hasilnya 538 temuan palsu
+         (yang benar 61). Kalau sesudah ini dipilih ulang, pilihan orang
+         yang dipakai. */
+      var terbaca = IMPORT_MODE === 'berkas' ? imporTebakJenis(semua, f.name) : '';
+      if (terbaca && el('impb_jenis') && el('impb_jenis').value !== terbaca) {
+        el('impb_jenis').value = terbaca;
+        if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
+      }
       /* Ringkasan berkas ditulis sebagai keping kecil satu baris supaya tidak
          mendorong pratinjau ke bawah; daftar sheet cukup jadi tooltip. */
       info.innerHTML = '<span class="imp-chip"><b>' + esc(f.name) + '</b>'
         + '<span class="imp-chip-s">' + baris.length + ' baris</span>'
+        + (terbaca ? '<span class="imp-chip-s">terbaca Jurnal ' + (terbaca === 'bank' ? 'Bank' : 'Kas') + '</span>' : '')
         + (wb.SheetNames.length > 1
             ? '<span class="imp-chip-s" title="' + esc(sheetDibaca.join(', ')) + '">' + sheetDibaca.length + '/' + wb.SheetNames.length + ' sheet</span>'
             : '')
@@ -4639,6 +4673,7 @@ function tarikImportData() {
            menguraikan berkasnya lagi. Dipakai sesudah tanggal dibetulkan di
            layar Periksa Data. */
         window.IMPORT_TEMP_RES = res;
+        IMPOR_JEJAK = {};
         window.IMPORT_TEMP_HIMPUN_ROWS = res.himpunValid;
         window.IMPORT_TEMP_SALUR_ROWS = res.salurValid;
         window.IMPORT_TEMP_UMP_ROWS = res.umpValid || [];
@@ -4899,6 +4934,7 @@ function imporGambarJurnal(res) {
       '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Akun Kredit</th><th>Jumlah</th><th>Metode</th>' +
       '</tr></thead><tbody>';
     res.himpunValid.forEach(function(r, idx) {
+      if (r._batal) return;
       var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="himpun" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada, centang bila tetap ingin disimpan</label></div>' : '';
       var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
       var bedaWarn = r.bedaDana ? '<div style="margin-top:3px;font-size:10.5px;color:var(--amber);font-weight:700">Uraian menyebut jenis dana lain, mengikuti akun kredit</div>' : '';
@@ -4923,6 +4959,7 @@ function imporGambarJurnal(res) {
       '<th>Tgl</th><th>Penerima</th><th>Program</th><th>Jumlah</th><th>Metode</th><th>FR</th>' +
       '</tr></thead><tbody>';
     res.salurValid.forEach(function(r, idx) {
+      if (r._batal) return;
       var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="salur" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada, centang bila tetap ingin disimpan</label></div>' : '';
       var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
       if (r._lewati) { rowBg = ' style="opacity:.45"'; dupWarn += '<div style="margin-top:3px;font-size:10.5px;font-weight:700">Dilewati, tidak ikut disimpan</div>'; }
@@ -4995,8 +5032,27 @@ function imporJadikanDaerah(r, kumpulan) {
 }
 /* Menerapkan satu keputusan ke baris-barisnya. Mengembalikan jumlah baris
    yang berubah. u: usulan server atau pilihan orang. */
+/* Jejak perubahan tiap temuan, supaya keputusan bisa dibatalkan ("Ubah")
+   dan pilihan massal bisa menimpa atau mempertahankan pilihan sendiri
+   (permintaan pemilik 2 Oktober 2026). Yang dicatat per kolom: nilai
+   sebelum dan sesudah. Saat dibatalkan, kolom hanya dikembalikan kalau
+   nilainya masih buatan temuan itu, sehingga dua temuan yang menyentuh
+   baris yang sama (kantor dan pilar) tidak saling menghapus. */
+var IMPOR_JEJAK = {};
 function imporUbahBaris(t, u, peta) {
   peta = peta || imporPetaBaris();
+  var jejak = { ubah: [], tambah: [] };
+  /* typeof: tools/test_samakan_rekap.js mengambil fungsi ini sendirian. */
+  if (t && t.id && typeof IMPOR_JEJAK !== 'undefined') IMPOR_JEJAK[t.id] = jejak;
+  var catat = function(r, ubah){
+    var lama = {}; Object.keys(r).forEach(function(k){ lama[k] = r[k]; });
+    ubah();
+    var kunci = {};
+    Object.keys(lama).concat(Object.keys(r)).forEach(function(k){ if (lama[k] !== r[k]) kunci[k] = 1; });
+    Object.keys(kunci).forEach(function(k){
+      jejak.ubah.push({ r: r, k: k, ada: Object.prototype.hasOwnProperty.call(lama, k), sebelum: lama[k], sesudah: r[k] });
+    });
+  };
   var n = 0;
   /* Usulan dari "Samakan dengan Rekap": perubahan per baris (tiap baris bisa
      berbeda, misalnya tanggalnya masing-masing) dan baris baru yang hanya
@@ -5006,7 +5062,7 @@ function imporUbahBaris(t, u, peta) {
     (u.perBaris || []).forEach(function(x){
       var r = (peta[x.kumpulan] || [])[x.idx];
       if (!r) return;
-      Object.keys(x.ubah || {}).forEach(function(k){ r[k] = x.ubah[k]; });
+      catat(r, function(){ Object.keys(x.ubah || {}).forEach(function(k){ r[k] = x.ubah[k]; }); });
       n++;
     });
     (u.tambah || []).forEach(function(x){
@@ -5015,6 +5071,7 @@ function imporUbahBaris(t, u, peta) {
       var baru = {};
       Object.keys(x.baris || {}).forEach(function(k){ baru[k] = x.baris[k]; });
       arr.push(baru);
+      jejak.tambah.push(baru);
       n++;
     });
     return n;
@@ -5022,15 +5079,33 @@ function imporUbahBaris(t, u, peta) {
   (t.baris || []).forEach(function(b, i){
     var r = (peta[b.kumpulan] || [])[b.idx];
     if (!r) return;
-    if (u.tanggal) { r.tanggal = u.tanggal; r.tglBeda = null; }
-    if (u.pilar) r.pilar = u.pilar;
-    if (u.lewati) r._lewati = true;
-    if (u.lewatiKecualiPertama && i > 0) r._lewati = true;
-    if (u.layananId) imporPasangKantor(r, b.kumpulan, u);
-    if (u.daerah) imporJadikanDaerah(r, b.kumpulan);
+    catat(r, function(){
+      if (u.tanggal) { r.tanggal = u.tanggal; r.tglBeda = null; }
+      if (u.pilar) r.pilar = u.pilar;
+      if (u.lewati) r._lewati = true;
+      if (u.lewatiKecualiPertama && i > 0) r._lewati = true;
+      if (u.layananId) imporPasangKantor(r, b.kumpulan, u);
+      if (u.daerah) imporJadikanDaerah(r, b.kumpulan);
+    });
     n++;
   });
   return n;
+}
+/* Baris tambahan dari rekap tidak dibuang dari daftar saat dibatalkan,
+   cukup ditandai: usulan temuan lain menunjuk baris lewat nomor urutnya, dan
+   membuang satu baris akan menggeser nomor baris sesudahnya. */
+function imporBatalkanTemuan(t) {
+  var j = IMPOR_JEJAK[t.id];
+  if (j) {
+    j.ubah.slice().reverse().forEach(function(c){
+      if (c.r[c.k] !== c.sesudah) return;
+      if (c.ada) c.r[c.k] = c.sebelum; else delete c.r[c.k];
+    });
+    j.tambah.forEach(function(r){ r._batal = true; r._lewati = true; });
+    delete IMPOR_JEJAK[t.id];
+  }
+  t.status = ''; t.statusTeks = ''; t.oleh = '';
+  window.IMPORT_KONFIRM_SIMPAN = false;
 }
 function imporTombolTemuan(t) {
   var u = t.usulan || {};
@@ -5069,8 +5144,10 @@ function imporKartuTemuan(t) {
       + ' &middot; ' + esc(b.keterangan || b.nama || '') + '</div>';
   }).join('') + ((t.baris || []).length > 6 ? '<div class="muted" style="font-size:11px">dan ' + (t.baris.length - 6) + ' baris lagi</div>' : '');
   var aksi = t.status
-    ? '<div style="margin-top:6px;font-size:11.5px;font-weight:700;color:' + (t.status === 'diterapkan' ? 'var(--green)' : 'var(--muted)') + '">'
-      + esc(t.statusTeks || (t.status === 'diterapkan' ? 'Diterapkan' : 'Dibiarkan')) + '</div>'
+    ? '<div class="imp-temu-status' + (t.status === 'diterapkan' ? ' terap' : '') + '">'
+      + '<span>' + esc(t.statusTeks || (t.status === 'diterapkan' ? 'Diterapkan' : 'Dibiarkan')) + '</span>'
+      + (t.oleh === 'massal' ? '<span class="imp-temu-oleh">massal</span>' : '')
+      + '<button type="button" class="btn btn-mini btn-ghost imp-temu-ubah" data-t="' + esc(t.id) + '">Ubah</button></div>'
     : '<div style="margin-top:6px">' + imporTombolTemuan(t) + '</div>';
   return '<div style="padding:9px 0;border-top:1px solid var(--border)">'
     + '<div><b>' + esc(t.judul) + '</b></div>'
@@ -5088,10 +5165,18 @@ function imporBlokTemuan(res) {
   var h = '<details class="imp-note' + (belum ? ' imp-warn' : '') + ' imp-det" id="imporTemuanBlok" open><summary><b>'
     + (perlu.length ? (belum ? belum + ' temuan perlu diputuskan' : 'Semua temuan sudah diputuskan') : 'Tidak ada temuan yang perlu diputuskan') + '</b>'
     + (catatan.length ? ' &middot; ' + catatan.length + ' catatan untuk diperiksa' : '') + '</summary><div class="imp-det-b">';
-  var massal = imporRekapMassal(res);
-  if (massal.length) {
-    h += '<div style="margin:4px 0 8px"><button type="button" class="btn btn-primary" id="imporSamakanSemua" onclick="imporSamakanSemua()">Samakan semua dengan rekap (' + massal.length + ' temuan)</button>'
-      + '<div class="muted" style="font-size:11.5px;margin-top:4px">Yang tidak ikut: perbedaan kantor yang perlu Anda putuskan sendiri, dan penyaluran yang hanya ada di rekap.</div></div>';
+  var rekap = imporTemuanRekap(res);
+  if (rekap.length) {
+    var keRekap = imporRekapMassal(res).filter(function(t){ return t.status !== 'diterapkan'; }).length;
+    var sendiri = rekap.filter(function(t){ return t.status && t.oleh === 'sendiri'; }).length;
+    h += '<div class="imp-massal">'
+      + '<div class="imp-massal-t">Semua temuan rekap:</div>'
+      + '<button type="button" class="btn btn-primary btn-sm" id="imporSamakanSemua" onclick="imporSamakanSemua()">Cocokkan ke rekap' + (keRekap ? ' (' + keRekap + ')' : '') + '</button>'
+      + '<button type="button" class="btn btn-ghost btn-sm" id="imporSemuaJurnal" onclick="imporSemuaJurnal()">Sesuai jurnal</button>'
+      + '<label class="imp-massal-c"><input type="checkbox" id="imporPertahankan"' + (IMPOR_PERTAHANKAN ? ' checked' : '')
+      + ' onchange="IMPOR_PERTAHANKAN=this.checked;imporGambarUlang()"> Pertahankan yang sudah saya pilih sendiri' + (sendiri ? ' (' + sendiri + ')' : '') + '</label>'
+      + '<div class="imp-massal-k">Perbedaan kantor yang membingungkan dan penyaluran yang hanya ada di rekap tidak ikut "Cocokkan ke rekap"; putuskan satu per satu.</div>'
+      + '</div>';
   }
   h += perlu.map(imporKartuTemuan).join('');
   if (catatan.length) {
@@ -5117,6 +5202,7 @@ function imporPutuskanTemuan(id, aksi) {
   if (aksi === 'biar') {
     t.status = 'dibiarkan';
     t.statusTeks = 'Dibiarkan apa adanya';
+    t.oleh = 'sendiri';
     return imporGambarUlang();
   }
   var u = t.usulan || {};
@@ -5131,6 +5217,7 @@ function imporPutuskanTemuan(id, aksi) {
   }
   var n = imporUbahBaris(t, u);
   t.status = 'diterapkan';
+  t.oleh = 'sendiri';
   t.statusTeks = u.sendiri ? 'Tetap "' + t.nama + '", dihitung kelompok ' + String(t.nama).split(' ')[0] + ' tanpa didaftarkan'
     : u.tambah ? 'Ditambahkan dari rekap'
     : u.perBaris ? 'Disamakan dengan rekap (' + n + ' baris)'
@@ -5172,7 +5259,9 @@ function onImporRekap(e) {
       window.IMPORT_REKAP_SHEETS = wb.SheetNames.map(function(nm){
         return { nama: nm, rows: XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, raw: true, defval: '' }).map(function(r){ return r.map(sel); }) };
       });
-      info.textContent = f.name + ' terbaca (' + wb.SheetNames.length + ' sheet).';
+      info.textContent = 'Rekap terbaca (' + wb.SheetNames.length + ' sheet).';
+      var tombolRekap = el('impb_rekap_btn');
+      if (tombolRekap) { tombolRekap.textContent = f.name; tombolRekap.title = 'Klik untuk mengganti rekap'; tombolRekap.classList.add('ada'); }
       if (window.IMPORT_TEMP_RES && window.IMPORT_TEMP_IS_JURNAL) imporSamakanRekap();
       else toast('Rekap terbaca. Klik "Tarik & Analisis Data" untuk jurnalnya.');
     } catch (err) {
@@ -5212,29 +5301,74 @@ function imporSamakanRekap() {
     handleErr(err);
   });
 }
+/* Pilihan massal untuk temuan rekap (pemilik, 2 Oktober 2026): "Cocokkan ke
+   rekap", "Sesuai jurnal", dan "Pertahankan yang sudah saya pilih sendiri".
+   Yang dipilih lewat tombol per temuan bertanda oleh:'sendiri'; selama
+   kotak itu tercentang, pilihan massal tidak menyentuhnya. */
+var IMPOR_PERTAHANKAN = true;
+function imporTemuanRekap(res) {
+  return ((res && res.temuan) || []).filter(function(t){ return /^rekap/.test(t.jenis) && t.jenis !== 'rekapRingkas'; });
+}
+function imporBolehMassal(t) { return !(IMPOR_PERTAHANKAN && t.status && t.oleh === 'sendiri'); }
 function imporRekapMassal(res) {
-  return (res.temuan || []).filter(function(t){
-    return /^rekap/.test(t.jenis) && t.jenis !== 'rekapRancu' && !t.tanya && !t.status && t.usulan;
+  return imporTemuanRekap(res).filter(function(t){
+    return t.jenis !== 'rekapRancu' && !t.tanya && t.usulan && imporBolehMassal(t);
   });
 }
 function imporSamakanSemua() {
   var res = window.IMPORT_TEMP_RES;
   if (!res) return;
-  var daftar = imporRekapMassal(res), n = 0;
-  daftar.forEach(function(t){
+  var n = 0;
+  imporRekapMassal(res).forEach(function(t){
+    if (t.status === 'diterapkan' && t.oleh === 'massal') return;
+    if (t.status) imporBatalkanTemuan(t);
     var k = imporUbahBaris(t, t.usulan);
-    t.status = 'diterapkan';
+    t.status = 'diterapkan'; t.oleh = 'massal';
     t.statusTeks = t.usulan.tambah ? 'Ditambahkan dari rekap' : t.usulan.lewati ? 'Dilewati, ikut rekap' : 'Disamakan dengan rekap (' + k + ' baris)';
     n++;
   });
   /* Catatan rekap tidak butuh keputusan lagi setelah semuanya disamakan. */
-  (res.temuan || []).forEach(function(t){ if (!t.status && (t.jenis === 'rekapRingkas' || t.jenis === 'rekapCatatan' || t.jenis === 'rekapTanggal')) { t.status = 'dibiarkan'; t.statusTeks = 'Sudah dibaca'; } });
-  toast(n + ' temuan disamakan dengan rekap');
+  imporTemuanRekap(res).forEach(function(t){
+    if (!t.status && !t.usulan) { t.status = 'dibiarkan'; t.statusTeks = 'Sudah dibaca'; t.oleh = 'massal'; }
+  });
+  (res.temuan || []).forEach(function(t){ if (!t.status && t.jenis === 'rekapRingkas') { t.status = 'dibiarkan'; t.statusTeks = 'Sudah dibaca'; } });
+  window.IMPORT_KONFIRM_SIMPAN = false;
+  toast(n + ' temuan dicocokkan ke rekap');
+  imporGambarUlang();
+}
+function imporSemuaJurnal() {
+  var res = window.IMPORT_TEMP_RES;
+  if (!res) return;
+  var n = 0;
+  imporTemuanRekap(res).forEach(function(t){
+    if (!imporBolehMassal(t)) return;
+    if (t.status === 'dibiarkan') { if (t.oleh !== 'sendiri') t.oleh = 'massal'; return; }
+    if (t.status) imporBatalkanTemuan(t);
+    t.status = 'dibiarkan'; t.oleh = 'massal';
+    t.statusTeks = t.jenis === 'rekapHanyaJurnal' ? 'Tetap disimpan, ikut jurnal'
+      : t.jenis === 'rekapHanyaRekap' ? 'Tidak ditambahkan, ikut jurnal'
+      : t.usulan ? 'Ikut jurnal' : 'Sudah dibaca';
+    n++;
+  });
+  (res.temuan || []).forEach(function(t){ if (!t.status && t.jenis === 'rekapRingkas') { t.status = 'dibiarkan'; t.statusTeks = 'Sudah dibaca'; } });
+  window.IMPORT_KONFIRM_SIMPAN = false;
+  toast(n + ' temuan mengikuti jurnal');
   imporGambarUlang();
 }
 function imporPasangTemuan() {
   document.querySelectorAll('.imp-temu-aksi').forEach(function(b){
     b.onclick = function(){ imporPutuskanTemuan(b.getAttribute('data-t'), b.getAttribute('data-aksi')); };
+  });
+  document.querySelectorAll('.imp-temu-ubah').forEach(function(b){
+    b.onclick = function(){
+      var res = window.IMPORT_TEMP_RES, id = b.getAttribute('data-t');
+      var t = ((res && res.temuan) || []).filter(function(x){ return x.id === id; })[0];
+      if (!t) return;
+      var alias = t.jenis === 'kantorTakTerdaftar' && t.status === 'diterapkan';
+      imporBatalkanTemuan(t);
+      if (alias) toast('Pilihan dibatalkan. Nama lain yang sudah diingat bisa dihapus di Layanan, "Nama lain dari jurnal".');
+      imporGambarUlang();
+    };
   });
   if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
 }

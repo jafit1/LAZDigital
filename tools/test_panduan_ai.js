@@ -106,19 +106,21 @@ cek('semua tools/*.js memang LF',
   fs.readdirSync(path.join(AKAR, 'tools')).filter((f) => f.endsWith('.js') && crlf(path.join(AKAR, 'tools', f))));
 
 console.log('\n=== E. UJI YANG DISEBUT PANDUAN MEMANG ADA ===');
+/* Sejak 1 Oktober 2026 daftar uji ada di tools/jalankan-uji.js (dijalankan
+   bersamaan); uji-sebelum-deploy.bat tinggal memanggilnya. */
 const bat = fs.readFileSync(path.join(AKAR, 'uji-sebelum-deploy.bat'), 'utf8');
-const diBat = (bat.match(/tools\\[a-z_0-9-]+\.js/gi) || []).map((x) => x.replace(/^tools\\/i, ''));
+const diBat = require('./jalankan-uji.js').DAFTAR.map((u) => u.berkas);
 const hilangBerkas = diBat.filter((f) => !fs.existsSync(path.join(AKAR, 'tools', f)));
-cek('setiap uji di uji-sebelum-deploy.bat berkasnya ada', hilangBerkas.length === 0, hilangBerkas);
+cek('setiap uji di daftar tools/jalankan-uji.js berkasnya ada', hilangBerkas.length === 0, hilangBerkas);
 const tidakDiDoc = diBat.filter((f) => teks.indexOf(f) < 0);
 cek('uji utama disebut di panduan',
   tidakDiDoc.length <= 6, tidakDiDoc);
 
-console.log('\n=== F. LABEL DI .BAT TIDAK MEMAKAI & ===');
+console.log('\n=== F. ECHO DI .BAT TIDAK MEMAKAI & ===');
 /* echo pada Windows menganggap & sebagai pemisah perintah, jadi label
    "Fitur Media & Desain" mencetak galat 'Desain' is not recognized. */
-const labelAmp = bat.split(/\r?\n/).filter((b) => /^call :jalankan/.test(b) && b.indexOf('&') >= 0);
-cek('tidak ada label uji yang memakai &', labelAmp.length === 0, labelAmp);
+const labelAmp = bat.split(/\r?\n/).filter((b) => /^\s*echo\b/i.test(b) && /[^^]&/.test(b));
+cek('tidak ada echo di uji-sebelum-deploy.bat yang memakai & telanjang', labelAmp.length === 0, labelAmp);
 cek('jebakan ini dicatat di panduan', /`&` di dalam `echo`/.test(teks) || /echo.*&.*\.bat/i.test(teks));
 
 console.log('\n=== G. TIDAK ADA RAHASIA IKUT TERTULIS ===');

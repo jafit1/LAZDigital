@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const AKAR = path.join(__dirname, '..');
 process.chdir(AKAR);
-fs.rmSync(path.join(AKAR, '.data'), { recursive: true, force: true });
+fs.rmSync(require('./_folder-data.js')(AKAR), { recursive: true, force: true });
 delete process.env.UPSTASH_REDIS_REST_URL;
 delete process.env.UPSTASH_REDIS_REST_TOKEN;
 

@@ -7,30 +7,45 @@ ada gunanya lanjut ke lapis 2.
 
 ---
 
-## Lapis 1 — Uji otomatis (2 menit)
+## Lapis 1: Uji otomatis (1 sampai 2 menit)
 
 Klik dua kali **`uji-sebelum-deploy.bat`**.
 
-Isinya:
+Semua uji (45 berkas, sekitar 2.450 pemeriksaan) dijalankan bersamaan oleh
+`tools/jalankan-uji.js`. Layar hanya menampilkan satu baris per uji:
 
-| Uji | Yang dipastikan |
+```
+  OK     Impor jurnal                            38 cek  0,2 dtk
+  LEWAT  Sambungan ke PostgreSQL                dilewati: DATABASE_URL belum ada
+  GAGAL  Fitur Broadcast  0,5 dtk
+         | GAGAL| kontak diblokir dilewati, bukan dikirimi
+         log lengkap: ...\laz-uji\test_blast_fitur.log
+```
+
+Di akhir ada ringkasan: **SEMUA LULUS - aman untuk deploy**, atau daftar uji
+yang gagal beserta perintah untuk menjalankannya ulang satu per satu.
+
+Pilihan lain:
+
+| Perintah | Kegunaan |
 |---|---|
-| `tools/test_agen.js` | Pesan tidak diaku terkirim sebelum WhatsApp menerimanya; satu pesan tidak keluar dua kali; pekerjaan tidak hilang kalau gateway mati di tengah jalan; token agen benar-benar mengunci |
-| `tools/test_blast_ui.js` | Halaman Broadcast memakai `styles.css` yang sama dengan halaman utama; tidak ada sisa Tailwind; dropdown memakai penyelaras yang sama; tema gelap ikut berpindah; tidak melebar di layar HP |
+| `uji-sebelum-deploy.bat impor kll` | hanya uji yang namanya memuat kata itu (sambil mengerjakan; belum izin deploy) |
+| `uji-sebelum-deploy.bat --urut` | satu per satu seperti dulu, kalau ada yang aneh |
+| `uji-sebelum-deploy.bat --rinci` | cetak seluruh keluaran tiap uji |
 
-Uji tampilan butuh Playwright. Kalau belum ada, ia akan **dilewati** (bukan
-dianggap gagal). Untuk mengaktifkannya, sekali saja:
+Uji tampilan butuh Playwright. Kalau belum ada, ia tampil sebagai **LEWAT**
+(bukan dianggap gagal). Untuk mengaktifkannya, sekali saja:
 
 ```
 npm i -D playwright
 npx playwright install chromium
 ```
 
-Data yang dipakai semuanya palsu dan disimpan di `.data/`. Data sungguhan di
-Upstash tidak tersentuh.
+Data yang dipakai semuanya palsu. Tiap uji mendapat folder sementaranya
+sendiri, jadi data sungguhan tidak tersentuh dan uji tidak saling menimpa.
 
-**Kalau ada yang GAGAL: jangan deploy.** Gulir ke atas, cari baris berawalan
-`GAGAL|` — namanya menjelaskan apa yang rusak.
+**Kalau ada yang GAGAL: jangan deploy.** Baris di bawah nama uji yang gagal
+menjelaskan apa yang rusak.
 
 ---
 
@@ -140,5 +155,5 @@ diminta kembali.
 ## Kalau perlu mengulang setelah berubah
 
 Setiap kali ada perubahan di `lib/blast/`, `api/blast*`, atau
-`src/public/blast*`, jalankan lagi **Lapis 1**. Butuh dua menit, dan itulah
+`src/public/blast*`, jalankan lagi **Lapis 1**. Butuh satu sampai dua menit, dan itulah
 yang membedakan "sudah saya cek" dengan "sudah saya jalankan".

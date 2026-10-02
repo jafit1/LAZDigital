@@ -944,7 +944,9 @@ async function bukaLayarQR(id, gantiNomor) {
   const mulai = Date.now();
   const BATAS_MS = 3 * 60 * 1000;   // QR WhatsApp berganti tiap ~20 detik; 3 menit sudah lebih dari cukup
   while (!berhenti) {
-    await new Promise((r) => setTimeout(r, 2000));
+    /* __ujiJedaQr hanya diisi uji tampilan supaya tidak menunggu 2 detik
+       per tanya; di lapangan selalu 2 detik. */
+    await new Promise((r) => setTimeout(r, window.__ujiJedaQr || 2000));
     if (berhenti) return;
     let h;
     try { h = await rpc('perangkat.periksa', { id }); } catch (e) { continue; }
@@ -3344,6 +3346,7 @@ async function buka(kode) {
         '\u{1F512}'))}</div>`;
     const ttKunci = $('#tombolTema');
     if (ttKunci) ttKunci.onclick = () => { terapkanTema(!temaGelap()); segarTema(ttKunci); };
+    document.documentElement.setAttribute('data-halaman-siap', kode);
     return;
   }
 
@@ -3370,6 +3373,10 @@ async function buka(kode) {
     selesaiSibuk();
   }
   if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
+  /* Tanda halaman selesai digambar. Dipakai tools/test_blast_ui.js untuk
+     menunggu keadaannya, bukan jeda tetap 700-800 ms per pindah halaman
+     (dulu sekitar 27 detik jeda tetap, dan tetap gagal di komputer sibuk). */
+  document.documentElement.setAttribute('data-halaman-siap', negara.halaman);
 }
 
 /* Tema memakai kunci dan atribut yang sama dengan halaman utama

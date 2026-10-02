@@ -229,9 +229,13 @@ const BATAS = {
     console.log('  GAGAL|', n, ket);
   };
 
-  for (const hal of HALAMAN) {
-    console.log(`\n=== ${hal.nama} (${hal.url}) ===`);
-    for (const uk of LEBAR) {
+  /* Tiap halaman dibuka di tujuh lebar layar. Dulu satu per satu: 49 kali
+     buka halaman, terukur 50 detik dan jadi uji terlama. Sekarang beberapa
+     lebar dibuka bersamaan di peramban yang sama (tiap lebar tetap konteks
+     sendiri, jadi tidak saling memengaruhi), lalu diperiksa berurutan
+     supaya keluarannya tetap rapi. */
+  const SEJAJAR = 3;
+  const ukurSatu = async (hal, uk) => {
       const ctx = await b.newContext({ viewport: { width: uk.w, height: uk.h } });
       const p = await ctx.newPage();
       p.on('pageerror', (e) => galat.push(`${hal.nama} @${uk.w}: ${e}`));
@@ -266,6 +270,18 @@ const BATAS = {
             .filter((x) => x.getBoundingClientRect().right > window.innerWidth + 1).length,
         };
       });
+      await ctx.close();
+      return u;
+  };
+
+  for (const hal of HALAMAN) {
+    console.log(`\n=== ${hal.nama} (${hal.url}) ===`);
+    const hasilUkur = [];
+    for (let i = 0; i < LEBAR.length; i += SEJAJAR) {
+      hasilUkur.push(...await Promise.all(LEBAR.slice(i, i + SEJAJAR).map((uk) => ukurSatu(hal, uk))));
+    }
+    LEBAR.forEach((uk, iu) => {
+      const u = hasilUkur[iu];
 
       const tag = `${hal.nama} @${uk.w}`;
       cek(`${tag}: perangkat terbaca "${uk.perangkat}"`, u.perangkat === uk.perangkat, u.perangkat);
@@ -304,9 +320,7 @@ const BATAS = {
           cek(`${tag}: bilah menu masih cukup lebar untuk labelnya`, u.navLebar >= 180, u.navLebar);
         }
       }
-
-      await ctx.close();
-    }
+    });
   }
 
   console.log('\n=== SENTUHAN JARI ===');

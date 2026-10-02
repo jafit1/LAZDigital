@@ -11,7 +11,7 @@
 const fs = require('fs'), path = require('path');
 const AKAR = path.join(__dirname, '..');
 process.chdir(AKAR);
-fs.rmSync(path.join(AKAR, '.data'), { recursive: true, force: true });
+fs.rmSync(require('./_folder-data.js')(AKAR), { recursive: true, force: true });
 
 process.env.BLAST_AGEN_TOKEN = 'token-agen-uji';
 delete process.env.UPSTASH_REDIS_REST_URL;

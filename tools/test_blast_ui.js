@@ -279,6 +279,17 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   await p.goto(A + '/blast.html');
   await p.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
 
+  /* Pindah halaman lalu tunggu sampai halamannya selesai digambar
+     (blast.js memasang data-halaman-siap). Dulu jeda tetap 450-800 ms per
+     pindah: lambat di sini, dan tetap kurang di komputer yang sedang sibuk. */
+  const pindah = async (kode) => {
+    await p.evaluate((k) => {
+      if (location.hash !== '#' + k) { document.documentElement.removeAttribute('data-halaman-siap'); location.hash = '#' + k; }
+    }, kode);
+    await p.waitForFunction(() => document.documentElement.getAttribute('data-halaman-siap') !== null, null, { timeout: 15000 });
+    await p.waitForTimeout(120);
+  };
+
   console.log('=== A. SATU BAHASA VISUAL DENGAN LAZDIGITAL ===');
   /* Ambil nilai acuan dari halaman utama supaya uji ini tidak menghafal warna:
      kalau tema LAZDigital diubah, uji ikut berubah sendiri. */
@@ -343,8 +354,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   const tanpaJudul = [];
   const kosongIsi = [];
   for (const kode of HALAMAN) {
-    await p.evaluate((k) => { location.hash = '#' + k; }, kode);
-    await p.waitForTimeout(450);
+    await pindah(kode);
     const h = await p.evaluate(() => {
       const semua = Array.from(document.querySelectorAll('#isi *'));
       const pola = /(^|\s)(rounded-|px-\d|py-\d|text-xs|text-sm|text-slate|bg-slate|bg-white|font-medium|dark:|sm:|lg:|md:|grid-cols|space-y-|divide-)/;
@@ -365,8 +375,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('tidak ada halaman yang gagal digambar', kosongIsi.length === 0, kosongIsi);
 
   console.log('\n=== D. DROPDOWN MEMAKAI PENYELARAS YANG SAMA ===');
-  await p.evaluate(() => { location.hash = '#massal'; });
-  await p.waitForTimeout(1400);
+  await pindah('massal');
   const drop = await p.evaluate(() => {
     const asli = Array.from(document.querySelectorAll('#isi select'));
     return {
@@ -396,7 +405,9 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   console.log('\n=== E. TEMA GELAP IKUT BERPINDAH ===');
   const terang = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
   await p.click('#tombolTema');
-  await p.waitForTimeout(350);
+  /* Latar berganti lewat transisi CSS. Ditunggu sampai warnanya berubah
+     (paling lama 3 detik); jeda tetap 350 ms gagal palsu di komputer sibuk. */
+  await p.waitForFunction((t) => getComputedStyle(document.body).backgroundColor !== t, terang, { timeout: 3000 }).catch(() => {});
   const gelap = await p.evaluate(() => ({
     atribut: document.documentElement.getAttribute('data-theme'),
     latar: getComputedStyle(document.body).backgroundColor,
@@ -406,14 +417,13 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('latarnya benar-benar berubah', gelap.latar !== terang, { terang, gelap: gelap.latar });
   cek('disimpan di kunci yang sama dengan halaman utama (laz_theme)', gelap.tersimpan === 'dark', gelap.tersimpan);
   await p.click('#tombolTema');
-  await p.waitForTimeout(300);
+  await p.waitForFunction((t) => getComputedStyle(document.body).backgroundColor === t, terang, { timeout: 3000 }).catch(() => {});
 
   console.log('\n=== F. DI LAYAR HP ===');
   await p.setViewportSize({ width: 390, height: 844 });
   const luberDi = [];
   for (const kode of HALAMAN) {
-    await p.evaluate((k) => { location.hash = '#' + k; }, kode);
-    await p.waitForTimeout(400);
+    await pindah(kode);
     const luber = await p.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
     if (luber) luberDi.push(kode);
   }
@@ -423,8 +433,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   /* Penggantian nama per kontak sudah jalan sejak awal; yang tidak ada adalah
      sesuatu yang memberitahu petugas bahwa penandanya ada. */
   await p.setViewportSize({ width: 1280, height: 900 });
-  await p.evaluate(() => { location.hash = '#kirim'; });
-  await p.waitForTimeout(800);
+  await pindah('kirim');
   const keping = await p.evaluate(() => Array.from(document.querySelectorAll('#isi .keping')).map((k) => k.textContent.trim()));
   cek('ada keping {{nama}} di komposer', keping.includes('{{nama}}'), keping);
   /* {{keterangan}} menggantikan {{kantor}} sebagai penanda yang ditawarkan.
@@ -516,8 +525,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   await p.waitForTimeout(200);
 
   console.log('\n=== F0c. HAPUS RIWAYAT ===');
-  await p.evaluate(() => { location.hash = '#antrean'; });
-  await p.waitForTimeout(700);
+  await pindah('antrean');
   const hapusRiwayat = await p.evaluate(() => ({
     tombolBaris: document.querySelectorAll('#isi [data-hapusp]').length,
     tombolSemua: (document.getElementById('hapusSemua') || {}).textContent || '',
@@ -598,10 +606,15 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   const sesudahGambarUlang = await p.evaluate(async () => {
     const kotak = Array.from(document.querySelectorAll('#isi input.tandai'));
     kotak[0].click();
+    /* Ditunggu sampai keadaannya benar-benar berganti, bukan jeda tetap
+       700/900 ms: saat uji dijalankan bersamaan (tools/jalankan-uji.js)
+       daftar antrean belum selesai digambar setelah 900 ms dan bilahnya
+       belum ada, sehingga uji gagal padahal aplikasinya benar. */
+    const tunggu = async (syarat) => { for (let i = 0; i < 160 && !syarat(); i++) await new Promise((r) => setTimeout(r, 50)); };
     location.hash = '#kontak';
-    await new Promise((r) => setTimeout(r, 700));
+    await tunggu(() => !kotak[0].isConnected);
     location.hash = '#antrean';
-    await new Promise((r) => setTimeout(r, 900));
+    await tunggu(() => document.getElementById('bilahTandai') && document.querySelector('#isi input.tandai'));
     return {
       tercentang: document.querySelectorAll('#isi input.tandai:checked').length,
       bilahTersembunyi: (document.getElementById('bilahTandai') || {}).hidden,
@@ -611,8 +624,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     sesudahGambarUlang.tercentang === 0 && sesudahGambarUlang.bilahTersembunyi === true, sesudahGambarUlang);
 
   console.log('\n=== F0d. GRUP DI KIRIMAN MASSAL ===');
-  await p.evaluate(() => { location.hash = '#massal'; });
-  await p.waitForTimeout(800);
+  await pindah('massal');
   const layarMassal = await p.evaluate(() => ({
     adaSegmenLama: Boolean(document.querySelector('#isi select[name=segmen]')),
     grup: Array.from(document.querySelectorAll('#isi [data-grup]')).map((c) => c.value),
@@ -689,8 +701,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   /* Bagian sebelumnya berpindah ke halaman lain, jadi halamannya dikembalikan
      dulu. Uji yang bergantung pada sisa keadaan uji sebelumnya akan gagal
      dengan sebab yang menyesatkan begitu urutannya berubah. */
-  await p.evaluate(() => { location.hash = '#kirim'; });
-  await p.waitForTimeout(800);
+  await pindah('kirim');
   const kotak = await p.evaluate(() => {
     const f = document.querySelector('#isi input[type=file]');
     return f ? { ada: true, terima: f.accept, ket: (document.getElementById('fkBerkasKet') || {}).textContent || '' } : { ada: false };
@@ -727,8 +738,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('berkas yang muat langsung diunggah', kecil.id === 'f_uji1', kecil);
   cek('namanya ditampilkan supaya petugas yakin', /Panduan Zakat/.test(kecil.ket), kecil.ket);
 
-  await p.evaluate(() => { location.hash = '#massal'; });
-  await p.waitForTimeout(800);
+  await pindah('massal');
   const massal = await p.evaluate(() => ({
     berkas: !!document.querySelector('#isi input[type=file]'),
     keping: Array.from(document.querySelectorAll('#isi .keping')).map((k) => k.textContent.trim()),
@@ -737,8 +747,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('dan juga punya keping penanda', massal.keping.includes('{{nama}}'), massal.keping);
 
   console.log('\n=== F1b. CENTANG SAMPAI DAN DIBACA ===');
-  await p.evaluate(() => { location.hash = '#antrean'; });
-  await p.waitForTimeout(800);
+  await pindah('antrean');
   const centang = await p.evaluate(() => {
     const cari = (t) => Array.from(document.querySelectorAll('#isi .badge')).find((b) => b.textContent.trim() === t);
     const diserahkan = cari('diserahkan'), terkirim = cari('terkirim');
@@ -750,8 +759,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('status terkirim ditandai centang', centang.terkirimPunyaCentang, centang);
   cek('status yang belum sampai HP tidak diberi centang', centang.diserahkanTanpaCentang, centang);
 
-  await p.evaluate(() => { location.hash = '#dasbor'; });
-  await p.waitForTimeout(800);
+  await pindah('dasbor');
   const dasbor = await p.evaluate(() => {
     const ubin = Array.from(document.querySelectorAll('#isi .ringkas .stat'));
     return {
@@ -800,10 +808,12 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     ? { status: 'menunggu', qr: QR_PALSU, keterangan: '' }
     : { status: 'terputus', qr: '', keterangan: 'Menunggu gateway.' });
 
-  await p.evaluate(() => { location.hash = '#perangkat'; });
-  await p.waitForTimeout(700);
+  await pindah('perangkat');
+  /* Jeda tanya QR dipendekkan dari 2 detik ke 0,4 detik (hanya di uji ini):
+     tiga kali tanya dulu menghabiskan 6 detik menunggu. */
+  await p.evaluate(() => { window.__ujiJedaQr = 400; });
   await p.click('[data-sambung]');
-  await p.waitForTimeout(600);
+  await p.waitForSelector('#qrIsi', { timeout: 10000 });
   const awalQR = await p.evaluate(() => ({
     terbuka: document.getElementById('modalBg').classList.contains('show'),
     adaRangka: !!document.querySelector('#qrIsi .rangka'),
@@ -837,6 +847,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     .catch(() => cek('layar menutup sendiri setelah tersambung', false));
   delete dinamis['perangkat.sambung'];
   delete dinamis['perangkat.periksa'];
+  await p.evaluate(() => { delete window.__ujiJedaQr; });
 
   console.log('\n=== G. LAYAR PEMUATAN MENYATU DENGAN HALAMAN ===');
   /* Layar pembuka harus diperiksa SELAGI terlihat, jadi jawaban status
@@ -946,8 +957,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('menu lainnya tetap utuh', menuAdmin.length === HALAMAN.length - 2, menuAdmin);
 
   /* Menu yang disembunyikan tetap bisa dicapai dengan mengetik alamatnya. */
-  await p.evaluate(() => { location.hash = '#webhook'; });
-  await p.waitForTimeout(700);
+  await pindah('webhook');
   const paksaWebhook = await p.evaluate(() => ({
     isi: (document.getElementById('isi') || {}).textContent || '',
     adaRahasia: Boolean(document.querySelector('[name="webhook.rahasia"]')),
@@ -957,14 +967,12 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('dan rahasia tanda tangannya tidak ikut tergambar di mana pun',
     paksaWebhook.adaRahasia === false);
 
-  await p.evaluate(() => { location.hash = '#audit'; });
-  await p.waitForTimeout(700);
+  await pindah('audit');
   const paksaAudit = await p.evaluate(() => (document.getElementById('isi') || {}).textContent || '');
   cek('begitu juga #audit', /superadmin/i.test(paksaAudit), paksaAudit.slice(0, 160));
 
   /* Mengunci menunya saja tidak cukup: kartu webhook ada di Pengaturan. */
-  await p.evaluate(() => { location.hash = '#setelan'; });
-  await p.waitForTimeout(900);
+  await pindah('setelan');
   const setelanAdmin = await p.evaluate(() => ({
     adaKartu: Array.from(document.querySelectorAll('#isi h3')).some((h) => /webhook/i.test(h.textContent)),
     adaRahasia: Boolean(document.querySelector('[name="webhook.rahasia"]')),
@@ -983,8 +991,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   await p.waitForTimeout(1000);
 
   console.log('\n=== H2. HAPUS DI WEBHOOK DAN AUDIT ===');
-  await p.evaluate(() => { location.hash = '#webhook'; });
-  await p.waitForTimeout(900);
+  await pindah('webhook');
   const alatW = await p.evaluate(() => ({
     perBaris: document.querySelectorAll('#isi [data-hapusw]').length,
     kosongkan: Boolean(document.getElementById('hapusSemua')),
@@ -996,8 +1003,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   cek('tiap baris webhook bisa ditandai', alatW.kotakTandai >= 1, alatW);
   cek('halaman berbentuk kartu tetap punya "tandai semua"', alatW.tandaiSemua === true, alatW);
 
-  await p.evaluate(() => { location.hash = '#audit'; });
-  await p.waitForTimeout(900);
+  await pindah('audit');
   const alatA = await p.evaluate(() => ({
     perBaris: document.querySelectorAll('#isi [data-hapusa]').length,
     kosongkan: Boolean(document.getElementById('hapusSemua')),
@@ -1025,8 +1031,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
      memakai urutan lain, yang terjadi bukan galat melainkan keterangan yang
      diam-diam masuk ke kolom kantor — dan kantor itulah yang dipakai mengunci
      pengurus KLL ke kantornya sendiri. */
-  await p.evaluate(() => { location.hash = '#kontak'; });
-  await p.waitForTimeout(800);
+  await pindah('kontak');
   await p.click('#imporK');
   await p.waitForTimeout(400);
   const dlg = await p.evaluate(() => ({
@@ -1057,8 +1062,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
      memperlihatkan setiap pesan sebagai baris tersendiri. Di sini dibuktikan
      empat pesan dengan Budi menjadi SATU baris, dan bahwa mengkliknya
      benar-benar memperlihatkan keempatnya. */
-  await p.evaluate(() => { location.hash = '#percakapan'; });
-  await p.waitForTimeout(900);
+  await pindah('percakapan');
   const pc = await p.evaluate(() => ({
     baris: Array.from(document.querySelectorAll('#isi [data-utas]')).map((b) => ({
       kunci: b.dataset.utas,

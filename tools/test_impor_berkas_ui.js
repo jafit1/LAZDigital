@@ -190,12 +190,27 @@ const srv = http.createServer(async (req, res) => {
       await page.evaluate(() => !document.getElementById('import_default_metode') && !document.getElementById('import_default_rekening')));
     await page.evaluate(() => {
       const set = (id, v) => { const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); };
-      set('impb_jenis', 'kas'); set('impb_bulan', '09'); set('impb_tahun', '2026');
+      /* Sengaja salah: pemilik pernah mengunggah jurnal BANK dengan pilihan
+         bawaan "Jurnal Kas", dan rekapnya jadi 538 temuan (yang benar 61). */
+      set('impb_jenis', 'bank'); set('impb_bulan', '09'); set('impb_tahun', '2026');
     });
 
     console.log('\n=== B. UNGGAH, TANGGAL TIDAK MUNDUR, TEMUAN TAMPIL ===');
     await page.setInputFiles('#import_file', berkas);
     await page.waitForFunction(() => window.IMPORT_FILE_TSV || (typeof IMPORT_FILE_TSV !== 'undefined' && IMPORT_FILE_TSV), null, { timeout: 15000 });
+    cek('jenis berkas mengikuti isi berkas: seksi "VIA KAS" jadi Jurnal Kas', await page.evaluate(() => document.getElementById('impb_jenis').value) === 'kas',
+      await page.evaluate(() => document.getElementById('impb_jenis').value));
+    cek('keping berkas menyebut jenis yang terbaca', /Jurnal Kas/.test(await page.textContent('#importFileInfo')), await page.textContent('#importFileInfo'));
+    const tata = await page.evaluate(() => {
+      const k = (id) => document.getElementById(id).getBoundingClientRect();
+      const drop = k('importDrop'), jenis = document.getElementById('impb_jenis').closest('.field').getBoundingClientRect(), rekap = document.querySelector('#impb_rekap').closest('.field').getBoundingClientRect();
+      const atas = document.querySelector('.imp-atas').getBoundingClientRect(), badan = document.getElementById('modalBody').getBoundingClientRect();
+      return { dropW: drop.width, badanW: badan.width, dropTop: drop.top, dropBawah: drop.bottom, jenisTop: jenis.top, jenisBawah: jenis.bottom, rekapTop: rekap.top, atasH: atas.height };
+    });
+    cek('kotak Telusuri disempitkan (kurang dari 40% lebar jendela)', tata.dropW < tata.badanW * 0.4, tata);
+    cek('pilihan jenis, bulan, tahun, dan rekap berdampingan dengan kotak Telusuri',
+      tata.jenisTop < tata.dropBawah && tata.jenisBawah > tata.dropTop && Math.abs(tata.rekapTop - tata.jenisTop) < 30, tata);
+    cek('bagian atas jendela impor ringkas (di bawah 170 px) supaya pratinjau lebih luas', tata.atasH < 170, tata);
     await page.click('#importTarikBtn');
     await page.waitForSelector('#imporTemuanBlok', { timeout: 20000 });
     const H = () => page.evaluate(() => (window.IMPORT_TEMP_HIMPUN_ROWS || []).map((r) => ({ t: r.tanggal, j: r.jumlah, n: r.namaDonatur, l: r.layananId, p: r.pilar, x: !!r._lewati })));
@@ -281,6 +296,50 @@ const srv = http.createServer(async (req, res) => {
     cek('kekeringan diusulkan pindah ke Lingkungan, ambulan ke Kesehatan',
       await page.evaluate(() => { const j = JSON.stringify(window.IMPORT_TEMP_RES.temuan.filter((t) => t.jenis === 'rekapDana')); return /Lingkungan/.test(j) && /Kesehatan/.test(j); }));
     cek('tombol "Samakan semua dengan rekap" tampil', await page.$('#imporSamakanSemua') !== null);
+
+    console.log('\n=== F. PILIHAN MASSAL: IKUT REKAP, IKUT JURNAL, PERTAHANKAN PILIHAN SENDIRI ===');
+    const totalNow = () => page.evaluate(() => Math.round(ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.total));
+    const pilarKek = () => page.evaluate(() => (window.IMPORT_TEMP_HIMPUN_ROWS.find((r) => Math.round(r.jumlah) === 75000) || {}).pilar);
+    const statusT = (id) => page.evaluate((i) => { const t = window.IMPORT_TEMP_RES.temuan.find((x) => x.id === i); return t ? (t.status || '') : 'hilang'; }, id);
+    const totalJurnal = await totalNow();
+    const pilarJurnal = await pilarKek();
+    cek('ada tombol "Semua sesuai jurnal"', (await page.$('#imporSemuaJurnal')) !== null);
+    cek('ada pilihan "pertahankan yang sudah saya pilih sendiri", tercentang bawaan',
+      await page.evaluate(() => { const c = document.getElementById('imporPertahankan'); return !!c && c.checked; }));
+    const idKek = await page.evaluate(() => (window.IMPORT_TEMP_RES.temuan.find((t) => t.jenis === 'rekapDana' && /Lingkungan/.test(JSON.stringify(t.usulan))) || {}).id);
+    const idAmb = await page.evaluate(() => (window.IMPORT_TEMP_RES.temuan.find((t) => t.jenis === 'rekapDana' && /Kesehatan/.test(JSON.stringify(t.usulan))) || {}).id);
+    const idTambah = await page.evaluate(() => (window.IMPORT_TEMP_RES.temuan.find((t) => t.jenis === 'rekapHanyaRekap' && /Donatur Rekap/.test(JSON.stringify(t.usulan))) || {}).id);
+    await page.click('.imp-temu-aksi[data-t="' + idKek + '"][data-aksi="biar"]');
+    await page.waitForTimeout(150);
+    await page.click('#imporSemuaJurnal');
+    await page.waitForTimeout(200);
+    const belumPutus = await page.evaluate(() => window.IMPORT_TEMP_RES.temuan.filter((t) => /^rekap/.test(t.jenis) && t.jenis !== 'rekapRingkas' && !t.status).length);
+    cek('"Semua sesuai jurnal": semua temuan rekap diputuskan', belumPutus === 0, belumPutus);
+    cek('"Semua sesuai jurnal": angka tetap angka jurnal', (await totalNow()) === totalJurnal, [await totalNow(), totalJurnal]);
+    await page.click('#imporSamakanSemua');
+    await page.waitForTimeout(200);
+    cek('"Cocokkan ke rekap" dengan pilihan sendiri dipertahankan: kekeringan tetap ikut jurnal',
+      (await pilarKek()) === pilarJurnal && (await statusT(idKek)) === 'dibiarkan', [await pilarKek(), await statusT(idKek)]);
+    cek('yang tidak dipilih sendiri ikut rekap, termasuk yang tadi "sesuai jurnal" massal', (await statusT(idAmb)) === 'diterapkan' && (await totalNow()) === 4295000,
+      [await statusT(idAmb), await totalNow()]);
+    cek('tiap temuan yang sudah diputuskan punya tombol "Ubah"', (await page.$('.imp-temu-ubah[data-t="' + idTambah + '"]')) !== null);
+    await page.click('.imp-temu-ubah[data-t="' + idTambah + '"]');
+    await page.waitForTimeout(200);
+    cek('"Ubah" membatalkan tambahan dari rekap: barisnya hilang lagi', (await totalNow()) === 4295000 - 50000
+      && !(await page.evaluate(() => window.IMPORT_TEMP_HIMPUN_ROWS.some((r) => r.namaDonatur === 'Donatur Rekap' && !r._lewati))), await totalNow());
+    cek('sesudah "Ubah", tombol pilihannya muncul lagi', (await statusT(idTambah)) === ''
+      && (await page.$('.imp-temu-aksi[data-t="' + idTambah + '"]')) !== null);
+    await page.click('.imp-temu-ubah[data-t="' + idKek + '"]');
+    await page.waitForTimeout(150);
+    await page.click('.imp-temu-aksi[data-t="' + idKek + '"][data-aksi="terap"]');
+    await page.waitForTimeout(150);
+    cek('pilihan sendiri bisa diganti: kekeringan jadi Lingkungan', (await pilarKek()) === 'Lingkungan', await pilarKek());
+    await page.click('.imp-temu-ubah[data-t="' + idKek + '"]');
+    await page.waitForTimeout(150);
+    cek('"Ubah" mengembalikan nilai jurnal', (await pilarKek()) === pilarJurnal, await pilarKek());
+    await page.click('.imp-temu-aksi[data-t="' + idKek + '"][data-aksi="biar"]');
+    await page.waitForTimeout(150);
+    await page.uncheck('#imporPertahankan');
     await page.click('#imporSamakanSemua');
     await page.waitForTimeout(300);
     const R = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []));

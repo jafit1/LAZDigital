@@ -200,14 +200,23 @@ atau angka yang meleset. **Yang menemukan selalu pengukuran.**
 Bukan sekadar menambah uji. Buktikan dulu ujinya **gagal tanpa perbaikan**,
 baru pasang perbaikannya. Uji yang lulus di dua-duanya tidak menjaga apa pun.
 
-Simpan ujinya sebagai berkas tetap di `tools/`, dan daftarkan di
-`uji-sebelum-deploy.bat`.
+Simpan ujinya sebagai berkas tetap di `tools/`, dan daftarkan di `DAFTAR`
+pada `tools/jalankan-uji.js` (pelari yang dipanggil `uji-sebelum-deploy.bat`).
+
+Uji dijalankan **bersamaan**, jadi uji baru tidak boleh menulis ke tempat yang
+dipakai uji lain. Penyimpanan lokal Broadcast/Fundraising/AI/Media sudah
+mengikuti `LAZ_DATA_LOKAL` (folder sementara per uji); kalau uji perlu
+menghapus folder datanya, pakai `require('./_folder-data.js')(AKAR)`, jangan
+`path.join(AKAR, '.data')`. Uji yang terpaksa berbagi berkas proyek dijadikan
+satu kelompok di `aturGrup()` supaya bergiliran.
 
 ### 3.9 `&` di dalam `echo` pada berkas .bat
 
 `echo --- Fitur Media & Desain ---` membuat Windows menganggap `Desain` sebagai
 perintah, lalu muncul `'Desain' is not recognized as an internal or external
-command`. Pakai kata "dan" pada label di `uji-sebelum-deploy.bat`, jangan `&`.
+command`. Pakai kata "dan" di `echo` berkas .bat, jangan `&` (atau tulis `^&`).
+Label uji sekarang ada di `tools/jalankan-uji.js`, jadi aturan ini tinggal
+berlaku untuk `echo` di .bat.
 
 ### 3.10 Keamanan akun, sesi, dan pintu dari luar
 
@@ -352,7 +361,7 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
 ```
 1. Ubah kode
 2. node tools/<uji yang relevan>.js     (cepat, sambil mengerjakan)
-3. uji-sebelum-deploy.bat               (semuanya, wajib)
+3. uji-sebelum-deploy.bat               (semuanya, wajib, 1 sampai 2 menit)
 4. deploy.bat                           (git add + commit + push)
 5. Tunggu Vercel selesai, lalu Ctrl+Shift+R di peramban
 ```
@@ -370,17 +379,43 @@ lalu **tautkan ulang nomor WhatsApp** kalau yang berubah menyangkut riwayat.
 
 ## 7. Daftar uji
 
-Dijalankan berurutan oleh `uji-sebelum-deploy.bat`. Uji yang butuh Playwright
-akan melewati dirinya sendiri dengan kode keluar 2 kalau Playwright belum ada
-(`npm i -D playwright && npx playwright install chromium`).
+Dijalankan oleh `uji-sebelum-deploy.bat` lewat `tools/jalankan-uji.js`:
+bersamaan (3 sampai 5 sekaligus, yang paling lama dimulai lebih dulu), satu
+baris per uji, rincian dan alamat log lengkap hanya untuk yang GAGAL. Satu per
+satu seperti dulu: `uji-sebelum-deploy.bat --urut`. Sebagian saja:
+`uji-sebelum-deploy.bat impor kll` (hasilnya tidak disebut aman untuk deploy).
+
+**Uji yang membuka Chromium dibatasi 2 sekaligus** (3 kalau prosesor 8 inti
+ke atas; ubah dengan `--peramban=N`). Di komputer pemilik (Windows) enam
+sekaligus membuat uji yang di sini 7 detik jadi 58 detik, dan empat uji
+tampilan gagal karena halamannya tidak terbuka dalam 30 detik. **Uji yang
+gagal diulang sekali, sendirian, di akhir**; kalau lulus, tetap tertulis
+"diulang sendirian dan lulus" beserta sebab gagal pertamanya, jadi tidak
+tersembunyi. Yang gagal dua kali, itu kegagalan sungguhan.
+
+Dua uji terlama sudah dipangkas tanpa mengurangi pemeriksaan:
+`test_blast_ui.js` 50 jadi 26 detik (menunggu `data-halaman-siap` yang
+dipasang `blast.js`, bukan jeda tetap, dan jeda tanya QR dipendekkan lewat
+`window.__ujiJedaQr`), `test_skala_ui.js` 50 jadi 29 detik (tiga lebar layar
+dibuka bersamaan). Berurutan dulu 248 detik.
+Uji yang mengukur waktu (`test_sidebar_gerak.js`, milidetik hitung tata letak)
+bertanda `sendiri: true`: dijalankan paling akhir tanpa teman, karena saat
+bersamaan terukur 78 ms lawan batas 45 ms (sendirian 15,8 ms). Uji baru yang
+menunggu dengan jeda tetap (`waitForTimeout(900)`) cenderung gagal palsu saat
+bersamaan; tunggu keadaannya, bukan waktunya.
+
+Uji yang butuh Playwright akan melewati dirinya sendiri dengan kode keluar 2
+kalau Playwright belum ada (`npm i -D playwright && npx playwright install
+chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 
 | Berkas | Menjaga apa |
 |---|---|
 | `uji_batas_vercel.js` | jumlah fungsi masih di bawah 12 |
+| `test_jalankan_uji.js` | pelari uji: tiap uji punya folder data sendiri, uji yang gagal/macet/hilang terhitung gagal, keluaran ringkas, alat migrasi dan basis data percobaan bergiliran |
 | `test_agen.js` | sambungan ke gateway WhatsApp, centang, lampiran |
 | `test_impor_jurnal.js` | impor jurnal, tidak ada baris hilang diam-diam |
 | `test_impor_jurnal_bank.js` | unggah Excel di zona WIB tidak memundurkan tanggal, akun "Penerimaan ..." di seksi mana pun (PERSEDIAAN, TRANSAKSI BANK) terhitung penghimpunan |
-| `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan |
+| `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan, jenis berkas terbaca dari isinya, bagian atas jendela ringkas, pilihan massal rekap/jurnal yang mempertahankan pilihan sendiri, tombol Ubah |
 | `test_samakan_rekap.js` | rekap bulanan jadi patokan: angka jurnal sama dengan rekap setelah disamakan, biaya admin bank tidak dilewati, LPJ dan label rekap yang bentrok tidak dipindah diam-diam, Closing menghitung gaji KLL yang dibayar Daerah sebagai Daerah |
 | `test_tampilan_kll_menu.js` | rekap bulanan tidak wajib tetapi ditawarkan di pratinjau, Saldo KLL ringkas (sisa saldo hijau, belum LPJ bertanda merah), urutan menu kiri per akun (tarik atau panah, tersimpan di server, menu teratas jadi halaman pertama) |
 | `test_izin_modul.js` | pemecahan izin Dashboard, akun lama tidak kehilangan menu |
@@ -503,6 +538,14 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   tanpa KLL/ULL, kantor tak terdaftar, pilar bertentangan dengan keterangan,
   rekening jenis dana lain, nominal di bawah Rp 1.000, baris kembar, berkas
   bank yang hanya berisi sebagian seksi. Tidak ada yang diubah otomatis.
+  Jenis berkas (kas/bank) dipilih otomatis dari judul seksi penerimaan
+  ("... VIA BANK" / "... VIA KAS", `imporTebakJenis`): jurnal bank yang
+  diimpor sebagai "Jurnal Kas" pernah memberi 538 temuan rekap palsu (yang
+  benar 61), karena penerimaan rekap dipilah lewat kolom MELALUI.
+  Tiap keputusan temuan bisa dibatalkan ("Ubah", `IMPOR_JEJAK`), dan temuan
+  rekap punya pilihan massal "Cocokkan ke rekap" / "Sesuai jurnal" dengan
+  "Pertahankan yang sudah saya pilih sendiri" (keputusan per temuan bertanda
+  `oleh:'sendiri'` tidak disentuh selama tercentang).
 - **Rekap bulanan pemilik adalah patokan** (1 Oktober 2026). Jurnal tetap
   diimpor (hanya jurnal yang memuat setor tunai, mutasi, dan biaya admin
   bank), lalu `apiSamakanRekap` mengusulkan kantor, pilar (dari kolom

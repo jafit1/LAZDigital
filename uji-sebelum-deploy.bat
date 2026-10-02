@@ -1,108 +1,41 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 title LAZ Digital - Uji sebelum deploy
 cd /d "%~dp0"
 chcp 65001 >nul
 
-echo.
-echo ==================================================
-echo   UJI SEBELUM DEPLOY
-echo   Semua uji di bawah ini jalan di komputer ini,
-echo   memakai data palsu. Data sungguhan tidak disentuh.
-echo ==================================================
-echo.
+REM Semua uji jalan di komputer ini dengan data palsu. Data sungguhan tidak
+REM disentuh. Daftar ujinya ada di tools\jalankan-uji.js (bukan di sini lagi):
+REM uji dijalankan bersamaan dan hanya yang gagal yang dicetak rinci.
+REM
+REM   uji-sebelum-deploy.bat            semua uji
+REM   uji-sebelum-deploy.bat impor      hanya uji yang namanya memuat "impor"
+REM   uji-sebelum-deploy.bat --urut     satu per satu, kalau ada yang aneh
 
 where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js belum terpasang. Unduh di https://nodejs.org
-  pause & exit /b 1
+  pause
+  exit /b 1
 )
 if not exist node_modules (
   echo Memasang dependensi, sekali saja...
   call npm install
 )
 
-set GAGAL=0
+node tools\jalankan-uji.js %*
+set HASIL=%errorlevel%
 
-REM Yang paling depan sengaja yang paling murah dan paling fatal: kalau jumlah
-REM fungsi melewati batas Vercel, SELURUH deploy ditolak - bukan cuma satu fitur.
-call :jalankan "Batas fungsi Vercel"            tools\uji_batas_vercel.js
-call :jalankan "Panduan AI masih cocok"        tools\test_panduan_ai.js
-call :jalankan "Sambungan ke gateway WhatsApp"  tools\test_agen.js
-call :jalankan "Impor jurnal"                   tools\test_impor_jurnal.js
-call :jalankan "Impor jurnal bank dan tanggal"  tools\test_impor_jurnal_bank.js
-call :jalankan "Aturan kantor dan temuan impor" tools\test_impor_berkas.js
-call :jalankan "Layar Impor Jurnal per Berkas" tools\test_impor_berkas_ui.js
-call :jalankan "Samakan jurnal dengan rekap"    tools\test_samakan_rekap.js
-call :jalankan "Tawaran rekap, Saldo KLL, urutan menu"    tools\test_tampilan_kll_menu.js
-call :jalankan "Pemecahan izin Dashboard"       tools\test_izin_modul.js
-call :jalankan "Admin tidak bisa jadi superadmin" tools\test_eskalasi_user.js
-call :jalankan "Ingat saya tanpa menyimpan sandi" tools\test_ingat_saya.js
-call :jalankan "Alur Ingat saya di peramban"   tools\test_ingat_saya_ui.js
-call :jalankan "Akun nonaktif langsung tertutup" tools\test_akun_nonaktif.js
-call :jalankan "Dialog Edit User"               tools\test_izin_ui.js
-call :jalankan "Nama kantor layanan kembar"     tools\test_kantor_kembar.js
-call :jalankan "Peringatan cadangan"            tools\test_cadangan_peringatan.js
-call :jalankan "Pemulihan cadangan hanya superadmin" tools\test_pulihkan_aman.js
-call :jalankan "Keamanan gelombang kedua"       tools\test_keamanan_lanjutan.js
-call :jalankan "Kunci login dan sesi ter-hash"  tools\test_sesi_kuat.js
-call :jalankan "Fitur Broadcast"                tools\test_blast_fitur.js
-call :jalankan "Pintu pesan masuk WhatsApp"     tools\test_blast_masuk.js
-call :jalankan "Tampilan halaman Broadcast"     tools\test_blast_ui.js
-call :jalankan "Kotak masuk percakapan"          tools\test_percakapan.js
-call :jalankan "Bentuk layar percakapan"         tools\ukur-percakapan.js
-call :jalankan "Fitur Fundraising"              tools\test_fund_fitur.js
-call :jalankan "Fundraiser dan pencocokan"        tools\test_fundraiser.js
-call :jalankan "Tampilan halaman Fundraising"   tools\test_fund_ui.js
-call :jalankan "Fitur Media dan Desain"           tools\test_media_fitur.js
-call :jalankan "Tampilan halaman Media"         tools\test_media_ui.js
-call :jalankan "Fitur AI Asisten"               tools\test_ai_fitur.js
-call :jalankan "Tampilan halaman AI Asisten"    tools\test_ai_ui.js
-call :jalankan "Sambungan ke PostgreSQL"         tools\cek-postgres.js
-call :jalankan "Buku besar di PostgreSQL"        tools\test_laz_pg.js
-call :jalankan "Cadangan dan pemulihan PostgreSQL" tools\test_cadangan_pg.js
-call :jalankan "Sesi modul di PostgreSQL"        tools\test_sesi_modul_pg.js
-call :jalankan "Alat ukur dan rapikan Redis"       tools\test_alat_redis.js
-call :jalankan "Alat ekspor Redis"              tools\test_ekspor_redis.js
-call :jalankan "Lambang dan ikon situs"            tools\test_ikon.js
-call :jalankan "Bilah menu: logo dan tombol keluar" tools\test_sidebar_ui.js
-call :jalankan "Gerak buka/tutup bilah menu"     tools\test_sidebar_gerak.js
-call :jalankan "Kelurusan ikon bilah menu"       tools\ukur-sisi.js
-call :jalankan "Skala tampilan di semua perangkat" tools\test_skala_ui.js
-call :jalankan "Apa yang sudah sampai di server" tools\uji_cek_deploy.js
-
-echo.
-echo ==================================================
-if "%GAGAL%"=="0" (
-  echo   SEMUA LULUS - aman untuk deploy.
-  echo.
-  echo   Langkah berikutnya:
-  echo     1. Pastikan variabel di Vercel sudah terisi
-  echo        ^(lihat .env.example: BLAST_AGEN_TOKEN, RAHASIA_SESI, PENGIRIM^)
-  echo     2. Jalankan deploy.bat
-) else (
-  echo   ADA %GAGAL% UJI YANG GAGAL - jangan deploy dulu.
-  echo   Gulir ke atas untuk melihat baris bertanda GAGAL.
-)
-echo ==================================================
+if not "%HASIL%"=="0" goto gagal
+if not "%~1"=="" goto selesai
+echo   Langkah berikutnya:
+echo     1. Pastikan variabel di Vercel sudah terisi ^(lihat .env.example^)
+echo     2. Jalankan deploy.bat
+goto selesai
+:gagal
+echo   Perbaiki yang GAGAL, lalu jalankan ulang ujinya saja, misalnya:
+echo     node tools\test_impor_berkas.js
+:selesai
 echo.
 pause
-exit /b %GAGAL%
-
-:jalankan
-echo.
-echo --- %~1 ---
-if not exist "%~2" (
-  echo   DILEWATI^: berkas %~2 tidak ada
-  exit /b 0
-)
-node "%~2"
-if errorlevel 2 (
-  echo   DILEWATI^: butuh Playwright ^(npm i -D playwright ^&^& npx playwright install chromium^)
-  exit /b 0
-)
-if errorlevel 1 (
-  set /a GAGAL+=1
-  echo   ^>^>^> GAGAL^: %~1
-)
-exit /b 0
+exit /b %HASIL%

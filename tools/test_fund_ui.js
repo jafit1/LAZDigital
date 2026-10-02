@@ -573,7 +573,14 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
     akhir.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
     const pita = pop.querySelectorAll('.rt-sel.dalam').length;
     akhir.click();
-    await new Promise((r) => setTimeout(r, 400));
+    /* Ditunggu sampai tulisannya muncul (paling lama 5 detik), bukan jeda
+       tetap 400 ms: di komputer pemilik yang sedang menjalankan uji lain,
+       tombolnya masih kosong setelah 400 ms dan uji gagal palsu. */
+    for (let i = 0; i < 100; i++) {
+      const t = (document.getElementById('rtFund_teks') || {}).textContent || '';
+      if (/\u2013/.test(t) && !document.querySelector('.rt-pop:not(.hidden)')) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
     return {
       sesudahAwal, pita,
       teksTombol: (document.getElementById('rtFund_teks') || {}).textContent || '',
