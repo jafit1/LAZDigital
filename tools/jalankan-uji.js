@@ -41,6 +41,7 @@ const DAFTAR = [
   { label: 'Layar Impor Jurnal per Berkas', berkas: 'test_impor_berkas_ui.js' },
   { label: 'Samakan jurnal dengan rekap', berkas: 'test_samakan_rekap.js' },
   { label: 'Tawaran rekap, Saldo KLL, urutan menu', berkas: 'test_tampilan_kll_menu.js' },
+  { label: 'Link Penghimpunan Harian', berkas: 'test_link_harian.js' },
   { label: 'Pemecahan izin Dashboard', berkas: 'test_izin_modul.js' },
   { label: 'Admin tidak bisa jadi superadmin', berkas: 'test_eskalasi_user.js' },
   { label: 'Ingat saya tanpa menyimpan sandi', berkas: 'test_ingat_saya.js' },

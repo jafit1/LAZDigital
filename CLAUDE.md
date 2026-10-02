@@ -252,7 +252,7 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
 - **Settings ke peramban disaring** lewat `_settingsAman()`: `lg_*` tidak
   pernah dikirim, `publicToken` hanya ke pemegang izin lihat Pengaturan.
   `apiSaveSettings` menolak kunci milik sistem (`_kunciSistem()`: `lg_*`,
-  `uf_*`, `um_*`, `publicToken`, `publicEnabled`, `aliasKantor`).
+  `uf_*`, `um_*`, `lhToken*`, `publicToken`, `publicEnabled`, `aliasKantor`).
   Urutan menu kiri (`um_<id>`) hanya ditulis lewat `apiUpdateMyProfile`
   `urutanMenu`, berisi daftar id menu berhuruf kecil saja.
 - **Impor lewat URL** hanya https, dan setiap alamat IP hasil DNS harus
@@ -415,9 +415,10 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_agen.js` | sambungan ke gateway WhatsApp, centang, lampiran |
 | `test_impor_jurnal.js` | impor jurnal, tidak ada baris hilang diam-diam |
 | `test_impor_jurnal_bank.js` | unggah Excel di zona WIB tidak memundurkan tanggal, akun "Penerimaan ..." di seksi mana pun (PERSEDIAAN, TRANSAKSI BANK) terhitung penghimpunan |
-| `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan, jenis berkas terbaca dari isinya, bagian atas jendela ringkas, pilihan massal rekap/jurnal yang mempertahankan pilihan sendiri, tombol Ubah, tombol bawah sama tinggi dan sejajar (Batal berbingkai di kiri, satu tombol utama), tombol temuan berbingkai, kotak Telusuri sejajar dengan pilihan di sampingnya |
-| `test_samakan_rekap.js` | rekap bulanan jadi patokan: angka jurnal sama dengan rekap setelah disamakan, biaya admin bank tidak dilewati, LPJ dan label rekap yang bentrok tidak dipindah diam-diam, Closing menghitung gaji KLL yang dibayar Daerah sebagai Daerah |
+| `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan, jenis berkas terbaca dari isinya, bagian atas jendela ringkas, pilihan massal rekap/jurnal yang mempertahankan pilihan sendiri, tombol Ubah, tombol bawah sama tinggi dan sejajar (Batal berbingkai di kiri, satu tombol utama), tombol temuan berbingkai, kotak Telusuri sejajar dengan pilihan di sampingnya, fokus tanpa rekap (tanggal dan nama KLL/ULL di depan, sisanya dilipat), fokus dengan rekap (tabel jurnal lawan rekap yang jadi "Sama" setelah disamakan), baris status di kaki jendela, kaki tidak terpotong di lebar 390 |
+| `test_samakan_rekap.js` | rekap bulanan jadi patokan: angka jurnal sama dengan rekap setelah disamakan, angka rekap untuk tabel perbandingan cocok dengan itu, biaya admin bank tidak dilewati, LPJ dan label rekap yang bentrok tidak dipindah diam-diam, Closing menghitung gaji KLL yang dibayar Daerah sebagai Daerah |
 | `test_tampilan_kll_menu.js` | rekap bulanan tidak wajib tetapi ditawarkan di pratinjau, Saldo KLL ringkas (sisa saldo hijau, belum LPJ bertanda merah), urutan menu kiri per akun (tarik atau panah, tersimpan di server, menu teratas jadi halaman pertama) |
+| `test_link_harian.js` | link Penghimpunan Harian (donatur dan KLL/ULL): token terpisah, data pribadi tidak keluar, nama anonim jadi Hamba Allah, tanggal masa depan ditolak, memperbarui sendiri, link mati tertutup, kalender dan dropdown lz-ui (bukan bawaan), kotak cari (kantor/donatur) tidak hilang saat halaman memperbarui diri, tampilan ringkas (angka di kepala, tanpa label kotak, kartu kantor jadi saringan) |
 | `test_izin_modul.js` | pemecahan izin Dashboard, akun lama tidak kehilangan menu |
 | `test_izin_ui.js` | dialog Edit User, kolom kiri diam saat kanan digulir |
 | `test_kantor_kembar.js` | nama KLL/ULL bertumpuk, rincian transaksi, pembanding |
@@ -546,6 +547,16 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   rekap punya pilihan massal "Cocokkan ke rekap" / "Sesuai jurnal" dengan
   "Pertahankan yang sudah saya pilih sendiri" (keputusan per temuan bertanda
   `oleh:'sendiri'` tidak disentuh selama tercentang).
+  Fokus layar (pemilik, 2 Oktober 2026, `imporKelompok`): TANPA rekap,
+  bagian depan hanya Tanggal (luar bulan, debet/kredit beda) dan Nama
+  KLL/ULL (tanpa awalan, rancu, tak terdaftar); pilar, nominal kecil, baris
+  kembar, rekening dilipat di "Pemeriksaan lain". DENGAN rekap, bagian depan
+  tabel jurnal lawan rekap (Daerah/KLL/ULL/penyaluran; sisi rekap dari
+  `_rkAngka` di server, sisi jurnal dihitung langsung dari baris di layar)
+  lalu perbedaan per jenis; pemeriksaan jurnal sendiri dilipat. Yang dilipat
+  tetap dihitung saat menyimpan. Peringatan "belum diputuskan" tampil di
+  baris status kaki jendela (`#imporKakiInfo`), bukan di label tombol.
+  Kelas `.imp-chip` sudah dipakai keping berkas; penanda fokus `.imp-fchip`.
 - **Rekap bulanan pemilik adalah patokan** (1 Oktober 2026). Jurnal tetap
   diimpor (hanya jurnal yang memuat setor tunai, mutasi, dan biaya admin
   bank), lalu `apiSamakanRekap` mengusulkan kantor, pilar (dari kolom
@@ -560,6 +571,23 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   `namaPenerima` diawali KLL/ULL. Keterangan tidak lagi dibaca untuk baris
   yang punya `section`, supaya "Gaji Amil Kll Pundong" yang dibayar Daerah
   tetap Daerah seperti di rekap.
+- **Link Penghimpunan Harian** (2 Oktober 2026, `public/harian.html`,
+  `apiPenghimpunanHarian`): dua link baca-saja terpisah dari Dashboard
+  Publik, token di Settings `lhTokenDonatur` / `lhTokenKantor` (kunci sistem,
+  tidak pernah ikut `_settingsAman`). Link donatur: semua donasi per hari
+  dengan nama LENGKAP (pilihan pemilik), kecuali yang memang anonim jadi
+  "Hamba Allah"; setoran KLL/ULL bertanda jenis kantornya. Link KLL/ULL:
+  satu link untuk semua kantor, hanya setoran kantor. Kolom yang dikirim
+  dipilih satu per satu (daftar izin): telepon, email, alamat, keterangan,
+  kwitansi, rekening, petugas tidak pernah ikut. Memperbarui sendiri tiap
+  30 detik selama yang dilihat hari ini.
+  Pembaruan hanya mengganti `#lhIsi`; bilah saring (tanggal, kantor, cari)
+  digambar sekali, supaya teks dan fokus kotak cari tidak hilang tiap 30 detik.
+  Tampilan dibuat ringkas (pemilik, 2 Oktober 2026: "menarik tapi simple,
+  tidak banyak keterangan"): angka utama di kepala halaman, tanggal dan cari
+  satu baris tanpa label, daftar dalam satu kartu. Link KLL/ULL tanpa
+  dropdown kantor: kartu kantor (yang sudah setor di depan, yang Rp 0
+  dilipat) sekaligus jadi saringan.
 - **Bidang tim media dibekukan saat permohonan diajukan**, supaya memindahkan
   jenis media suatu hari tidak memindahkan ratusan pekerjaan lama secara surut.
 

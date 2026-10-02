@@ -46,6 +46,18 @@ const bentukKaki = (page) => page.evaluate(() => [...document.querySelectorAll('
     bingkai: c.borderTopStyle !== 'none' && !/rgba\(\d+, \d+, \d+, 0\)|transparent/.test(c.borderTopColor) && parseFloat(c.borderTopWidth) > 0,
     gradasi: c.backgroundImage !== 'none' };
 }));
+/* Kaki jendela sesudah dianalisis: Batal, baris status, Tarik Ulang, Simpan.
+   Semua tombol harus tetap di dalam jendela (tidak terpotong di HP) dan
+   tombol Simpan tidak boleh melebar karena labelnya (dulu 330 px saat
+   berbunyi "Tetap simpan (3 temuan belum diputuskan)"). */
+const kakiLengkap = (page) => page.evaluate(() => {
+  const kaki = document.getElementById('modalFoot'), info = document.getElementById('imporKakiInfo');
+  const rk = kaki.getBoundingClientRect(), kartu = document.getElementById('modalCard').getBoundingClientRect();
+  const tombol = [...kaki.querySelectorAll('button')].filter((b) => b.offsetParent).map((b) => { const r = b.getBoundingClientRect(); return { teks: b.textContent.trim(), kiri: r.left, kanan: r.right, lebar: Math.round(r.width), tinggi: Math.round(r.height), atas: Math.round(r.top) }; });
+  const ri = info ? info.getBoundingClientRect() : null;
+  return { tombol, info: info ? info.innerText.trim() : null, kelas: info ? info.className : '', infoKiri: ri ? ri.left : 0, infoKanan: ri ? ri.right : 0,
+    dalam: tombol.every((t) => t.kiri >= kartu.left - 0.5 && t.kanan <= kartu.right + 0.5), kakiKanan: rk.right };
+});
 let ok = 0, gagal = 0;
 const cek = (nama, syarat, info) => {
   if (syarat) { ok++; console.log('  OK   |', nama); }
@@ -274,7 +286,27 @@ const srv = http.createServer(async (req, res) => {
     cek('kotak Telusuri sejajar atas-bawah dengan pilihan jenis, bulan, tahun, dan rekap',
       baris1.kontrol.every((r) => Math.abs(r[0] - baris1.drop[0]) <= 1 && Math.abs(r[1] - baris1.drop[1]) <= 1), baris1);
     cek('temuan tanggal di luar bulan tampil', /Tanggal di luar September 2026/.test(teks));
-    cek('temuan pilar tampil', /Pilar Pendidikan, keterangan menyebut Kesehatan/.test(teks));
+    /* Tanpa rekap, fokusnya tanggal dan nama KLL/ULL (pemilik, 2 Oktober
+       2026). Temuan lain tetap ada, tetapi dilipat di bawah. */
+    const fokus = await page.evaluate(() => {
+      const blok = document.getElementById('imporTemuanBlok');
+      const kel = [...blok.querySelectorAll('.imp-kel')].map((x) => x.getAttribute('data-kel'));
+      const lain = document.getElementById('imporLainBlok');
+      const atasTemuan = blok.getBoundingClientRect().top, atasRingkas = [...document.querySelectorAll('#importPreview summary')].find((x) => /Ringkasan/.test(x.textContent));
+      return { judul: blok.querySelector('.imp-fokus-j').textContent, kel, chip: [...blok.querySelectorAll('.imp-fchip')].map((x) => x.textContent.trim()),
+        lainAda: !!lain, lainBuka: lain ? lain.open : null, lainTeks: lain ? lain.textContent : '', pilarDiFokus: /Pilar Pendidikan/.test(blok.textContent),
+        temuanDiAtasRingkasan: atasRingkas ? atasTemuan < atasRingkas.getBoundingClientRect().top : false };
+    });
+    cek('tanpa rekap: judul fokus "Prioritas: tanggal dan nama KLL / ULL"', /Prioritas: tanggal dan nama KLL \/ ULL/.test(fokus.judul), fokus);
+    cek('tanpa rekap: bagian Tanggal lalu Nama KLL/ULL, tidak ada yang lain di fokus', fokus.kel.join(',') === 'tanggal,kantor', fokus.kel);
+    cek('tanpa rekap: penanda jumlah per bagian (Tanggal 1, Nama kantor 2)', fokus.chip.join('|') === 'Tanggal 1|Nama kantor 2', fokus.chip);
+    cek('temuan pilar tidak di fokus, tetapi ada di "Pemeriksaan lain" yang dilipat', !fokus.pilarDiFokus && fokus.lainAda && fokus.lainBuka === false
+      && /Pilar Pendidikan, keterangan menyebut Kesehatan/.test(fokus.lainTeks) && /1 belum diputuskan/.test(fokus.lainTeks), fokus);
+    cek('fokus pemeriksaan tampil di atas ringkasan', fokus.temuanDiAtasRingkasan, fokus);
+    let kk = await kakiLengkap(page);
+    cek('kaki jendela: status "3 belum diputuskan" di antara Batal dan Tarik Ulang',
+      /Tanggal dan nama kantor: 3 belum diputuskan/.test(kk.info) && /warn/.test(kk.kelas)
+      && kk.infoKiri >= kk.tombol[0].kanan && kk.infoKanan <= kk.tombol[1].kiri, kk);
     cek('ringkasan Daerah / KLL / ULL tampil', /Ringkasan/.test(teks) && /Daerah/.test(teks) && /KLL/.test(teks));
     cek('tidak ada em dash di layar impor', !/—/.test(teks + (await page.textContent('#modalTitle'))));
     const daerahAwal = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.Daerah);
@@ -283,6 +315,10 @@ const srv = http.createServer(async (req, res) => {
     console.log('\n=== C. MEMBETULKAN LANGSUNG DI LAYAR ===');
     cek('klik "Jadikan KLL Bantul Kota"', await klikAksi('Nama kantor tanpa KLL/ULL', 'terap'));
     rows = await H();
+    await page.evaluate(() => { document.getElementById('imporLainBlok').open = true; });
+    await page.waitForTimeout(100);
+    cek('"Pemeriksaan lain" yang dibuka tetap terbuka sesudah layar digambar ulang',
+      await page.evaluate(() => { imporGambarUlang(); return document.getElementById('imporLainBlok').open; }));
     cek('baris itu sekarang KLL Bantul Kota', baris(2500000).n === 'KLL Bantul Kota' && baris(2500000).l === LAY['Bantul Kota'], baris(2500000));
     const daerahSesudah = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.Daerah);
     cek('ringkasan Daerah turun sebesar setoran itu', daerahAwal - daerahSesudah === 2500000, [daerahAwal, daerahSesudah]);
@@ -304,6 +340,9 @@ const srv = http.createServer(async (req, res) => {
     cek('klik "Pakai" tanggal usulan', await klikAksi('Tanggal di luar', 'terap'));
     rows = await H();
     cek('tanggal Juni jadi September', baris(120000).t === '2026-09-07', baris(120000));
+    kk = await kakiLengkap(page);
+    cek('tanggal dan nama kantor diputuskan: kaki berbunyi "sudah beres", hijau', /sudah beres/.test(kk.info) && /\bok\b/.test(kk.kelas), kk);
+    cek('penanda bagian berubah jadi centang', await page.evaluate(() => [...document.querySelectorAll('.imp-fchip')].every((x) => x.classList.contains('beres'))), await page.evaluate(() => [...document.querySelectorAll('.imp-fchip')].map((x) => x.outerHTML)));
     cek('klik "Lewati baris ini" untuk nominal Rp 10', await klikAksi('Nominal sangat kecil', 'terap'));
     rows = await H();
     cek('baris Rp 10 ditandai dilewati', baris(10).x === true, baris(10));
@@ -314,9 +353,12 @@ const srv = http.createServer(async (req, res) => {
     /* Temuan pilar sengaja belum diputuskan: klik pertama hanya mengingatkan. */
     await page.click('#importSimpanBtn');
     await page.waitForTimeout(300);
+    kk = await kakiLengkap(page);
     cek('klik pertama mengingatkan temuan yang belum diputuskan, belum menyimpan',
-      /Tetap simpan \(1 temuan/.test(await page.textContent('#importSimpanBtn')) && tabel('Penghimpunan').length === 0,
-      [await page.textContent('#importSimpanBtn'), tabel('Penghimpunan').length]);
+      (await page.textContent('#importSimpanBtn')).trim() === 'Tetap simpan' && /1 temuan belum diputuskan/.test(kk.info) && /bahaya/.test(kk.kelas) && tabel('Penghimpunan').length === 0,
+      [await page.textContent('#importSimpanBtn'), kk.info, tabel('Penghimpunan').length]);
+    cek('peringatan tidak melebarkan tombol Simpan (di bawah 180 px), tombol tetap sejajar',
+      kk.tombol.every((t) => t.lebar < 180 && t.tinggi === kk.tombol[0].tinggi && Math.abs(t.atas - kk.tombol[0].atas) <= 1), kk.tombol);
     await page.click('#importSimpanBtn');
     await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 15000 });
     const P = tabel('Penghimpunan');
@@ -348,6 +390,22 @@ const srv = http.createServer(async (req, res) => {
     cek('kekeringan diusulkan pindah ke Lingkungan, ambulan ke Kesehatan',
       await page.evaluate(() => { const j = JSON.stringify(window.IMPORT_TEMP_RES.temuan.filter((t) => t.jenis === 'rekapDana')); return /Lingkungan/.test(j) && /Kesehatan/.test(j); }));
     cek('tombol "Samakan semua dengan rekap" tampil', await page.$('#imporSamakanSemua') !== null);
+    const banding = () => page.evaluate(() => {
+      const blok = document.getElementById('imporTemuanBlok'), t = blok.querySelector('.imp-banding');
+      const baris = t ? [...t.querySelectorAll('tbody tr')].map((r) => [...r.cells].map((c) => c.textContent.trim())) : [];
+      const lain = document.getElementById('imporLainBlok');
+      return { judul: (blok.querySelector('.imp-fokus-j') || {}).textContent, baris, kel: [...blok.querySelectorAll('.imp-kel')].map((x) => x.getAttribute('data-kel')),
+        lainBuka: lain ? lain.open : null, lainTeks: lain ? lain.textContent : '', kaki: document.getElementById('imporKakiInfo').innerText };
+    });
+    let bd = await banding();
+    const totalBaris = (b) => (b.baris.find((r) => r[0] === 'Total penerimaan') || []);
+    cek('dengan rekap: fokusnya "Perbandingan jurnal dengan rekap"', bd.judul === 'Perbandingan jurnal dengan rekap', bd.judul);
+    cek('tabel perbandingan: rekap Rp 4.295.000, ada selisih sebelum disamakan', /4\.295\.000/.test(totalBaris(bd)[2] || '') && totalBaris(bd)[3] !== 'Sama', bd.baris);
+    cek('tabel perbandingan memisah Daerah, KLL, ULL', ['Penerimaan Daerah', 'Penerimaan KLL', 'Penerimaan ULL'].every((k) => bd.baris.some((r) => r[0] === k)), bd.baris);
+    cek('dengan rekap: perbedaan dikelompokkan (beda kantor di depan, beda dana, hanya di rekap)',
+      bd.kel[0] === 'rKantor' && bd.kel.includes('rDana') && bd.kel.includes('rRekap') && !bd.kel.includes('tanggal') && !bd.kel.includes('kantor'), bd.kel);
+    cek('dengan rekap: pemeriksaan jurnal sendiri (tanggal, nama kantor, pilar) dilipat di bawah', bd.lainBuka === false && /Tanggal di luar September/.test(bd.lainTeks), bd.lainTeks.slice(0, 120));
+    cek('kaki jendela menyebut selisih penerimaan dengan rekap', /Selisih penerimaan/.test(bd.kaki), bd.kaki);
 
     console.log('\n=== F. PILIHAN MASSAL: IKUT REKAP, IKUT JURNAL, PERTAHANKAN PILIHAN SENDIRI ===');
     const totalNow = () => page.evaluate(() => Math.round(ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.total));
@@ -399,6 +457,22 @@ const srv = http.createServer(async (req, res) => {
     cek('setelah disamakan, Penghimpunan Daerah = Daerah rekap', Math.round(R.totalHimpun.Daerah) === 245000, R.totalHimpun);
     teks = await teksPratinjau();
     cek('ringkasan di layar ikut berubah', /4\.295\.000/.test(teks));
+    bd = await banding();
+    cek('setelah disamakan: semua baris tabel perbandingan "Sama"', bd.baris.length >= 2 && bd.baris.every((r) => r[3] === 'Sama'), bd.baris);
+    cek('setelah disamakan: kaki berbunyi "Sama dengan rekap"', /Sama dengan rekap/.test(bd.kaki), bd.kaki);
+
+    console.log('\n=== G. KAKI JENDELA DI HP ===');
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.waitForTimeout(300);
+    kk = await kakiLengkap(page);
+    cek('lebar 390: semua tombol bawah di dalam jendela, tidak terpotong', kk.dalam && kk.tombol.length === 3, kk);
+    cek('lebar 390: tombol bawah sama tinggi dan satu baris', kk.tombol.every((t) => t.tinggi === kk.tombol[0].tinggi && Math.abs(t.atas - kk.tombol[0].atas) <= 1), kk.tombol);
+    cek('lebar 390: status di atas tombol, bukan berdesakan di antaranya', kk.info && kk.tombol.every((t) => t.atas > 0) && await page.evaluate(() => {
+      const i = document.getElementById('imporKakiInfo').getBoundingClientRect(), b = document.getElementById('importSimpanBtn').getBoundingClientRect();
+      return i.bottom <= b.top + 1;
+    }), kk);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(200);
     await page.click('#importSimpanBtn');
     await page.waitForTimeout(300);
     if (await page.evaluate(() => document.getElementById('modalBg').classList.contains('show'))) await page.click('#importSimpanBtn');

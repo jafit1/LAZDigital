@@ -470,7 +470,7 @@ function apiMe(t){ return sanitizeUser(authUser(t)); }
    pengguna (uf_*, diubah lewat apiUpdateMyProfile oleh pemiliknya). Dulu
    apiSaveSettings menerima semuanya, jadi pemegang izin Pengaturan bisa
    membuka kunci login orang, mengganti token publik, atau foto orang lain. */
-function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || /^um_/.test(k) || k === 'publicToken' || k === 'publicEnabled' || k === 'aliasKantor'; }
+function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || /^um_/.test(k) || /^lhToken/.test(k) || k === 'publicToken' || k === 'publicEnabled' || k === 'aliasKantor'; }
 /* Settings yang boleh dikirim ke peramban. Catatan penguncian login tidak
    pernah dikirim; token publik hanya ke pemegang izin lihat Pengaturan (dan
    lewat apiGetPublicLinkInfo). Dulu apiBootstrap mengirim semuanya ke setiap
@@ -479,6 +479,7 @@ function _settingsAman(semua, bolehToken){
   var o = {};
   Object.keys(semua || {}).forEach(function(k){
     if (/^lg_/.test(k)) return;
+    if (/^lhToken/.test(k)) return;   /* token link harian hanya lewat apiInfoLinkHarian */
     if (!bolehToken && k === 'publicToken') return;
     o[k] = semua[k];
   });
@@ -1268,6 +1269,119 @@ function apiPublicDashboard(t, bulan){
   };
   d.periodeDipilih = pilih;
   return d;
+}
+
+/* ============================================================
+   LINK PENGHIMPUNAN HARIAN (pemilik, 2 Oktober 2026)
+   ------------------------------------------------------------
+   Dua link baca-saja, terpisah dari Dashboard Publik:
+   - donatur: semua penghimpunan satu hari, dengan nama donatur, nominal,
+     jenis dana, fundraiser, dan metode. Setoran KLL/ULL diberi tanda
+     kantornya. Nama lengkap, kecuali yang memang anonim.
+   - kantor : hanya setoran KLL/ULL, untuk semua kantor dalam satu link,
+     plus ringkasan per kantor hari ini dan bulan berjalan.
+   Yang dikirim ke pengunjung dipilih satu per satu (daftar izin, bukan
+   daftar larangan): telepon, email, alamat, keterangan, kwitansi, rekening,
+   dan petugas tidak pernah ikut, termasuk kalau kelak ada kolom baru.
+   ============================================================ */
+var _LH_KUNCI = { donatur: 'lhTokenDonatur', kantor: 'lhTokenKantor' };
+function _lhInfo(jenis){ var x = getSetting(_LH_KUNCI[jenis]) || ''; return { jenis: jenis, aktif: !!x, token: x }; }
+function _lhJenisSah(jenis){ if (!_LH_KUNCI[jenis]) throw new Error('Jenis link tidak dikenal.'); return jenis; }
+function apiInfoLinkHarian(t){ _requirePerm(t, 'dashboard', 'view'); return { donatur: _lhInfo('donatur'), kantor: _lhInfo('kantor') }; }
+function apiBuatLinkHarian(t, jenis){
+  var u = _requirePerm(t, 'settings', 'edit'); _lhJenisSah(jenis);
+  setSetting(_LH_KUNCI[jenis], Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 8));
+  audit(u.id, u.username, 'link_harian_buat', jenis, { modul: 'settings', ringkas: 'link penghimpunan harian ' + jenis + ' dibuat ulang' });
+  return _lhInfo(jenis);
+}
+function apiMatikanLinkHarian(t, jenis){
+  var u = _requirePerm(t, 'settings', 'edit'); _lhJenisSah(jenis);
+  setSetting(_LH_KUNCI[jenis], '');
+  audit(u.id, u.username, 'link_harian_matikan', jenis, { modul: 'settings', ringkas: 'link penghimpunan harian ' + jenis + ' dimatikan' });
+  return _lhInfo(jenis);
+}
+/* "Hamba Allah", "NN", "anonim", kosong: donatur yang memang tidak mau
+   namanya tampil. Semua bentuk itu ditampilkan seragam. */
+function _lhNama(n){
+  var s = String(n == null ? '' : n).trim();
+  if (!s || /^(hamba\s*allah|h\.?\s*a\.?|n\.?\s*n\.?|anonim|anonymous|tanpa\s*nama|-+)$/i.test(s)) return 'Hamba Allah';
+  return s;
+}
+function apiPenghimpunanHarian(token, tanggal){
+  token = String(token == null ? '' : token);
+  var jenis = '';
+  if (token.length >= 24) {
+    if (token === getSetting('lhTokenDonatur')) jenis = 'donatur';
+    else if (token === getSetting('lhTokenKantor')) jenis = 'kantor';
+  }
+  if (!jenis) throw new Error('Link tidak valid atau sudah dimatikan.');
+  var hari = _hariIni();
+  var tgl = String(tanggal == null ? '' : tanggal);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl) || isNaN(new Date(tgl + 'T00:00:00Z').getTime()) || tgl > hari) tgl = hari;
+  var bulan = tgl.slice(0, 7);
+
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+  var tipeDari = function(nama){
+    if (nama === LAYANAN_DAERAH) return 'Daerah';
+    return /^ull\b/i.test(nama) ? 'ULL' : 'KLL';
+  };
+  var ringkas = { total: 0, n: 0, perMetode: {}, perDana: {} };
+  var bulanIni = { total: 0, n: 0 };
+  var perKantor = {};
+  if (jenis === 'kantor') layList.forEach(function(l){
+    if (String(l.aktif) === 'false') return;
+    var nm = _layLabel(l);
+    perKantor[_norm(nm)] = { kantor: nm, tipe: tipeDari(nm), hariIni: 0, bulanIni: 0, n: 0 };
+  });
+  var baris = [];
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    var tg = String(r.tanggal == null ? '' : r.tanggal).slice(0, 10);
+    if (tg.slice(0, 7) !== bulan || tg > tgl) return;
+    if (/batal|belum/i.test(String(r.statusBayar || ''))) return;
+    var n = Number(r.jumlah) || 0;
+    var kantor = resolveLayananName(r, layList, layMap);
+    var tipe = tipeDari(kantor);
+    if (jenis === 'kantor' && tipe === 'Daerah') return;
+    bulanIni.total += n; bulanIni.n++;
+    var kk = _norm(kantor);
+    if (jenis === 'kantor') {
+      var pk = perKantor[kk] || (perKantor[kk] = { kantor: kantor, tipe: tipe, hariIni: 0, bulanIni: 0, n: 0 });
+      pk.bulanIni += n;
+      if (tg === tgl) { pk.hariIni += n; pk.n++; }
+    }
+    if (tg !== tgl) return;
+    var metode = String(r.metode || '').trim() || 'Lainnya';
+    var dana = String(r.subJenis || r.jenisDana || '').trim();
+    ringkas.total += n; ringkas.n++;
+    ringkas.perMetode[metode] = (ringkas.perMetode[metode] || 0) + n;
+    var dk = String(r.jenisDana || 'Lainnya').trim() || 'Lainnya';
+    ringkas.perDana[dk] = (ringkas.perDana[dk] || 0) + n;
+    /* Jam hanya kalau dicatat pada hari yang sama; baris hasil impor jurnal
+       dibuat belakangan, jadi jamnya bukan jam donasi. */
+    var jam = '';
+    var dib = r.dibuat ? new Date(r.dibuat) : null;
+    if (dib && !isNaN(dib.getTime())) {
+      var w = new Date(dib.getTime() + 7 * 3600e3).toISOString();
+      if (w.slice(0, 10) === tg) jam = w.slice(11, 16);
+    }
+    baris.push({
+      nama: _lhNama(r.namaDonatur), jumlah: n, dana: dana, pilar: String(r.pilar || ''),
+      fundraising: String(r.fundraising || '').trim(), metode: metode,
+      kantor: tipe === 'Daerah' ? '' : kantor, tipe: tipe, jam: jam, urut: r.dibuat ? String(r.dibuat) : ''
+    });
+  });
+  baris.sort(function(a, b){ return (b.urut || '').localeCompare(a.urut || ''); });
+  baris = baris.slice(0, 1000).map(function(x){ delete x.urut; return x; });
+  var s = getAllSettings();
+  var out = {
+    jenis: jenis, tanggal: tgl, hariIni: hari, bulan: bulanIni, ringkas: ringkas, baris: baris,
+    lembaga: { namaLembaga: s.namaLembaga || '', singkatan: s.singkatan || '', telepon: s.telepon || '', website: s.website || '', logoData: s.logoData || s.logoUrl || '' },
+    diperbarui: new Date().toISOString()
+  };
+  if (jenis === 'kantor') out.perKantor = Object.keys(perKantor).map(function(k){ return perKantor[k]; })
+    .sort(function(a, b){ return b.hariIni - a.hariIni || b.bulanIni - a.bulanIni || (a.kantor < b.kantor ? -1 : 1); });
+  return out;
 }
 
 /* ============================================================
@@ -5445,8 +5559,27 @@ function _samakanRekap(jurnal, rekap, opsi, listLayanan, listRek){
       + (adaSalur ? ', penyaluran ' + _rpTeks(sumR(RS)) + ' (' + RS.length + ' baris). ' : '. Berkas ini tidak memuat penyaluran, jadi penyaluran rekap dibandingkan saat berkas yang memuatnya diimpor. ')
       + 'Jurnal: penerimaan ' + _rpTeks(sumJ(JH)) + ' (' + JH.length + ' baris), penyaluran ' + _rpTeks(sumJ(JS)) + ' (' + JS.length + ' baris, tanpa biaya admin bank). '
       + (hH.pasang.length + hS.pasang.length) + ' transaksi cocok. Terapkan semua usulan di bawah supaya sama dengan rekap.',
-    baris: [], usulan: null });
+    baris: [], usulan: null, angka: _rkAngka(RH, adaSalur ? RS : null, lay, hH.pasang.length + hS.pasang.length) });
   return out;
+}
+
+/* Angka rekap untuk tabel perbandingan di layar impor (pemilik, 2 Oktober
+   2026: "kalau ada rekap, fokus perbandingan antara keduanya"). Hanya sisi
+   rekap yang dihitung di sini; sisi jurnal dihitung di peramban dari baris
+   yang sedang di layar, supaya selisihnya ikut mengecil setiap kali satu
+   usulan diterapkan. Pembagian Daerah/KLL/ULL memakai aturan yang sama
+   dengan usulan kantor (_rkKantor), jadi selisih nol berarti usulannya
+   sudah diterapkan semua. */
+function _rkAngka(RH, RS, lay, cocok){
+  var h = { Daerah: 0, KLL: 0, ULL: 0, total: 0, n: 0 };
+  (RH || []).forEach(function(r){
+    var rk = _rkKantor(r.nama, lay);
+    var k = rk ? (rk.lay ? String(rk.lay.tipe || rk.tipe).toUpperCase() : rk.tipe) : 'Daerah';
+    if (k !== 'KLL' && k !== 'ULL') k = 'Daerah';
+    h[k] += Number(r.jumlah) || 0; h.total += Number(r.jumlah) || 0; h.n++;
+  });
+  var s = RS ? { total: RS.reduce(function(a, r){ return a + (Number(r.jumlah) || 0); }, 0), n: RS.length } : null;
+  return { himpun: h, salur: s, cocok: cocok || 0 };
 }
 
 async function apiSamakanRekap(t, jurnal, sheets, opsi){
@@ -7842,6 +7975,10 @@ REGISTRY['apiChangeMyPassword']=apiChangeMyPassword;
 REGISTRY['apiMe']=apiMe;
 REGISTRY['apiGetPermissionMeta']=apiGetPermissionMeta;
 REGISTRY['apiPublicDashboard']=apiPublicDashboard;
+REGISTRY['apiInfoLinkHarian']=apiInfoLinkHarian;
+REGISTRY['apiBuatLinkHarian']=apiBuatLinkHarian;
+REGISTRY['apiMatikanLinkHarian']=apiMatikanLinkHarian;
+REGISTRY['apiPenghimpunanHarian']=apiPenghimpunanHarian;
 REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiSimpanAliasKantor']=apiSimpanAliasKantor;

@@ -619,7 +619,7 @@ function dashMenuPilih(fn) {
 
 function renderDashboard(d){
   window.DASH=d;
-  var pubBtn=canDo('dashboard','view')?'<button class="btn btn-ghost" onclick="openPublicLink()">\uD83D\uDD17 Link Publik</button>':'';
+  var pubBtn=canDo('dashboard','view')?'<button class="btn btn-ghost" onclick="openPublicLink()">\uD83D\uDD17 Link Publik</button><button class="btn btn-ghost" onclick="openLinkHarian()">\uD83D\uDCC5 Link Harian</button>':'';
   var editBtn='<button class="btn '+(window.DASH_EDIT?'btn-primary':'btn-ghost')+'" id="dashEditBtn" onclick="toggleDashEdit()">'+(window.DASH_EDIT?'\u2705 Selesai':'\u2699\uFE0F Atur Layout')+'</button>';
   var hr=new Date().getHours();var salam=hr<11?'Selamat pagi':hr<15?'Selamat siang':hr<19?'Selamat sore':'Selamat malam';
   var h='<div class="dash-hero"><div class="dash-hero-in"><div><div class="dh-greet">'+salam+', '+esc((ME&&ME.nama||'').split(' ')[0]||'Sahabat')+' \uD83D\uDC4B</div><div class="dh-sub">Ringkasan amanah '+esc(SETTINGS.namaLembaga||'Lembaga Amil Zakat')+' \u2014 '+new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})+'</div></div><div style="display:flex;gap:10px;flex-wrap:wrap">'+editBtn+pubBtn+'</div></div></div>';
@@ -707,6 +707,54 @@ function openPublicLink(){gas('apiGetPublicLinkInfo')(TOKEN).then(function(info)
   var f=canDo('settings','edit')?((info.enabled?'<button class="btn btn-danger" onclick="disablePub()">Nonaktifkan</button>':'')+'<button class="btn btn-primary" onclick="genPub()">'+(info.enabled?'Buat Ulang Link':'Aktifkan & Buat Link')+'</button>'):'';
   if(!canDo('settings','edit')&&!info.enabled) b+='<p class="muted" style="margin-top:8px">Minta admin yang berwenang atas Pengaturan untuk menyalakannya.</p>';
   openModal('Link Dashboard Publik',b,f);}).catch(handleErr);}
+/* ============ LINK PENGHIMPUNAN HARIAN ============
+   Dua link baca-saja (pemilik, 2 Oktober 2026), terpisah dari Dashboard
+   Publik: untuk donatur (semua donasi per hari, dengan nama) dan untuk
+   KLL/ULL (setoran kantor saja). Dilayani public/harian.html. */
+var LH_KET = {
+  donatur: { judul: 'Untuk Donatur', isi: 'Semua donasi per hari: nama donatur, nominal, jenis dana, fundraiser, dan metode. Nama "Hamba Allah"/NN tetap tanpa nama. Setoran KLL/ULL diberi tanda kantornya.' },
+  kantor: { judul: 'Untuk KLL & ULL', isi: 'Satu link untuk semua kantor: setoran KLL/ULL per hari dan ringkasan per kantor bulan berjalan. Donatur perorangan tidak tampil.' }
+};
+function openLinkHarian(){
+  gas('apiInfoLinkHarian')(TOKEN).then(function(info){
+    var bolehUbah = canDo('settings','edit');
+    var kartu = function(j){
+      var x = info[j] || {}, url = x.token ? location.origin + '/harian.html?t=' + x.token : '';
+      return '<div class="lh-admin-kartu"><div class="lh-admin-h"><b>' + LH_KET[j].judul + '</b>'
+        + '<span class="badge ' + (x.aktif ? 'green' : '') + '">' + (x.aktif ? 'Aktif' : 'Belum aktif') + '</span></div>'
+        + '<div class="muted lh-admin-k">' + LH_KET[j].isi + '</div>'
+        + (x.aktif ? '<div class="link-box"><input id="lhUrl_' + j + '" readonly value="' + esc(url) + '">'
+          + '<button class="btn btn-sm btn-primary" onclick="salinLinkHarian(\'' + j + '\')">Salin</button></div>' : '')
+        + '<div class="lh-admin-a">'
+        + (x.aktif ? '<a class="btn btn-sm" href="' + esc(url) + '" target="_blank" rel="noopener">Buka</a>' : '')
+        + (bolehUbah ? '<button class="btn btn-sm" onclick="buatLinkHarian(\'' + j + '\')">' + (x.aktif ? 'Buat ulang' : 'Aktifkan') + '</button>' : '')
+        + (bolehUbah && x.aktif ? '<button class="btn btn-sm lh-admin-mati" onclick="matikanLinkHarian(\'' + j + '\')">Matikan</button>' : '')
+        + '</div></div>';
+    };
+    var b = '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Halaman memperbarui sendiri tiap 30 detik dan bisa memilih tanggal lain. '
+      + 'Telepon, alamat, email, keterangan, dan nomor kwitansi tidak pernah ditampilkan. "Buat ulang" mematikan alamat lama.</p>'
+      + kartu('donatur') + kartu('kantor')
+      + (bolehUbah ? '' : '<p class="muted" style="font-size:12px">Menyalakan atau mematikan link butuh izin ubah Pengaturan.</p>');
+    openModal('Link Penghimpunan Harian', b, '<button class="btn btn-ghost" onclick="closeModal()">Tutup</button>');
+  }).catch(handleErr);
+}
+function buatLinkHarian(j){
+  var lanjut = function(){ gas('apiBuatLinkHarian')(TOKEN, j).then(function(){ toast('Link dibuat'); openLinkHarian(); }).catch(handleErr); };
+  var el_ = el('lhUrl_' + j);
+  if (el_ && el_.value) confirmDialog({ title: 'Buat ulang link?', message: 'Alamat lama akan berhenti bekerja. Siapa pun yang memegangnya perlu dikirimi alamat baru.', okText: 'Buat ulang', cancelText: 'Batal' }).then(function(ok){ if (ok) lanjut(); }); else lanjut();
+}
+function matikanLinkHarian(j){
+  confirmDialog({ title: 'Matikan link?', message: 'Siapa pun yang memegang alamatnya tidak bisa membukanya lagi.', okText: 'Matikan', cancelText: 'Batal', danger: true }).then(function(ok){
+    if (!ok) return;
+    gas('apiMatikanLinkHarian')(TOKEN, j).then(function(){ toast('Link dimatikan'); openLinkHarian(); }).catch(handleErr);
+  });
+}
+function salinLinkHarian(j){
+  var i = el('lhUrl_' + j); if (!i) return;
+  var v = i.value;
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(function(){ toast('Link disalin'); }, function(){ i.select(); document.execCommand('copy'); toast('Link disalin'); });
+  else { i.select(); document.execCommand('copy'); toast('Link disalin'); }
+}
 function genPub(){gas('apiGeneratePublicLink')(TOKEN).then(function(){toast('Link publik dibuat');openPublicLink();}).catch(handleErr);}
 function disablePub(){gas('apiDisablePublicLink')(TOKEN).then(function(){toast('Link dinonaktifkan');closeModal();}).catch(handleErr);}
 function copyPub(){var i=el('pubUrl');i.select();document.execCommand('copy');toast('Link disalin');}
@@ -4518,6 +4566,7 @@ function openImportModal(type, mode) {
      pratinjau ada; sesudahnya "Simpan" yang utama dan tombol tarik turun jadi
      berbingkai biasa (diatur CSS lewat :has, tanpa mengubah kelas di JS). */
   var f = '<button class="btn imp-batal" onclick="closeModal()">Batal</button>' +
+    '<div class="imp-kaki-info" id="imporKakiInfo"></div>' +
     '<button class="btn btn-primary" id="importTarikBtn" onclick="tarikImportData()">Tarik & Analisis Data</button>' +
     '<button class="btn btn-primary hidden" id="importSimpanBtn" onclick="simpanImportData()">Simpan Data</button>';
 
@@ -4535,6 +4584,8 @@ function setImportTab(tab) {
   });
   el('importPreview').innerHTML = '<div class="imp-kosong">Pratinjau data akan muncul di sini setelah berkas ditarik &amp; dianalisis.</div>';
   el('importSimpanBtn').classList.add('hidden');
+  var kaki = el('imporKakiInfo');
+  if (kaki) { kaki.innerHTML = ''; kaki.className = 'imp-kaki-info'; }
 }
 var IMPORT_TAB = 'file';
 var IMPORT_FILE_TSV = '';
@@ -4678,6 +4729,7 @@ function tarikImportData() {
            layar Periksa Data. */
         window.IMPORT_TEMP_RES = res;
         IMPOR_JEJAK = {};
+        IMPOR_LAIN_BUKA = false;
         window.IMPORT_TEMP_HIMPUN_ROWS = res.himpunValid;
         window.IMPORT_TEMP_SALUR_ROWS = res.salurValid;
         window.IMPORT_TEMP_UMP_ROWS = res.umpValid || [];
@@ -4769,10 +4821,12 @@ function imporBetulkanTanggal(kunci, tgl) {
   (res.anomaliTanggal || []).forEach(function(a){
     if (a.kumpulan === p[0] && Number(a.idx) === Number(p[1])) { a.beres = true; a.tglBaru = tgl; }
   });
-  var kotak = el('imporTanggalBlok');
-  if (kotak) {
-    kotak.outerHTML = '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
-    imporPasangPerbaikanTanggal();
+  /* Digambar ulang seluruhnya (bukan blok tanggal saja), supaya hitungan
+     "belum diputuskan" di judul bagian dan di kaki jendela ikut turun. */
+  if (res.opsiBerkas) imporGambarUlang();
+  else {
+    var kotak = el('imporTanggalBlok');
+    if (kotak) { kotak.outerHTML = '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>'; imporPasangPerbaikanTanggal(); }
   }
   toast('Tanggal dibetulkan jadi ' + tglIndo(tgl));
 }
@@ -4892,12 +4946,11 @@ function imporGambarJurnal(res) {
      terlewat karena kolomnya ada di atas, jauh dari pratinjau. Selama jurnal
      dianalisis tanpa rekap, tawarannya muncul di sini; begitu rekap terbaca,
      tawarannya hilang sendiri. */
+  h += imporBlokTemuan(res);
   if (IMPORT_MODE === 'berkas' && !window.IMPORT_REKAP_SHEETS && el('impb_rekap')) {
     h += '<div class="imp-note imp-tawar" id="imporTawarRekap"><div><b>Punya rekap bulanan?</b> Cantumkan supaya angkanya disamakan dengan rekap. <span class="muted">Boleh dilewati.</span></div>'
       + '<button type="button" class="btn btn-sm" onclick="el(\'impb_rekap\').click()">Cantumkan rekap</button></div>';
   }
-  h += imporBlokTemuan(res);
-  h += '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
   h += imporBlokDilewati(res);
   h += imporBlokRingkasan(res);
   h += '<div class="imp-stat">'
@@ -4980,10 +5033,15 @@ function imporGambarJurnal(res) {
   }
   
   el('importSimpanBtn').classList.remove('hidden');
-  el('importSimpanBtn').textContent = 'Simpan Data Jurnal';
+  /* "Data Jurnal" disembunyikan di HP: di lebar 390 tiga tombol berlabel
+     lengkap butuh 355 px dari 300 px yang ada, dan Simpan turun sendirian. */
+  el('importSimpanBtn').innerHTML = window.IMPORT_KONFIRM_SIMPAN ? 'Tetap simpan' : 'Simpan<span class="imp-panjang">&nbsp;Data Jurnal</span>';
   el('importPreview').innerHTML = h;
   imporPasangPerbaikanTanggal();
   imporPasangTemuan();
+  var lipat = el('imporLainBlok');
+  if (lipat) lipat.addEventListener('toggle', function(){ IMPOR_LAIN_BUKA = lipat.open; });
+  imporPerbaruiKaki();
   /* Centang "tetap simpan" untuk transaksi serupa disimpan di objek barisnya,
      supaya tidak hilang setiap kali pratinjau digambar ulang. */
   var petaDup = { himpun: window.IMPORT_TEMP_HIMPUN_ROWS || [], salur: window.IMPORT_TEMP_SALUR_ROWS || [] };
@@ -5144,50 +5202,208 @@ function imporTombolTemuan(t) {
 }
 function imporKartuTemuan(t) {
   var baris = (t.baris || []).slice(0, 6).map(function(b){
-    return '<div class="muted" style="font-size:11px">' + esc(tglIndo(b.tanggal)) + ' &middot; ' + rp(b.jumlah)
+    return '<div class="imp-temu-r">' + esc(tglIndo(b.tanggal)) + ' &middot; ' + rp(b.jumlah)
       + ' &middot; ' + esc(b.keterangan || b.nama || '') + '</div>';
-  }).join('') + ((t.baris || []).length > 6 ? '<div class="muted" style="font-size:11px">dan ' + (t.baris.length - 6) + ' baris lagi</div>' : '');
+  }).join('') + ((t.baris || []).length > 6 ? '<div class="imp-temu-r">dan ' + (t.baris.length - 6) + ' baris lagi</div>' : '');
   var aksi = t.status
     ? '<div class="imp-temu-status' + (t.status === 'diterapkan' ? ' terap' : '') + '">'
       + '<span>' + esc(t.statusTeks || (t.status === 'diterapkan' ? 'Diterapkan' : 'Dibiarkan')) + '</span>'
       + (t.oleh === 'massal' ? '<span class="imp-temu-oleh">massal</span>' : '')
       + '<button type="button" class="btn btn-mini imp-aksi-2 imp-temu-ubah" data-t="' + esc(t.id) + '">Ubah</button></div>'
     : '<div class="imp-temu-baris">' + imporTombolTemuan(t) + '</div>';
-  return '<div style="padding:9px 0;border-top:1px solid var(--border)">'
-    + '<div><b>' + esc(t.judul) + '</b></div>'
-    + '<div style="font-size:12px;margin:2px 0 4px">' + esc(t.pesan) + '</div>'
+  return '<div class="imp-temu' + (t.status ? ' selesai' : t.tingkat === 'perlu' ? ' perlu' : '') + '" data-t="' + esc(t.id) + '">'
+    + '<div class="imp-temu-j">' + esc(t.judul) + '</div>'
+    + '<div class="imp-temu-p">' + esc(t.pesan) + '</div>'
     + baris + aksi + '</div>';
 }
+/* ---- Fokus pemeriksaan (pemilik, 2 Oktober 2026) -------------------------
+
+   "Kalau tidak mencantumkan rekap, pembacaan langsung fokus ke tanggal dan
+   nama KLL atau ULL yang rancu atau belum sesuai, dan itu prioritasnya.
+   Kalau ada file rekapan, fokus perbandingan antara keduanya."
+
+   Dulu semua temuan berderet dalam satu kotak merah muda dengan urutan
+   pembuatannya, jadi temuan tanggal dan kantor bercampur dengan pilar,
+   nominal kecil, dan baris kembar. Sekarang temuan dikelompokkan, dan yang
+   tampil di depan bergantung ada tidaknya rekap. Yang di luar fokus tetap
+   ada (dilipat), dan tetap dihitung saat menyimpan: tidak ada temuan yang
+   hilang hanya karena tidak sedang difokuskan. */
+function imporKelompok(t) {
+  if (String(t.id).charAt(0) === 'r') {
+    switch (t.jenis) {
+      case 'rekapRingkas': return 'ringkas';
+      case 'rekapKantor': case 'rekapRancu': case 'kantorTakTerdaftar': return 'rKantor';
+      case 'rekapJumlah': return 'rJumlah';
+      case 'rekapDana': return 'rDana';
+      case 'rekapHanyaRekap': return 'rRekap';
+      case 'rekapHanyaJurnal': return 'rJurnal';
+      case 'rekapTanggal': return 'rTanggal';
+      default: return 'rCatatan';
+    }
+  }
+  if (t.jenis === 'luarBulan') return 'tanggal';
+  if (t.jenis === 'kantorTanpaAwalan' || t.jenis === 'kantorTakTerdaftar') return 'kantor';
+  if (t.jenis === 'berkasTakLengkap' || t.jenis === 'jenisBerkas') return 'berkas';
+  return 'lain';
+}
+var IMPOR_KEL_JUDUL = {
+  berkas: 'Jenis dan kelengkapan berkas', tanggal: 'Tanggal', kantor: 'Nama KLL / ULL', lain: 'Pemeriksaan lain',
+  rKantor: 'Beda kantor', rJumlah: 'Beda nominal', rDana: 'Beda jenis dana atau pilar', rRekap: 'Hanya ada di rekap',
+  rJurnal: 'Hanya ada di jurnal', rTanggal: 'Beda tanggal', rCatatan: 'Catatan perbandingan'
+};
+function imporBelum(arr) { return (arr || []).filter(function(t){ return t.tingkat === 'perlu' && !t.status; }).length; }
+function imporKelompokkan(res) {
+  var kel = {};
+  ((res && res.temuan) || []).forEach(function(t){ var k = imporKelompok(t); (kel[k] = kel[k] || []).push(t); });
+  return kel;
+}
+/* Satu bagian bertajuk: judul, jumlah yang belum diputuskan, lalu kartunya. */
+function imporBagian(kunci, daftar, ket, tambahan, kosong) {
+  daftar = daftar || [];
+  var n = imporBelum(daftar) + (kunci === 'tanggal' ? imporAnomTanggal() : 0);
+  var ada = daftar.length || tambahan;
+  var tanda = n ? '<span class="imp-kel-n">' + n + ' belum diputuskan</span>'
+    : ada ? '<span class="imp-kel-n beres">Beres</span>' : '<span class="imp-kel-n beres">Tidak ada masalah</span>';
+  return '<section class="imp-kel" data-kel="' + kunci + '"><div class="imp-kel-h"><span class="imp-kel-j">' + esc(IMPOR_KEL_JUDUL[kunci] || kunci) + '</span>' + tanda
+    + (ket ? '<span class="imp-kel-k">' + esc(ket) + '</span>' : '') + '</div>'
+    + (ada ? daftar.map(imporKartuTemuan).join('') + (tambahan || '') : (kosong ? '<div class="imp-kel-kosong">' + esc(kosong) + '</div>' : ''))
+    + '</section>';
+}
+function imporAnomTanggal() {
+  var res = window.IMPORT_TEMP_RES;
+  return ((res && res.anomaliTanggal) || []).filter(function(a){ return !a.beres; }).length;
+}
+/* Tabel jurnal lawan rekap. Sisi rekap dari server (angka tetap), sisi
+   jurnal dihitung dari baris yang sedang di layar, jadi selisihnya mengecil
+   setiap kali usulan diterapkan dan jadi "Sama" kalau sudah cocok. */
+function imporTabelBanding(res, ringkas) {
+  var A = ringkas && ringkas.angka;
+  if (!A) return ringkas ? '<div class="imp-kel-kosong">' + esc(ringkas.pesan) + '</div>' : '';
+  var R = ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS || res.himpunValid, window.IMPORT_TEMP_SALUR_ROWS || res.salurValid,
+                             window.IMPORT_TEMP_UMP_ROWS || res.umpValid, window.IMPORT_TEMP_TRANSFER_ROWS || res.transferValid);
+  var sel = function(j, r){
+    var d = Math.round(j - r);
+    return d === 0 ? '<td class="jnum imp-sama">Sama</td>' : '<td class="jnum imp-selisih">' + (d > 0 ? '+' : '&minus;') + rp(Math.abs(d)) + '</td>';
+  };
+  var baris = function(label, j, r, tebal){
+    return '<tr' + (tebal ? ' class="imp-bd-total"' : '') + '><td>' + label + '</td><td class="jnum">' + rp(j) + '</td><td class="jnum">' + rp(r) + '</td>' + sel(j, r) + '</tr>';
+  };
+  var h = '<div class="imp-tblwrap imp-banding"><table class="imp-tbl"><thead><tr><th></th><th>Jurnal (sekarang)</th><th>Rekap</th><th>Selisih</th></tr></thead><tbody>';
+  ['Daerah', 'KLL', 'ULL'].forEach(function(k){
+    if (R.totalHimpun[k] || A.himpun[k]) h += baris('Penerimaan ' + k, R.totalHimpun[k], A.himpun[k]);
+  });
+  h += baris('Total penerimaan', R.totalHimpun.total, A.himpun.total, true);
+  if (A.salur) h += baris('Penyaluran', R.totalSalur.total, A.salur.total, true);
+  h += '</tbody></table></div>';
+  var cat = [A.cocok + ' transaksi cocok'];
+  if (!A.salur) cat.push('berkas ini tidak memuat penyaluran, jadi penyaluran rekap dibandingkan di berkas yang memuatnya');
+  if (R.bagiHasil) cat.push('penerimaan jurnal termasuk bagi hasil bank ' + rp(R.bagiHasil));
+  return h + '<div class="imp-banding-k">' + cat.join(' &middot; ') + '.</div>';
+}
+var IMPOR_LAIN_BUKA = false;
 function imporBlokTemuan(res) {
   var semua = res.temuan || [];
-  if (!semua.length) {
-    return res.opsiBerkas ? '<div class="imp-note" style="margin-bottom:12px"><b>Tidak ada temuan.</b> Tanggal, nama kantor, pilar, dan rekening tidak ada yang janggal.</div>' : '';
-  }
-  var perlu = semua.filter(function(t){ return t.tingkat === 'perlu'; });
-  var catatan = semua.filter(function(t){ return t.tingkat !== 'perlu'; });
-  var belum = perlu.filter(function(t){ return !t.status; }).length;
-  var h = '<details class="imp-note' + (belum ? ' imp-warn' : '') + ' imp-det" id="imporTemuanBlok" open><summary><b>'
-    + (perlu.length ? (belum ? belum + ' temuan perlu diputuskan' : 'Semua temuan sudah diputuskan') : 'Tidak ada temuan yang perlu diputuskan') + '</b>'
-    + (catatan.length ? ' &middot; ' + catatan.length + ' catatan untuk diperiksa' : '') + '</summary><div class="imp-det-b">';
-  var rekap = imporTemuanRekap(res);
-  if (rekap.length) {
+  /* Impor jurnal lama (bukan per berkas) tidak punya bulan acuan, jadi tidak
+     boleh mengaku "semua tanggal di dalam bulan berkas". */
+  if (!res.opsiBerkas) return '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
+  var kel = imporKelompokkan(res);
+  var adaRekap = !!(kel.ringkas && kel.ringkas.length);
+  var h = '';
+  if (adaRekap) {
+    var rekap = imporTemuanRekap(res);
     var keRekap = imporRekapMassal(res).filter(function(t){ return t.status !== 'diterapkan'; }).length;
     var sendiri = rekap.filter(function(t){ return t.status && t.oleh === 'sendiri'; }).length;
-    h += '<div class="imp-massal">'
-      + '<div class="imp-massal-t">Semua temuan rekap:</div>'
-      + '<button type="button" class="btn btn-primary btn-sm" id="imporSamakanSemua" onclick="imporSamakanSemua()">Cocokkan ke rekap' + (keRekap ? ' (' + keRekap + ')' : '') + '</button>'
-      + '<button type="button" class="btn btn-sm" id="imporSemuaJurnal" onclick="imporSemuaJurnal()">Sesuai jurnal</button>'
-      + '<label class="imp-massal-c"><input type="checkbox" id="imporPertahankan"' + (IMPOR_PERTAHANKAN ? ' checked' : '')
-      + ' onchange="IMPOR_PERTAHANKAN=this.checked;imporGambarUlang()"> Pertahankan yang sudah saya pilih sendiri' + (sendiri ? ' (' + sendiri + ')' : '') + '</label>'
-      + '<div class="imp-massal-k">Perbedaan kantor yang membingungkan dan penyaluran yang hanya ada di rekap tidak ikut "Cocokkan ke rekap"; putuskan satu per satu.</div>'
-      + '</div>';
+    var belumR = imporBelum(rekap);
+    h += '<div class="imp-fokus rekap" id="imporTemuanBlok"><div class="imp-fokus-h"><div>'
+      + '<div class="imp-fokus-j">Perbandingan jurnal dengan rekap</div>'
+      + '<div class="imp-fokus-k">Rekap bulanan jadi patokan. ' + (belumR ? belumR + ' perbedaan belum diputuskan.' : 'Semua perbedaan sudah diputuskan.') + '</div>'
+      + '</div></div>'
+      + imporTabelBanding(res, kel.ringkas[0]);
+    if (rekap.length) {
+      h += '<div class="imp-massal">'
+        + '<div class="imp-massal-t">Semua perbedaan:</div>'
+        + '<button type="button" class="btn btn-primary btn-sm" id="imporSamakanSemua" onclick="imporSamakanSemua()">Cocokkan ke rekap' + (keRekap ? ' (' + keRekap + ')' : '') + '</button>'
+        + '<button type="button" class="btn btn-sm" id="imporSemuaJurnal" onclick="imporSemuaJurnal()">Sesuai jurnal</button>'
+        + '<label class="imp-massal-c"><input type="checkbox" id="imporPertahankan"' + (IMPOR_PERTAHANKAN ? ' checked' : '')
+        + ' onchange="IMPOR_PERTAHANKAN=this.checked;imporGambarUlang()"> Pertahankan yang sudah saya pilih sendiri' + (sendiri ? ' (' + sendiri + ')' : '') + '</label>'
+        + '<div class="imp-massal-k">Beda kantor yang membingungkan dan penyaluran yang hanya ada di rekap tidak ikut "Cocokkan ke rekap"; putuskan satu per satu.</div>'
+        + '</div>';
+    }
+    if (kel.berkas) h += imporBagian('berkas', kel.berkas);
+    ['rKantor', 'rJumlah', 'rDana', 'rRekap', 'rJurnal', 'rTanggal', 'rCatatan'].forEach(function(k){
+      if (kel[k] && kel[k].length) h += imporBagian(k, kel[k]);
+    });
+    if (!rekap.length) h += '<div class="imp-kel-kosong">Jurnal dan rekap sama, tidak ada perbedaan.</div>';
+    h += '</div>';
+    /* Pemeriksaan jurnal sendiri dilipat: sebagian besar ikut beres saat
+       perbedaan dengan rekap diputuskan. */
+    var jur = (kel.tanggal || []).concat(kel.kantor || [], kel.lain || []);
+    var nJur = imporBelum(jur) + imporAnomTanggal();
+    if (jur.length || imporAnomTanggal() || (res.anomaliTanggal || []).length) {
+      h += '<details class="imp-note imp-det imp-lain" id="imporLainBlok"' + (IMPOR_LAIN_BUKA ? ' open' : '') + '><summary><b>Pemeriksaan jurnal sendiri</b>'
+        + ' &middot; tanggal, nama kantor, pilar' + (nJur ? ' &middot; <b class="imp-merah">' + nJur + ' belum diputuskan</b>' : '') + '</summary><div class="imp-det-b">'
+        + imporBagian('tanggal', kel.tanggal, '', '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>')
+        + (kel.kantor ? imporBagian('kantor', kel.kantor) : '')
+        + (kel.lain ? imporBagian('lain', kel.lain) : '')
+        + '</div></details>';
+    }
+    return h;
   }
-  h += perlu.map(imporKartuTemuan).join('');
-  if (catatan.length) {
-    h += '<details class="imp-det" style="margin-top:6px"><summary>' + catatan.length + ' catatan: nominal sangat kecil, baris kembar, rekening jenis dana lain</summary><div class="imp-det-b">'
-      + catatan.map(imporKartuTemuan).join('') + '</div></details>';
+  /* Tanpa rekap: tanggal dan nama KLL/ULL lebih dulu. */
+  var nTgl = imporBelum(kel.tanggal) + imporAnomTanggal(), nKtr = imporBelum(kel.kantor);
+  var chip = function(teks, n){ return '<span class="imp-fchip' + (n ? '' : ' beres') + '">' + teks + (n ? ' <b>' + n + '</b>' : ' &#10003;') + '</span>'; };
+  h += '<div class="imp-fokus" id="imporTemuanBlok"><div class="imp-fokus-h"><div>'
+    + '<div class="imp-fokus-j">Prioritas: tanggal dan nama KLL / ULL</div>'
+    + '<div class="imp-fokus-k">Tanpa rekap, dua hal ini yang paling sering keliru dan langsung mengubah laporan bulan dan saldo kantor.</div>'
+    + '</div><div class="imp-fchips">' + chip('Tanggal', nTgl) + chip('Nama kantor', nKtr) + '</div></div>';
+  if (kel.berkas) h += imporBagian('berkas', kel.berkas);
+  h += imporBagian('tanggal', kel.tanggal, 'di luar bulan berkas, atau debet dan kredit berbeda',
+    (res.anomaliTanggal || []).length ? '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>' : '',
+    'Semua tanggal ada di dalam bulan berkas.');
+  h += imporBagian('kantor', kel.kantor, 'rancu, tanpa tulisan KLL/ULL, atau belum terdaftar', '', 'Semua nama KLL/ULL terbaca dan terdaftar.');
+  h += '</div>';
+  var lain = kel.lain || [];
+  if (lain.length) {
+    var nLain = imporBelum(lain);
+    h += '<details class="imp-note imp-det imp-lain" id="imporLainBlok"' + (IMPOR_LAIN_BUKA ? ' open' : '') + '><summary><b>Pemeriksaan lain</b> &middot; '
+      + lain.length + ' temuan: pilar, nominal sangat kecil, baris kembar, rekening'
+      + (nLain ? ' &middot; <b class="imp-merah">' + nLain + ' belum diputuskan</b>' : '') + '</summary><div class="imp-det-b">'
+      + lain.map(imporKartuTemuan).join('') + '</div></details>';
   }
-  return h + '</div></details>';
+  return h;
+}
+/* Baris status di kaki jendela: apa yang masih tersisa, terlihat tanpa
+   menggulir. Sebelumnya peringatan "belum diputuskan" dijejalkan ke label
+   tombol Simpan ("Tetap simpan (3 temuan belum diputuskan)"), tombolnya
+   melebar dua kali lipat dan baris tombol jadi tidak rata. */
+function imporPerbaruiKaki() {
+  var info = el('imporKakiInfo'), res = window.IMPORT_TEMP_RES;
+  if (!info) return;
+  if (!res || !window.IMPORT_TEMP_IS_JURNAL) { info.innerHTML = ''; info.className = 'imp-kaki-info'; return; }
+  var kel = imporKelompokkan(res);
+  var hitung = function(a){ return (a || []).filter(function(r){ return !r._lewati; }).length; };
+  var nSimpan = hitung(window.IMPORT_TEMP_HIMPUN_ROWS) + hitung(window.IMPORT_TEMP_SALUR_ROWS);
+  var semuaBelum = imporBelum(res.temuan) + imporAnomTanggal();
+  var teks, kelas;
+  if (window.IMPORT_KONFIRM_SIMPAN && semuaBelum) {
+    teks = semuaBelum + ' temuan belum diputuskan. Klik "Tetap simpan" sekali lagi untuk menyimpan apa adanya.';
+    kelas = 'bahaya';
+  } else if (kel.ringkas && kel.ringkas[0] && kel.ringkas[0].angka) {
+    var A = kel.ringkas[0].angka;
+    var R = ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, window.IMPORT_TEMP_UMP_ROWS, window.IMPORT_TEMP_TRANSFER_ROWS);
+    var d = Math.round(R.totalHimpun.total - A.himpun.total);
+    var dS = A.salur ? Math.round(R.totalSalur.total - A.salur.total) : 0;
+    var nR = imporBelum(imporTemuanRekap(res));
+    teks = (d === 0 && dS === 0 ? 'Sama dengan rekap' : 'Selisih ' + (d ? 'penerimaan ' + (d > 0 ? '+' : '-') + rp(Math.abs(d)) : '') + (d && dS ? ', ' : '') + (dS ? 'penyaluran ' + (dS > 0 ? '+' : '-') + rp(Math.abs(dS)) : ''))
+      + (nR ? ' &middot; ' + nR + ' belum diputuskan' : '');
+    kelas = d === 0 && dS === 0 && !nR ? 'ok' : 'warn';
+  } else {
+    var nP = imporBelum(kel.tanggal) + imporAnomTanggal() + imporBelum(kel.kantor) + imporBelum(kel.berkas);
+    teks = nP ? 'Tanggal dan nama kantor: ' + nP + ' belum diputuskan' : 'Tanggal dan nama kantor sudah beres';
+    kelas = nP ? 'warn' : 'ok';
+  }
+  info.className = 'imp-kaki-info ' + kelas;
+  info.innerHTML = '<span class="imp-kaki-dot"></span><span class="imp-kaki-t">' + teks + '<span class="imp-kaki-n"> &middot; ' + nSimpan + ' baris akan disimpan</span></span>';
 }
 /* Menggambar ulang pratinjau tanpa melompat ke atas. */
 function imporGambarUlang() {
@@ -5467,10 +5683,11 @@ function simpanImportData() {
   /* Temuan yang belum diputuskan tidak menghalangi, tetapi tidak boleh
      terlewat tanpa sengaja: klik pertama hanya mengingatkan. */
   if (isJurnal && window.IMPORT_TEMP_RES && !window.IMPORT_KONFIRM_SIMPAN) {
-    var belum = (window.IMPORT_TEMP_RES.temuan || []).filter(function(t){ return t.tingkat === 'perlu' && !t.status; }).length;
+    var belum = imporBelum(window.IMPORT_TEMP_RES.temuan) + imporAnomTanggal();
     if (belum) {
       window.IMPORT_KONFIRM_SIMPAN = true;
-      el('importSimpanBtn').textContent = 'Tetap simpan (' + belum + ' temuan belum diputuskan)';
+      el('importSimpanBtn').textContent = 'Tetap simpan';
+      imporPerbaruiKaki();
       var blok = el('imporTemuanBlok');
       if (blok && blok.scrollIntoView) blok.scrollIntoView({ block: 'start', behavior: 'smooth' });
       return toast(belum + ' temuan belum diputuskan. Klik sekali lagi kalau memang ingin menyimpan apa adanya.', true);

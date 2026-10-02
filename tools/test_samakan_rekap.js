@@ -246,6 +246,15 @@ function ambil(nama) {
   const Rg = ui.ringkasImporJurnal(H, pk.salur.concat(pb.salur), [], []);
   const daerahRekap = 100000 + 200000 + 40706513;
   cek('Penghimpunan Daerah = Daerah di rekap', Math.round(Rg.totalHimpun.Daerah) === daerahRekap, [Rg.totalHimpun, daerahRekap]);
+  /* Angka rekap untuk tabel perbandingan di layar: harus sama dengan angka
+     yang dicapai jurnal setelah semua usulan diterapkan, kalau tidak, layar
+     akan menampilkan selisih palsu padahal sudah sama dengan rekap. */
+  const ak = (ada(tk, 'rekapRingkas')[0] || {}).angka, ab = (ada(tb, 'rekapRingkas')[0] || {}).angka;
+  cek('angka rekap terkirim untuk tabel perbandingan (kas dan bank)', !!(ak && ab && ak.himpun && ab.himpun), [ak, ab]);
+  cek('angka rekap: total penerimaan kas + bank = total rekap', ak && ab && Math.round(ak.himpun.total + ab.himpun.total) === totalRekap, ak && ab && [ak.himpun, ab.himpun]);
+  cek('angka rekap: Daerah kas + bank = Daerah di rekap (sama dengan jurnal yang sudah disamakan)',
+    ak && ab && Math.round(ak.himpun.Daerah + ab.himpun.Daerah) === daerahRekap, ak && ab && [ak.himpun, ab.himpun]);
+  cek('angka rekap: penyaluran rekap ikut terkirim untuk berkas yang memuat penyaluran', ab && ab.salur && ab.salur.n > 0 && ab.salur.total > 0, ab);
   const salurRekap = 900000 + 2000000 + 23750000 + 45000 + 750000 + 700000;
   cek('penyaluran (tanpa admin bank) = rekap', Math.round(Rg.totalSalur.total) === salurRekap, [Rg.totalSalur.total, salurRekap]);
   cek('biaya admin bank tetap ada untuk saldo rekening', Math.round(Rg.adminBank) === 6500, Rg.adminBank);

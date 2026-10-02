@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F2704F">
+  <link rel="icon" href="/ikon/lazismu.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/ikon/ikon-180.png">
+  <meta name="robots" content="noindex">
+  <title>Penghimpunan Harian</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* ================================================================
+       PENGHIMPUNAN HARIAN (pemilik, 2 Oktober 2026)
+       Halaman baca-saja untuk donatur dan KLL/ULL. Versi kedua hari yang
+       sama: "lebih menarik tapi simple, tidak banyak keterangan". Yang
+       dibuang: tiga kartu angka terpisah, label TANGGAL/KANTOR/CARI di atas
+       kotak, judul tanggal panjang, dropdown kantor (kartu kantornya sendiri
+       sudah jadi saringan). Angka utama pindah ke kepala halaman.
+       Warna dan huruf mengikuti token styles.css (tema terang/gelap).
+       ================================================================ */
+    body{ padding:0; margin:0; background:var(--bg); }
+    .lh-wrap{ max-width:760px; margin:0 auto; padding:16px 16px 48px; }
+
+    .lh-head{
+      position:relative; overflow:hidden; background:var(--grad-accent); color:#fff;
+      border-radius:24px; padding:18px 22px 20px; box-shadow:var(--glow);
+    }
+    .lh-head::after{ content:""; position:absolute; right:-70px; top:-90px; width:260px; height:260px; border-radius:50%;
+      background:radial-gradient(circle,rgba(255,255,255,.22),transparent 70%); pointer-events:none; }
+    .lh-atas{ display:flex; align-items:center; justify-content:space-between; gap:10px; position:relative; }
+    .lh-id{ display:flex; align-items:center; gap:10px; min-width:0; }
+    .lh-logo{ width:34px; height:34px; flex:none; border-radius:11px; background:rgba(255,255,255,.2);
+      border:1px solid rgba(255,255,255,.28); display:grid; place-items:center; overflow:hidden;
+      font-family:var(--head); font-weight:800; font-size:13px; }
+    .lh-logo img{ width:100%; height:100%; object-fit:contain; }
+    .lh-nama{ font-family:var(--head); font-size:14.5px; font-weight:700; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lh-alat{ display:flex; align-items:center; gap:6px; flex:none; }
+    .lh-langsung{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
+      background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.26); border-radius:999px; padding:5px 10px; white-space:nowrap; }
+    .lh-titik{ width:7px; height:7px; border-radius:50%; background:#b9f6ca; animation:lhDenyut 2s infinite; }
+    .lh-langsung.diam .lh-titik{ background:rgba(255,255,255,.6); animation:none; }
+    @keyframes lhDenyut{ 0%{box-shadow:0 0 0 0 rgba(185,246,202,.7)} 70%{box-shadow:0 0 0 7px rgba(185,246,202,0)} 100%{box-shadow:0 0 0 0 rgba(185,246,202,0)} }
+    .lh-tema{ width:30px; height:30px; border-radius:50%; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.16); color:#fff; cursor:pointer; font-size:13px; }
+
+    .lh-utama{ position:relative; margin-top:18px; }
+    .lh-label{ font-size:12px; font-weight:600; opacity:.9; }
+    .lh-total{ font-family:var(--head); font-size:38px; font-weight:800; line-height:1.1; margin-top:2px; letter-spacing:-.01em;
+      font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+    .lh-info{ font-size:12.5px; opacity:.92; margin-top:4px; }
+    .lh-info b{ font-weight:700; }
+    .lh-metode-baris{ position:relative; display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+    .lh-pil{ font-size:11.5px; background:rgba(255,255,255,.17); border:1px solid rgba(255,255,255,.24); border-radius:999px;
+      padding:4px 10px; white-space:nowrap; }
+    .lh-pil b{ font-weight:700; font-variant-numeric:tabular-nums; }
+
+    /* Bilah alat: tanggal dan cari dalam satu baris, tanpa label di atas. */
+    .lh-bilah{ display:flex; align-items:center; gap:8px; margin:14px 0 18px; flex-wrap:wrap; }
+    .lh-tgl-baris{ display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+    .lh-tgl-baris .custom-dropdown,.lh-tgl-baris .datepicker-enhanced{ width:168px; }
+    .lh-tgl-btn{ height:38px; min-width:38px; padding:0 10px; border-radius:11px; border:1px solid var(--border); background:var(--surface);
+      color:var(--text); font-weight:700; font-size:15px; cursor:pointer; flex:none; }
+    .lh-tgl-btn:hover:not(:disabled){ border-color:var(--accent); color:var(--accent-d); }
+    .lh-tgl-btn:disabled{ opacity:.35; cursor:default; }
+    .lh-hariini{ font-size:12.5px; }
+    .lh-cari{ position:relative; flex:1 1 220px; min-width:0; }
+    .lh-cari svg{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
+    .lh-cari input{ width:100%; padding-left:36px; padding-right:34px; height:38px; border-radius:11px; }
+    .lh-cari-hapus{ position:absolute; right:6px; top:50%; transform:translateY(-50%); width:26px; height:26px; border:0; border-radius:8px;
+      background:var(--surface2); color:var(--text2); cursor:pointer; font-size:14px; line-height:1; }
+
+    .lh-judul{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin:0 2px 8px; }
+    .lh-judul span:first-child{ font-family:var(--head); font-weight:800; font-size:14.5px; color:var(--text); }
+    .lh-hasil{ font-size:12px; color:var(--muted); }
+    .lh-judul .lh-hapus-saring{ border:0; background:none; color:var(--accent-d); font-weight:700; font-size:12px; cursor:pointer; padding:0; }
+
+    /* Daftar: satu kartu berisi baris-baris bergaris tipis, bukan kartu per baris. */
+    .lh-daftar{ background:var(--surface); border:1px solid var(--border); border-radius:18px; overflow:hidden; }
+    .lh-baris{ display:flex; align-items:center; gap:12px; padding:12px 16px; min-width:0; border-top:1px solid var(--border);
+      transition:background .8s; }
+    .lh-baris:first-child{ border-top:0; }
+    .lh-baris.lh-baru{ background:color-mix(in srgb,var(--green) 11%,var(--surface)); }
+    .lh-av{ width:36px; height:36px; flex:none; border-radius:50%; display:grid; place-items:center; font-family:var(--head);
+      font-weight:800; font-size:13px; color:var(--accent-d); background:var(--accent-soft); }
+    .lh-baris.kantor .lh-av{ color:#2563eb; background:color-mix(in srgb,#3b82f6 14%,var(--surface)); }
+    .lh-isi{ flex:1; min-width:0; }
+    .lh-nama-d{ font-weight:700; font-size:14px; color:var(--text); overflow-wrap:anywhere; }
+    .lh-kantor{ display:inline-block; margin-left:6px; font-size:10px; font-weight:800; color:#2563eb;
+      background:color-mix(in srgb,#3b82f6 12%,var(--surface)); border-radius:6px; padding:1px 6px; vertical-align:2px; }
+    .lh-ket{ font-size:12px; color:var(--muted); margin-top:1px; overflow-wrap:anywhere; }
+    .lh-kanan{ text-align:right; flex:none; }
+    .lh-jumlah{ font-family:var(--head); font-weight:800; font-size:15px; color:var(--green); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .lh-metode{ font-size:11px; color:var(--muted); margin-top:1px; white-space:nowrap; }
+
+    /* Kartu kantor: yang sudah setor di depan, sekaligus jadi saringan. */
+    .lh-kantor-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin-bottom:18px; }
+    .lh-kantor-kartu{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:10px 12px; cursor:pointer;
+      text-align:left; min-width:0; font:inherit; color:inherit; transition:border-color .15s, background .15s; }
+    .lh-kantor-kartu:hover{ border-color:var(--accent); }
+    .lh-kantor-kartu.on{ border-color:var(--accent); background:var(--accent-soft); }
+    .lh-kantor-kartu.nol{ opacity:.6; }
+    .lh-kk-n{ font-weight:700; font-size:12.5px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lh-kk-v{ font-family:var(--head); font-weight:800; font-size:16px; color:var(--green); margin-top:2px; font-variant-numeric:tabular-nums; }
+    .lh-kantor-kartu.nol .lh-kk-v{ color:var(--muted); }
+    .lh-semua{ grid-column:1 / -1; justify-self:center; border:0; background:none; color:var(--accent-d); font-weight:700; font-size:12.5px; cursor:pointer; padding:4px 8px; }
+
+    .lh-kosong{ text-align:center; color:var(--muted); font-size:13px; padding:34px 12px; background:var(--surface);
+      border:1px dashed var(--border); border-radius:18px; }
+    .lh-kosong b{ display:block; font-size:22px; margin-bottom:4px; }
+    .lh-galat{ max-width:420px; margin:80px auto; text-align:center; background:var(--surface); border:1px solid var(--border);
+      border-radius:18px; padding:28px 22px; color:var(--text2); font-size:14px; line-height:1.6; }
+    .lh-galat b{ display:block; font-family:var(--head); font-size:17px; color:var(--text); margin-bottom:6px; }
+    .lh-kaki{ text-align:center; font-size:11.5px; color:var(--muted); margin-top:22px; }
+
+    @media(max-width:620px){
+      .lh-wrap{ padding:12px 12px 40px; }
+      .lh-head{ padding:16px 16px 18px; border-radius:20px; }
+      .lh-total{ font-size:32px; }
+      .lh-tgl-baris{ flex:1 1 100%; }
+      .lh-tgl-baris .custom-dropdown,.lh-tgl-baris .datepicker-enhanced{ flex:1; width:auto; min-width:0; }
+      .lh-cari{ flex-basis:100%; }
+      .lh-baris{ padding:11px 12px; gap:10px; }
+      .lh-av{ width:32px; height:32px; font-size:12px; }
+      .lh-langsung .lh-jam{ display:none; }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    /* Tema mengikuti pilihan tersimpan, kalau belum ada ikut setelan perangkat. */
+    (function(){
+      var t = null;
+      try { t = localStorage.getItem('laz_theme'); } catch(e) {}
+      if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <div id="boot" class="lz lz--full"><div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div></div>
+  <div id="root" class="lh-wrap hidden"></div>
+
+  <script src="/js/lz-ui.js" defer></script>
+  <script>
+    var TOKEN = new URLSearchParams(location.search).get('t') || '';
+    var HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    var BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    var DATA = null, TGL = '', SARING = '', CARI = '', KUNCI_LAMA = null, PEWAKTU = null, KERANGKA = '';
+    /* Diperbarui tiap 30 detik selama yang dilihat hari ini dan tab terbuka.
+       __ujiJedaHarian hanya diisi uji supaya tidak menunggu 30 detik. */
+    var JEDA = window.__ujiJedaHarian || 30000;
+    var IKON_CARI = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+
+    function $(id){ return document.getElementById(id); }
+    function rp(n){ return 'Rp ' + Math.round(Number(n) || 0).toLocaleString('id-ID'); }
+    function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+    function tglPanjang(t){ var d = new Date(t + 'T00:00:00'); return HARI[d.getDay()] + ', ' + d.getDate() + ' ' + BULAN[d.getMonth() + 1] + ' ' + d.getFullYear(); }
+    function geser(t, n){ var d = new Date(t + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+    function inisial(n){ var p = String(n || '?').replace(/^(KLL|ULL)\s+/i, '').trim().split(/\s+/); return ((p[0] || '?').charAt(0) + (p[1] ? p[1].charAt(0) : '')).toUpperCase(); }
+    function cocok(teks){ var q = CARI.trim().toLowerCase(); return !q || String(teks || '').toLowerCase().indexOf(q) >= 0; }
+    function segarkanKendali(){ if (window.tandaiPerluEnhance) window.tandaiPerluEnhance(); }
+
+    function panggil(fn, args){
+      return fetch('/api/rpc', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ fn: fn, args: args || [] }) })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if (j && j.__error) throw new Error(j.__error); return j.result; });
+    }
+
+    function muat(tgl, diam){
+      return panggil('apiPenghimpunanHarian', [TOKEN, tgl || '']).then(function(d){
+        if (!DATA || d.tanggal !== DATA.tanggal) KUNCI_LAMA = null;
+        DATA = d; TGL = d.tanggal;
+        gambar();
+        jadwal();
+      }).catch(function(e){
+        if (diam && DATA) { jadwal(); return; }   /* gagal sesaat saat memperbarui: data lama tetap tampil */
+        galat(e.message || String(e));
+      });
+    }
+    function jadwal(){
+      clearTimeout(PEWAKTU);
+      if (!DATA || DATA.tanggal !== DATA.hariIni) return;
+      PEWAKTU = setTimeout(function(){ if (document.hidden) { jadwal(); return; } muat(TGL, true); }, JEDA);
+    }
+    document.addEventListener('visibilitychange', function(){ if (!document.hidden && DATA && DATA.tanggal === DATA.hariIni) muat(TGL, true); });
+
+    function galat(pesan){
+      $('boot').classList.add('hidden');
+      var r = $('root'); r.classList.remove('hidden');
+      KERANGKA = '';
+      r.innerHTML = '<div class="lh-galat" id="lhGalat"><b>Link tidak bisa dibuka</b>' + esc(pesan)
+        + '<br>Minta link terbaru ke petugas Lazismu.</div>';
+    }
+
+    function kunciBaris(x){ return [x.nama, x.jumlah, x.jam, x.metode, x.dana, x.kantor].join('|'); }
+
+    /* Kerangka (kepala dan bilah alat) digambar sekali. Pembaruan tiap 30
+       detik hanya mengganti angka dan daftar, supaya kotak cari yang sedang
+       diketik tidak hilang. */
+    function gambarKerangka(){
+      var d = DATA, kantor = d.jenis === 'kantor', s = d.lembaga || {};
+      var logo = s.logoData ? '<img src="' + esc(s.logoData) + '" alt="">' : esc((s.singkatan || 'LZ').slice(0, 2).toUpperCase());
+      var h = '<div class="lh-head"><div class="lh-atas"><div class="lh-id"><div class="lh-logo">' + logo + '</div>'
+        + '<div class="lh-nama">' + esc(s.namaLembaga || 'Lazismu') + '</div></div>'
+        + '<div class="lh-alat"><span class="lh-langsung" id="lhLangsung"><span class="lh-titik"></span><span id="lhLangsungT"></span></span>'
+        + '<button class="lh-tema" type="button" id="lhTema" onclick="gantiTema()" aria-label="Ganti tema"></button></div></div>'
+        + '<div class="lh-utama"><div class="lh-label" id="lhLabel"></div><div class="lh-total" id="lhTotal"></div>'
+        + '<div class="lh-info" id="lhInfo"></div></div><div class="lh-metode-baris" id="lhMetode"></div></div>';
+      h += '<div class="lh-bilah"><div class="lh-tgl-baris">'
+        + '<button class="lh-tgl-btn" type="button" onclick="pindahHari(-1)" aria-label="Hari sebelumnya" title="Hari sebelumnya">&#8249;</button>'
+        + '<input type="date" id="lhTanggal" value="' + esc(d.tanggal) + '" onchange="muat(this.value)" aria-label="Tanggal">'
+        + '<button class="lh-tgl-btn" type="button" id="lhBerikut" onclick="pindahHari(1)" aria-label="Hari berikutnya" title="Hari berikutnya">&#8250;</button>'
+        + '<button class="lh-tgl-btn lh-hariini" type="button" id="lhHariIni" onclick="muat(\'\')">Hari ini</button>'
+        + '</div><div class="lh-cari">' + IKON_CARI + '<input id="lhCari" type="text" autocomplete="off" aria-label="'
+        + (kantor ? 'Cari kantor layanan' : 'Cari donatur') + '" placeholder="' + (kantor ? 'Cari kantor layanan' : 'Cari donatur') + '" oninput="cari(this.value)">'
+        + '<button class="lh-cari-hapus hidden" id="lhCariHapus" type="button" onclick="cari(\'\', true)" aria-label="Hapus pencarian">&times;</button></div></div>';
+      h += '<div id="lhIsi"></div>';
+      h += '<div class="lh-kaki">' + esc(s.namaLembaga || 'Lazismu') + (s.website ? ' &middot; ' + esc(s.website) : '') + '</div>';
+      $('root').innerHTML = h;
+      KERANGKA = d.jenis;
+    }
+
+    function gambar(){
+      var d = DATA, kantor = d.jenis === 'kantor', s = d.lembaga || {};
+      $('boot').classList.add('hidden');
+      $('root').classList.remove('hidden');
+      document.title = (kantor ? 'Setoran KLL & ULL' : 'Penghimpunan Harian') + ' | ' + (s.singkatan || s.namaLembaga || 'Lazismu');
+      if (KERANGKA !== d.jenis || !$('lhIsi')) gambarKerangka();
+
+      var langsung = d.tanggal === d.hariIni;
+      var jamPerbarui = new Date(d.diperbarui).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+      $('lhLangsung').classList.toggle('diam', !langsung);
+      $('lhLangsungT').innerHTML = langsung ? 'Langsung<span class="lh-jam"> &middot; ' + esc(jamPerbarui) + '</span>' : 'Arsip';
+      $('lhTema').innerHTML = document.documentElement.getAttribute('data-theme') === 'dark' ? '&#9728;' : '&#9790;';
+      var inp = $('lhTanggal');
+      if (inp.value !== d.tanggal) inp.value = d.tanggal;
+      $('lhBerikut').disabled = langsung;
+      $('lhHariIni').classList.toggle('hidden', langsung);
+
+      /* Angka utama di kepala: satu angka besar, satu baris keterangan. */
+      var nBulan = BULAN[Number(d.tanggal.slice(5, 7))];
+      $('lhLabel').textContent = (kantor ? 'Setoran KLL & ULL ' : 'Terhimpun ') + (langsung ? 'hari ini' : tglPanjang(d.tanggal));
+      $('lhTotal').textContent = rp(d.ringkas.total);
+      var nSetor = (d.perKantor || []).filter(function(x){ return x.hariIni > 0; }).length;
+      $('lhInfo').innerHTML = (kantor ? '<b>' + nSetor + '</b> dari ' + (d.perKantor || []).length + ' kantor setor' : '<b>' + d.ringkas.n + '</b> donasi')
+        + ' &middot; ' + esc(nBulan) + ' <b>' + rp(d.bulan.total) + '</b>';
+      var metode = Object.keys(d.ringkas.perMetode || {}).sort(function(a, b){ return d.ringkas.perMetode[b] - d.ringkas.perMetode[a]; });
+      $('lhMetode').innerHTML = metode.map(function(m){ return '<span class="lh-pil">' + esc(m) + ' <b>' + rp(d.ringkas.perMetode[m]) + '</b></span>'; }).join('');
+      $('lhMetode').classList.toggle('hidden', !metode.length);
+      gambarIsi();
+      segarkanKendali();
+    }
+
+    var SEMUA_KANTOR = false;
+    function gambarIsi(){
+      var d = DATA, kantor = d.jenis === 'kantor';
+      var langsung = d.tanggal === d.hariIni;
+      var hitungLama = {};
+      if (KUNCI_LAMA) KUNCI_LAMA.forEach(function(k){ hitungLama[k] = (hitungLama[k] || 0) + 1; });
+      var baris = d.baris.map(function(x){
+        var k = kunciBaris(x), baru = false;
+        if (KUNCI_LAMA) { if (hitungLama[k]) hitungLama[k]--; else baru = true; }
+        return { x: x, baru: baru };
+      });
+      KUNCI_LAMA = d.baris.map(kunciBaris);
+      var h = '';
+
+      if (kantor) {
+        /* Yang sudah setor di depan. Yang belum setor disembunyikan sampai
+           diminta, kecuali sedang dicari: di Bantul ada puluhan KLL/ULL, dan
+           deretan kartu Rp 0 menenggelamkan yang penting. */
+        var semua = (d.perKantor || []).slice().sort(function(a, b){ return (b.hariIni - a.hariIni) || a.kantor.localeCompare(b.kantor); });
+        var kartu = semua.filter(function(k){ return cocok(k.kantor); });
+        var nol = kartu.filter(function(k){ return !k.hariIni; }).length;
+        var tampilK = (SEMUA_KANTOR || CARI) ? kartu : kartu.filter(function(k){ return k.hariIni > 0 || k.kantor === SARING; });
+        if (kartu.length) {
+          h += '<div class="lh-kantor-grid">' + tampilK.map(function(k){
+                return '<button type="button" class="lh-kantor-kartu' + (SARING === k.kantor ? ' on' : '') + (k.hariIni ? '' : ' nol') + '" data-k="' + esc(k.kantor) + '" title="' + esc(nBulanIni() + ': ' + rp(k.bulanIni)) + '">'
+                  + '<div class="lh-kk-n">' + esc(k.kantor) + '</div>'
+                  + '<div class="lh-kk-v">' + rp(k.hariIni) + '</div></button>';
+              }).join('')
+            + (!CARI && nol ? '<button type="button" class="lh-semua" onclick="SEMUA_KANTOR=!SEMUA_KANTOR;gambarIsi()">'
+              + (SEMUA_KANTOR ? 'Sembunyikan yang belum setor' : '+ ' + nol + ' kantor belum setor') + '</button>' : '')
+            + '</div>';
+        } else {
+          h += '<div class="lh-kosong" style="margin-bottom:18px">Tidak ada kantor bernama "' + esc(CARI) + '".</div>';
+        }
+      }
+
+      var tampil = baris.filter(function(b){
+        var x = b.x;
+        if (kantor) return (!SARING || x.kantor === SARING) && cocok(x.kantor);
+        return cocok([x.nama, x.fundraising, x.dana, x.pilar, x.kantor, x.metode].join(' '));
+      });
+      h += '<div class="lh-judul"><span>' + (kantor ? (SARING ? esc(SARING) : 'Setoran') : 'Donasi') + '</span>'
+        + (SARING ? '<button type="button" class="lh-hapus-saring" onclick="saring(\'\')">Semua kantor</button>'
+          : '<span class="lh-hasil">' + ((CARI) ? tampil.length + ' dari ' + baris.length : baris.length ? baris.length + ' transaksi' : '') + '</span>') + '</div>';
+      if (!tampil.length) {
+        h += '<div class="lh-kosong">' + ((CARI || SARING) && baris.length ? 'Tidak ada yang cocok.'
+          : langsung ? '<b>&#127793;</b>Belum ada ' + (kantor ? 'setoran' : 'donasi') + ' hari ini.'
+          : 'Tidak ada ' + (kantor ? 'setoran' : 'donasi') + ' pada tanggal ini.') + '</div>';
+      } else {
+        h += '<div class="lh-daftar">' + tampil.map(function(b){
+          var x = b.x, ket = [];
+          if (x.dana) ket.push(esc(x.pilar && x.pilar !== x.dana ? x.pilar : x.dana));
+          if (x.fundraising && x.fundraising !== x.nama) ket.push('via ' + esc(x.fundraising));
+          var label = kantor ? x.kantor : x.nama;
+          return '<div class="lh-baris' + (b.baru ? ' lh-baru' : '') + (x.kantor ? ' kantor' : '') + '">'
+            + '<div class="lh-av">' + esc(inisial(label)) + '</div>'
+            + '<div class="lh-isi"><div class="lh-nama-d">' + esc(label)
+            /* Setoran yang namanya sudah nama kantor cukup ditandai jenisnya. */
+            + (!kantor && x.kantor ? '<span class="lh-kantor">' + esc(x.nama === x.kantor ? x.tipe : x.kantor) + '</span>' : '')
+            + (kantor && String(x.kantor || '').indexOf(x.tipe + ' ') !== 0 ? '<span class="lh-kantor">' + esc(x.tipe) + '</span>' : '') + '</div>'
+            + (ket.length ? '<div class="lh-ket">' + ket.join(' &middot; ') + '</div>' : '') + '</div>'
+            + '<div class="lh-kanan"><div class="lh-jumlah">' + rp(x.jumlah) + '</div><div class="lh-metode">' + esc(x.metode) + (x.jam ? ' &middot; ' + esc(x.jam) : '') + '</div></div></div>';
+        }).join('') + '</div>';
+      }
+      $('lhIsi').innerHTML = h;
+      $('lhIsi').querySelectorAll('.lh-kantor-kartu').forEach(function(b){
+        b.onclick = function(){ saring(SARING === b.getAttribute('data-k') ? '' : b.getAttribute('data-k')); };
+      });
+    }
+    function nBulanIni(){ return BULAN[Number(DATA.tanggal.slice(5, 7))]; }
+    function saring(k){
+      SARING = k || '';
+      gambarIsi();
+    }
+    function cari(v, fokus){
+      CARI = v || '';
+      var i = $('lhCari'); if (i && i.value !== CARI) i.value = CARI;
+      $('lhCariHapus').classList.toggle('hidden', !CARI);
+      gambarIsi();
+      if (fokus && i) i.focus();
+    }
+    function pindahHari(n){ var t = geser(TGL, n); if (DATA && t > DATA.hariIni) return; muat(t); }
+    function gantiTema(){
+      var kini = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', kini);
+      try { localStorage.setItem('laz_theme', kini); } catch(e) {}
+      $('lhTema').innerHTML = kini === 'dark' ? '&#9728;' : '&#9790;';
+    }
+
+    if (!TOKEN) galat('Alamatnya tidak lengkap.');
+    else muat('');
+  </script>
+</body>
+</html>

@@ -2705,7 +2705,7 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
   background:var(--surface);border-color:var(--border);color:var(--text);box-shadow:none;
 }
 .modal.import-modal .modal-foot .btn:not(.btn-primary):not(.btn-danger):hover{border-color:var(--accent);color:var(--accent-d)}
-.modal.import-modal .modal-foot > .btn:first-child{margin-right:auto}
+.modal.import-modal .modal-foot > .btn:first-child{margin-right:0}
 /* Sesudah pratinjau ada, "Simpan" yang utama; tombol tarik turun jadi biasa. */
 /* !important karena .btn-primary sendiri memakai !important untuk latar. */
 .modal.import-modal .modal-foot:has(#importSimpanBtn:not(.hidden)) #importTarikBtn{
@@ -6098,3 +6098,99 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
   .md-pita i{ transition:none; }
   .md-baris:hover{ transform:none; }
 }
+
+/* ---------- LINK PENGHIMPUNAN HARIAN: jendela admin ---------- */
+.lh-admin-kartu{border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px;background:var(--surface)}
+.lh-admin-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.lh-admin-h b{font-family:var(--head);font-size:14px;color:var(--text)}
+.lh-admin-k{font-size:12px;line-height:1.5;margin-bottom:10px}
+.lh-admin-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.lh-admin-a .btn{height:32px;padding:0 12px}
+.lh-admin-mati{color:var(--red)}
+.lh-admin-mati:hover{border-color:var(--red);color:var(--red)}
+
+/* ================================================================
+   IMPOR: FOKUS PEMERIKSAAN DAN KAKI JENDELA (pemilik, 2 Oktober 2026)
+   "Tanpa rekap fokus ke tanggal dan nama KLL/ULL; dengan rekap fokus
+   perbandingan." Dan: "tombol bawah masih belum rapi". Ukuran sebelum:
+   label "Tetap simpan (3 temuan belum diputuskan)" membuat tombol Simpan
+   melebar ke 330 px; bayangan tombol utama 22 px melewati garis kaki
+   jendela; garis pemisah kaki (--border2) nyaris tak terlihat di tema kaca.
+   ================================================================ */
+.modal.import-modal .modal-foot{
+  display:flex;align-items:center;flex-wrap:nowrap;gap:8px;
+  border-top:1px solid var(--border);background:var(--surface);
+  border-radius:0 0 var(--radius,18px) var(--radius,18px);
+}
+.modal.import-modal .modal-foot .btn{flex:0 0 auto;white-space:nowrap;min-width:84px;justify-content:center;gap:0}
+.modal.import-modal .modal-foot .btn-primary{box-shadow:0 4px 10px -6px rgba(var(--accent-rgb),.9) !important}
+.modal.import-modal .modal-foot .btn-primary:hover{box-shadow:0 6px 14px -6px rgba(var(--accent-rgb),1) !important}
+.imp-kaki-info{
+  flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;
+  padding:0 8px;font-size:12px;line-height:1.35;color:var(--text2);
+}
+.imp-kaki-info:empty{padding:0}
+.imp-kaki-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.imp-kaki-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-kaki-n{color:var(--muted)}
+.imp-kaki-info.ok .imp-kaki-dot{background:var(--green)}
+.imp-kaki-info.ok .imp-kaki-t{color:var(--green);font-weight:600}
+.imp-kaki-info.warn .imp-kaki-dot{background:var(--amber)}
+.imp-kaki-info.warn .imp-kaki-t{color:var(--text);font-weight:600}
+.imp-kaki-info.bahaya .imp-kaki-dot{background:var(--red)}
+.imp-kaki-info.bahaya .imp-kaki-t{color:var(--red);font-weight:700;white-space:normal}
+@media(max-width:640px){
+  .modal.import-modal .modal-foot{flex-wrap:wrap;padding:10px 12px}
+  .imp-kaki-info{order:-1;flex-basis:100%;padding:0 2px 2px}
+  .imp-kaki-t{white-space:normal}
+  .modal.import-modal .modal-foot > .btn:first-child{margin-right:auto}
+  .modal.import-modal .modal-foot .btn{min-width:0;padding:0 12px}
+  .imp-panjang{display:none}
+}
+
+/* Bingkai fokus: putih berbingkai, bukan satu kotak merah muda besar. */
+.imp-fokus{
+  border:1px solid var(--border);border-radius:12px;background:var(--surface);
+  padding:12px 14px;margin-bottom:10px;
+}
+.imp-fokus-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.imp-fokus-j{font-size:13.5px;font-weight:800;color:var(--text)}
+.imp-fokus-k{font-size:11.5px;color:var(--muted);margin-top:2px;max-width:640px}
+.imp-fchips{display:flex;gap:6px;flex-wrap:wrap}
+.imp-fchip{
+  display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;
+  font-size:11.5px;font-weight:700;background:var(--red-bg);color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent);
+}
+.imp-fchip.beres{background:color-mix(in srgb,var(--green) 10%,transparent);color:var(--green);border-color:color-mix(in srgb,var(--green) 35%,transparent)}
+.imp-kel{border-top:1px solid var(--border);padding-top:10px;margin-top:10px}
+.imp-kel:first-of-type{margin-top:6px}
+.imp-kel-h{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin-bottom:2px}
+.imp-kel-j{font-size:12.5px;font-weight:800;color:var(--text)}
+.imp-kel-n{font-size:11px;font-weight:700;color:var(--red);background:var(--red-bg);border-radius:999px;padding:1px 8px}
+.imp-kel-n.beres{color:var(--green);background:color-mix(in srgb,var(--green) 10%,transparent)}
+.imp-kel-k{font-size:11px;color:var(--muted)}
+.imp-kel-kosong{font-size:12px;color:var(--muted);padding:4px 0 2px}
+.imp-kel .imp-note{margin:8px 0 0}
+.imp-temu{padding:9px 0 9px 12px;border-left:3px solid var(--border);margin-top:8px}
+.imp-temu.perlu{border-left-color:var(--red)}
+.imp-temu.selesai{border-left-color:var(--green);opacity:.85}
+.imp-temu-j{font-size:12.5px;font-weight:700;color:var(--text)}
+.imp-temu.perlu .imp-temu-j{color:var(--red)}
+.imp-temu-p{font-size:12px;margin:2px 0 4px;color:var(--text2)}
+.imp-temu-r{font-size:11px;color:var(--muted)}
+.imp-merah{color:var(--red) !important}
+.imp-lain .imp-kel:first-child{border-top:0;margin-top:0;padding-top:0}
+
+/* Tabel jurnal lawan rekap */
+.imp-banding{margin:6px 0 4px}
+.imp-banding th:not(:first-child),.imp-banding td.jnum{text-align:right}
+.imp-banding .imp-sama{color:var(--green);font-weight:700}
+.imp-banding .imp-selisih{color:var(--red);font-weight:700}
+.imp-banding .imp-bd-total td{font-weight:700}
+.imp-banding-k{font-size:11px;color:var(--muted);margin-bottom:6px}
+
+/* Judul lipatan dulu display:flex: setiap <b> jadi kolom sendiri, dan di
+   lebar 390 "Terbaca sebagai jurnal penerimaan" patah jadi empat kolom
+   setinggi 70 px. Sekarang teks biasa yang mengalir, panahnya di kanan. */
+.imp-det > summary{display:block;position:relative;padding-right:18px}
+.imp-det > summary::after{position:absolute;right:2px;top:50%;margin-top:-4px}
