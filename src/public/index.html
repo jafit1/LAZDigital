@@ -10,9 +10,15 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <!-- Huruf: stylesheet Google Fonts tidak lagi menahan gambar pertama (media=print lalu dilepas saat selesai).
+       Sebelumnya layar pembuka menunggu satu perjalanan ke server pihak ketiga; selama belum tiba dipakai huruf sistem. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"></noscript>
   <link rel="stylesheet" href="/styles.css">
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+  <!-- Pustaka Excel: salinan sendiri, dan async. Dulu dari cdn.sheetjs.com dengan defer, dan skrip defer berjalan berurutan:
+       app.js baru mulai setelah 880 KB dari server pihak ketiga selesai diunduh, jadi layar pembuka ikut menunggu CDN yang lambat
+       atau terblokir di jaringan kantor. Pustaka ini baru dipakai saat impor/ekspor Excel, bukan saat membuka aplikasi. -->
+  <script src="/js/vendor/xlsx.full.min.js" async></script>
   <script src="/js/utils/qrcode.js" defer></script>
   <script src="/js/lz-perangkat.js"></script>
   <script src="/js/lz-sisi.js" defer></script>
@@ -101,7 +107,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <!-- defer: dieksekusi berurutan (xlsx → qrcode → app) setelah HTML selesai diparse,
+  <!-- defer: dieksekusi berurutan (qrcode → app) setelah HTML selesai diparse,
        jadi parsing halaman tidak diblokir oleh library besar. -->
   <script src="/app.js" defer></script>
 </body>

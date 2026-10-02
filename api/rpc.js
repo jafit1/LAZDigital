@@ -150,7 +150,16 @@ module.exports = async (req, res) => {
        Jalur Redis di bawah dibiarkan utuh sebagai jalan pulang: cukup hapus
        DATABASE_URL dan aplikasinya kembali memakai bongkah laz:db. */
     if (lazpg.pakaiPostgres()) {
+      /* izinMentah: bacaan yang diingat dijawab sebagai teks JSON jadi, tanpa diurai
+         lalu ditulis ulang (daftar Penghimpunan bisa 8 MB). */
+      ctx.izinMentah = true;
       const hasil = await lazpg.jalankanRPC(engine, fn, args, ctx);
+      if (hasil instanceof lazpg.JsonMentah) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end('{"result":' + hasil.teks + '}');
+        return;
+      }
       res.status(200).json({ result: hasil });
       return;
     }

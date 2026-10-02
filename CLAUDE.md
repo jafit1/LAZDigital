@@ -99,7 +99,7 @@ menulis:
 | `api/rpc.js`, `api/blast.js`, `api/fund.js` | `api/_engine.js`, `api/backup.js`, `api/media.js`, `api/ai.js` |
 | `lib/blast/db.js`, `lib/fund/himpunan.js`, `lib/media/db.js` | `lib/laz-pg.js`, `lib/laz-skema.js`, `lib/kv-postgres.js`, `lib/blast/percakapan.js`, `lib/media/permohonan.js` |
 | `src/public/app.js`, `src/public/blast.js`, `src/public/fund.js` | `src/public/ai.js`, `src/public/media.js`, `src/public/styles.css` |
-| `src/public/js/lz-ui.js`, semua `*.bat` | semua `tools/*.js` |
+| `src/public/js/lz-ui.js`, semua `*.bat` | semua `tools/*.js`, `lib/surat/*.js`, `src/public/surat.js`, `src/public/surat.html`, `src/public/lacak.html`, `src/public/harian.html` |
 
 Cara aman menyunting dengan Python:
 
@@ -143,7 +143,7 @@ Modul izin sekarang (`MODULES` di `_engine.js`):
 ```
 dashboard, saldo, saldokll, penghimpunan, pentasyarufan, laporan,
 rekening, layanan, users, settings, donatur, log, saldodaerah,
-broadcast, fundraising, ai, media
+broadcast, fundraising, ai, media, surat
 ```
 
 Aksi: `view`, `create`, `edit`, `delete`. Modul yang hanya masuk akal untuk
@@ -307,6 +307,7 @@ LAZDigital/
 │  ├─ blast/                 db, antrean, kontak, percakapan, siap
 │  ├─ fund/                  himpunan, dan lainnya
 │  ├─ media/                 db, sesi-laz, jenis, tim, permohonan
+│  ├─ surat/                 db, surat (aturan), api (tindakan surat.*)
 │  └─ ai/                    db, penyedia, alir
 ├─ src/public/               Frontend, vanilla JS, tanpa build step
 │  ├─ index.html + app.js    Aplikasi utama (~525 KB)
@@ -314,6 +315,8 @@ LAZDigital/
 │  ├─ fund.html + fund.js
 │  ├─ ai.html + ai.js
 │  ├─ media.html + media.js
+│  ├─ surat.html + surat.js  Surat & Pengajuan (lewat /api/media)
+│  ├─ lacak.html             Lacak Pengajuan untuk pemohon (tanpa masuk)
 │  ├─ styles.css             Satu berkas untuk semua halaman (~279 KB)
 │  └─ js/lz-ui.js            Dropdown dan pemilih tanggal bertema
 ├─ tools/                    Uji dan alat, semuanya LF
@@ -351,6 +354,30 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   supaya `_engine.js` tidak perlu ditulis ulang.
 - **Tidak ada build step.** Frontend dilayani apa adanya dari `src/public`.
   Tidak ada React, tidak ada bundler.
+- **Hasil bacaan diingat** (`INGAT` di `lib/laz-pg.js`, 2 Okt 2026). Sembilan
+  fungsi baca murni (daftar `BACA`: Dashboard, ListPenghimpunan,
+  ListPentasyarufan, Saldo, SaldoLayanan, DonaturAnalytics, ListDonatur, RAPBData,
+  LaporanHarian, semuanya aksi `view`) disimpan per fn + argumen (token ikut) +
+  hari WIB. Penanda sah-tidaknya `kunciCache` berasal dari baris kv `laz:cver`
+  `{c, v}`: `c` ACAK (bukan nomor versi, nomor bisa berulang setelah DB dibuat
+  ulang) dan hanya berubah bila buku besar benar-benar berubah. Tulisan yang
+  hanya menyentuh `AuditLog`, `Sessions`, atau props `_aksesTerakhir` tidak
+  mengubahnya. Saat kena cache izin tetap dicek hidup (`engine.cekIzin`) dan
+  catatan akses tetap ditulis (`engine.catatAkses`). Anggaran memori
+  `LAZ_INGAT_MAKS` (bawaan 48e6 karakter, LRU; `0` mematikan). Hasil dikirim
+  sebagai JSON mentah (`JsonMentah`, `ctx.izinMentah` dari `api/rpc.js`).
+- **`pipeline` di `lib/kv-postgres.js`** mengelompokkan GET berurutan menjadi
+  satu MGET (potongan 1000); pipeline semua-GET tanpa transaksi. Dipakai
+  `surat.daftar` (404 kueri jadi paling banyak 4).
+- **Tabel bertahap di klien** (`tabelBertahap` di `app.js`): Penghimpunan,
+  Pentasyarufan, Donatur hanya menggambar 100 baris pertama (`TABEL_BATCH`),
+  sisanya dimuat oleh `IntersectionObserver` saat digulir. Pencarian dan
+  saringan bekerja di atas SEMUA baris (teks cari `c` sudah dihitung), bukan
+  yang tampak saja. `applyFilters` ditunda 80 ms.
+- **Buka aplikasi**: boot jalan di `DOMContentLoaded`, bukan `load` (yang
+  menunggu font dan skrip pihak ketiga). Font Google tidak memblokir render;
+  xlsx dilayani lokal (`/js/vendor/xlsx.full.min.js`, 0.18.5, `async`) dan
+  semua jalur yang memakainya lewat `siapXLSX()`.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
 
@@ -427,6 +454,10 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_percakapan.js`, `ukur-percakapan.js` | kotak masuk |
 | `test_fund_fitur.js`, `test_fundraiser.js`, `test_fund_ui.js` | fundraising |
 | `test_media_fitur.js`, `test_media_ui.js` | modul media |
+| `test_surat_fitur.js`, `test_surat_ui.js` | modul Surat & Pengajuan: izin per centang, nomor agenda, langkah tidak bisa dilompati (juga di papan), data wajib tiap langkah, disposisi (penerima izin lihat bisa menyelesaikan miliknya), lampiran (2 MB, jenis dari isi berkas, 6 per surat, kuota, Drive, tautan), foto dikompres di peramban, PDF besar ditawari kompres atau tautan, surat rahasia, lacak publik tanpa catatan internal dan dibatasi 30 kali per 10 menit |
+| `test_ingatan_hasil.js` | hasil bacaan buku besar yang diingat (`lib/laz-pg.js`): bacaan kedua tidak memuat tabel transaksi, sama persis dengan hitung ulang, gugur saat ada penulisan (juga dari penulis tanpa penanda), token kedaluwarsa dan izin dicabut tidak dilayani dari ingatan, catatan akses tetap tertulis tanpa menggugurkan ingatan, penanda isi acak, jawaban mentah lewat `api/rpc.js` |
+| `test_kv_massal.js` | pipeline kv membaca banyak kunci dengan satu kueri (dulu satu per kunci), hasil dan urutan sama dengan satu per satu, pipeline campuran tetap atomik, daftar Surat tidak lagi satu kueri per surat |
+| `test_performa_ui.js` | daftar panjang tetap lancar (10.000 penghimpunan, 4.000 penyaluran, 3.000 donatur): baris di layar dibatasi, saringan benar, gulir memuat sisanya, ketikan tidak membekukan layar; aplikasi terbuka walau server luar (CDN, Google Fonts) tidak menjawab |
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |
@@ -492,6 +523,20 @@ Sekarang satu fungsi `_barisKantor()` dipakai dua-duanya.
 cadangan memerahkan 2,74 MB dengan kalimat "mendekati batas 1 MB Upstash"
 padahal jatah Supabase 500 MB. Sekali orang belajar mengabaikan yang merah,
 yang merah sungguhan ikut diabaikan.
+
+**N+1 kueri lewat `kv.get` dalam perulangan.** `surat.daftar` memicu 404
+kueri, terasa detik di Vercel padahal 89 ms di lokal. Kumpulkan lewat
+`pipeline` (jadi MGET).
+
+**Semua baris masuk DOM.** 10 ribu baris Penghimpunan membekukan layar
+17,8 detik dan setiap ketikan di kotak cari 1 detik lebih. Gambar per
+potongan, saring di data, bukan di DOM.
+
+**Acara `load` menunggu sumber pihak ketiga.** Font yang macet menahan seluruh
+boot aplikasi. Boot di `DOMContentLoaded`, sumber luar jangan memblokir.
+
+**Penanda cache yang berulang.** Nomor versi kembali ke angka lama setelah DB
+dibuat ulang, hasil basi dianggap sah. Penanda harus acak.
 
 **Nama modul dan komentar bisa berbohong tentang penyimpanan.** Banyak yang
 masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
@@ -588,6 +633,25 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   satu baris tanpa label, daftar dalam satu kartu. Link KLL/ULL tanpa
   dropdown kantor: kartu kantor (yang sudah setor di depan, yang Rp 0
   dilipat) sekaligus jadi saringan.
+- **Surat & Pengajuan** (pemilik, 2 Oktober 2026; `lib/surat/`, `src/public/surat.js`):
+  surat masuk (Diterima > Didisposisi > Ditindaklanjuti > Selesai), surat
+  keluar (Draf > Dikirim > Selesai), dan pengajuan bantuan/sponsorship/
+  proposal (Diterima > Diproses > Asesmen > Disetujui > Dicairkan > Selesai,
+  atau Ditolak sebelum Disetujui). **Tidak punya berkas di `api/`**: tindakan
+  `surat.*` diteruskan `api/media.js` ke `lib/surat/api.js` SEBELUM
+  pemeriksaan izin Media, dan izinnya modul `surat` sendiri. Data di `kv`
+  berawalan `surat:`; isi lampiran di kunci `surat:berkas:<id>`, terpisah dari
+  catatannya supaya daftar tidak ikut mengunduh PDF. Batas: 2 MB per berkas
+  (batas Vercel 4,5 MB per kiriman, base64 menambah sepertiga), 6 lampiran
+  per surat, kuota `SURAT_KUOTA_MB` (bawaan 200) dari 500 MB Supabase. Foto
+  selalu dikompres di peramban ke JPEG di bawah 900 KB; PDF di atas 2 MB
+  ditawari "Kompres PDF" (pdf.js + jsPDF dari cdnjs, diunduh saat ditekan)
+  atau disimpan sebagai tautan. Kalau `GDRIVE_*` disetel, lampiran baru
+  masuk Google Drive (`_drive.unggahBiner`), bukan basis data. Kompres PDF
+  BELUM teruji otomatis karena uji tidak boleh keluar ke internet; yang diuji
+  jalan keluarnya kalau pustakanya tidak terunduh. Halaman `lacak.html`
+  (tanpa masuk) hanya menerima nomor + kode lacak 6 huruf dan hanya
+  mengembalikan langkah dan tanggalnya.
 - **Bidang tim media dibekukan saat permohonan diajukan**, supaya memindahkan
   jenis media suatu hari tidak memindahkan ratusan pekerjaan lama secara surut.
 

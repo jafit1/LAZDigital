@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F2704F">
+  <link rel="icon" href="/ikon/surat.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/ikon/ikon-180.png">
+  <meta name="robots" content="noindex">
+  <title>Lacak Pengajuan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* LACAK PENGAJUAN (pemilik, 2 Oktober 2026): pemohon bantuan, sponsorship,
+       atau proposal melihat sudah sampai mana pengajuannya tanpa menelepon
+       kantor. Yang tampil hanya langkah dan tanggalnya; catatan internal,
+       hasil asesmen, nominal, dan nama petugas tidak pernah dikirim server. */
+    body{ margin:0; padding:0; background:var(--bg); }
+    .lk-wrap{ max-width:560px; margin:0 auto; padding:24px 16px 48px; }
+    .lk-head{ background:var(--grad-accent); color:#fff; border-radius:24px; padding:24px 22px; box-shadow:var(--glow); position:relative; overflow:hidden; }
+    .lk-head::after{ content:""; position:absolute; right:-70px; top:-90px; width:240px; height:240px; border-radius:50%; background:radial-gradient(circle,rgba(255,255,255,.22),transparent 70%); }
+    .lk-head h1{ font-family:var(--head); font-size:24px; margin:0; position:relative; }
+    .lk-head p{ margin:6px 0 0; opacity:.92; font-size:13.5px; position:relative; }
+    .lk-form{ background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:16px; margin-top:14px; display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:10px; }
+    .lk-form label{ font-size:12px; font-weight:700; color:var(--text2); display:block; margin-bottom:4px; }
+    .lk-form input{ width:100%; height:42px; border-radius:11px; font-size:15px; text-transform:uppercase; }
+    .lk-form button{ grid-column:1 / -1; height:44px; font-size:14.5px; }
+    .lk-hasil{ margin-top:16px; }
+    .lk-kartu{ background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:18px; }
+    .lk-atas{ display:flex; justify-content:space-between; gap:8px; align-items:flex-start; flex-wrap:wrap; }
+    .lk-jenis{ font-size:11.5px; font-weight:800; color:var(--accent-d); background:var(--accent-soft); border-radius:6px; padding:2px 8px; }
+    .lk-nomor{ font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .lk-perihal{ font-family:var(--head); font-weight:800; font-size:18px; margin:8px 0 2px; color:var(--text); }
+    .lk-tgl{ font-size:12.5px; color:var(--muted); }
+    .lk-status{ margin:16px 0 4px; font-size:13px; color:var(--text2); }
+    .lk-status b{ font-size:16px; color:var(--text); }
+    .lk-langkah{ list-style:none; margin:14px 0 0; padding:0; }
+    .lk-langkah li{ display:flex; gap:12px; position:relative; padding-bottom:16px; }
+    .lk-langkah li::before{ content:""; position:absolute; left:13px; top:28px; bottom:0; width:2px; background:var(--border); }
+    .lk-langkah li:last-child::before{ display:none; }
+    .lk-langkah li.ya::before{ background:var(--green); }
+    .lk-b{ width:28px; height:28px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; background:var(--surface2); color:var(--muted); border:2px solid var(--border); position:relative; z-index:1; }
+    .lk-langkah li.ya .lk-b{ background:var(--green); border-color:var(--green); color:#fff; }
+    .lk-langkah li.kini .lk-b{ box-shadow:0 0 0 5px color-mix(in srgb,var(--green) 22%,transparent); }
+    .lk-l{ font-weight:700; font-size:14px; color:var(--text); padding-top:4px; }
+    .lk-langkah li:not(.ya) .lk-l{ color:var(--muted); font-weight:600; }
+    .lk-w{ font-size:12px; color:var(--muted); }
+    .lk-tolak{ margin-top:6px; padding:12px 14px; border-radius:12px; background:var(--red-bg); color:var(--red); font-size:13.5px; }
+    .lk-galat{ margin-top:16px; padding:14px; border-radius:14px; background:var(--red-bg); color:var(--red); font-size:13.5px; text-align:center; }
+    .lk-kaki{ text-align:center; font-size:11.5px; color:var(--muted); margin-top:20px; }
+    @media(max-width:480px){ .lk-form{ grid-template-columns:minmax(0,1fr); } .lk-head h1{ font-size:21px; } }
+  </style>
+</head>
+<body>
+  <script>
+    (function(){ var t = null; try { t = localStorage.getItem('laz_theme'); } catch(e) {}
+      if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t); })();
+  </script>
+  <div class="lk-wrap">
+    <div class="lk-head"><h1>Lacak Pengajuan</h1><p>Lihat progres pengajuan bantuan, sponsorship, atau proposal Anda.</p></div>
+    <form class="lk-form" id="lkForm" autocomplete="off">
+      <div><label for="lkNomor">Nomor pengajuan</label><input id="lkNomor" placeholder="001/PB/X/2026" required></div>
+      <div><label for="lkKode">Kode lacak</label><input id="lkKode" placeholder="6 huruf" maxlength="8" required></div>
+      <button class="btn btn-primary" type="submit" id="lkCari">Lihat progres</button>
+    </form>
+    <div class="lk-hasil" id="lkHasil"></div>
+    <div class="lk-kaki">Nomor dan kode lacak diberikan petugas saat pengajuan diterima.</div>
+  </div>
+  <script>
+    var BULAN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    function $(id){ return document.getElementById(id); }
+    function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+    function tgl(t){ if (!t) return ''; var d = new Date(t); if (isNaN(d)) { var p = String(t).split('-'); return p.length === 3 ? Number(p[2]) + ' ' + BULAN[Number(p[1]) - 1] + ' ' + p[0] : t; }
+      return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' }); }
+    var q = new URLSearchParams(location.search);
+    if (q.get('n')) $('lkNomor').value = q.get('n');
+    if (q.get('k')) $('lkKode').value = q.get('k');
+    $('lkForm').onsubmit = function(e){
+      e.preventDefault();
+      var b = $('lkCari'); b.disabled = true; b.textContent = 'Mencari...';
+      fetch('/api/media', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ tindakan:'surat.lacak', data:{ nomor: $('lkNomor').value, kode: $('lkKode').value } }) })
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if (!j.ok) throw new Error(j.pesan || 'Tidak ditemukan');
+          var p = j.pengajuan, kini = -1;
+          p.langkah.forEach(function(l, i){ if (l.selesai) kini = i; });
+          var h = '<div class="lk-kartu" id="lkKartu"><div class="lk-atas"><span class="lk-jenis">' + esc(p.jenisLabel) + '</span><span class="lk-nomor">' + esc(p.nomor) + '</span></div>'
+            + '<div class="lk-perihal">' + esc(p.perihal) + '</div><div class="lk-tgl">Diterima ' + esc(tgl(p.tanggalTerima)) + '</div>'
+            + '<div class="lk-status">Status sekarang: <b>' + esc(p.statusLabel) + '</b></div>'
+            + (p.ditolak ? '<div class="lk-tolak">Mohon maaf, pengajuan ini belum dapat kami penuhi' + (p.waktuTolak ? ' (' + esc(tgl(p.waktuTolak)) + ')' : '') + '. Silakan hubungi kantor untuk keterangan lebih lanjut.</div>' : '')
+            + '<ol class="lk-langkah">' + p.langkah.map(function(l, i){
+                return '<li class="' + (l.selesai ? 'ya' : '') + (i === kini && !p.ditolak ? ' kini' : '') + '"><span class="lk-b">' + (l.selesai ? '&#10003;' : (i + 1)) + '</span>'
+                  + '<div><div class="lk-l">' + esc(l.label) + '</div><div class="lk-w">' + esc(tgl(l.waktu)) + '</div></div></li>'; }).join('') + '</ol></div>';
+          $('lkHasil').innerHTML = h;
+        })
+        .catch(function(err){ $('lkHasil').innerHTML = '<div class="lk-galat" id="lkGalat">' + esc(err.message) + '</div>'; })
+        .then(function(){ b.disabled = false; b.textContent = 'Lihat progres'; });
+    };
+    if ($('lkNomor').value && $('lkKode').value) $('lkForm').requestSubmit();
+  </script>
+</body>
+</html>

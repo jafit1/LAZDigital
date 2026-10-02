@@ -90,4 +90,36 @@ async function pangkas(awalan, simpan){
   return { total: semua.length, dihapus: buang.length };
 }
 
-module.exports = { driveSiap, tokenAkses, unggah, daftar, hapus, pangkas };
+/* Unggah berkas biner (lampiran surat). unggah() di atas menyusun badan
+   sebagai teks, dan PDF atau JPEG yang dijadikan teks rusak tanpa galat:
+   berkasnya tersimpan, tetapi tidak bisa dibuka. Jadi badannya disusun
+   sebagai Buffer. */
+async function unggahBiner(nama, buf, mime){
+  const e = ENV();
+  const token = await tokenAkses();
+  const batas = 'laz-batas-' + Date.now();
+  const meta = JSON.stringify({ name: nama, parents: [e.folder], mimeType: mime || 'application/octet-stream' });
+  const body = Buffer.concat([
+    Buffer.from('--' + batas + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n'
+      + '--' + batas + '\r\nContent-Type: ' + (mime || 'application/octet-stream') + '\r\n\r\n'),
+    buf,
+    Buffer.from('\r\n--' + batas + '--'),
+  ]);
+  return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + batas },
+    body
+  });
+}
+
+/* Unduh isi berkas sebagai Buffer (untuk lampiran yang tersimpan di Drive). */
+async function unduh(id){
+  const token = await tokenAkses();
+  const res = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?alt=media', {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!res.ok) throw new Error('Google Drive: berkas tidak bisa diambil (HTTP ' + res.status + ')');
+  return Buffer.from(await res.arrayBuffer());
+}
+
+module.exports = { driveSiap, tokenAkses, unggah, unggahBiner, unduh, daftar, hapus, pangkas };

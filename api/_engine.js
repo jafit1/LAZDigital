@@ -101,7 +101,7 @@ var SHEETS = {
    memperlihatkan uang yang dipegang tiap kantor layanan. Staff yang cuma
    perlu melihat ringkasan jadi ikut melihat saldo rekening. Sekarang tiga
    izin sendiri-sendiri. Akun lama dijembatani MODUL_ASAL di bawah. */
-var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media'];
+var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media','surat'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -112,7 +112,7 @@ var MODUL_LABEL = {
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
   log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
   fundraising:'Fundraising (Penghimpunan Lapangan)', ai:'AI Asisten',
-  media:'Media & Desain'
+  media:'Media & Desain', surat:'Surat & Pengajuan'
 };
 var MODUL_KET = {
   dashboard:'Halaman Dashboard: ringkasan angka, grafik, dan Link Publik. Hanya "lihat" yang dipakai.',
@@ -131,7 +131,8 @@ var MODUL_KET = {
   broadcast:'Mengirim pesan WhatsApp massal ke buku kontak broadcast',
   fundraising:'Modul fundraiser lapangan: database donatur, jadwal pengambilan, pencatatan, dan pencocokan dengan buku utama. Centang "hapus" menjadikannya koordinator yang melihat data semua fundraiser.',
   ai:'AI Asisten: "lihat" membaca percakapan, "tambah" boleh bertanya, "ubah" boleh menyunting pengetahuan & persona, "hapus" boleh menghapus percakapan (percakapan dipakai bersama seluruh tim). Pengaturan provider dan kunci API tetap khusus superadmin.',
-  media:'Permohonan desain ke tim media: "lihat" membuka modul dan melihat permohonan, "tambah" boleh mengajukan permohonan dan meminta revisi atas permohonannya sendiri, "ubah" menjadikannya tim media yang mengerjakan, "hapus" menjadikannya koordinator yang membagi bidang, mengatur anggota tim, dan melihat rekap. Bidang foto/video/desain diatur terpisah di halaman Tim Media.'
+  media:'Permohonan desain ke tim media: "lihat" membuka modul dan melihat permohonan, "tambah" boleh mengajukan permohonan dan meminta revisi atas permohonannya sendiri, "ubah" menjadikannya tim media yang mengerjakan, "hapus" menjadikannya koordinator yang membagi bidang, mengatur anggota tim, dan melihat rekap. Bidang foto/video/desain diatur terpisah di halaman Tim Media.',
+  surat:'Surat masuk, surat keluar, dan pengajuan bantuan/sponsorship/proposal: "lihat" membuka modul, melihat surat, dan menjawab disposisi untuknya, "tambah" mencatat surat atau pengajuan baru beserta lampirannya, "ubah" memindah progres (asesmen, disetujui, dicairkan) dan membuat disposisi, "hapus" menghapus surat.'
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
@@ -8020,4 +8021,5 @@ async function runRPC(db, fn, args, ctx){
    pengguna. Keduanya bekerja pada DB yang sedang dimuat lewat runRPC. */
 module.exports = { runRPC, _setLambat, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
   catatStatusCadangan: function(db, st){ DB = db; catatStatusCadangan(st); return db; },
+  catatAkses: function(db, fn, token, ctx){ DB = db || {sheets:{},props:{}}; if(!DB.sheets)DB.sheets={}; if(!DB.props)DB.props={}; try{auditKonteks(ctx||{});}catch(e){} setup(); _catatAkses(fn, token); return db; },
   cekIzin: function(db, token, modul, aksi, ctx){ DB = db || {sheets:{},props:{}}; if(!DB.sheets)DB.sheets={}; if(!DB.props)DB.props={}; try{auditKonteks(ctx||{});}catch(e){} setup(); return sanitizeUser(_requirePerm(token, modul, aksi)); } };

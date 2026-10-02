@@ -88,7 +88,11 @@ function _rpcCall(fn,args,retried){
 }
 function rp(n){return 'Rp '+(Number(n)||0).toLocaleString('id-ID');}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-function fdate(d){if(!d)return '-';try{return new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return d;}}
+/* fdate dipanggil sekali per baris tabel. toLocaleDateString membuat pemformat tanggal baru tiap panggilan; di 15 ribu baris itu saja sekitar 1 detik.
+   Tanggalnya sendiri hanya beberapa ratus nilai berbeda, jadi hasilnya diingat. */
+var _FDATE={}, _FDATE_N=0;
+function fdate(d){if(!d)return '-';var k=String(d);var v=_FDATE[k];if(v)return v;try{v=new Date(d).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return d;}
+  if(_FDATE_N>3000){_FDATE={};_FDATE_N=0;}_FDATE[k]=v;_FDATE_N++;return v;}
 function today(){return new Date().toISOString().slice(0,10);}
 function toast(m,err){var t=el('toast');t.textContent=m;t.className='toast show'+(err?' err':'');setTimeout(function(){t.className='toast';},2800);}
 function handleErr(e){var m=(e&&e.message)||String(e);if(m.indexOf('AUTH:')>=0){ if(punyaIngat()){ reloginSilently().then(function(ok){ if(ok){toast('Sesi disegarkan, silakan ulangi');} else if(!_reloginDitolak&&getIngat()){toast('Koneksi ke server terputus. Coba lagi sebentar.',true);} else {lupakanIngat();toast('Sesi berakhir, login ulang',true);doLogout();} }); } else { toast('Sesi berakhir, login ulang',true); doLogout(); } return; } toast(m.replace(/^(IZIN:|Error:)\s*/,''),true);}
@@ -122,7 +126,8 @@ var NAV_ICONS={
   broadcast: navIcon('<path d="M4 11.5a7.5 7.5 0 1 1 3.2 6.15L3.5 20l1-3.4A7.4 7.4 0 0 1 4 11.5z"/><path d="M8.5 10.5h7"/><path d="M8.5 13.5h4.5"/>'),
   fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>'),
   ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>'),
-  media: navIcon('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M3.5 17.5 9 12.5l3.5 3 3-2.5 5 4.5"/>')};
+  media: navIcon('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M3.5 17.5 9 12.5l3.5 3 3-2.5 5 4.5"/>'),
+  surat: navIcon('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>')};
 var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
   {id:'penghimpunan',label:'Penghimpunan',ic:NAV_ICONS.penghimpunan,mod:'penghimpunan'},
@@ -137,6 +142,7 @@ var MENU=[
   {id:'fundraising',label:'Fundraising',ic:NAV_ICONS.fundraising,mod:'fundraising',url:'/fund.html'},
   {id:'ai',label:'AI Asisten',ic:NAV_ICONS.ai,mod:'ai',url:'/ai.html'},
   {id:'media',label:'Media & Desain',ic:NAV_ICONS.media,mod:'media',url:'/media.html'},
+  {id:'surat',label:'Surat & Pengajuan',ic:NAV_ICONS.surat,mod:'surat',url:'/surat.html'},
   {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
 /* Kembarannya can() di api/_engine.js, termasuk jembatan MODUL_ASAL-nya.
@@ -200,7 +206,11 @@ function cleanFR(fr) {
 function isTransferMethod(m){ m=(m||'').toLowerCase(); return m.indexOf('transfer')>=0||m.indexOf('qris')>=0||m.indexOf('wallet')>=0||m.indexOf('debit')>=0||m.indexOf('bank')>=0; }
 
 /* ============ BOOTSTRAP ============ */
-window.addEventListener('load',function(){
+/* Mulai saat halaman selesai diparse, BUKAN saat peristiwa load. load menunggu semua
+   sub-sumber daya, termasuk stylesheet huruf dari Google dan pustaka Excel; satu server
+   luar yang lambat menunda apiBootstrap dan layar pembuka ikut menunggu. setTimeout 0:
+   sisa app.js (LZ, MENU, dst.) harus selesai dievaluasi dulu. */
+function _mulaiBoot(){
   /* Layar pembuka tidak punya batas waktu sendiri — ia hilang saat datanya
      siap. Yang dipantau cuma: kalau kelamaan, beri keterangan. */
   try{ LZ.bootPantau(); }catch(e){}
@@ -211,7 +221,8 @@ window.addEventListener('load',function(){
     if(TOKEN){ gas('apiBootstrap')(TOKEN).then(function(b){ME=b.user;SETTINGS=b.settings;startApp();}).catch(function(){ tryAutoLogin(); }); }
     else { tryAutoLogin(); }
   });
-});
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(_mulaiBoot,0); }); else setTimeout(_mulaiBoot,0);
 function tryAutoLogin(){
   if(!punyaIngat()){ showLogin(); return; }
   reloginSilently().then(function(ok){
@@ -763,14 +774,7 @@ function copyPub(){var i=el('pubUrl');i.select();document.execCommand('copy');to
 function viewPenghimpunan(){
   Promise.all([gas('apiListPenghimpunan')(TOKEN),gas('apiListRekeningPublic')(TOKEN),gas('apiListLayananPublic')(TOKEN)])
    .then(function(res){
-     var sorted = res[0].slice().sort(function(a, b) {
-       var da = new Date(a.tanggal + 'T00:00:00');
-       var db = new Date(b.tanggal + 'T00:00:00');
-       if (da.getTime() !== db.getTime()) return db - da;
-       var ta = new Date(a.dibuat || 0);
-       var tb = new Date(b.dibuat || 0);
-       return tb - ta;
-     });
+     var sorted = res[0].slice().sort(_urutTerbaru);
      CACHE.himpun=sorted;CACHE.rekening=res[1];CACHE.layanan=res[2];renderPenghimpunan(sorted);
    }).catch(handleErr);
 }
@@ -818,14 +822,17 @@ function renderPenghimpunan(rows){
   h+= filterHtml;
   h+='<div style="overflow:auto"><table id="himpunTable"><thead><tr><th>No. Kwitansi</th><th>Tanggal</th><th>Donatur</th><th>Jenis / Detail</th><th>Metode</th><th>Jumlah</th><th></th></tr></thead><tbody>';
   if(!rows.length)h+='<tr><td colspan="7"><div class="empty"><div class="big">'+SVG_ICONS.bsrKosong+'</div>Belum ada penghimpunan.</div></td></tr>';
+  var baris=[];
   rows.forEach(function(r){
     var det=(r.subJenis||r.jenisDana)+((String(r.subJenis).toLowerCase().indexOf('pilar')>=0&&r.pilar)?(' — '+r.pilar):'');
     var frCleaned = cleanFR(r.fundraising);
     var frText = '<div class="muted" style="font-size:11px;margin-top:2px">FR: ' + esc(frCleaned) + '</div>';
-    h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
+    var htr='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
+    baris.push({h:htr, tg:String(r.tanggal||'').slice(0,10), jn:String(r.jenisDana||''), mt:String(r.metode||''), fr:String(frCleaned||'').toLowerCase(), c:[r.noKwitansi,fdate(r.tanggal),r.tanggal,r.namaDonatur||'-','FR: '+frCleaned,r.jenisDana,det,r.metode||'-',rp(r.jumlah),r.jumlah].join(' ').toLowerCase()});
   });
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
   rtPasangFilter('himpunTable');
+  tabelBertahap('himpunTable', baris, 7);
   if(canDo('penghimpunan','create'))formHimpun('','himpunFormHost');
 }
 function setupSearchDropdown(inputId, menuId, suggestions, onSelect) {
@@ -1033,14 +1040,7 @@ function buildKwitansiHTML(d,s){
 var ASHNAF=['Fakir','Miskin','Amil','Muallaf','Riqab (Memerdekakan Budak)','Gharimin (Berhutang)','Fi Sabilillah','Ibnu Sabil'];
 var BENTUK=['Uang Tunai','Transfer','Sembako','Beasiswa','Modal Usaha','Bantuan Kesehatan','Bantuan Pendidikan','Bantuan Bencana','Pembangunan','Lainnya'];
 function viewPentasyarufan(){gas('apiListPentasyarufan')(TOKEN).then(function(rows){
-    var sorted = rows.slice().sort(function(a, b) {
-      var da = new Date(a.tanggal + 'T00:00:00');
-      var db = new Date(b.tanggal + 'T00:00:00');
-      if (da.getTime() !== db.getTime()) return db - da;
-      var ta = new Date(a.dibuat || 0);
-      var tb = new Date(b.dibuat || 0);
-      return tb - ta;
-    });
+    var sorted = rows.slice().sort(_urutTerbaru);
     CACHE.tasyaruf=sorted;renderPentasyarufan(sorted);
   }).catch(handleErr);}
 function renderPentasyarufan(rows){
@@ -1083,13 +1083,16 @@ function renderPentasyarufan(rows){
   h+= filterHtml;
   h+='<div style="overflow:auto"><table id="tasyTable"><thead><tr><th>No. Bukti</th><th>Tanggal</th><th>Penerima</th><th>Ashnaf</th><th>Program</th><th>Jumlah</th><th>Status</th><th></th></tr></thead><tbody>';
   if(!rows.length)h+='<tr><td colspan="8"><div class="empty"><div class="big">'+SVG_ICONS.bsrKosong+'</div>Belum ada pentasyarufan.</div></td></tr>';
+  var baris=[];
   rows.forEach(function(r){
     var frCleaned = cleanFR(r.fundraising);
     var frText = '<div class="muted" style="font-size:11px;margin-top:2px">FR: ' + esc(frCleaned) + '</div>';
-    h+='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.ashnaf)+'" data-metode="'+esc(r.bentukBantuan)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noBukti)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaPenerima||'-')+'</b>'+frText+'</td><td><span class="badge purple">'+esc(r.ashnaf)+'</span></td><td>'+esc(r.program||'-')+'</td><td style="font-weight:700;color:var(--amber)">'+rp(r.jumlah)+'</td><td>'+statusBadge(r.statusSalur||'Tersalur')+'</td><td><div class="actions-cell"><button class="icon-btn" onclick="cetakBukti(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('pentasyarufan','edit')?'<button class="icon-btn" onclick="formTasyaruf(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('pentasyarufan','delete')?'<button class="icon-btn" onclick="delTasyaruf(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
+    var htr='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.ashnaf)+'" data-metode="'+esc(r.bentukBantuan)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noBukti)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaPenerima||'-')+'</b>'+frText+'</td><td><span class="badge purple">'+esc(r.ashnaf)+'</span></td><td>'+esc(r.program||'-')+'</td><td style="font-weight:700;color:var(--amber)">'+rp(r.jumlah)+'</td><td>'+statusBadge(r.statusSalur||'Tersalur')+'</td><td><div class="actions-cell"><button class="icon-btn" onclick="cetakBukti(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('pentasyarufan','edit')?'<button class="icon-btn" onclick="formTasyaruf(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('pentasyarufan','delete')?'<button class="icon-btn" onclick="delTasyaruf(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
+    baris.push({h:htr, tg:String(r.tanggal||'').slice(0,10), jn:String(r.ashnaf||''), mt:String(r.bentukBantuan||''), fr:String(frCleaned||'').toLowerCase(), c:[r.noBukti,fdate(r.tanggal),r.tanggal,r.namaPenerima||'-','FR: '+frCleaned,r.ashnaf,r.program||'-',rp(r.jumlah),r.jumlah,r.statusSalur||'Tersalur'].join(' ').toLowerCase()});
   });
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
   rtPasangFilter('tasyTable');
+  tabelBertahap('tasyTable', baris, 8);
   if(canDo('pentasyarufan','create'))formTasyaruf('','tasyarufFormHost');}
 function statusBadge(s){s=s||'Lunas';var c=s==='Lunas'||s==='Tersalur'?'green':(s==='Pending'?'amber':'blue');return '<span class="badge '+c+'">'+esc(s)+'</span>';}
 function formTasyaruf(id,host){
@@ -1808,7 +1811,7 @@ function copyAllJurnal() {
     toast('Gagal menyalin data', true);
   });
 }
-function exportJurnalXlsx(d){
+function exportJurnalXlsx(d){ if(!siapXLSX()) return;
   var wb = XLSX.utils.book_new();
   
   function buildSheetData(viaType) {
@@ -2369,13 +2372,112 @@ function rtPasangFilter(tid){
   });
 }
 
+/* Pustaka Excel dimuat async dari salinan sendiri (lihat index.html). Hampir pasti sudah ada saat dipakai;
+   kalau seseorang menekan Impor dalam detik pertama sebelum selesai diunduh, beri tahu, jangan galat. */
+function siapXLSX(){ if(typeof XLSX!=='undefined') return true; toast('Pustaka Excel masih dimuat, coba lagi sebentar.', true); return false; }
+/* ============ TABEL BERTAHAP ============
+   Daftar Penghimpunan, Pentasyarufan, dan Donatur dulu menggambar SEMUA baris
+   ke DOM, lalu tiap ketikan di kotak cari mengulang textContent dan style.display
+   untuk semua baris itu. Diukur di 15.000 penghimpunan: 1,1 sampai 1,5 detik
+   layar membeku per huruf yang diketik; membuka Pentasyarufan 5.000 baris
+   membekukan layar 17 detik (tugas terpanjang 5,8 detik).
+
+   Sekarang data dipegang sebagai larik di memori dan yang masuk DOM hanya
+   TABEL_BATCH baris pertama dari yang cocok. Sisanya digambar saat baris
+   penutup di dasar tabel terlihat (digulir) atau tombolnya ditekan. Teks cari
+   sudah dihitung satu kali per baris (huruf kecil), jadi menyaring 15.000 baris
+   cuma indexOf pada string, bukan membaca DOM. Hasil yang tampil sama dengan
+   sebelumnya: urutannya tetap, yang cocok tetap yang cocok. */
+var TABEL_BATCH = 100;
+var TABEL = {};
+var _TABEL_OBS = {};
+function tabelBertahap(tid, baris, kolom){
+  if(!baris || !baris.length) return;            /* kosong: pesan "belum ada" dari pemanggil dibiarkan */
+  TABEL[tid] = { baris: baris, cocok: baris, tampil: TABEL_BATCH, kolom: kolom };
+  tabelGambar(tid);
+}
+function _tabelPenutup(tid, tampil, total){
+  var T = TABEL[tid];
+  return '<tr class="tbl-lagi" data-tabel="'+tid+'"><td colspan="'+T.kolom+'"><span class="tbl-lagi-info">Menampilkan '
+    + tampil.toLocaleString('id-ID') + ' dari ' + total.toLocaleString('id-ID') + '</span>'
+    + '<button class="btn btn-sm btn-ghost" type="button" onclick="tabelLagi(\''+tid+'\')">Tampilkan '+TABEL_BATCH+' lagi</button></td></tr>';
+}
+function tabelGambar(tid){
+  var T = TABEL[tid]; if(!T) return;
+  var tb = document.querySelector('#'+tid+' tbody'); if(!tb) return;
+  var n = Math.min(T.tampil, T.cocok.length), out = new Array(n);
+  for(var i=0;i<n;i++) out[i] = T.cocok[i].h;
+  var h = out.join('');
+  if(!T.cocok.length) h = '<tr class="tbl-kosong"><td colspan="'+T.kolom+'"><div class="empty">Tidak ada data yang cocok dengan penyaringan.</div></td></tr>';
+  else if(n < T.cocok.length) h += _tabelPenutup(tid, n, T.cocok.length);
+  tb.innerHTML = h;
+  _tabelPantau(tid);
+}
+function tabelLagi(tid){
+  var T = TABEL[tid]; if(!T) return;
+  var tb = document.querySelector('#'+tid+' tbody'); if(!tb) return;
+  var dari = Math.min(T.tampil, T.cocok.length);
+  T.tampil = dari + TABEL_BATCH;
+  var sampai = Math.min(T.tampil, T.cocok.length), out = [];
+  for(var i=dari;i<sampai;i++) out.push(T.cocok[i].h);
+  var tutup = tb.querySelector('tr.tbl-lagi'); if(tutup) tutup.parentNode.removeChild(tutup);
+  var h = out.join('');
+  if(sampai < T.cocok.length) h += _tabelPenutup(tid, sampai, T.cocok.length);
+  tb.insertAdjacentHTML('beforeend', h);
+  _tabelPantau(tid);
+}
+/* Baris penutup yang sudah terlihat memuat batch berikutnya sendiri, jadi
+   menggulir ke bawah terasa seperti daftar yang tidak ada habisnya. */
+function _tabelPantau(tid){
+  if(_TABEL_OBS[tid]){ try{ _TABEL_OBS[tid].disconnect(); }catch(e){} _TABEL_OBS[tid] = null; }
+  if(typeof IntersectionObserver !== 'function') return;
+  var tutup = document.querySelector('#'+tid+' tbody tr.tbl-lagi'); if(!tutup) return;
+  var ob = new IntersectionObserver(function(es){
+    if(es.some(function(e){ return e.isIntersecting; })){ ob.disconnect(); _TABEL_OBS[tid] = null; tabelLagi(tid); }
+  }, { rootMargin: '600px 0px' });
+  ob.observe(tutup);
+  _TABEL_OBS[tid] = ob;
+}
+/* Urutan terbaru dulu (tanggal, lalu waktu dibuat). Dibandingkan sebagai teks
+   ISO, sama hasilnya dengan membandingkan Date tetapi tanpa membuat empat objek
+   Date tiap perbandingan (15.000 baris = lebih dari 800 ribu objek). */
+function _urutTerbaru(a, b){
+  var ta = String(a.tanggal||''), tb = String(b.tanggal||'');
+  if(ta !== tb) return ta < tb ? 1 : -1;
+  var da = String(a.dibuat||''), db = String(b.dibuat||'');
+  return da < db ? 1 : (da > db ? -1 : 0);
+}
+
+function _tabelSaring(T, tid, q, rg, typeVal, methodVal, frVal) {
+  T.cocok = T.baris.filter(function(b) {
+    if (q && b.c.indexOf(q) < 0) return false;
+    if (rg.dari && rg.sampai && !(b.tg >= rg.dari && b.tg <= rg.sampai)) return false;
+    if (typeVal && b.jn !== typeVal) return false;
+    if (methodVal && b.mt !== methodVal) return false;
+    if (frVal && b.fr.indexOf(frVal) < 0) return false;
+    return true;
+  });
+  T.tampil = TABEL_BATCH;
+  tabelGambar(tid);
+}
+
 function applyFilters(tid) {
   var q = el(tid + '_search') ? el(tid + '_search').value.toLowerCase() : '';
   var rg = (typeof rentangNilai === 'function') ? rentangNilai(tid + '_rt') : {dari:'',sampai:''};
   var typeVal = el(tid + '_filter_type') ? el(tid + '_filter_type').value : '';
   var methodVal = el(tid + '_filter_method') ? el(tid + '_filter_method').value : '';
   var frVal = el(tid + '_filter_fr') ? el(tid + '_filter_fr').value.toLowerCase() : '';
-  
+
+  var T = TABEL[tid];
+  if (T) {
+    /* Tertunda sebentar: orang mengetik beberapa huruf berturutan, dan menyaring
+       sesudah tiap huruf di HP yang lambat terukur 60 sampai 190 ms per huruf
+       (CPU 4x lebih lambat, 15.000 baris). Kotak ketik sendiri tetap langsung. */
+    clearTimeout(T.tunda);
+    T.tunda = setTimeout(function(){ _tabelSaring(T, tid, q, rg, typeVal, methodVal, frVal); }, 80);
+    return;
+  }
+
   var rows = document.querySelectorAll('#' + tid + ' tbody tr');
   rows.forEach(function(row) {
     if (row.cells.length < 2) return;
@@ -2384,7 +2486,7 @@ function applyFilters(tid) {
     var rowJenis = row.getAttribute('data-jenis') || '';
     var rowMetode = row.getAttribute('data-metode') || '';
     var rowFr = row.getAttribute('data-fr') || '';
-    
+
     var matchSearch = !q || textContent.indexOf(q) >= 0;
     var hariBaris = String(rowDate).slice(0,10);
     var matchDate = (!rg.dari || !rg.sampai)
@@ -2392,7 +2494,7 @@ function applyFilters(tid) {
     var matchType = !typeVal || rowJenis === typeVal;
     var matchMethod = !methodVal || rowMetode === methodVal;
     var matchFr = !frVal || rowFr.toLowerCase().indexOf(frVal) >= 0;
-    
+
     if (matchSearch && matchDate && matchType && matchMethod && matchFr) {
       row.style.display = '';
     } else {
@@ -4592,7 +4694,7 @@ var IMPORT_FILE_TSV = '';
 
 /* Baca .xlsx / .xls / .csv di browser lalu ubah jadi TSV berheader,
    supaya jalur unggah file dan tempel teks memakai parser yang sama. */
-function onImportFile(e){
+function onImportFile(e){ if(!siapXLSX()) return;
   var f = e.target.files && e.target.files[0];
   if (!f) return;
   var info = el('importFileInfo');
@@ -5466,7 +5568,7 @@ function imporPutuskanTemuan(id, aksi) {
    dan biaya admin bank. Rekap dibaca di peramban dengan pembaca sel yang
    sama dengan jurnal (tanggal tidak mundur), lalu server mencocokkannya
    dengan baris jurnal yang sedang di layar (apiSamakanRekap). */
-function onImporRekap(e) {
+function onImporRekap(e) { if(!siapXLSX()) return;
   var f = e.target.files && e.target.files[0];
   if (!f) return;
   var info = el('impb_rekap_info');
@@ -6906,7 +7008,7 @@ function openImportMutasiModal() {
   if (mc) mc.classList.add('import-modal', 'mutasi-modal');
 }
 
-function processMutasiFile() {
+function processMutasiFile() { if(!siapXLSX()) return;
   var fileInp = el('mutasi_file_input');
   if (!fileInp || !fileInp.files.length) return;
   var file = fileInp.files[0];
@@ -7563,7 +7665,7 @@ function renderDonatur(rows) {
     '  </div>';
 
   h += '  <div style="overflow:auto">' +
-    '    <table>' +
+    '    <table id="donaturTable">' +
     '      <thead>' +
     '        <tr>' +
     '          <th>Nama Donatur</th>' +
@@ -7578,6 +7680,7 @@ function renderDonatur(rows) {
     '      </thead>' +
     '      <tbody id="donaturTableBody">';
     
+  var baris = [];
   if (rows.length === 0) {
     h += '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Belum ada donatur terdaftar</td></tr>';
   } else {
@@ -7591,7 +7694,7 @@ function renderDonatur(rows) {
       var vipBadge = r.isVip ? '<span class="badge amber" style="margin-left:4px">VIP</span>' : '';
       var rutinBadge = r.isRutin ? '<span class="badge green" style="margin-left:4px">Rutin</span>' : '';
 
-      h += '<tr class="donatur-row" data-kategori="' + esc(r.kategori) + '" data-layanan="' + esc((r.layanan || []).join('|').toLowerCase()) + '">' +
+      var htr = '<tr class="donatur-row" data-kategori="' + esc(r.kategori) + '" data-layanan="' + esc((r.layanan || []).join('|').toLowerCase()) + '">' +
         '  <td style="font-weight:600" class="donatur-name-cell">' + esc(r.nama) + vipBadge + rutinBadge + '</td>' +
         '  <td><span class="badge ' + stBadgeClass + '">' + esc(r.status || 'Baru') + '</span></td>' +
         '  <td><span class="badge">' + esc(r.kategori) + '</span></td>' +
@@ -7601,6 +7704,7 @@ function renderDonatur(rows) {
         '  <td>' + (r.terakhirDonasi ? fdate(r.terakhirDonasi) : '-') + '</td>' +
         '  <td style="text-align:center"><button class="btn btn-ghost btn-sm" onclick="openDonaturDetail(\'' + encodeURIComponent(r.nama) + '\')">'+SVG_ICONS.mata+' Detail</button></td>' +
         '</tr>';
+      baris.push({h:htr, kt:String(r.kategori||''), ly:(r.layanan||[]).join('|').toLowerCase().split('|'), c:[r.nama,r.isVip?'VIP':'',r.isRutin?'Rutin':'',r.status||'Baru',r.kategori,r.telepon||'-',rp(r.totalDonasi||0),(r.jumlahTransaksi||0)+' x',r.terakhirDonasi?fdate(r.terakhirDonasi):'-','Detail'].join(' ').toLowerCase()});
     });
   }
   
@@ -7610,6 +7714,7 @@ function renderDonatur(rows) {
     '</div>';
     
   el('content').innerHTML = h;
+  tabelBertahap('donaturTable', baris, 8);
 }
 
 function onDonaturKategoriChange() {
@@ -7750,52 +7855,42 @@ function toggleKllUllDropdown(e) {
 }
 
 function filterDonaturTable() {
+  var T = TABEL['donaturTable']; if (!T) return;
+  clearTimeout(T.tunda);
+  T.tunda = setTimeout(_donaturSaring, 80);       /* lihat catatan di applyFilters */
+}
+function _donaturSaring() {
   var q = el('donatur_search') ? el('donatur_search').value.toLowerCase() : '';
   var kat = el('donatur_filter_kategori') ? el('donatur_filter_kategori').value : '';
-  var rows = document.querySelectorAll('.donatur-row');
-  
+  var T = TABEL['donaturTable'];
+  if (!T) return;
+
   var checkedLayanan = [];
   var totalLayanan = document.querySelectorAll('.kll-ull-chk').length;
-  if (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)') {
-    var chks = document.querySelectorAll('.kll-ull-chk:checked');
-    chks.forEach(function(c) {
+  var pakaiLayanan = (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)');
+  if (pakaiLayanan) {
+    document.querySelectorAll('.kll-ull-chk:checked').forEach(function(c) {
       checkedLayanan.push(c.value.toLowerCase());
     });
   }
-  
-  var allSelected = (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)') && totalLayanan > 0 && (checkedLayanan.length === totalLayanan);
+  var allSelected = pakaiLayanan && totalLayanan > 0 && (checkedLayanan.length === totalLayanan);
 
-  rows.forEach(function(row) {
-    var nameCell = row.querySelector('.donatur-name-cell');
-    var donorNameLower = nameCell ? nameCell.textContent.toLowerCase() : '';
-    var txt = row.textContent.toLowerCase();
-    var rowKat = row.getAttribute('data-kategori');
-    
-    var matchSearch = txt.indexOf(q) >= 0;
-    var matchKat = !kat || rowKat === kat;
-    
-    if (matchSearch && matchKat && (kat === 'Kantor Layanan (KLL)' || kat === 'Unit Layanan (ULL)')) {
-      // Batasi berdasarkan Kantor/Unit Layanan hanya jika master layanan tersedia
-      // DAN pengguna memilih sebagian layanan (bukan semua, bukan kosong).
-      // Cocokkan dengan asosiasi layanan asli donatur (data-layanan), bukan nama donatur.
-      if (totalLayanan > 0 && !allSelected && checkedLayanan.length > 0) {
-        var rowLayanan = (row.getAttribute('data-layanan') || '').split('|').filter(Boolean);
-        var matchLayanan = false;
-        for (var j = 0; j < checkedLayanan.length; j++) {
-          if (rowLayanan.indexOf(checkedLayanan[j]) >= 0) {
-            matchLayanan = true;
-            break;
-          }
-        }
-        if (!matchLayanan) {
-          row.style.display = 'none';
-          return;
-        }
+  T.cocok = T.baris.filter(function(b) {
+    if (q && b.c.indexOf(q) < 0) return false;
+    if (kat && b.kt !== kat) return false;
+    /* Batasi berdasarkan Kantor/Unit Layanan hanya jika master layanan tersedia
+       DAN pengguna memilih sebagian layanan (bukan semua, bukan kosong).
+       Dicocokkan dengan asosiasi layanan asli donatur, bukan nama donatur. */
+    if (pakaiLayanan && totalLayanan > 0 && !allSelected && checkedLayanan.length > 0) {
+      for (var j = 0; j < checkedLayanan.length; j++) {
+        if (b.ly.indexOf(checkedLayanan[j]) >= 0) return true;
       }
+      return false;
     }
-    
-    row.style.display = (matchSearch && matchKat) ? '' : 'none';
+    return true;
   });
+  T.tampil = TABEL_BATCH;
+  tabelGambar('donaturTable');
 }
 
 function openImportDonaturModal() {
@@ -8803,7 +8898,7 @@ function unduhCadangan(){
   }).catch(function(e){ host.innerHTML=''; handleErr(e); });
 }
 
-function unduhEksporExcel(){
+function unduhEksporExcel(){ if(!siapXLSX()) return;
   var host = el('cadanganHasil');
   host.innerHTML = BOXES_SPINNER;
   gas('apiCadanganDB')(TOKEN).then(function(d){
