@@ -4471,6 +4471,7 @@ function openImportModal(type, mode) {
     '</div>' +
     '<div class="imp-baris">' +
     '<div id="group_import_file" class="imp-src">' +
+    (IMPORT_MODE === 'berkas' ? '<div class="imp-src-l">Berkas jurnal</div>' : '') +
     '<div class="imp-drop" onclick="el(\'import_file\').click()" id="importDrop">' +
     '<span class="imp-drop-ic" aria-hidden="true">' + IKON_UNGGAH + '</span>' +
     '<span class="imp-drop-tx"><b>Pilih berkas Excel atau CSV</b>' +
@@ -4513,8 +4514,11 @@ function openImportModal(type, mode) {
     '</div>' +
     '<div id="importPreview"><div class="imp-kosong">Pratinjau data akan muncul di sini setelah berkas ditarik &amp; dianalisis.</div></div>';
   
-  var f = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>' +
-    '<button class="btn btn-ghost" id="importTarikBtn" onclick="tarikImportData()">Tarik & Analisis Data</button>' +
+  /* Batal di kiri, berbingkai. "Tarik & Analisis Data" tombol utama sampai
+     pratinjau ada; sesudahnya "Simpan" yang utama dan tombol tarik turun jadi
+     berbingkai biasa (diatur CSS lewat :has, tanpa mengubah kelas di JS). */
+  var f = '<button class="btn imp-batal" onclick="closeModal()">Batal</button>' +
+    '<button class="btn btn-primary" id="importTarikBtn" onclick="tarikImportData()">Tarik & Analisis Data</button>' +
     '<button class="btn btn-primary hidden" id="importSimpanBtn" onclick="simpanImportData()">Simpan Data</button>';
 
   openModal(title, b, f);
@@ -4890,7 +4894,7 @@ function imporGambarJurnal(res) {
      tawarannya hilang sendiri. */
   if (IMPORT_MODE === 'berkas' && !window.IMPORT_REKAP_SHEETS && el('impb_rekap')) {
     h += '<div class="imp-note imp-tawar" id="imporTawarRekap"><div><b>Punya rekap bulanan?</b> Cantumkan supaya angkanya disamakan dengan rekap. <span class="muted">Boleh dilewati.</span></div>'
-      + '<button type="button" class="btn btn-sm btn-ghost" onclick="el(\'impb_rekap\').click()">Cantumkan rekap</button></div>';
+      + '<button type="button" class="btn btn-sm" onclick="el(\'impb_rekap\').click()">Cantumkan rekap</button></div>';
   }
   h += imporBlokTemuan(res);
   h += '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
@@ -5109,7 +5113,7 @@ function imporBatalkanTemuan(t) {
 }
 function imporTombolTemuan(t) {
   var u = t.usulan || {};
-  var tb = function(aksi, teks, utama){ return '<button type="button" class="btn btn-mini' + (utama ? ' btn-primary' : ' btn-ghost') + ' imp-temu-aksi" data-t="' + esc(t.id) + '" data-aksi="' + aksi + '">' + esc(teks) + '</button> '; };
+  var tb = function(aksi, teks, utama){ return '<button type="button" class="btn btn-mini' + (utama ? ' btn-primary' : ' imp-aksi-2') + ' imp-temu-aksi" data-t="' + esc(t.id) + '" data-aksi="' + aksi + '">' + esc(teks) + '</button>'; };
   switch (t.jenis) {
     case 'rekapKantor': case 'rekapDana': case 'rekapJumlah': case 'rekapTanggal':
       return tb('terap', 'Samakan dengan rekap', true) + tb('biar', 'Ikut jurnal');
@@ -5124,10 +5128,10 @@ function imporTombolTemuan(t) {
     case 'kantorTanpaAwalan':
       return tb('terap', 'Jadikan ' + u.label, true) + tb('biar', 'Biarkan di Daerah');
     case 'kantorTakTerdaftar':
-      return '<select class="imp-temu-pilih" data-t="' + esc(t.id) + '" style="width:auto;min-width:220px;display:inline-block">'
+      return '<select class="imp-temu-pilih" data-t="' + esc(t.id) + '">'
         + '<option value="">Pilih kantor yang dimaksud...</option>'
         + (t.pilihan || []).map(function(p){ return '<option value="' + esc(p.id) + '"' + (u.layananId === p.id ? ' selected' : '') + '>' + esc(p.label) + '</option>'; }).join('')
-        + '</select> ' + tb('pilih', 'Terapkan', true) + tb('biar', 'Biarkan apa adanya');
+        + '</select>' + tb('pilih', 'Terapkan', true) + tb('biar', 'Biarkan apa adanya');
     case 'pilarTakCocok':
       return tb('terap', 'Ubah ke ' + u.pilar, true) + tb('biar', 'Biarkan');
     case 'nominalKecil':
@@ -5147,8 +5151,8 @@ function imporKartuTemuan(t) {
     ? '<div class="imp-temu-status' + (t.status === 'diterapkan' ? ' terap' : '') + '">'
       + '<span>' + esc(t.statusTeks || (t.status === 'diterapkan' ? 'Diterapkan' : 'Dibiarkan')) + '</span>'
       + (t.oleh === 'massal' ? '<span class="imp-temu-oleh">massal</span>' : '')
-      + '<button type="button" class="btn btn-mini btn-ghost imp-temu-ubah" data-t="' + esc(t.id) + '">Ubah</button></div>'
-    : '<div style="margin-top:6px">' + imporTombolTemuan(t) + '</div>';
+      + '<button type="button" class="btn btn-mini imp-aksi-2 imp-temu-ubah" data-t="' + esc(t.id) + '">Ubah</button></div>'
+    : '<div class="imp-temu-baris">' + imporTombolTemuan(t) + '</div>';
   return '<div style="padding:9px 0;border-top:1px solid var(--border)">'
     + '<div><b>' + esc(t.judul) + '</b></div>'
     + '<div style="font-size:12px;margin:2px 0 4px">' + esc(t.pesan) + '</div>'
@@ -5172,7 +5176,7 @@ function imporBlokTemuan(res) {
     h += '<div class="imp-massal">'
       + '<div class="imp-massal-t">Semua temuan rekap:</div>'
       + '<button type="button" class="btn btn-primary btn-sm" id="imporSamakanSemua" onclick="imporSamakanSemua()">Cocokkan ke rekap' + (keRekap ? ' (' + keRekap + ')' : '') + '</button>'
-      + '<button type="button" class="btn btn-ghost btn-sm" id="imporSemuaJurnal" onclick="imporSemuaJurnal()">Sesuai jurnal</button>'
+      + '<button type="button" class="btn btn-sm" id="imporSemuaJurnal" onclick="imporSemuaJurnal()">Sesuai jurnal</button>'
       + '<label class="imp-massal-c"><input type="checkbox" id="imporPertahankan"' + (IMPOR_PERTAHANKAN ? ' checked' : '')
       + ' onchange="IMPOR_PERTAHANKAN=this.checked;imporGambarUlang()"> Pertahankan yang sudah saya pilih sendiri' + (sendiri ? ' (' + sendiri + ')' : '') + '</label>'
       + '<div class="imp-massal-k">Perbedaan kantor yang membingungkan dan penyaluran yang hanya ada di rekap tidak ikut "Cocokkan ke rekap"; putuskan satu per satu.</div>'

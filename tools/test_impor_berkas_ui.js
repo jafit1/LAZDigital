@@ -36,6 +36,16 @@ const XLSX = require(path.join(AKAR, 'node_modules', 'xlsx'));
 const SHEETJS = [path.join(AKAR, 'node_modules', 'xlsx', 'dist', 'xlsx.full.min.js'), path.join(AKAR, 'node_modules', 'xlsx', 'xlsx.js')]
   .find((f) => fs.existsSync(f));
 
+
+/* Bentuk tombol di jendela impor (pemilik, 2 Oktober 2026: "tombol batal dan
+   sejajarnya masih jelek"). Diukur, bukan dilihat: tinggi, posisi, dan apakah
+   tombol sekunder benar-benar tampak sebagai tombol (berbingkai). */
+const bentukKaki = (page) => page.evaluate(() => [...document.querySelectorAll('#modalFoot button')].filter((b) => b.offsetParent).map((b) => {
+  const r = b.getBoundingClientRect(), c = getComputedStyle(b);
+  return { teks: b.textContent.trim(), atas: Math.round(r.top), tinggi: Math.round(r.height), kiri: Math.round(r.left),
+    bingkai: c.borderTopStyle !== 'none' && !/rgba\(\d+, \d+, \d+, 0\)|transparent/.test(c.borderTopColor) && parseFloat(c.borderTopWidth) > 0,
+    gradasi: c.backgroundImage !== 'none' };
+}));
 let ok = 0, gagal = 0;
 const cek = (nama, syarat, info) => {
   if (syarat) { ok++; console.log('  OK   |', nama); }
@@ -184,6 +194,11 @@ const srv = http.createServer(async (req, res) => {
     cek('tombol "Impor Jurnal per Berkas" ada di Penghimpunan', adaTombol);
     await page.waitForSelector('#impb_jenis', { state: 'attached', timeout: 10000 });
     cek('judul jendelanya "Impor Jurnal per Berkas"', (await page.textContent('#modalTitle')).trim() === 'Impor Jurnal per Berkas');
+    let kaki = await bentukKaki(page);
+    cek('tombol bawah sama tinggi dan sejajar', kaki.length >= 2 && kaki.every((x) => x.tinggi === kaki[0].tinggi && Math.abs(x.atas - kaki[0].atas) <= 1), kaki);
+    cek('"Batal" tampak sebagai tombol berbingkai, bukan tulisan polos', (kaki.find((x) => x.teks === 'Batal') || {}).bingkai === true, kaki);
+    cek('sebelum dianalisis, "Tarik & Analisis Data" jadi tombol utama', (kaki.find((x) => /Tarik/.test(x.teks)) || {}).gradasi === true, kaki);
+    cek('"Batal" dipisah di kiri, jauh dari tombol utama', (kaki.find((x) => x.teks === 'Batal') || {}).kiri < Math.min(...kaki.filter((x) => x.teks !== 'Batal').map((x) => x.kiri)) - 100, kaki);
     cek('ada pilihan jenis berkas, bulan, dan tahun',
       await page.evaluate(() => !!(document.getElementById('impb_jenis') && document.getElementById('impb_bulan') && document.getElementById('impb_tahun'))));
     cek('pilihan metode dan rekening bawaan tidak ditampilkan (jurnal sudah menyebutnya)',
@@ -221,6 +236,43 @@ const srv = http.createServer(async (req, res) => {
     let teks = await teksPratinjau();
     cek('temuan nama kantor tanpa KLL/ULL tampil', /Nama kantor tanpa KLL\/ULL/.test(teks));
     cek('temuan kantor tidak terdaftar tampil', /Kantor "ULL Masjid" tidak terdaftar/.test(teks));
+    /* Warna bingkai tombol berpindah lewat transisi 0,16 detik. Di komputer
+       sibuk pengukuran bisa jatuh di tengah transisi (bingkai masih bening),
+       jadi ditunggu sampai bingkainya selesai muncul. */
+    await page.waitForFunction(() => { const b = document.getElementById('importTarikBtn'); return b && !/, 0\)$/.test(getComputedStyle(b).borderTopColor); }, null, { timeout: 3000 }).catch(() => {});
+    kaki = await bentukKaki(page);
+    cek('sesudah dianalisis: tombol bawah tetap sama tinggi dan sejajar', kaki.length === 3 && kaki.every((x) => x.tinggi === kaki[0].tinggi && Math.abs(x.atas - kaki[0].atas) <= 1), kaki);
+    cek('sesudah dianalisis: "Simpan" yang utama, "Tarik Ulang" berbingkai biasa',
+      (kaki.find((x) => /Simpan/.test(x.teks)) || {}).gradasi === true && (kaki.find((x) => /Tarik/.test(x.teks)) || {}).gradasi === false
+      && (kaki.find((x) => /Tarik/.test(x.teks)) || {}).bingkai === true, kaki);
+    await page.waitForFunction(() => { const x = document.querySelector('select.imp-temu-pilih'); return x && x.previousElementSibling && x.previousElementSibling.classList.contains('select-enhanced'); }, null, { timeout: 5000 }).catch(() => {});
+    const aksiTemuan = await page.evaluate(() => {
+      const sek = [...document.querySelectorAll('.imp-temu-aksi[data-aksi="biar"]')].filter((b) => b.offsetParent);
+      const garis = getComputedStyle(document.documentElement).getPropertyValue('--border').trim();
+      const c = sek[0] && getComputedStyle(sek[0]);
+      const t = window.IMPORT_TEMP_RES.temuan.find((x) => x.jenis === 'kantorTakTerdaftar');
+      const pilih = document.querySelector('select.imp-temu-pilih[data-t="' + t.id + '"]');
+      const kotak = pilih && pilih.previousElementSibling && pilih.previousElementSibling.classList.contains('select-enhanced') ? pilih.previousElementSibling : null;
+      const terap = document.querySelector('.imp-temu-aksi[data-t="' + t.id + '"][data-aksi="pilih"]');
+      const kartu = document.getElementById('imporTemuanBlok').getBoundingClientRect();
+      const rk = kotak && kotak.getBoundingClientRect(), rt = terap && terap.getBoundingClientRect();
+      return { n: sek.length, bingkai: c ? c.borderTopColor : '', putih: c ? /255, 255, 255/.test(c.borderTopColor) : null,
+        sebaris: rk && rt ? Math.abs((rk.top + rk.height / 2) - (rt.top + rt.height / 2)) : null,
+        lebarPilih: rk ? Math.round(rk.width) : null, lebarKartu: Math.round(kartu.width), tinggiPilih: rk ? Math.round(rk.height) : null, tinggiTombol: rt ? Math.round(rt.height) : null };
+    });
+    cek('tombol pilihan kedua di temuan berbingkai jelas (bukan putih di atas merah muda)', aksiTemuan.n > 0 && aksiTemuan.putih === false, aksiTemuan);
+    cek('pilihan kantor dan tombol "Terapkan" satu baris', aksiTemuan.sebaris !== null && aksiTemuan.sebaris <= 3, aksiTemuan);
+    cek('kotak pilihan kantor tidak selebar kartu', aksiTemuan.lebarPilih !== null && aksiTemuan.lebarPilih < aksiTemuan.lebarKartu * 0.5, aksiTemuan);
+    cek('kotak pilihan kantor setinggi tombolnya', aksiTemuan.tinggiPilih !== null && Math.abs(aksiTemuan.tinggiPilih - aksiTemuan.tinggiTombol) <= 2, aksiTemuan);
+    const baris1 = await page.evaluate(() => {
+      const k = (e) => e.getBoundingClientRect();
+      const drop = k(document.getElementById('importDrop'));
+      const kontrol = [document.getElementById('impb_jenis').previousElementSibling, document.getElementById('impb_bulan').previousElementSibling,
+        document.getElementById('impb_tahun').previousElementSibling, document.getElementById('impb_rekap_btn')].map(k);
+      return { drop: [Math.round(drop.top), Math.round(drop.bottom)], kontrol: kontrol.map((r) => [Math.round(r.top), Math.round(r.bottom)]) };
+    });
+    cek('kotak Telusuri sejajar atas-bawah dengan pilihan jenis, bulan, tahun, dan rekap',
+      baris1.kontrol.every((r) => Math.abs(r[0] - baris1.drop[0]) <= 1 && Math.abs(r[1] - baris1.drop[1]) <= 1), baris1);
     cek('temuan tanggal di luar bulan tampil', /Tanggal di luar September 2026/.test(teks));
     cek('temuan pilar tampil', /Pilar Pendidikan, keterangan menyebut Kesehatan/.test(teks));
     cek('ringkasan Daerah / KLL / ULL tampil', /Ringkasan/.test(teks) && /Daerah/.test(teks) && /KLL/.test(teks));

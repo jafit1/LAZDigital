@@ -2694,7 +2694,24 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
   overflow:hidden;                 /* yang bergulir cukup pratinjaunya */
   display:flex;flex-direction:column;gap:0;
 }
-.modal.import-modal .modal-foot{flex-wrap:wrap;gap:8px}
+.modal.import-modal .modal-foot{flex-wrap:wrap;gap:8px;align-items:center}
+/* Tombol bawah jendela impor (pemilik, 2 Oktober 2026: "tombol batal dan
+   sejajarnya masih jelek"). Dulu Batal dan Tarik berkelas btn-ghost: tanpa
+   bingkai dan tanpa latar, jadi tampak seperti tulisan polos, setinggi 33 px
+   di samping tombol utama. Sekarang semua 36 px, Batal berbingkai dan
+   dipisah ke kiri, dan hanya ada satu tombol utama pada satu waktu. */
+.modal.import-modal .modal-foot .btn{height:36px;padding:0 16px;font-size:13px}
+.modal.import-modal .modal-foot .btn:not(.btn-primary):not(.btn-danger){
+  background:var(--surface);border-color:var(--border);color:var(--text);box-shadow:none;
+}
+.modal.import-modal .modal-foot .btn:not(.btn-primary):not(.btn-danger):hover{border-color:var(--accent);color:var(--accent-d)}
+.modal.import-modal .modal-foot > .btn:first-child{margin-right:auto}
+/* Sesudah pratinjau ada, "Simpan" yang utama; tombol tarik turun jadi biasa. */
+/* !important karena .btn-primary sendiri memakai !important untuk latar. */
+.modal.import-modal .modal-foot:has(#importSimpanBtn:not(.hidden)) #importTarikBtn{
+  background:var(--surface) !important;border-color:var(--border) !important;color:var(--text);box-shadow:none !important;
+}
+.modal.import-modal .modal-foot:has(#importSimpanBtn:not(.hidden)) #importTarikBtn:hover{border-color:var(--accent) !important;color:var(--accent-d)}
 
 /* ---- blok pengantar: tab, sumber data, pilihan bawaan ---- */
 .imp-atas{flex:0 0 auto;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:12px}
@@ -2773,6 +2790,16 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
   grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,.75fr) minmax(0,1.3fr);
 }
 .imp-atas-berkas .imp-hint{margin-top:3px}
+/* Kolom berkas diberi label seperti kolom lain, dan semua kendali di baris
+   ini 36 px, supaya kotak Telusuri sejajar atas-bawah dengan pilihan di
+   sampingnya (dulu kotaknya 46 px dan mulai 21 px lebih tinggi). */
+.imp-src-l{display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.imp-atas-berkas .imp-drop{height:36px;box-sizing:border-box;padding:0 4px 0 6px}
+.imp-atas-berkas .imp-drop-ic{width:26px;height:26px;border-radius:8px}
+.imp-atas-berkas .imp-drop-ic svg{width:15px;height:15px}
+.imp-atas-berkas .imp-drop-btn{padding:3px 10px}
+.imp-atas-berkas .imp-opsi .select-enhanced-btn,.imp-atas-berkas .imp-rekap-btn{height:36px;box-sizing:border-box;padding-top:0;padding-bottom:0}
+.imp-atas-berkas .imp-rekap-btn{line-height:34px}
 .imp-rekap-btn{
   display:block;width:100%;box-sizing:border-box;padding:9px 12px;border-radius:11px;
   border:1px dashed var(--border);background:var(--surface);color:var(--text2);
@@ -2793,6 +2820,16 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .imp-massal-c{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer}
 .imp-massal-c input{width:auto;margin:0}
 .imp-massal-k{flex-basis:100%;font-size:11px;color:var(--muted)}
+/* Tombol pilihan di kartu temuan. Pilihan kedua dulu btn-ghost/glass:
+   bingkai putih 72% di atas latar merah muda, tampak seperti gumpalan putih
+   tanpa tepi. Sekarang berbingkai garis biasa. */
+.imp-temu-baris{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px}
+.imp-temu-baris .btn-mini,.imp-temu-status .btn-mini{height:30px;padding:0 12px;box-sizing:border-box}
+.btn-mini.imp-aksi-2{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+.btn-mini.imp-aksi-2:hover{border-color:var(--accent);color:var(--accent-d)}
+.imp-temu-baris .custom-dropdown{flex:0 1 340px;min-width:220px;width:auto}
+.imp-temu-baris .select-enhanced-btn{height:30px;box-sizing:border-box;padding:0 10px;font-size:12.5px}
+.imp-tawar .btn,.imp-massal .btn{height:30px;padding:0 12px;box-sizing:border-box}
 .imp-temu-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:6px;font-size:11.5px;font-weight:700;color:var(--muted)}
 .imp-temu-status.terap{color:var(--green)}
 .imp-temu-oleh{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:0 5px}
