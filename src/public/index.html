@@ -10,10 +10,14 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Huruf: stylesheet Google Fonts tidak lagi menahan gambar pertama (media=print lalu dilepas saat selesai).
-       Sebelumnya layar pembuka menunggu satu perjalanan ke server pihak ketiga; selama belum tiba dipakai huruf sistem. -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" media="print" onload="this.media='all'">
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"></noscript>
+  <!-- Huruf: stylesheet Google Fonts tetap tidak menahan boot (media=print lalu dilepas), tetapi layar TIDAK digambar
+       dengan huruf sistem dulu. Tanpa penahan, layar pertama memakai huruf sistem lalu berganti ke Inter/Plus Jakarta Sans
+       di depan mata (ukuran dan bentuk huruf berubah). Isi halaman ditahan transparan sampai kedua huruf siap, paling lama 1,5 detik
+       supaya server huruf yang macet tidak menahan aplikasi. -->
+  <style>html.tunggu-huruf body{opacity:0}html body{transition:opacity .15s}</style>
+  <script>(function(){var h=document.documentElement;h.classList.add("tunggu-huruf");var l=function(){h.classList.remove("tunggu-huruf")};window.__hurufSiap=function(){try{Promise.all([document.fonts.load("500 14px Inter"),document.fonts.load("700 14px 'Plus Jakarta Sans'")]).then(l,l)}catch(e){l()}};setTimeout(l,1500)})()</script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" media="print" onload="this.media='all';window.__hurufSiap&&window.__hurufSiap()">
+  <noscript><style>html.tunggu-huruf body{opacity:1}</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"></noscript>
   <link rel="stylesheet" href="/styles.css">
   <!-- Pustaka Excel: salinan sendiri, dan async. Dulu dari cdn.sheetjs.com dengan defer, dan skrip defer berjalan berurutan:
        app.js baru mulai setelah 880 KB dari server pihak ketiga selesai diunduh, jadi layar pembuka ikut menunggu CDN yang lambat

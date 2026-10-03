@@ -154,6 +154,7 @@ const server = http.createServer(async (req, res) => {
     cek('index.html: tidak ada skrip defer dari server luar', !/<script[^>]*src="https?:\/\/[^"]*"[^>]*defer/i.test(html));
     cek('index.html: pustaka Excel dari salinan sendiri, async', /<script[^>]*src="\/js\/vendor\/xlsx\.full\.min\.js"[^>]*async/i.test(html));
     cek('index.html: stylesheet Google Fonts tidak menahan gambar pertama', /fonts\.googleapis\.com[^>]*media="print"[^>]*onload/i.test(html));
+    cek('index.html: layar ditahan sampai huruf siap (tanpa berganti huruf di depan mata), dengan batas waktu', /tunggu-huruf/.test(html) && /setTimeout\(l,1500\)/.test(html) && /__hurufSiap/.test(html));
     await ctx.close();
   }
 

@@ -15,6 +15,10 @@
     {
       "path": "/api/backup",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/blast-antrean",
+      "schedule": "0 2 * * *"
     }
   ],
   "routes": [

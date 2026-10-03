@@ -164,33 +164,24 @@ Sisa yang masih terbuka dari daftar lama (nomor 3, 5, 6) tetap seperti tertulis 
    Aplikasi dipakai harian jadi biasanya aman, tapi jadi risiko kalau ada
    libur panjang.
 
-### E. Kebersihan berkas memori lama (temuan baru, 3 Oktober 2026)
+### E. Kebersihan berkas memori lama (diputuskan pemilik, 4 Oktober 2026)
 
-`MEMORY.md` dan `PROJECT_MEMORY.md` di akar proyek SUDAH SANGAT USANG: masih
-menyebut Upstash Redis dan Google Sheets sebagai basis data (sudah pindah ke
-Supabase PostgreSQL sejak lama), masih menyebut path lokal lama
-`C:\Users\2024\.gemini\antigravity\scratch\laz-vercel`, dan daftar fiturnya
-jauh ketinggalan dari keadaan sekarang. `CLAUDE.md` sudah menjadi sumber
-kebenaran dan `AGENTS.md` sudah mengarahkan ke sana, tapi dua berkas usang
-ini masih ada di akar proyek dan bisa menyesatkan model lain yang membacanya
-tanpa tahu isinya basi. **Belum dihapus atau ditandai usang**, karena itu
-keputusan pemilik: tawarkan untuk menghapus keduanya (isinya sudah
-sepenuhnya tercakup, dan lebih akurat, di `CLAUDE.md`), atau kalau pemilik
-mau menyimpannya sebagai arsip sejarah, beri judul/catatan tegas di baris
-pertama bahwa berkas itu usang dan tidak dipakai lagi.
+`MEMORY.md` dan `PROJECT_MEMORY.md` sangat usang (masih menyebut Upstash Redis,
+Google Sheets, dan path lokal lama). Pemilik memutuskan DIHAPUS; `CLAUDE.md`
+adalah satu-satunya sumber kebenaran. Penghapusan dilakukan pemilik sendiri
+(sesi AI tidak punya alat hapus di komputernya). Kalau berkasnya masih ada,
+jangan dipercaya isinya.
 
 ---
 
 ### F. Temuan 3 Oktober 2026 yang belum diputuskan pemilik
 
-1. `PANDUAN-BROADCAST.md` menyebut cron `/api/wa-dispatch` yang tidak ada. Sudah
-   dikoreksi: antrean didorong gateway dan saat kampanye dibuat, `vercel.json` hanya
-   punya cron backup. Menjadwalkan `/api/cron/blast-antrean` sebagai penyapu harian
-   BELUM dilakukan karena mengubah perilaku kirim (pesan tertunda bisa terkirim jam
-   tak terduga). Keputusan pemilik.
-2. `data/ekspor-redis-2026-09-26T....json` (±48 MB) masih di folder proyek. Masuk
-   `.gitignore`, tapi berisi data lembaga. Pindahkan atau hapus bila migrasi dianggap
-   selesai.
+1. SELESAI (4 Oktober 2026): `vercel.json` kini punya dua cron harian, `/api/backup`
+   (`0 19 * * *`) dan penyapu antrean broadcast `/api/cron/blast-antrean`
+   (`0 2 * * *`, 09.00 WIB). Wajib `CRON_SECRET` di Vercel. Batas Hobby: maksimal 2
+   cron, sekali sehari, jadi tidak bisa ditambah lagi.
+2. Berkas `data/ekspor-redis-2026-09-26T....json` (±48 MB, data lembaga) diputuskan
+   dihapus pemilik; hapus manual dari komputer.
 3. Dua panduan pindah server (`PANDUAN-PINDAH-KE-SERVER.md`, `PANDUAN-PINDAH-SUPABASE.md`)
    masih ditulis sebagai rencana dan menyebut Redis sebagai jalan mundur.
 

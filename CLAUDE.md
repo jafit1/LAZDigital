@@ -323,7 +323,7 @@ LAZDigital/
 ├─ sql/01-skema.sql          Skema PostgreSQL
 ├─ uji-sebelum-deploy.bat    Jalankan SEBELUM deploy
 ├─ deploy.bat                git add, commit, push (Vercel yang membangun)
-└─ vercel.json               Region sin1, maxDuration 30, cron backup harian
+└─ vercel.json               Region sin1, maxDuration 30, 2 cron harian (backup, penyapu antrean broadcast; batas Hobby)
 ```
 
 ---
