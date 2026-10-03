@@ -80,6 +80,41 @@ const srv = http.createServer(async (req, res) => {
   fs.createReadStream(f).pipe(res);
 });
 
+/* PDF sungguhan (bukan sekadar kepala %PDF): n halaman Letter berisi teks, ditambah satu objek
+   tak terpakai berisi spasi supaya ukurannya melewati batas lampiran 2 MB. Tabel xref dihitung
+   dari posisi byte sebenarnya, jadi pdf.js membacanya tanpa harus membangun ulang strukturnya. */
+function pdfNyata(halaman, padding) {
+  const objs = [];
+  objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  const anak = [];
+  for (let i = 0; i < halaman; i++) anak.push((3 + i * 2) + ' 0 R');
+  objs[2] = '<< /Type /Pages /Kids [' + anak.join(' ') + '] /Count ' + halaman + ' >>';
+  for (let i = 0; i < halaman; i++) {
+    const hal = 3 + i * 2, isi = 4 + i * 2, teks = 'BT /F1 24 Tf 72 700 Td (Halaman karangan ' + (i + 1) + ') Tj ET';
+    objs[hal] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ' + isi + ' 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>';
+    objs[isi] = '<< /Length ' + teks.length + ' >>\nstream\n' + teks + '\nendstream';
+  }
+  const terakhir = 3 + halaman * 2;
+  objs[terakhir] = '<< /Length ' + padding + ' >>\nstream\n' + ' '.repeat(padding) + '\nendstream';
+  let out = '%PDF-1.4\n';
+  const posisi = [];
+  for (let n = 1; n <= terakhir; n++) { posisi[n] = Buffer.byteLength(out, 'latin1'); out += n + ' 0 obj\n' + objs[n] + '\nendobj\n'; }
+  const xref = Buffer.byteLength(out, 'latin1');
+  out += 'xref\n0 ' + (terakhir + 1) + '\n0000000000 65535 f \n';
+  for (let n = 1; n <= terakhir; n++) out += String(posisi[n]).padStart(10, '0') + ' 00000 n \n';
+  out += 'trailer\n<< /Size ' + (terakhir + 1) + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+  return Buffer.from(out, 'latin1');
+}
+/* jsPDF dari CDN tidak bisa diunduh di uji (tanpa internet), jadi ditiru: yang dicatat adalah apa
+   yang dikerjakan kode kompres terhadap pustaka itu (berapa halaman, ukuran, gambar apa). pdf.js-nya
+   SUNGGUHAN (salinan lokal 3.11.174), jadi menggambar halaman ke kanvas benar-benar berjalan. */
+const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
+  var s = window.__pdfTiruan = { opsi: o, halaman: 1, tambahan: [], gambar: [] };
+  this.addPage = function (f, a) { s.halaman++; s.tambahan.push([f, a]); };
+  this.addImage = function (d, t, x, y, w, h) { s.gambar.push({ panjang: d.length, awal: d.slice(0, 30), tipe: t, w: w, h: h }); };
+  this.output = function () { return new Blob(['%PDF-1.4 hasil kompres tiruan'], { type: 'application/pdf' }); };
+} };`;
+
 (async () => {
   /* Kelas sr-* yang dipakai surat.js harus ada di styles.css (jebakan 3.6:
      kelas karangan tidak menimbulkan galat, cuma tampilan yang aneh). */
@@ -112,6 +147,8 @@ const srv = http.createServer(async (req, res) => {
   const page = await ctx.newPage();
   const galatHal = [];
   page.on('pageerror', (e) => galatHal.push(e.message));
+  const urlDiminta = [];
+  page.on('request', (r) => urlDiminta.push(r.url()));
   const siap = (rute) => page.waitForFunction((r) => document.body.getAttribute('data-halaman-siap') === r, rute, { timeout: 15000 });
   const toastTeks = () => page.evaluate(() => document.getElementById('toast').textContent);
 
@@ -191,6 +228,25 @@ const srv = http.createServer(async (req, res) => {
     await page.click('#tSimpan');
     await page.waitForFunction(() => document.querySelectorAll('.sr-lamp').length === 2, null, { timeout: 10000 });
     cek('tersimpan sebagai tautan', /Tautan/.test(await page.evaluate(() => document.querySelectorAll('.sr-lamp')[1].textContent)));
+
+    console.log('\n=== D2. KOMPRES PDF BERHASIL (pdf.js lokal sungguhan, jsPDF ditiru) ===');
+    const pdfAsli = path.join(tmp, 'scan_beneran.pdf');
+    fs.writeFileSync(pdfAsli, pdfNyata(3, 2600000));
+    await page.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/jspdf\//, (r) => r.fulfill({ contentType: 'text/javascript', body: JSPDF_TIRUAN }));
+    await page.setInputFiles('#srBerkas', pdfAsli);
+    await page.waitForSelector('.sr-tawar', { timeout: 8000 });
+    await page.click('.sr-tawar button[data-p="kompres"]');
+    const selesai = await page.waitForFunction(() => window.__pdfTiruan && window.__pdfTiruan.gambar.length === 3, null, { timeout: 30000 }).then(() => true).catch(() => false);
+    const t = await page.evaluate(() => window.__pdfTiruan || null);
+    cek('pdf.js membaca PDF sungguhan dan menggambar tiga halaman', selesai && !!t && t.gambar.length === 3, t);
+    cek('halaman pertama dibuat lewat konstruktor, dua sisanya lewat addPage', !!t && t.halaman === 3 && t.tambahan.length === 2, t && [t.halaman, t.tambahan.length]);
+    cek('ukuran halaman mengikuti PDF asli (Letter 612 x 792, potret)', !!t && t.opsi.orientation === 'p' && t.opsi.format[0] === 612 && t.opsi.format[1] === 792 && t.gambar.every((g) => g.w === 612 && g.h === 792), t && [t.opsi, t.gambar.map((g) => [g.w, g.h])]);
+    cek('tiap halaman dimasukkan sebagai JPEG yang benar-benar tergambar (bukan kanvas kosong kecil)', !!t && t.gambar.every((g) => g.tipe === 'JPEG' && /^data:image\/jpeg;base64,/.test(g.awal) && g.panjang > 1500), t && t.gambar.map((g) => g.panjang));
+    await page.waitForFunction(() => document.querySelectorAll('.sr-lamp').length === 3, null, { timeout: 15000 }).catch(() => {});
+    const lamp3 = await page.evaluate(() => [...document.querySelectorAll('.sr-lamp')].map((x) => x.textContent));
+    cek('hasil kompres terkirim dan tersimpan sebagai lampiran ketiga', lamp3.length === 3 && /scan_beneran\.pdf/.test(lamp3.join('|')), lamp3);
+    cek('pdf.js dimuat dari server sendiri, bukan dari CDN', urlDiminta.some((u) => /\/js\/vendor\/pdf\.min\.js/.test(u)) && urlDiminta.some((u) => /\/js\/vendor\/pdf\.worker\.min\.js/.test(u)) && !urlDiminta.some((u) => /cdnjs[^ ]*pdf\.js/.test(u)), urlDiminta.filter((u) => /pdf/.test(u)));
+    await page.unroute(/cdnjs\.cloudflare\.com\/ajax\/libs\/jspdf\//);
 
     console.log('\n=== E. PENGAJUAN DI PAPAN ===');
     await page.goto(A + '/surat.html#pengajuan');

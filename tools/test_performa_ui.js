@@ -28,6 +28,7 @@ function muatPlaywright() {
 const { chromium } = muatPlaywright();
 const CHROMIUM = fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {};
 const AKAR = path.join(__dirname, '..');
+const engine = require(path.join(AKAR, 'api', '_engine.js'));
 const PUBLIK = process.env.LAZ_PUBLIK_UJI || path.join(AKAR, 'src', 'public');
 
 /* ---------- data karangan ---------- */
@@ -61,6 +62,7 @@ for (let i = 0; i < N_DONATUR; i++) {
   });
 }
 
+const PADAT_DIMINTA = [];
 const JAWAB = {
   apiBootstrap: () => ({ user: { id: 'u1', username: 'uji', nama: 'Petugas Uji', role: 'superadmin', permissions: {} }, settings: {}, webAppUrl: '' }),
   apiGetPermissionMeta: () => ({ modules: [], actions: [] }),
@@ -74,10 +76,16 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url.startsWith('/api/')) {
     let body = '';
     for await (const c of req) body += c;
-    let fn = '';
-    try { fn = JSON.parse(body).fn || ''; } catch (_) {}
+    let fn = '', minta = {};
+    try { minta = JSON.parse(body); fn = minta.fn || ''; } catch (_) {}
     const f = JAWAB[fn];
     res.writeHead(200, { 'Content-Type': 'application/json' });
+    /* Seperti api/rpc.js: bentuk padat hanya dilayani untuk dua fungsi daftar dan hanya
+       bila klien meminta. Klien yang tidak meminta tetap mendapat larik biasa. */
+    if (f && minta.padat && engine.FN_PADAT[fn]) {
+      PADAT_DIMINTA.push(fn);
+      return res.end(JSON.stringify({ result: engine._padatkan(f()) }));
+    }
     return res.end(JSON.stringify({ result: f ? f() : (/^apiList/.test(fn) ? [] : {}) }));
   }
   const nama = req.url.split('?')[0];
@@ -249,6 +257,11 @@ const server = http.createServer(async (req, res) => {
     await ctx.close();
   }
 
+  /* Daftar besar dikirim padat (3 Okt 2026, 7,72 MB menjadi 3,73 MB pada 15.000 baris). Tiruan server
+     di atas HANYA menjawab padat bila klien memintanya, jadi seluruh pemeriksaan baris, saringan, dan
+     gulir di atas sekaligus membuktikan hasil bongkarannya sama dengan larik biasa. */
+  cek('Klien meminta bentuk padat untuk daftar Penghimpunan', PADAT_DIMINTA.indexOf('apiListPenghimpunan') >= 0, PADAT_DIMINTA);
+  cek('Klien meminta bentuk padat untuk daftar Pentasyarufan', PADAT_DIMINTA.indexOf('apiListPentasyarufan') >= 0, PADAT_DIMINTA);
   cek('Tidak ada galat skrip di halaman', galat.length === 0, galat.slice(0, 3));
   await b.close(); server.close();
   console.log(`\n  ${ok} lulus, ${g} gagal`);

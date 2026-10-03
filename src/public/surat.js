@@ -647,8 +647,12 @@ async function bukaLampiran(r, lid) {
      (pdf.js dan jsPDF) baru diunduh saat tombolnya ditekan.
    - Kalau masih terlalu besar, atau berkas Word/Excel di atas 2 MB, pilihan
      terakhir: simpan sebagai tautan Google Drive. */
-const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-const PDFJS_KERJA = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+/* pdf.js memakai salinan di server sendiri (src/public/js/vendor, 3.11.174, sama persis dengan yang
+   dulu diunduh dari cdnjs), alasannya sama dengan halaman AI: skrip dari CDN berarti pihak ketiga
+   bisa mengganti isinya kapan saja, dan kantor yang memblokir CDN membuat Kompres PDF buntu. Hanya
+   jsPDF yang masih dari CDN (belum ada salinan lokalnya). Versi pdf.js dan worker-nya HARUS sama. */
+const PDFJS = '/js/vendor/pdf.min.js';
+const PDFJS_KERJA = '/js/vendor/pdf.worker.min.js';
 const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const MIME_EKS = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -656,8 +660,11 @@ const MIME_EKS = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg'
 function mimeBerkas(f) { const e = String(f.name).split('.').pop().toLowerCase(); return MIME_EKS[e] || f.type || ''; }
 function muatSkrip(src) {
   return new Promise((ok, gagal) => {
-    if ($$('script').some((s) => s.src === src)) return ok();
-    const s = document.createElement('script'); s.src = src; s.onload = () => ok(); s.onerror = () => gagal(new Error('Pustaka kompres PDF tidak bisa diunduh. Periksa internet, atau simpan sebagai tautan.'));
+    /* s.src selalu berbentuk alamat penuh, jadi alamat relatif (salinan lokal) harus diubah dulu;
+       tanpa ini skripnya ditambahkan lagi setiap kali Kompres PDF ditekan. */
+    const penuh = new URL(src, location.href).href;
+    if ($$('script').some((s) => s.src === penuh)) return ok();
+    const s = document.createElement('script'); s.src = src; s.onload = () => ok(); s.onerror = () => { s.remove(); gagal(new Error('Pustaka kompres PDF tidak bisa diunduh. Periksa internet, atau simpan sebagai tautan.')); };   /* dibuang: yang gagal tidak boleh dianggap sudah termuat pada percobaan berikutnya */
     document.head.appendChild(s);
   });
 }

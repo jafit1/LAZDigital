@@ -62,12 +62,27 @@ function reloginSilently(){
   _reloginPromise.finally(function(){ setTimeout(function(){ _reloginPromise=null; },0); });
   return _reloginPromise;
 }
+/* Daftar besar diminta dalam bentuk padat (nama kolom sekali, baris sebagai larik): 15.000
+   baris Penghimpunan 7,72 MB menjadi 3,78 MB, di bawah batas respons Vercel 4,5 MB. Nama
+   fungsinya tetap sama; servernya yang mengalihkan (api/rpc.js, engine.FN_PADAT). Jawaban
+   yang sudah berupa larik (server lama, tiruan server di uji) dilewatkan apa adanya. */
+var _FN_PADAT={apiListPenghimpunan:1,apiListPentasyarufan:1};
+function _bongkarPadat(h){
+  if(!h || !Array.isArray(h.kolom) || !Array.isArray(h.baris)) return h;
+  var k=h.kolom, n=k.length, b=h.baris, out=new Array(b.length);
+  for(var i=0;i<b.length;i++){
+    var r=b[i], o={};
+    for(var c=0;c<n;c++){ var v=r[c]; o[k[c]]=(v===undefined?'':v); }
+    out[i]=o;
+  }
+  return out;
+}
 function gas(fn){ return function(){ var a=[].slice.call(arguments); return _rpcCall(fn,a,false); }; }
 function _rpcCall(fn,args,retried){
   __barShow();
-  return fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fn:fn,args:args})})
+  return fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(_FN_PADAT[fn]?{fn:fn,args:args,padat:1}:{fn:fn,args:args})})
     .then(function(r){return r.json();})
-    .then(function(j){ __barHide(); if(j&&j.__error){ throw new Error(j.__error); } return j.result; })
+    .then(function(j){ __barHide(); if(j&&j.__error){ throw new Error(j.__error); } return _bongkarPadat(j.result); })
     .catch(function(e){
       var m=(e&&e.message)||String(e);
       if(!retried && m.indexOf('AUTH:')>=0 && fn!=='login' && fn!=='logout' && fn!=='loginIngat' && punyaIngat() && TOKEN){

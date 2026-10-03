@@ -74,6 +74,8 @@ const DAFTAR = [
   { label: 'Hasil bacaan diingat dan tidak basi', berkas: 'test_ingatan_hasil.js' },
   { label: 'Baca banyak kunci satu kueri', berkas: 'test_kv_massal.js' },
   { label: 'Kelancaran daftar panjang dan buka aplikasi', berkas: 'test_performa_ui.js' },
+  { label: 'Daftar besar dikirim padat', berkas: 'test_daftar_padat.js' },
+  { label: 'Fungsi xlsx yang dipakai ada di salinan lokal', berkas: 'test_xlsx_lokal.js' },
   { label: 'Alat ukur dan rapikan Redis', berkas: 'test_alat_redis.js' },
   { label: 'Alat ekspor Redis', berkas: 'test_ekspor_redis.js' },
   { label: 'Lambang dan ikon situs', berkas: 'test_ikon.js' },

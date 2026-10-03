@@ -136,7 +136,13 @@ module.exports = async (req, res) => {
     let body = req.body;
     if (typeof body === 'string') body = JSON.parse(body || '{}');
     body = body || {};
-    const fn = body.fn, args = body.args || [];
+    let fn = body.fn;
+    const args = body.args || [];
+    /* Daftar besar (Penghimpunan, Pentasyarufan) dikirim padat kalau klien memintanya:
+       15.000 baris 7,72 MB menjadi 3,78 MB, di bawah batas respons Vercel 4,5 MB.
+       Hanya dua fungsi di peta engine.FN_PADAT yang dialihkan; izinnya tetap
+       diperiksa oleh fungsi aslinya. Pemanggil tanpa penanda tetap dapat bentuk lama. */
+    if (body.padat && engine.FN_PADAT && Object.prototype.hasOwnProperty.call(engine.FN_PADAT, fn)) fn = engine.FN_PADAT[fn];
     const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     const ctx = {
       ip: fwd || (req.socket && req.socket.remoteAddress) || '',

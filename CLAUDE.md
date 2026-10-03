@@ -374,6 +374,20 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   sisanya dimuat oleh `IntersectionObserver` saat digulir. Pencarian dan
   saringan bekerja di atas SEMUA baris (teks cari `c` sudah dihitung), bukan
   yang tampak saja. `applyFilters` ditunda 80 ms.
+- **Daftar besar dikirim padat** (3 Okt 2026). `apiListPenghimpunan` dan
+  `apiListPentasyarufan` mengirim objek per baris, jadi 22 nama kolom diulang
+  di setiap baris: 15.000 baris terukur 7,72 MB, padahal Vercel membatasi badan
+  respons fungsi sekitar 4,5 MB (daftar akan berhenti terbuka pada sekitar 9.000
+  baris). Klien (`_rpcCall` di `app.js`) menyertakan `padat:1` untuk dua fungsi
+  itu, `api/rpc.js` mengalihkannya lewat peta `engine.FN_PADAT` ke
+  `apiListPenghimpunanPadat` / `apiListPentasyarufanPadat` (nama kolom sekali,
+  tiap baris larik tanpa teks kosong di ujung, 3,73 MB), dan `_bongkarPadat`
+  mengembalikannya jadi objek yang sama persis. Fungsi lama tidak berubah, dan
+  jawaban yang sudah berupa larik dilewatkan apa adanya, jadi uji yang meniru
+  server tidak ikut rusak. Fungsi padat didaftarkan di `BACA` sendiri (cache
+  terpisah) dan di `_LOG_AKSES`. Bukan berkas baru di `api/`. Kalau menambah
+  kolom ke tabelnya, tidak ada yang perlu diubah: kolom dibaca dari baris
+  pertama. Jangan memangkas nilai selain `''` (angka 0 dan teks "0" sah).
 - **Buka aplikasi**: boot jalan di `DOMContentLoaded`, bukan `load` (yang
   menunggu font dan skrip pihak ketiga). Font Google tidak memblokir render;
   xlsx dilayani lokal (`/js/vendor/xlsx.full.min.js`, 0.18.5, `async`) dan
@@ -454,10 +468,12 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_percakapan.js`, `ukur-percakapan.js` | kotak masuk |
 | `test_fund_fitur.js`, `test_fundraiser.js`, `test_fund_ui.js` | fundraising |
 | `test_media_fitur.js`, `test_media_ui.js` | modul media |
-| `test_surat_fitur.js`, `test_surat_ui.js` | modul Surat & Pengajuan: izin per centang, nomor agenda, langkah tidak bisa dilompati (juga di papan), data wajib tiap langkah, disposisi (penerima izin lihat bisa menyelesaikan miliknya), lampiran (2 MB, jenis dari isi berkas, 6 per surat, kuota, Drive, tautan), foto dikompres di peramban, PDF besar ditawari kompres atau tautan, surat rahasia, lacak publik tanpa catatan internal dan dibatasi 30 kali per 10 menit |
+| `test_surat_fitur.js`, `test_surat_ui.js` | modul Surat & Pengajuan: izin per centang, nomor agenda, langkah tidak bisa dilompati (juga di papan), data wajib tiap langkah, disposisi (penerima izin lihat bisa menyelesaikan miliknya), lampiran (2 MB, jenis dari isi berkas, 6 per surat, kuota, Drive, tautan), foto dikompres di peramban, PDF besar ditawari kompres atau tautan, kompres PDF berhasil (pdf.js lokal, 3 halaman) dan percobaan ulang setelah gagal unduh, surat rahasia, lacak publik tanpa catatan internal dan dibatasi 30 kali per 10 menit |
 | `test_ingatan_hasil.js` | hasil bacaan buku besar yang diingat (`lib/laz-pg.js`): bacaan kedua tidak memuat tabel transaksi, sama persis dengan hitung ulang, gugur saat ada penulisan (juga dari penulis tanpa penanda), token kedaluwarsa dan izin dicabut tidak dilayani dari ingatan, catatan akses tetap tertulis tanpa menggugurkan ingatan, penanda isi acak, jawaban mentah lewat `api/rpc.js` |
 | `test_kv_massal.js` | pipeline kv membaca banyak kunci dengan satu kueri (dulu satu per kunci), hasil dan urutan sama dengan satu per satu, pipeline campuran tetap atomik, daftar Surat tidak lagi satu kueri per surat |
 | `test_performa_ui.js` | daftar panjang tetap lancar (10.000 penghimpunan, 4.000 penyaluran, 3.000 donatur): baris di layar dibatasi, saringan benar, gulir memuat sisanya, ketikan tidak membekukan layar; aplikasi terbuka walau server luar (CDN, Google Fonts) tidak menjawab |
+| `test_daftar_padat.js` | daftar Penghimpunan dan Pentasyarufan dikirim padat (nama kolom sekali, baris sebagai larik): dibongkar di klien sama persis dengan bentuk lama (nilai, urutan, `__row`, nol dan "0" tidak terpangkas), 15.000 baris 7,72 MB jadi 3,73 MB (di bawah batas respons Vercel 4,5 MB), izin tetap diperiksa paling depan, hanya dua fungsi yang dialihkan `api/rpc.js` dan hanya bila diminta, bacaan padat ikut diingat (`BACA`), klien membongkar jawaban larik tanpa mengubahnya |
+| `test_xlsx_lokal.js` | setiap `XLSX.*` yang dipanggil aplikasi ada di salinan lokal 0.18.5 (8 fungsi saat ditulis), baca dan tulis xlsx berfungsi, pemindainya sendiri terbukti menangkap nama yang tidak ada |
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |
@@ -645,11 +661,15 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   (batas Vercel 4,5 MB per kiriman, base64 menambah sepertiga), 6 lampiran
   per surat, kuota `SURAT_KUOTA_MB` (bawaan 200) dari 500 MB Supabase. Foto
   selalu dikompres di peramban ke JPEG di bawah 900 KB; PDF di atas 2 MB
-  ditawari "Kompres PDF" (pdf.js + jsPDF dari cdnjs, diunduh saat ditekan)
+  ditawari "Kompres PDF" (pdf.js dari salinan lokal `js/vendor`, jsPDF dari cdnjs diunduh saat ditekan)
   atau disimpan sebagai tautan. Kalau `GDRIVE_*` disetel, lampiran baru
   masuk Google Drive (`_drive.unggahBiner`), bukan basis data. Kompres PDF
-  BELUM teruji otomatis karena uji tidak boleh keluar ke internet; yang diuji
-  jalan keluarnya kalau pustakanya tidak terunduh. Halaman `lacak.html`
+  teruji di `test_surat_ui.js` bagian D dan D2: jalan keluar kalau jsPDF tidak
+  terunduh, dan jalur sukses dengan PDF 3 halaman sungguhan yang dibaca pdf.js
+  lokal (jsPDF ditiru karena uji tidak boleh keluar ke internet, jadi yang
+  belum teruji hanya keluaran PDF akhir dari jsPDF asli). Skrip yang gagal
+  diunduh dibuang dari halaman (`muatSkrip`), kalau tidak percobaan kedua
+  dianggap sudah termuat lalu error. Halaman `lacak.html`
   (tanpa masuk) hanya menerima nomor + kode lacak 6 huruf dan hanya
   mengembalikan langkah dan tanggalnya.
 - **Bidang tim media dibekukan saat permohonan diajukan**, supaya memindahkan
@@ -659,12 +679,19 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
 
 ## 10. Keadaan sekarang dan pekerjaan tertunda
 
-Per 29 September 2026.
+Per 29 September 2026, dengan tambahan 3 Oktober 2026 di bawah.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, dan (30 September 2026) lima celah keamanan di
 bagian 3.10.
+
+**Ditambahkan 3 Oktober 2026:** daftar Penghimpunan dan Pentasyarufan dikirim
+padat (bagian 5), Kompres PDF memakai pdf.js lokal dan jalur suksesnya teruji
+beserta perbaikan percobaan ulang, dan semua fungsi xlsx yang dipakai terbukti
+ada di 0.18.5 (`test_xlsx_lokal.js`). Dicek dan sengaja TIDAK diubah: membangun
+HTML per baris hanya untuk baris yang digambar (membuka 15.000 baris terukur
+±580 ms di mesin uji, tidak sepadan dengan risikonya di `app.js` 600 KB).
 
 **Perlu dikerjakan pemilik, bukan kode:**
 

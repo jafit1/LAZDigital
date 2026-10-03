@@ -507,7 +507,35 @@ function _nomorUrutTerakhir(nama, kolom, awalan){
   return maks;
 }
 function generateNoKwitansi(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='KW/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENGHIMPUNAN,'noKwitansi',awalan)+1)).slice(-4); }
+/* BENTUK PADAT untuk daftar besar (3 Okt 2026). apiListPenghimpunan mengirim tiap baris
+   sebagai objek, jadi 22 nama kolom diulang di setiap baris: 15.000 baris terukur
+   7,72 MB, padahal Vercel membatasi badan respons fungsi sekitar 4,5 MB. Bentuk padat
+   mengirim nama kolom SEKALI dan tiap baris sebagai larik tanpa teks kosong di ujungnya:
+   3,78 MB pada data yang sama (hemat 48%). Klien membongkarnya lagi jadi objek yang sama
+   persis (_bongkarPadat di app.js). Kalau ada baris yang kuncinya berbeda dari baris
+   pertama, daftar dikembalikan apa adanya: lebih baik besar daripada salah. Daftar kosong
+   tetap larik kosong. Jumlah 0 dan teks "0" BUKAN kosong, hanya '' yang dipangkas. */
+function _padatkan(daftar){
+  if(!daftar || !daftar.length) return daftar;
+  var kolom=Object.keys(daftar[0]), n=kolom.length, baris=new Array(daftar.length);
+  for(var i=0;i<daftar.length;i++){
+    var o=daftar[i], b=new Array(n), k=0;
+    for(var kunci in o){
+      if(!Object.prototype.hasOwnProperty.call(o,kunci)) continue;
+      if(k>=n || kunci!==kolom[k]) return daftar;
+      b[k]=o[kunci]; k++;
+    }
+    if(k!==n) return daftar;
+    var m=n; while(m>0 && b[m-1]==='') m--;
+    b.length=m; baris[i]=b;
+  }
+  return {kolom:kolom, baris:baris};
+}
+/* Peta yang dibaca api/rpc.js: klien meminta bentuk padat dengan penanda padat:1, nama fungsinya
+   tetap yang lama. Izin tetap diperiksa oleh fungsi lamanya, di baris pertama. */
+var FN_PADAT = {apiListPenghimpunan:'apiListPenghimpunanPadat', apiListPentasyarufan:'apiListPentasyarufanPadat'};
 function apiListPenghimpunan(t){ _requirePerm(t,'penghimpunan','view'); return readAll(SHEETS.PENGHIMPUNAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
+function apiListPenghimpunanPadat(t){ return _padatkan(apiListPenghimpunan(t)); }
 async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.id?'edit':'create');
   d.fundraising = cleanFundraisingName(d.fundraising);
   var oldMonth = '';
@@ -555,6 +583,7 @@ function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view'); return {da
 /* ===== PENTASYARUFAN ===== */
 function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='BPT/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENTASYARUFAN,'noBukti',awalan)+1)).slice(-4); }
 function apiListPentasyarufan(t){ _requirePerm(t,'pentasyarufan','view'); return readAll(SHEETS.PENTASYARUFAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
+function apiListPentasyarufanPadat(t){ return _padatkan(apiListPentasyarufan(t)); }
 async function apiSavePentasyarufan(t,d){ var u=_requirePerm(t,'pentasyarufan',d.id?'edit':'create');
   d.fundraising = cleanFundraisingName(d.fundraising);
   var oldMonth = '';
@@ -7372,6 +7401,7 @@ function ringkasPerubahan(lama, baru){
    tiap beberapa menit per pengguna supaya log tidak dibanjiri. */
 var _LOG_AKSES = {
   apiDashboard:'dashboard', apiListPenghimpunan:'penghimpunan', apiListPentasyarufan:'pentasyarufan',
+  apiListPenghimpunanPadat:'penghimpunan', apiListPentasyarufanPadat:'pentasyarufan',
   apiListDonatur:'donatur', apiJurnalData:'laporan', apiBroadcastReport:'laporan',
   apiListUsers:'users', apiListRekening:'rekening', apiListLayanan:'layanan',
   apiGetSettings:'settings', apiListMutasi:'mutasi', apiListAudit:'log',
@@ -7936,12 +7966,14 @@ REGISTRY['apiGetRAPBData']=apiGetRAPBData;
 REGISTRY['apiSaveRAPBTarget']=apiSaveRAPBTarget;
 REGISTRY['apiGetDonaturAnalytics']=apiGetDonaturAnalytics;
 REGISTRY['apiListPenghimpunan']=apiListPenghimpunan;
+REGISTRY['apiListPenghimpunanPadat']=apiListPenghimpunanPadat;
 REGISTRY['apiListRekeningPublic']=apiListRekeningPublic;
 REGISTRY['apiListLayananPublic']=apiListLayananPublic;
 REGISTRY['apiSavePenghimpunan']=apiSavePenghimpunan;
 REGISTRY['apiDeletePenghimpunan']=apiDeletePenghimpunan;
 REGISTRY['apiGetKwitansi']=apiGetKwitansi;
 REGISTRY['apiListPentasyarufan']=apiListPentasyarufan;
+REGISTRY['apiListPentasyarufanPadat']=apiListPentasyarufanPadat;
 REGISTRY['apiSavePentasyarufan']=apiSavePentasyarufan;
 REGISTRY['apiDeletePentasyarufan']=apiDeletePentasyarufan;
 REGISTRY['apiGetBuktiPentasyarufan']=apiGetBuktiPentasyarufan;
@@ -8019,7 +8051,7 @@ async function runRPC(db, fn, args, ctx){
 }
 /* buatCadangan & catatStatusCadangan dipakai api/backup.js di luar sesi
    pengguna. Keduanya bekerja pada DB yang sedang dimuat lewat runRPC. */
-module.exports = { runRPC, _setLambat, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
+module.exports = { runRPC, _setLambat, FN_PADAT: FN_PADAT, _padatkan: _padatkan, buatCadangan: function(db, oleh){ DB = db; return buatCadangan(oleh); },
   catatStatusCadangan: function(db, st){ DB = db; catatStatusCadangan(st); return db; },
   catatAkses: function(db, fn, token, ctx){ DB = db || {sheets:{},props:{}}; if(!DB.sheets)DB.sheets={}; if(!DB.props)DB.props={}; try{auditKonteks(ctx||{});}catch(e){} setup(); _catatAkses(fn, token); return db; },
   cekIzin: function(db, token, modul, aksi, ctx){ DB = db || {sheets:{},props:{}}; if(!DB.sheets)DB.sheets={}; if(!DB.props)DB.props={}; try{auditKonteks(ctx||{});}catch(e){} setup(); return sanitizeUser(_requirePerm(token, modul, aksi)); } };

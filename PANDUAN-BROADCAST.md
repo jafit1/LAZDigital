@@ -98,8 +98,12 @@ Vercel akan build otomatis. Setelah live, buka aplikasi → menu **Broadcast WA*
 - **Setelan:** atur jeda acak, jam kirim, dan batas harian tanpa redeploy.
 
 ## Catatan cron Vercel
-Pengiriman berjalan langsung saat kampanye dibuat (proses berantai antar fungsi).
-Cron `/api/wa-dispatch` (di `vercel.json`) hanya "penyapu" cadangan sekali sehari
-untuk antrean yang mungkin tertunda. Paket **Hobby** membatasi cron 1×/hari — sudah
-sesuai. Kalau nanti pindah ke paket Pro dan ingin sapuan lebih sering, ubah
-`schedule` di `vercel.json`.
+Antrean TIDAK bergantung pada cron. Pengiriman didorong dua jalur: saat kampanye dibuat
+(`api/blast.js` memanggil `prosesAntrean` langsung) dan oleh gateway WhatsApp yang menarik
+antrean lewat `api/blast-agen.js`. Satu-satunya cron di `vercel.json` adalah `/api/backup`
+(cadangan harian). Pemroses `api/cron/blast-antrean.js` ada dan dilindungi `CRON_SECRET`,
+tetapi tidak dijadwalkan: paket **Hobby** membatasi cron 1 kali sehari, jadi cron tidak bisa
+menjadi tulang punggung antrean. Akibatnya kalau gateway mati, pesan menunggu di antrean
+(tidak hilang) sampai gateway hidup lagi atau kampanye berikutnya dibuat. Kalau ingin sapuan
+cadangan sehari sekali, tambahkan entri `crons` untuk `/api/cron/blast-antrean` di `vercel.json`;
+kalau nanti pindah ke Pro, jadwal bisa dibuat tiap menit (`* * * * *`).
