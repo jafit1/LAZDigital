@@ -6438,3 +6438,8 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
    ============================================================ */
 tr.tbl-lagi td{ text-align:center; padding:14px 12px; background:var(--surface2); }
 .tbl-lagi-info{ margin-right:12px; color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; }
+
+/* Tombol bawaan peramban TIDAK mewarisi huruf (memakai Arial/sistem), jadi menu kiri dan tombol Keluar
+   tampil dengan huruf lain dari judul "Selamat sore, Sobat" di sebelahnya. Satu aturan umum, bukan per kelas. */
+button,select{font-family:inherit}
+.tn-item,.tn-icon{font-family:var(--sans)}

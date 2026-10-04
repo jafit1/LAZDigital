@@ -242,7 +242,9 @@ const BATAS = {
       await p.addInitScript(() => {
         try { localStorage.setItem('laz_token', 'uji'); localStorage.setItem('laz_theme', 'light'); } catch (_) {}
       });
-      await p.goto(A + hal.url);
+      /* domcontentloaded, bukan load: load menunggu Google Fonts dari internet. Di komputer yang sedang sibuk
+         (tiga peramban sekaligus) itu melewati 30 detik dan uji gagal padahal halamannya benar. */
+      await p.goto(A + hal.url, { waitUntil: 'domcontentloaded' });
       await p.waitForSelector(hal.siap, { timeout: 15000 });
       await p.waitForTimeout(450);
 
@@ -333,7 +335,7 @@ const BATAS = {
     await p.addInitScript(() => {
       try { localStorage.setItem('laz_token', 'uji'); localStorage.setItem('laz_theme', 'light'); } catch (_) {}
     });
-    await p.goto(A + '/fund.html');
+    await p.goto(A + '/fund.html', { waitUntil: 'domcontentloaded' });
     await p.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
     await p.waitForTimeout(500);
     const s = await p.evaluate(() => {
@@ -360,7 +362,7 @@ const BATAS = {
     await p.addInitScript(() => {
       try { localStorage.setItem('laz_token', 'uji'); localStorage.setItem('laz_theme', 'light'); } catch (_) {}
     });
-    await p.goto(A + '/fund.html');
+    await p.goto(A + '/fund.html', { waitUntil: 'domcontentloaded' });
     await p.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
     await p.waitForTimeout(400);
     const s = await p.evaluate(() => ({

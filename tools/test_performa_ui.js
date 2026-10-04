@@ -155,6 +155,8 @@ const server = http.createServer(async (req, res) => {
     cek('index.html: pustaka Excel dari salinan sendiri, async', /<script[^>]*src="\/js\/vendor\/xlsx\.full\.min\.js"[^>]*async/i.test(html));
     cek('index.html: stylesheet Google Fonts tidak menahan gambar pertama', /fonts\.googleapis\.com[^>]*media="print"[^>]*onload/i.test(html));
     cek('index.html: layar ditahan sampai huruf siap (tanpa berganti huruf di depan mata), dengan batas waktu', /tunggu-huruf/.test(html) && /setTimeout\(l,1500\)/.test(html) && /__hurufSiap/.test(html));
+    const css = fs.readFileSync(path.join(PUBLIK, 'styles.css'), 'utf8');
+    cek('styles.css: tombol (menu kiri, Keluar) mewarisi huruf aplikasi, bukan Arial bawaan peramban', /(^|\n)button,select\{font-family:inherit\}/.test(css) && /\.tn-item,\.tn-icon\{font-family:var\(--sans\)\}/.test(css));
     await ctx.close();
   }
 

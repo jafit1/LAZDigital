@@ -276,7 +276,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     if (m.type() === 'error' && !/favicon|net::ERR|Failed to load resource|fonts\.googleapis/i.test(m.text())) galat.push('console: ' + m.text());
   });
 
-  await p.goto(A + '/blast.html');
+  await p.goto(A + '/blast.html', { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('#appView:not(.hidden)', { timeout: 15000 });
 
   /* Pindah halaman lalu tunggu sampai halamannya selesai digambar
@@ -857,7 +857,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     await new Promise((r) => setTimeout(r, 1500));
     try { await route.continue(); } catch (_) { /* halaman sudah pindah */ }
   });
-  await p.goto(A + '/blast.html');
+  await p.goto(A + '/blast.html', { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('#boot', { state: 'visible', timeout: 5000 });
 
   /* Peramban mengembalikan dua bentuk: "rgb(247, 244, 242)" dengan angka
@@ -934,7 +934,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
   console.log('\n=== H. WEBHOOK & AUDIT HANYA UNTUK SUPERADMIN ===');
   await p.unroute('**/api/blast').catch(() => {});
   await p.evaluate(() => document.documentElement.removeAttribute('data-theme'));
-  await p.goto(A + '/blast.html');
+  await p.goto(A + '/blast.html', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
 
   const menuSuper = await p.evaluate(() =>
@@ -947,7 +947,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tindakan: '__peran', data: { peran: 'admin' } }),
   }));
-  await p.goto(A + '/blast.html');
+  await p.goto(A + '/blast.html', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1200);
 
   const menuAdmin = await p.evaluate(() =>
@@ -987,7 +987,7 @@ const HALAMAN = ['dasbor', 'perangkat', 'kirim', 'percakapan', 'massal', 'antrea
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tindakan: '__peran', data: { peran: 'superadmin' } }),
   }));
-  await p.goto(A + '/blast.html');
+  await p.goto(A + '/blast.html', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(1000);
 
   console.log('\n=== H2. HAPUS DI WEBHOOK DAN AUDIT ===');
