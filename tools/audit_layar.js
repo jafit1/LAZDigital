@@ -7,7 +7,7 @@ const HAL=['dashboard','penghimpunan','pentasyarufan','saldo','kll','donatur','l
 (async()=>{
  const srv=spawn(process.execPath,['server_uji.js'],{env:Object.assign({},process.env,{PORT:String(PORT),DBFILE:'db-kll2-uji.json',SETUP_ADMIN_PASSWORD:'uji12345'}),stdio:'ignore'});
  await new Promise(r=>setTimeout(r,2500));
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+ const b=await chromium.launch(require('./_luncurkan.js')({executablePath:'/opt/pw-browsers/chromium'}));
  const p=await b.newPage({viewport:{width:1440,height:900}});
  const A='http://localhost:'+PORT;
  await p.goto(A+'/index.html'); await p.waitForSelector('#loginView:not(.hidden)');

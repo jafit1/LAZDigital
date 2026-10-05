@@ -14,7 +14,7 @@ const cek=(n,c,i)=>{if(c){ok++;console.log('  OK   |',n);}else{g++;console.log('
  process.on('exit',()=>{try{srv.kill();}catch(e){}});
  await new Promise(r=>setTimeout(r,2500));
  const A='http://localhost:'+PORT;
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+ const b=await chromium.launch(require('./_luncurkan.js')({executablePath:'/opt/pw-browsers/chromium'}));
 
  const errs=[];
  const ctx=await b.newContext({viewport:{width:1280,height:800}});

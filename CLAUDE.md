@@ -392,6 +392,7 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   menunggu font dan skrip pihak ketiga). Font Google tidak memblokir render;
   xlsx dilayani lokal (`/js/vendor/xlsx.full.min.js`, 0.18.5, `async`) dan
   semua jalur yang memakainya lewat `siapXLSX()`.
+- **Tombol tema satu tempat** (4 Oktober 2026, `src/public/js/lz-tema.js`): halaman modul (Surat, AI, Broadcast, Fundraising, Media) memuatnya sebelum skrip halaman. Klik pada `.kepala-tema` ditangkap di `document` (tahap tangkap) dan `onclick` lama tidak jalan lagi. Ikon satu SVG yang berubah bentuk lewat CSS `html[data-theme]`, menunjukkan tema TUJUAN. Peralihan memakai lingkaran yang melebar dari tombol (pola circular reveal ringan): `#lz-tema-dasar` menahan latar lama, `#lz-tema-lingkar` melukis latar baru (warna dasar body + gradien `body::before` hasil `getComputedStyle`) dan yang dianimasikan adalah `clip-path: circle()`. Jangan diganti `transform: scale`: gambar gradiennya ikut mengecil jadi persegi di dalam lingkaran. Isi halaman berganti warna lewat `html.lz-tema-halus` (transisi 0,5 detik). Jangan memberi `padding` atau `justify-content` lewat `.tn-icon` ke tombol ini, itu yang dulu membuat ikon bergeser.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
 
@@ -445,6 +446,8 @@ bersamaan terukur 78 ms lawan batas 45 ms (sendirian 15,8 ms). Uji baru yang
 menunggu dengan jeda tetap (`waitForTimeout(900)`) cenderung gagal palsu saat
 bersamaan; tunggu keadaannya, bukan waktunya.
 
+**Uji tampilan tidak boleh menunggu internet** (4 Oktober 2026). Halaman memuat Google Fonts lewat `<link>` biasa, dan stylesheet yang belum selesai menahan skrip sesudahnya. Saat internet penguji lambat, uji Media gagal "waiting until load" 30 detik, uji Surat kehabisan 20 detik, uji Fundraising gagal pada isi, padahal kodenya benar. Semua `chromium.launch` kini lewat `tools/_luncurkan.js`: sekali per rangkaian ia mencoba menjangkau fonts.googleapis.com; kalau lambat atau putus, host huruf dan CDN digagalkan seketika (`--host-resolver-rules`) dan `jalankan-uji.js` mencetak catatannya. Uji baru yang membuka peramban harus memakai pembungkus itu, dan `goto` memakai `waitUntil: 'domcontentloaded'`.
+
 Uji yang butuh Playwright akan melewati dirinya sendiri dengan kode keluar 2
 kalau Playwright belum ada (`npm i -D playwright && npx playwright install
 chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
@@ -474,6 +477,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_performa_ui.js` | daftar panjang tetap lancar (10.000 penghimpunan, 4.000 penyaluran, 3.000 donatur): baris di layar dibatasi, saringan benar, gulir memuat sisanya, ketikan tidak membekukan layar; aplikasi terbuka walau server luar (CDN, Google Fonts) tidak menjawab |
 | `test_daftar_padat.js` | daftar Penghimpunan dan Pentasyarufan dikirim padat (nama kolom sekali, baris sebagai larik): dibongkar di klien sama persis dengan bentuk lama (nilai, urutan, `__row`, nol dan "0" tidak terpangkas), 15.000 baris 7,72 MB jadi 3,73 MB (di bawah batas respons Vercel 4,5 MB), izin tetap diperiksa paling depan, hanya dua fungsi yang dialihkan `api/rpc.js` dan hanya bila diminta, bacaan padat ikut diingat (`BACA`), klien membongkar jawaban larik tanpa mengubahnya |
 | `test_xlsx_lokal.js` | setiap `XLSX.*` yang dipanggil aplikasi ada di salinan lokal 0.18.5 (8 fungsi saat ditulis), baca dan tulis xlsx berfungsi, pemindainya sendiri terbukti menangkap nama yang tidak ada |
+| `test_tema_ui.js` | tombol tema terang/gelap (`js/lz-tema.js`): ikon tepat di tengah tombol (dulu menempel ke kanan, 21 px dari kiri pada tombol 38 px), bentuk bulan/matahari berganti lewat CSS, lingkaran tema baru melebar dari tombol (clip-path), gerak dikurangi berganti langsung, lima halaman modul memuat skripnya |
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |

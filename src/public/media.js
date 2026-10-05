@@ -116,6 +116,8 @@ const galatKotak = (pesan) => `<div class="card" style="border-color:var(--red);
   <strong>Gagal memuat.</strong> <span style="color:var(--text2)">${H(pesan)}</span></div>`;
 
 function svgTema(gelap) {
+  /* Ikon baru satu SVG yang berubah bentuk lewat CSS (js/lz-tema.js); salinan di bawah hanya cadangan. */
+  if (window.LZTema) return window.LZTema.svg();
   const isi = gelap
     ? '<circle cx="12" cy="12" r="4.6" fill="currentColor"/>'
       + '<g stroke="currentColor" stroke-width="2.1" stroke-linecap="round">'

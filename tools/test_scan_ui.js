@@ -13,8 +13,8 @@ const cek=(n,c,i)=>{if(c){ok++;console.log('  OK   |',n);}else{g++;console.log('
  const srv=spawn(process.execPath,['server_uji.js'],{env:Object.assign({},process.env,{PORT:String(PORT),DBFILE:DBF,SETUP_ADMIN_PASSWORD:'uji12345'}),stdio:'ignore'});
  process.on('exit',()=>{try{srv.kill();}catch(e){}});
  await new Promise(r=>setTimeout(r,2500));
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium',
-   args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
+ const b=await chromium.launch(require('./_luncurkan.js')({executablePath:'/opt/pw-browsers/chromium',
+   args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']}));
  const ctx=await b.newContext({viewport:{width:1440,height:960},permissions:['camera']});
  const p=await ctx.newPage();
  const errs=[];

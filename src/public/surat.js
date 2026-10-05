@@ -150,6 +150,8 @@ function cocokCari(r, q) {
 
 // ------------------------------------------------------------ kerangka halaman
 function svgTema(gelap) {
+  /* Ikon baru satu SVG yang berubah bentuk lewat CSS (js/lz-tema.js); salinan di bawah hanya cadangan. */
+  if (window.LZTema) return window.LZTema.svg();
   return gelap
     ? '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.6" fill="currentColor"/><g stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 2.4v2.3"/><path d="M12 19.3v2.3"/><path d="M4.2 4.2l1.7 1.7"/><path d="M18.1 18.1l1.7 1.7"/><path d="M2.4 12h2.3"/><path d="M19.3 12h2.3"/><path d="M4.2 19.8l1.7-1.7"/><path d="M18.1 5.9l1.7-1.7"/></g></svg>'
     : '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><path fill="currentColor" d="M20.4 14.9A8.6 8.6 0 0 1 9.1 3.6 8.7 8.7 0 1 0 20.4 14.9z"/></svg>';

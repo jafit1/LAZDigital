@@ -20,7 +20,7 @@ function muatPlaywright() {
   console.error('\nPlaywright belum terpasang: npm i -D playwright\n'); process.exit(2);
 }
 const { chromium } = muatPlaywright();
-const CHROMIUM = fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {};
+const CHROMIUM = require('./_luncurkan.js')(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
 const AKAR = path.join(__dirname, '..');
 const PUBLIK = path.join(AKAR, 'src', 'public');
 const LUAR = path.join(AKAR, 'potret');

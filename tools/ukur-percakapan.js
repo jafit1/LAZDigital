@@ -48,8 +48,8 @@ catch (_) {
     process.exit(2);
   }
 }
-const CHROMIUM = fs.existsSync('/opt/pw-browsers/chromium')
-  ? { executablePath: '/opt/pw-browsers/chromium' } : {};
+const CHROMIUM = require('./_luncurkan.js')(fs.existsSync('/opt/pw-browsers/chromium')
+  ? { executablePath: '/opt/pw-browsers/chromium' } : {});
 
 let lulus = 0, gagal = 0;
 function cek(nama, benar, info) {

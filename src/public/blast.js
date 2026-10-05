@@ -322,6 +322,8 @@ const rangka = (n = 5) => `<div style="display:grid;gap:8px;padding:4px 0">${Arr
    bentuknya PADAT, jadi kalaupun garisnya tidak tergambar, bulatannya tetap
    terlihat. */
 function svgTema(gelap) {
+  /* Ikon baru satu SVG yang berubah bentuk lewat CSS (js/lz-tema.js); salinan di bawah hanya cadangan. */
+  if (window.LZTema) return window.LZTema.svg();
   var isi = gelap
     ? '<circle cx="12" cy="12" r="4.6" fill="currentColor"/>'
       + '<g stroke="currentColor" stroke-width="2.1" stroke-linecap="round">'

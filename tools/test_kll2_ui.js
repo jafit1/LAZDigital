@@ -59,7 +59,7 @@ async function buatFixture(){
  const srv=spawn(process.execPath,['server_uji.js'],{env:Object.assign({},process.env,{PORT:String(PORT),DBFILE:DBF}),stdio:'ignore'});
  process.on('exit',()=>{try{srv.kill();}catch(e){}});
  await new Promise(r=>setTimeout(r,2500));
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+ const b=await chromium.launch(require('./_luncurkan.js')({executablePath:'/opt/pw-browsers/chromium'}));
  const p=await b.newPage({viewport:{width:1440,height:1000}});
  const errs=[];
  p.on('pageerror',e=>errs.push(String(e.message)));

@@ -26,7 +26,7 @@ function muatPlaywright() {
   return null;
 }
 const pw = muatPlaywright();
-const CHROMIUM = fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {};
+const CHROMIUM = require('./_luncurkan.js')(fs.existsSync('/opt/pw-browsers/chromium') ? { executablePath: '/opt/pw-browsers/chromium' } : {});
 const AKAR = path.join(__dirname, '..');
 const PUBLIK = path.join(AKAR, 'src', 'public');
 const engine = require(path.join(AKAR, 'api', '_engine.js'));

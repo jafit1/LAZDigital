@@ -80,6 +80,7 @@ const DAFTAR = [
   { label: 'Alat ekspor Redis', berkas: 'test_ekspor_redis.js' },
   { label: 'Lambang dan ikon situs', berkas: 'test_ikon.js' },
   { label: 'Bilah menu: logo dan tombol keluar', berkas: 'test_sidebar_ui.js' },
+  { label: 'Tombol tema terang/gelap dan sapuannya', berkas: 'test_tema_ui.js' },
   /* sendiri: mengukur milidetik hitung tata letak, gagal palsu kalau prosesor
      dibagi dengan uji lain (terukur 78 ms lawan batas 45 ms saat bersamaan,
      15,8 ms saat sendirian). Dijalankan paling akhir, tanpa teman. */
@@ -149,6 +150,9 @@ function jalankanSatu(u, opsi) {
       return;
     }
     const folderData = fs.mkdtempSync(path.join(os.tmpdir(), 'laz-uji-data-'));
+    /* Sekali per rangkaian: kalau internet ke Google Fonts lambat atau putus, uji tampilan memutus host luar sendiri
+       (lihat _luncurkan.js) supaya yang diuji kode kita, bukan sambungan penguji. */
+    require('./_luncurkan.js').internetBaik();
     const env = Object.assign({}, process.env, { LAZ_DATA_LOKAL: folderData });
     const anak = spawn(process.execPath, [jalur], { cwd: AKAR, env, detached: process.platform !== 'win32' });
     let keluaran = '';
@@ -216,6 +220,7 @@ async function jalankan(argv) {
 
   console.log('');
   console.log(tebal('UJI SEBELUM DEPLOY') + redup('  ' + daftar.length + ' uji, ' + paralel + ' bersamaan (paling banyak ' + batasPeramban + ' peramban), data palsu'));
+  if (!require('./_luncurkan.js').internetBaik()) console.log(redup('  Internet ke Google Fonts lambat atau putus: huruf dan CDN diputus saat uji tampilan, supaya uji tidak menunggu internet.'));
   console.log('');
 
   const barisGagalDari = (teks) => teks.split(/\r?\n/).filter((b) => /GAGAL|TimeoutError/.test(b) && !/ADA GAGAL/.test(b));

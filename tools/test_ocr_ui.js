@@ -21,7 +21,7 @@ const PNG=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAFklEQVR42
  /* mengatur jawaban AI tiruan untuk permintaan berikutnya */
  const aturAI=(o)=>fetch(A+'/uji/ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
 
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+ const b=await chromium.launch(require('./_luncurkan.js')({executablePath:'/opt/pw-browsers/chromium'}));
  const ctx=await b.newContext({viewport:{width:1440,height:960}});
  const p=await ctx.newPage();
  const errs=[];
