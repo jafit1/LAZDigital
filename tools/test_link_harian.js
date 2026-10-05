@@ -187,6 +187,10 @@ const srv = http.createServer(async (req, res) => {
       cek('setoran KLL/ULL bertanda jenis kantornya, tanpa nama dobel', tanda.length === 2 && tanda.some((x) => x[0] === 'KLL Kota Contoh' && x[1] === 'KLL') && tanda.some((x) => x[0] === 'ULL Masjid Contoh' && x[1] === 'ULL'), tanda);
       cek('hari ini ditulis "hari ini", bukan "hari itu"', /Terhimpun hari ini/i.test(isi), isi.slice(0, 300));
       cek('tidak ada em dash di halaman', !/\u2014/.test(isi));
+      const warna = await page.evaluate(() => { const e = document.querySelector('.lh-utama'), t = document.getElementById('lhTotal');
+        return { bg: getComputedStyle(e).backgroundImage, teks: getComputedStyle(t).color, perangkat: document.documentElement.getAttribute('data-perangkat') }; });
+      cek('blok total memakai gradasi aksen yang sama dengan aplikasi utama, teks putih', /gradient/.test(warna.bg) && warna.teks === 'rgb(255, 255, 255)', warna);
+      cek('perangkat pembuka terbaca (data-perangkat terpasang)', /^(hp|tablet|laptop|desktop)$/.test(warna.perangkat), warna.perangkat);
       const ringkas = await page.evaluate(() => ({ kotak: document.querySelectorAll('.lh-k, .lap-filter label').length,
         totalDiKepala: !!document.querySelector('.lh-head #lhTotal'), kata: document.body.innerText.split(/\s+/).length }));
       cek('sederhana: angka utama di kepala, tanpa deretan kartu angka dan label kotak', ringkas.totalDiKepala && ringkas.kotak === 0, ringkas);

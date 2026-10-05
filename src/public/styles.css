@@ -6494,6 +6494,19 @@ html.lz-tema-halus .lz-tema-ikon{ transition:transform .7s cubic-bezier(.34,1.3,
 html.lz-tema-halus .lz-tema-ikon .t-inti{ transition:transform .6s cubic-bezier(.34,1.3,.5,1) !important; }
 html.lz-tema-halus .lz-tema-ikon .t-potong{ transition:transform .6s cubic-bezier(.45,0,.2,1) !important; }
 html.lz-tema-halus .lz-tema-ikon .t-sinar{ transition:transform .6s cubic-bezier(.34,1.3,.5,1) .06s, opacity .3s ease .06s !important; }
+/* Sapuan View Transitions (js/lz-tema.js, gantiSapu): potret lama diam di bawah, potret baru dibuka lingkaran dari
+   tombol. Animasi bawaan peramban (memudar silang) dimatikan, kalau tidak dua potret bercampur di tengah dan teks
+   terlihat ganda. Selama sapuan, transisi warna milik elemen dimatikan supaya potret baru langsung berwarna akhir
+   (tombol menu punya transisi .16s yang kalau dibiarkan memudar di dalam lingkaran); ikon tema tetap berubah bentuk. */
+html.lz-tema-vt::view-transition-old(root),
+html.lz-tema-vt::view-transition-new(root){ animation:none; mix-blend-mode:normal; }
+html.lz-tema-vt::view-transition-old(root){ z-index:1; }
+html.lz-tema-vt::view-transition-new(root){ z-index:2; }
+html.lz-tema-vt *, html.lz-tema-vt *::before, html.lz-tema-vt *::after{ transition:none !important; }
+html.lz-tema-vt .lz-tema-ikon{ transition:transform .7s cubic-bezier(.34,1.3,.5,1) !important; }
+html.lz-tema-vt .lz-tema-ikon .t-inti{ transition:transform .6s cubic-bezier(.34,1.3,.5,1) !important; }
+html.lz-tema-vt .lz-tema-ikon .t-potong{ transition:transform .6s cubic-bezier(.45,0,.2,1) !important; }
+html.lz-tema-vt .lz-tema-ikon .t-sinar{ transition:transform .6s cubic-bezier(.34,1.3,.5,1) .06s, opacity .3s ease .06s !important; }
 @media (prefers-reduced-motion: reduce){
   .lz-tema-ikon, .lz-tema-ikon *{ transition:none !important; }
 }
@@ -6534,3 +6547,47 @@ button{ color:var(--text); }
 .kw-prev-ket{font-size:12px;color:var(--muted);line-height:1.5}
 .kw-pop textarea{font-size:13px;line-height:1.5}
 td.kw-wa{white-space:nowrap}
+
+/* ================================================================
+   LOGO SVG DI BILAH MENU (js/lz-logo.js)
+   ================================================================
+   Pemilik, 5 Oktober 2026: pojok kiri atas setiap menu dan modul memakai logo SVG Lazismu Bantul, bergerak hanya saat
+   pertama kali menu itu dibuka. Logo ini bukan <img>, jadi lebarnya tidak lahir dari gambarnya: rasio 3840:2574
+   (1,4918) ditulis sendiri. Pemilih memakai #brandBox supaya menang atas tumpukan aturan .logo-img di bagian 31 dan 55
+   (sampai enam kelas, sebagian !important) tanpa ikut menambah !important tandingan per keadaan bilah.
+   Geser ke tengah panel dan pengecilan saat ciut tetap dari bagian 55 (transform + --u-logo-x di js/lz-sisi.js).
+   Tinggi 48 px: pada 34 px seperti logo unggahan lama, tulisan "bantul" tinggal 5 px dan tidak terbaca. */
+#brandBox .lz-logo-svg{
+  --lz-logo-t:48px; --lzm-ink:var(--text); --lzm-orange:#F59A1F;
+  display:block !important; position:relative; flex:none !important; line-height:0;
+  height:var(--lz-logo-t) !important; max-height:none !important;
+  width:calc(var(--lz-logo-t) * 1.4918) !important; max-width:none !important;
+  color:var(--lzm-ink);
+}
+#brandBox .lz-logo-svg svg{ display:block; width:100%; height:100%; overflow:visible; }
+#brandBox .lz-logo-svg .lzm-main path{ fill:currentColor; fill-rule:evenodd; }
+#brandBox .lz-logo-svg .lzm-main .w{ color:var(--lzm-ink); }
+#brandBox .lz-logo-svg .lzm-main .o{ color:var(--lzm-orange); }
+#brandBox .lz-logo-svg .lzm-zoom{ transform-box:view-box; transform-origin:50% 50%; }
+#brandBox .lz-logo-svg .lzm-glow{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:.45; }
+#brandBox .lz-logo-svg .lzm-glow-isi{ fill:var(--lzm-orange); fill-rule:evenodd; }
+/* Cahaya hanya di tema gelap: di latar terang ia cuma membuat tulisan tampak kotor (saran di berkas contoh pemilik). */
+html:not([data-theme="dark"]) #brandBox .lz-logo-svg .lzm-glow{ display:none; }
+/* Sebelum diputuskan diputar atau diam, logonya disembunyikan: kalau tidak, logo utuh sempat tampil lalu hilang dan
+   digambar ulang dari nol. */
+#brandBox .lz-logo-svg.lz-logo-tunggu > svg{ opacity:0; }
+@media (max-width:1023px){
+  #brandBox .lz-logo-svg{ --lz-logo-t:38px; }
+}
+/* Bilah ciut: 78% (bukan 56% milik logo unggahan), geserannya diukur js/lz-logo.js (--lz-logo-x-ciut). Pemilih #brandBox
+   juga mengalahkan keadaan "kursor menyentuh bilah" milik bagian 55, jadi keadaan itu ditulis ulang di sini; di
+   perangkat sentuh bilah tidak melebar saat disentuh, jadi logonya tetap versi ciut. */
+@media (min-width:1024px){
+  .app.collapsed #brandBox .lz-logo-svg{
+    transform:translateX(var(--lz-logo-x-ciut, var(--u-logo-x-ciut, 0px))) scale(var(--lz-logo-ciut, .56)) !important;
+  }
+  .app.collapsed .topnav:hover #brandBox .lz-logo-svg{ transform:translateX(var(--u-logo-x, 0px)) scale(1) !important; }
+  html.plat-sentuh .app.collapsed .topnav:hover #brandBox .lz-logo-svg{
+    transform:translateX(var(--lz-logo-x-ciut, var(--u-logo-x-ciut, 0px))) scale(var(--lz-logo-ciut, .56)) !important;
+  }
+}

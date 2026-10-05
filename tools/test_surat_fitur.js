@@ -223,6 +223,7 @@ const jpg = (n) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.
   cek('lacak tanpa masuk, huruf kecil tetap cocok', r.ok && r.pengajuan.status === 'dicairkan' && r.pengajuan.langkah.filter((x) => x.selesai).length === 5, r);
   const isi = JSON.stringify(r);
   cek('lacak tidak membawa catatan, asesmen, nominal, atau nama petugas', !/Rumah sederhana|Petugas Survei|Budi Program|Rina Sekretariat|2000000|Pemohon Contoh/.test(isi), isi.slice(0, 300));
+  cek('lacak membawa nama dan logo lembaga untuk kepala halaman, tanpa alamat dan telepon', r.lembaga && 'namaLembaga' in r.lembaga && 'logoData' in r.lembaga && !('alamat' in r.lembaga) && !('telepon' in r.lembaga), r.lembaga);
   r = await pintu('surat.lacak', { nomor: sp.nomor, kode: sp.kodeLacak }, '', '10.9.9.1');
   cek('pengajuan ditolak terbaca ditolak, tanpa alasan internalnya', r.ok && r.pengajuan.ditolak && !/Di luar program/.test(JSON.stringify(r)), r);
   r = await pintu('surat.lacak', { nomor: sm2.nomor, kode: sm2.kodeLacak }, '', '10.9.9.2');

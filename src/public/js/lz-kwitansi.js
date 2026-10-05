@@ -395,6 +395,7 @@
     + 'Yth. Bapak/Ibu {nama},\n\n'
     + 'Jazakumullahu khairan katsiran atas {jenis} sebesar Rp {jumlah} yang telah Bapak/Ibu tunaikan melalui {lembaga}. Semoga Allah menerima amal kebaikan Bapak/Ibu, membersihkan dan menyucikan harta, serta melipatgandakan keberkahannya.\n\n'
     + 'Berikut kami lampirkan kwitansi nomor {nomor} sebagai bukti penerimaan.\n\n'
+    + 'Catatan penghimpunan kami terbuka untuk umum dan diperbarui langsung: {link}\n\n'
     + 'Wassalamu\'alaikum warahmatullahi wabarakatuh.\n{lembaga}';
   var SK_BAWAAN = 'Lembaga Amil Zakat Nasional\nSK. Menteri Agama RI\nNo. 463 Tahun 2024\nTanggal 26 Juli 2024';
   function pesan(data, setelan) {
@@ -410,7 +411,10 @@
       tanggal: teksAman(d.tanggal, 10)
     };
     var t = String(s.kwPesan || '').trim() || TEMPLATE_BAWAAN;
-    return t.replace(/\{(nama|jumlah|jenis|nomor|lembaga|tanggal)\}/g, function (_, k) { return isi[k]; });
+    isi.link = teksAman(s.__linkDonatur, 300);
+    /* Tanpa link aktif, kalimat yang memuat {link} dibuang seluruhnya (beserta baris kosong sesudahnya). */
+    if (!isi.link) t = t.replace(/(^|\n)[^\n]*\{link\}[^\n]*\n*/g, '$1').replace(/\n{3,}/g, '\n\n').trim();
+    return t.replace(/\{(nama|jumlah|jenis|nomor|lembaga|tanggal|link)\}/g, function (_, k) { return isi[k]; });
   }
 
   window.LZKwitansi = { gambar: gambar, png: png, pesan: pesan, baca: baca, rp: rpFmt, templateBawaan: TEMPLATE_BAWAAN, skBawaan: SK_BAWAAN };

@@ -72,34 +72,38 @@ const DASBOR = '<!doctype html><link rel=stylesheet href="/styles.css"><script>d
     await p.click('#t');
     await p.waitForTimeout(250);
     const mid = await p.evaluate(() => {
-      const l = document.getElementById('lz-tema-lingkar');
-      const an = l ? l.getAnimations().map((a) => (a.effect.getKeyframes()[0] || {}).clipPath || '') : [];
-      return { lingkar: !!l, dasar: !!document.getElementById('lz-tema-dasar'), kelas: document.documentElement.className, an };
+      const vt = document.getAnimations().filter((a) => a.effect && a.effect.pseudoElement === '::view-transition-new(root)');
+      const an = vt.map((a) => (a.effect.getKeyframes()[0] || {}).clipPath || '');
+      return { vt: vt.length, an, lingkar: !!document.getElementById('lz-tema-lingkar') };
     });
-    cek('Klik memunculkan lingkaran tema baru dan latar lama', mid.lingkar && mid.dasar, mid);
-    cek('Lingkaran tumbuh lewat clip-path circle', mid.an.some((k) => /^circle\(/.test(k)), mid);
-    cek('Selama animasi isi halaman berganti warna pelan (lz-tema-halus)', /lz-tema-halus/.test(mid.kelas), mid);
-    /* Tengah animasi, dihitung dari tangkapan layar: dekat tombol (kanan atas) sudah gelap, sudut kiri bawah masih terang. */
+    /* Seluruh halaman (latar DAN isi) disapu lingkaran lewat View Transitions. Dulu hanya latarnya yang disapu; kartu,
+       teks, dan bilah menu berganti warna sendiri dalam 0,5 detik di mana pun letaknya, jadi bagian yang jauh dari
+       tombol sudah gelap sebelum lingkarannya sampai. */
+    cek('Klik menyapu seluruh halaman dengan lingkaran (View Transitions, clip-path circle)', mid.vt === 1 && mid.an.some((k) => /^circle\(/.test(k)) && !mid.lingkar, mid);
+    /* Tengah animasi, dihitung dari tangkapan layar: dekat tombol (kanan atas) sudah gelap, sudut kiri bawah masih terang,
+       DAN kartu di kiri bawah (belum tersentuh lingkaran) masih berwarna lama. */
     await p.waitForTimeout(120);
+    const kartu = await p.evaluate(() => { const r = document.querySelector('.card').getBoundingClientRect(); return { x: Math.round(r.left + 8), y: Math.round(r.bottom - 8) }; });
     const b64 = (await p.screenshot()).toString('base64');
-    const px = await p.evaluate((d) => new Promise((res) => {
+    const px = await p.evaluate(([d, k]) => new Promise((res) => {
       const im = new Image();
       im.onload = () => {
         const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
         const g = c.getContext('2d'); g.drawImage(im, 0, 0);
         const t = (x, y) => { const q = g.getImageData(x, y, 1, 1).data; return q[0] + q[1] + q[2]; };
-        res({ kananAtas: t(im.width - 4, 4), kiriBawah: t(4, im.height - 4) });
+        res({ kananAtas: t(im.width - 4, 4), kiriBawah: t(4, im.height - 4), kartu: t(k.x, k.y) });
       };
       im.src = 'data:image/png;base64,' + d;
-    }), b64);
+    }), [b64, kartu]);
     cek('Tengah animasi: kanan atas (tombol) gelap, kiri bawah masih terang', px.kananAtas < 250 && px.kiriBawah > 600, px);
+    cek('Tengah animasi: kartu yang belum tersentuh lingkaran masih berwarna lama (tidak mendahului)', px.kartu > 600, px);
     await p.waitForTimeout(1100);
     const t2 = await ukur(p);
     cek('Gelap: tema berganti dan tersimpan', t2.tema === 'dark' && (await p.evaluate(() => localStorage.getItem('laz_theme'))) === 'dark', t2);
     cek('Gelap: ikon tepat di tengah tombol', rata(t2), t2);
     cek('Gelap: matahari (sinar tampak)', t2.sinar === 1, t2);
     cek('Judul tombol ikut berganti', (await p.evaluate(() => document.getElementById('t').title)) === 'Ganti ke tema terang');
-    cek('Setelah selesai lingkaran, latar lama, dan kelas bantu dilepas', await p.evaluate(() => !document.getElementById('lz-tema-lingkar') && !document.getElementById('lz-tema-dasar') && !document.documentElement.classList.contains('lz-tema-halus')));
+    cek('Setelah selesai tidak ada sisa animasi atau kelas bantu', await p.evaluate(() => !document.getElementById('lz-tema-lingkar') && !document.getElementById('lz-tema-dasar') && !document.documentElement.classList.contains('lz-tema-halus') && !document.documentElement.classList.contains('lz-tema-vt')));
     await p.click('#t');
     await p.waitForTimeout(1300);
     const t3 = await ukur(p);
@@ -116,6 +120,22 @@ const DASBOR = '<!doctype html><link rel=stylesheet href="/styles.css"><script>d
     await p.click('#t');
     await p.waitForTimeout(1300);
     cek('Tiga klik beruntun: berakhir gelap', (await ukur(p)).tema === 'dark');
+    await ctx.close();
+  }
+  /* Peramban tanpa View Transitions (Safari < 18, Firefox lama): cara lama tetap jalan dan bersih sesudahnya. */
+  {
+    const ctx = await b.newContext({ viewport: { width: 1000, height: 500 } });
+    const p = await ctx.newPage();
+    await p.route(/^https?:\/\/(?!127)/, (r) => r.abort());
+    await p.addInitScript(() => { try { delete Document.prototype.startViewTransition; } catch (_) {} });
+    await p.goto(A + '/uji.html', { waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('#t');
+    await p.click('#t');
+    await p.waitForTimeout(200);
+    const m = await p.evaluate(() => ({ lingkar: !!document.getElementById('lz-tema-lingkar'), dasar: !!document.getElementById('lz-tema-dasar'), vt: typeof document.startViewTransition }));
+    cek('Tanpa View Transitions: lingkaran latar lama tetap dipakai', m.lingkar && m.dasar && m.vt === 'undefined', m);
+    await p.waitForTimeout(1200);
+    cek('Tanpa View Transitions: tema berganti dan elemen bantu dilepas', (await ukur(p)).tema === 'dark' && await p.evaluate(() => !document.getElementById('lz-tema-lingkar') && !document.documentElement.classList.contains('lz-tema-halus')));
     await ctx.close();
   }
   /* Susunan di semua keadaan menu kiri dan lebar layar. Aturan sidebar `.app.collapsed .tn-icon` (padding 0 18px, rata
@@ -273,7 +293,7 @@ const DASBOR = '<!doctype html><link rel=stylesheet href="/styles.css"><script>d
     await pg.close();
   }
   await halamanLuar('Layar login', '/index.html', () => { const v = document.getElementById('loginView'); v.classList.remove('hidden'); document.getElementById('boot')?.remove(); }, '#loginView .lz-tema-pojok');
-  await halamanLuar('Pelacakan', '/lacak.html', null, '.lz-tema-pojok');
+  await halamanLuar('Pelacakan', '/lacak.html', null, '.lk-tema');
   await halamanLuar('Laporan publik', '/public.html', () => {
     const d = document.createElement('div'); d.className = 'pub-head-alat';
     d.innerHTML = '<select class="pub-chip"><option>Mei</option></select><button class="pub-chip pub-tema kepala-tema" type="button">' + LZTema.svg() + '</button>';

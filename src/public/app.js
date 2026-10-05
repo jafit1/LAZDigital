@@ -441,18 +441,31 @@ function applyBranding(){
   var nm=SETTINGS.namaLembaga||'LAZ Digital';
   var b=el('brandBox'),tb=el('tbBrand');
   if(b){
-    /* Satu logo saja. Dulu lencana inisial ikut dipasang sebagai pengganti saat
-       sidebar ciut, dan CSS yang memilih salah satunya — hasilnya saat diciutkan
-       yang terlihat cuma dua huruf, bukan logonya. Sekarang logonya yang
-       dikecilkan (lihat styles.css bagian logo sidebar); inisial hanya dipakai
-       kalau lembaga memang belum mengunggah logo. */
-    var ident = logo
-      ? '<img class="logo-img" src="'+logo+'" alt="'+esc(nm)+'">'
-      : '<span class="logo">'+esc(inisialLembaga(nm))+'</span><span class="brand-name">'+esc(nm)+'</span>';
-    // Logo merangkap tombol buka/tutup menu — tidak ada tombol panel terpisah lagi.
-    b.innerHTML = '<button class="tn-brand-id" type="button" onclick="toggleSidebar()"'
-      + ' title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu">'
-      + ident + '</button>';
+    /* Logo bilah menu = logo SVG Lazismu Bantul dari js/lz-logo.js (pemilik, 5 Oktober 2026), bergerak hanya saat
+       pertama kali sebuah menu dibuka. Kalau sudah terpasang, cukup keterangannya yang diperbarui: menulis ulang
+       innerHTML memutus animasi yang mungkin sedang berjalan, dan applyBranding dipanggil lagi tepat sesudah masuk
+       (bersamaan dengan menu pertama) serta tiap Pengaturan disimpan. Logo unggahan di Pengaturan tetap dipakai
+       kwitansi, kop cetak, dan halaman publik; cabang lama di bawah hanya cadangan kalau lz-logo.js gagal dimuat. */
+    var adaSvg=b.querySelector('.lz-logo-svg');
+    if(window.LZLogo&&adaSvg){adaSvg.setAttribute('aria-label',nm);}
+    else if(window.LZLogo){
+      b.innerHTML='<button class="tn-brand-id" type="button" onclick="toggleSidebar()"'
+        + ' title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu">'
+        + LZLogo.html(nm) + '</button>';
+    } else {
+      /* Satu logo saja. Dulu lencana inisial ikut dipasang sebagai pengganti saat
+         sidebar ciut, dan CSS yang memilih salah satunya — hasilnya saat diciutkan
+         yang terlihat cuma dua huruf, bukan logonya. Sekarang logonya yang
+         dikecilkan (lihat styles.css bagian logo sidebar); inisial hanya dipakai
+         kalau lembaga memang belum mengunggah logo. */
+      var ident = logo
+        ? '<img class="logo-img" src="'+logo+'" alt="'+esc(nm)+'">'
+        : '<span class="logo">'+esc(inisialLembaga(nm))+'</span><span class="brand-name">'+esc(nm)+'</span>';
+      // Logo merangkap tombol buka/tutup menu — tidak ada tombol panel terpisah lagi.
+      b.innerHTML = '<button class="tn-brand-id" type="button" onclick="toggleSidebar()"'
+        + ' title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu">'
+        + ident + '</button>';
+    }
   }
   if(tb) tb.innerHTML = logo ? '<img src="'+logo+'" alt="logo">' : esc(nm);
 }
@@ -1113,7 +1126,7 @@ function kwBukaCetak(d,s){
 function kwPopup(id,opsi){
   opsi=opsi||{};
   gas('apiGetKwitansi')(TOKEN,id).then(function(res){
-    var d=res.data,s=res.settings,sudah=KWWA[id];
+    var d=res.data,s=Object.assign({},res.settings,{__linkDonatur:res.linkDonatur?location.origin+res.linkDonatur:''}),sudah=KWWA[id];
     if(!d){toast('Data penghimpunan tidak ditemukan',true);return;}
     if(!kwBisaKirim()){kwBukaCetak(d,s);return;}
     var st=sudah?({terkirim:'Sudah terkirim ke',menunggu:'Menunggu antrean ke',gagal:'Gagal terkirim ke'}[sudah.status]||'Dikirim ke'):'';
@@ -2307,7 +2320,7 @@ function lembagaHTML(s){
     + fld(4,'Email','<input id="s_email" value="' + esc(s.email||'') + '">')
     + fld(4,'Website','<input id="s_website" value="' + esc(s.website||'') + '">')
     + fld(6,'Legalitas di kwitansi (satu baris tiap teks)','<textarea id="s_kwSk" rows="4">' + esc(s.kwSk||LZKwitansi.skBawaan) + '</textarea>')
-    + fld(6,'Ucapan terima kasih kwitansi (WhatsApp)','<textarea id="s_kwPesan" rows="4">' + esc(s.kwPesan||LZKwitansi.templateBawaan) + '</textarea><div class="fld-ket">Isi otomatis: {nama} {jumlah} {jenis} {nomor} {lembaga}</div>')
+    + fld(6,'Ucapan terima kasih kwitansi (WhatsApp)','<textarea id="s_kwPesan" rows="4">' + esc(s.kwPesan||LZKwitansi.templateBawaan) + '</textarea><div class="fld-ket">Isi otomatis: {nama} {jumlah} {jenis} {nomor} {lembaga} {link}</div>')
     + '</div>';
 
   var salam = '<div class="fgrid">'

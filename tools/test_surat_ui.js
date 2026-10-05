@@ -311,6 +311,16 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     cek('halaman lacak tidak menampilkan nama pemohon, petugas, atau catatan internal', !/Pemohon Contoh|Berkas lengkap|Super/i.test(lk.teks), lk.teks.slice(0, 200));
     await lacak.setViewportSize({ width: 390, height: 800 });
     cek('lacak di HP tanpa geser ke samping', await lacak.evaluate(() => document.documentElement.scrollWidth <= 391));
+    const oto = await ctx.newPage();
+    await oto.goto(A + '/lacak.html?n=' + encodeURIComponent(nomorP) + '&k=' + encodeURIComponent(kode));
+    await oto.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
+    const ot = await oto.evaluate(() => ({ form: getComputedStyle(document.getElementById('lkForm')).display, lain: !document.getElementById('lkLain').classList.contains('hidden'),
+      nama: document.getElementById('lkLembaga').textContent.trim(), logo: !!document.querySelector('#lkLogo img'), kartu: !!document.getElementById('lkKartu') }));
+    cek('tautan bernomor dan berkode: isian disembunyikan dan hasil langsung tampil', ot.form === 'none' && ot.kartu && ot.lain, ot);
+    cek('kepala memuat logo dan nama lembaga', ot.logo && ot.nama.length > 3, ot);
+    await oto.click('#lkLain');
+    cek('"Cari pengajuan lain" menampilkan isian lagi', (await oto.evaluate(() => getComputedStyle(document.getElementById('lkForm')).display)) !== 'none');
+    await oto.close();
     await lacak.close();
 
     console.log('\n=== F2. TAUTAN PUBLIK LANGSUNG TERBUKA ===');

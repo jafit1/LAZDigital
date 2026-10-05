@@ -118,10 +118,14 @@ const server = http.createServer(async (req, res) => {
     const tpl = await p.evaluate(() => ({
       bawaan: LZKwitansi.templateBawaan,
       kustom: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 150000, subJenis: 'Infak Umum', noKwitansi: 'KW/1', tanggal: '2026-10-05' }, { namaLembaga: 'Lazismu Bantul', kwPesan: 'Halo {nama}, {jenis} Rp {jumlah} no {nomor} ({tanggal}) dari {lembaga}.' }),
-      kosong: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 1000, noKwitansi: 'KW/2' }, { namaLembaga: 'Lazismu Bantul', kwPesan: '   ' })
+      kosong: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 1000, noKwitansi: 'KW/2' }, { namaLembaga: 'Lazismu Bantul', kwPesan: '   ' }),
+      denganLink: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 1000, noKwitansi: 'KW/3' }, { namaLembaga: 'Lazismu Bantul', __linkDonatur: 'https://x.test/harian.html?t=abc' }),
+      tanpaLink: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 1000, noKwitansi: 'KW/3' }, { namaLembaga: 'Lazismu Bantul' })
     }));
     cek('template ucapan dari Pengaturan memakai isian {nama} {jenis} {jumlah} {nomor} {tanggal} {lembaga}', tpl.kustom === 'Halo Budi, infak umum Rp 150.000 no KW/1 (2026-10-05) dari Lazismu Bantul.', tpl.kustom);
     cek('template kosong memakai ucapan bawaan', /Jazakumullah/.test(tpl.kosong) && /KW\/2/.test(tpl.kosong) && !/\{nama\}/.test(tpl.kosong), tpl.kosong.slice(0, 120));
+    cek('ucapan memuat link donatur bila aktif', tpl.denganLink.includes('https://x.test/harian.html?t=abc'), tpl.denganLink.slice(-160));
+    cek('baris link dibuang bila link belum aktif', !/\{link\}|harian\.html/.test(tpl.tanpaLink) && /KW\/3/.test(tpl.tanpaLink), tpl.tanpaLink.slice(-160));
     cek('ucapan bawaan menyediakan isian untuk Pengaturan', /\{nama\}/.test(tpl.bawaan) && /\{lembaga\}/.test(tpl.bawaan));
     const dim = await p.evaluate(() => { const i = document.getElementById('kwPrev'); return { w: i.naturalWidth, h: i.naturalHeight }; });
     cek('pratinjau kwitansi berupa PNG 1600 x 1238', dim.w === 1600 && dim.h === 1238, dim);

@@ -26,6 +26,7 @@
     document.documentElement.setAttribute('data-theme', localStorage.getItem('laz_theme') || 'light');
   </script>
   <script src="/js/lz-perangkat.js"></script>
+  <script src="/js/lz-logo.js" defer></script>
   <script src="/js/lz-sisi.js" defer></script>
 </head>
 <body>
@@ -51,7 +52,7 @@
     <header class="topnav" id="topnav">
       <div class="tn-brand" id="brandBox">
         <button class="tn-brand-id" type="button" onclick="toggleSidebar()" title="Buka / tutup menu" aria-label="Buka atau tutup menu">
-          <span class="logo">LZ</span>
+          <span class="logo-img lz-logo-svg lz-logo-tunggu" data-lz-logo role="img" aria-label="Lazismu Bantul"></span>
         </button>
       </div>
       <nav class="tn-nav" id="nav"></nav>

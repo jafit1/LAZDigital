@@ -392,8 +392,19 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   menunggu font dan skrip pihak ketiga). Font Google tidak memblokir render;
   xlsx dilayani lokal (`/js/vendor/xlsx.full.min.js`, 0.18.5, `async`) dan
   semua jalur yang memakainya lewat `siapXLSX()`.
-- **Tombol tema satu tempat** (4 Oktober 2026, `src/public/js/lz-tema.js`): halaman modul (Surat, AI, Broadcast, Fundraising, Media) memuatnya sebelum skrip halaman. Klik pada `.kepala-tema` ditangkap di `document` (tahap tangkap) dan `onclick` lama tidak jalan lagi. Ikon satu SVG yang berubah bentuk lewat CSS `html[data-theme]`, menunjukkan tema TUJUAN. Peralihan memakai lingkaran yang melebar dari tombol (pola circular reveal ringan): `#lz-tema-dasar` menahan latar lama, `#lz-tema-lingkar` melukis latar baru (warna dasar body + gradien `body::before` hasil `getComputedStyle`) dan yang dianimasikan adalah `clip-path: circle()`. Jangan diganti `transform: scale`: gambar gradiennya ikut mengecil jadi persegi di dalam lingkaran. Isi halaman berganti warna lewat `html.lz-tema-halus` (transisi 0,5 detik). Semua halaman utama lain (Penghimpunan, Pentasyarufan, Saldo, Saldo KLL, Donatur, Mutasi, Laporan, Rekening, Layanan, User, Pengaturan, Log) mendapat tombol lewat `pasangTemaKepala()` di akhir `app.js` (diapit penanda `>>> pasangTemaKepala`, dibaca `test_tema_ui.js`): pengamat pada `#content` memindahkan anak kepala selain judul ke `.page-head-aksi` lalu menambah tombol, jadi pembangun HTML tiap tampilan tidak perlu diubah. Dashboard utama juga punya tombolnya (`dh-quick-btn dh-ikon kepala-tema` di `app.js`, baris `temaBtn`; `index.html` memuat `lz-tema.js` sebelum `app.js`). Jangan memberi `padding` atau `justify-content` lewat `.tn-icon` ke tombol ini, itu yang dulu membuat ikon bergeser: aturan sidebar `.app.collapsed .tn-icon` (padding 0 18px, rata kiri, `!important`) mengalahkan `.tn-icon.kepala-tema` saat menu kiri ciut (terukur kiri 21 px, kanan -3 px), jadi aturan tombol ini mengulang selektor `.app`, `.app.collapsed`, dan `.app.collapsed .topnav:hover`. Dijaga `test_tema_ui.js` (menu terbuka, ciut, dasbor, 4 lebar, 2 tema) dan `test_skala_ui.js` (halaman asli). **Warna teks di tema gelap** (5 Oktober 2026): `<button>` tanpa `color` memakai hitam bawaan peramban (nama pengguna di bilah kiri modul tidak terbaca). Ada aturan global `button{color:var(--text)}` di akhir `styles.css`; jangan menulis warna teks tetap (`#111`, `#333`) di CSS atau style inline layar, pakai `var(--text)`/`var(--muted)`. Dokumen cetak (`docShell`, kwitansi) memang berlatar putih sendiri. Dijaga `test_kontras_gelap.js`.
+- **Tombol tema satu tempat** (4 Oktober 2026, `src/public/js/lz-tema.js`): halaman modul (Surat, AI, Broadcast, Fundraising, Media) memuatnya sebelum skrip halaman. Klik pada `.kepala-tema` ditangkap di `document` (tahap tangkap) dan `onclick` lama tidak jalan lagi. Ikon satu SVG yang berubah bentuk lewat CSS `html[data-theme]`, menunjukkan tema TUJUAN. Peralihan memakai lingkaran yang melebar dari tombol. Sejak 5 Oktober 2026 lewat View Transitions (`gantiSapu`): peramban memotret halaman lama, memasang tema baru, lalu `clip-path: circle()` pada `::view-transition-new(root)` membuka potret halaman BARU utuh, jadi latar dan isi berganti tepat saat lingkaran menyentuhnya (keluhan pemilik: "ada bagian yang berubah warnanya dulu sebelum animasi menyentuhnya"; terukur kartu kiri bawah sudah gelap pada 370 ms padahal latarnya masih terang). Selama sapuan `html.lz-tema-vt` mematikan transisi elemen (kecuali ikon tema). Klik beruntun memakai tema TUJUAN (`tujuan`), karena pembaruan DOM View Transitions berjalan sesudah potret diambil. Peramban tanpa View Transitions memakai cara lama: `#lz-tema-dasar` menahan latar lama, `#lz-tema-lingkar` melukis latar baru dan yang dianimasikan `clip-path: circle()` (jangan `transform: scale`, gradiennya ikut mengecil jadi persegi), isi berganti lewat `html.lz-tema-halus` (0,5 detik). Semua halaman utama lain (Penghimpunan, Pentasyarufan, Saldo, Saldo KLL, Donatur, Mutasi, Laporan, Rekening, Layanan, User, Pengaturan, Log) mendapat tombol lewat `pasangTemaKepala()` di akhir `app.js` (diapit penanda `>>> pasangTemaKepala`, dibaca `test_tema_ui.js`): pengamat pada `#content` memindahkan anak kepala selain judul ke `.page-head-aksi` lalu menambah tombol, jadi pembangun HTML tiap tampilan tidak perlu diubah. Dashboard utama juga punya tombolnya (`dh-quick-btn dh-ikon kepala-tema` di `app.js`, baris `temaBtn`; `index.html` memuat `lz-tema.js` sebelum `app.js`). Jangan memberi `padding` atau `justify-content` lewat `.tn-icon` ke tombol ini, itu yang dulu membuat ikon bergeser: aturan sidebar `.app.collapsed .tn-icon` (padding 0 18px, rata kiri, `!important`) mengalahkan `.tn-icon.kepala-tema` saat menu kiri ciut (terukur kiri 21 px, kanan -3 px), jadi aturan tombol ini mengulang selektor `.app`, `.app.collapsed`, dan `.app.collapsed .topnav:hover`. Dijaga `test_tema_ui.js` (menu terbuka, ciut, dasbor, 4 lebar, 2 tema) dan `test_skala_ui.js` (halaman asli). **Warna teks di tema gelap** (5 Oktober 2026): `<button>` tanpa `color` memakai hitam bawaan peramban (nama pengguna di bilah kiri modul tidak terbaca). Ada aturan global `button{color:var(--text)}` di akhir `styles.css`; jangan menulis warna teks tetap (`#111`, `#333`) di CSS atau style inline layar, pakai `var(--text)`/`var(--muted)`. Dokumen cetak (`docShell`, kwitansi) memang berlatar putih sendiri. Dijaga `test_kontras_gelap.js`.
   Halaman di luar menu juga punya tombol (5 Oktober 2026): layar login (`#loginView`) dan `lacak.html` memakai `<button class="lz-tema-pojok kepala-tema" data-lz-tema>` (pojok kanan atas, ikon dan judul diisi `isiOtomatis()` di `lz-tema.js`); `public.html` (`.pub-tema`) dan `harian.html` (`.lh-tema`) memuat `lz-tema.js` di `<head>` tanpa defer dan membuat tombol dengan `LZTema.svg()`. `gantiTema()` lama di dua halaman itu sudah dihapus. Diuji `test_tema_ui.js` (ikon di tengah, satu tombol, ganti tema, tersimpan).
+- **Logo bilah menu** (5 Oktober 2026, `src/public/js/lz-logo.js`): pojok kiri atas aplikasi utama dan kelima modul
+  memakai logo SVG Lazismu Bantul (22 bagian, dari berkas contoh pemilik), BUKAN logo unggahan Pengaturan (yang itu
+  tetap dipakai kwitansi, kop cetak, halaman publik). Markup memuat wadah `<span class="logo-img lz-logo-svg
+  lz-logo-tunggu" data-lz-logo>`, skripnya dimuat sebelum `lz-sisi.js`. Logo bergerak (garis digambar, isi masuk,
+  cahaya di tema gelap) hanya saat menu pertama kali dibuka di sesi itu: menu dibaca dari `.topnav .tn-item.active`,
+  yang sudah diputar dicatat di sessionStorage `lz_logo_dilihat`, dan diputar baru saat logonya benar-benar terlihat
+  (IntersectionObserver; di halaman utama bilahnya tersembunyi di balik layar masuk). `applyBranding()` hanya
+  memperbarui `aria-label` bila logo sudah ada: menulis ulang innerHTML memutus animasi yang sedang berjalan.
+  Ukuran: 48 px (38 px di bawah 1024 px), dan saat bilah ciut 78% (bukan 56% milik logo unggahan 3:1) dengan geseran
+  `--lz-logo-x-ciut` yang diukur `lz-logo.js`. Pemilih CSS memakai `#brandBox` supaya menang atas tumpukan aturan
+  `.logo-img` di bagian 31 dan 55. Dijaga `test_logo_ui.js`.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
 
@@ -479,7 +490,8 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_daftar_padat.js` | daftar Penghimpunan dan Pentasyarufan dikirim padat (nama kolom sekali, baris sebagai larik): dibongkar di klien sama persis dengan bentuk lama (nilai, urutan, `__row`, nol dan "0" tidak terpangkas), 15.000 baris 7,72 MB jadi 3,73 MB (di bawah batas respons Vercel 4,5 MB), izin tetap diperiksa paling depan, hanya dua fungsi yang dialihkan `api/rpc.js` dan hanya bila diminta, bacaan padat ikut diingat (`BACA`), klien membongkar jawaban larik tanpa mengubahnya |
 | `test_xlsx_lokal.js` | setiap `XLSX.*` yang dipanggil aplikasi ada di salinan lokal 0.18.5 (8 fungsi saat ditulis), baca dan tulis xlsx berfungsi, pemindainya sendiri terbukti menangkap nama yang tidak ada |
 | `test_kontras_gelap.js`, `_kontras.js` | teks terbaca di tema gelap: pemindai menghitung rasio kontras tiap teks terhadap latar efektifnya (gradien dinilai dari henti terbaik, latar gambar dilewati) di layar masuk, tiap menu, tab Pengaturan, modal, dan halaman publik; `test_skala_ui.js` memindai tiap menu empat modul, `test_surat_ui.js` memindai Surat dan lacak |
-| `test_tema_ui.js` | tombol tema terang/gelap (`js/lz-tema.js`): ikon tepat di tengah tombol (dulu menempel ke kanan, 21 px dari kiri pada tombol 38 px), bentuk bulan/matahari berganti lewat CSS, lingkaran tema baru melebar dari tombol (clip-path), gerak dikurangi berganti langsung, lima halaman modul memuat skripnya |
+| `test_tema_ui.js` | tombol tema terang/gelap (`js/lz-tema.js`): ikon tepat di tengah tombol (dulu menempel ke kanan, 21 px dari kiri pada tombol 38 px), bentuk bulan/matahari berganti lewat CSS, sapuan lingkaran membuka SELURUH halaman bertema baru lewat View Transitions (kartu yang belum tersentuh lingkaran masih berwarna lama; dulu terukur sudah gelap pada 370 ms), cara lama tetap jalan di peramban tanpa View Transitions, gerak dikurangi berganti langsung, lima halaman modul memuat skripnya |
+| `test_logo_ui.js` | logo SVG di bilah menu (`js/lz-logo.js`): 22 bagian, rasio 3840:2574, 48 px (38 px di HP), di tengah panel dan rel, bergerak hanya saat menu pertama kali dibuka di sesi itu, diam saat kembali atau muat ulang, cahaya hanya di tema gelap, gerak dikurangi tidak bergerak, lima modul memuat logonya |
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |
@@ -519,7 +531,7 @@ ke basis data produksi:
   dikirimi. Pengurus kantor layanan tidak boleh menyinkronkan kontak.
 - Uji: `test_kwitansi_wa.js` (server), `test_kwitansi_ui.js` (tampilan).
 - Teks di kwitansi bisa diubah di Pengaturan, tab Identitas Lembaga: `kwSk` (legalitas di panel kiri, satu baris
-  tiap teks) dan `kwPesan` (template ucapan terima kasih WhatsApp; isian `{nama} {jumlah} {jenis} {nomor} {lembaga}
+  tiap teks) dan `kwPesan` (template ucapan terima kasih WhatsApp; isian `{nama} {jumlah} {jenis} {nomor} {lembaga} {link}
   {tanggal}`). Isi yang sama dengan bawaan tidak disimpan, supaya bawaan versi baru ikut terpakai.
 - Penerima di kwitansi = fundraising (`penerima()` di `lz-kwitansi.js`); bila kosong/"Tanpa fundraising"/kantor,
   dipakai nama petugas penginput. `apiGetKwitansi` hanya mengirim 3 angka terakhir rekening (`rekeningAkhir`).
@@ -669,14 +681,23 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   satu link untuk semua kantor, hanya setoran kantor. Kolom yang dikirim
   dipilih satu per satu (daftar izin): telepon, email, alamat, keterangan,
   kwitansi, rekening, petugas tidak pernah ikut. Memperbarui sendiri tiap
-  30 detik selama yang dilihat hari ini.
+  15 detik selama yang dilihat hari ini.
   Pembaruan hanya mengganti `#lhIsi`; bilah saring (tanggal, kantor, cari)
-  digambar sekali, supaya teks dan fokus kotak cari tidak hilang tiap 30 detik.
+  digambar sekali, supaya teks dan fokus kotak cari tidak hilang tiap 15 detik.
   Tampilan dibuat ringkas (pemilik, 2 Oktober 2026: "menarik tapi simple,
   tidak banyak keterangan"): angka utama di kepala halaman, tanggal dan cari
   satu baris tanpa label, daftar dalam satu kartu. Link KLL/ULL tanpa
   dropdown kantor: kartu kantor (yang sudah setor di depan, yang Rp 0
   dilipat) sekaligus jadi saringan.
+  Tautan donatur ikut ucapan WA lewat `{link}` (`apiGetKwitansi` mengirim `linkDonatur`; baris `{link}` dibuang
+  bila link belum aktif). Tampilan 5 Oktober 2026 mengikuti web utama (pemilik: "buat mirip seperti web utama"):
+  angka total di blok gradasi aksen (`--grad-accent`, teks putih), kartu kaca (`--glass-card`). `harian.html` dan
+  `lacak.html` memakai pembaca perangkat yang sama dengan aplikasi (`js/lz-perangkat.js`, atribut `data-perangkat`
+  hp/tablet/laptop/desktop dan `data-sentuh`): layar sentuh mendapat isian 16 px dan tombol lebih besar, laptop ke
+  atas mendapat halaman lebih lebar. JANGAN menulis berkas baru bernama sama: `lz-perangkat.js` sudah dimuat semua
+  halaman dan `test_skala_ui.js` memeriksa atributnya. `lacak.html` menyembunyikan isian bila tautan sudah membawa
+  nomor dan kode (`?n=&k=`), dan kepala halamannya memuat logo dan nama lembaga dari `surat.lacak` (`lembaga`:
+  nama, singkatan, logo saja; alamat dan telepon tidak dikirim).
 - **Surat & Pengajuan** (pemilik, 2 Oktober 2026; `lib/surat/`, `src/public/surat.js`):
   surat masuk (Diterima > Didisposisi > Ditindaklanjuti > Selesai), surat
   keluar (Draf > Dikirim > Selesai), dan pengajuan bantuan/sponsorship/

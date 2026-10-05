@@ -582,7 +582,10 @@ function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view');
   var d=findById(SHEETS.PENGHIMPUNAN,id);
   /* Kwitansi hanya menampilkan 3 angka terakhir nomor rekening; nomor lengkapnya tidak ikut dikirim ke peramban. */
   if(d&&d.rekeningId){ var rk=findById(SHEETS.REKENING,d.rekeningId); var no=String((rk&&rk.nomor)||'').replace(/\D/g,''); if(no) d=Object.assign({},d,{rekeningAkhir:no.slice(-3)}); }
-  return {data:d,settings:getAllSettings()}; }
+  /* Alamat halaman publik donatur (bila sudah diaktifkan), untuk disisipkan di ucapan terima kasih. Tautan ini memang
+     untuk dibagikan ke donatur; token link KLL/ULL tidak ikut. */
+  var tk=getSetting('lhTokenDonatur')||'';
+  return {data:d,settings:getAllSettings(),linkDonatur:tk?('/harian.html?t='+tk):''}; }
 
 /* ===== PENTASYARUFAN ===== */
 function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='BPT/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENTASYARUFAN,'noBukti',awalan)+1)).slice(-4); }

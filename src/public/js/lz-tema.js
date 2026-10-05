@@ -3,8 +3,9 @@
    dari aturan .tn-item) dan pergantian tema terjadi seketika. Di sini satu tempat:
    - ikon matahari/bulan satu SVG yang berubah bentuk (bulan sabit meluncur keluar, sinar tumbuh), dikendalikan CSS
      lewat html[data-theme], jadi tidak perlu digambar ulang dan tidak ada yang berkedip;
-   - peralihan tema berupa lingkaran warna tema baru yang melebar dari tombol (circular reveal ringan, satu elemen
-     dianimasikan). Pengguna yang meminta gerak dikurangi mendapat pergantian langsung. */
+   - peralihan tema berupa lingkaran yang melebar dari tombol dan membuka halaman bertema baru UTUH (View Transitions,
+     lihat gantiSapu); peramban lama memakai lingkaran latar saja. Pengguna yang meminta gerak dikurangi mendapat
+     pergantian langsung. */
 (function () {
   'use strict';
   var nomor = 0;
@@ -52,23 +53,61 @@
   }
 
   var sedang = false, animKini = null;
+
+  /* SAPUAN SELURUH HALAMAN (View Transitions). Cara di bawahnya (lingkaran latar + isi berganti 0,5 detik) punya cacat
+     yang terlihat: hanya LATAR yang disapu lingkaran, sementara kartu, teks, garis, dan bilah menu berganti warna sendiri
+     serentak di mana pun letaknya. Terukur di test_tema_ui.js pada 370 ms: kartu di kiri bawah sudah gelap (jumlah RGB
+     100) padahal latar di sebelahnya masih terang (693), jadi isi halaman "mendahului" lingkarannya.
+     Dengan View Transitions peramban memotret halaman lama, memasang tema baru, lalu yang dibuka lingkaran adalah
+     potret halaman BARU utuh: latar dan isi berganti tepat saat lingkaran menyentuhnya. Satu elemen semu dianimasikan,
+     isi halaman tidak dihitung ulang tiap frame. Peramban tanpa fitur ini (Safari < 18, Firefox lama) memakai cara lama.
+
+     Klik beruntun: tema TUJUAN dicatat di `tujuan`. Pembaruan DOM pada View Transitions berjalan tak serempak (sesudah
+     potret diambil), jadi pada klik kedua data-theme bisa masih tema lama; tanpa catatan ini dua klik cepat sama-sama
+     memilih gelap dan tema tersangkut. Transisi yang sedang berjalan dilewati peramban sendiri, dan pembaruannya tetap
+     dijalankan, jadi urutannya tetap benar. */
+  var vtKini = null, tujuan = null;
+  function gantiSapu(g, x, y, radius) {
+    var root = document.documentElement;
+    tujuan = g;
+    root.classList.add('lz-tema-vt');
+    var vt = document.startViewTransition(function () { simpan(g); });
+    vtKini = vt;
+    vt.ready.then(function () {
+      var pusat = ' at ' + x + 'px ' + y + 'px)';
+      root.animate(
+        { clipPath: ['circle(0px' + pusat, 'circle(' + radius + 'px' + pusat] },
+        { duration: DURASI, easing: 'cubic-bezier(.4,0,.2,1)', pseudoElement: '::view-transition-new(root)' }
+      );
+    }).catch(function () { /* dilewati oleh klik berikutnya */ });
+    var lepas = function () {
+      if (vtKini !== vt) return;
+      vtKini = null; tujuan = null;
+      root.classList.remove('lz-tema-vt');
+    };
+    vt.finished.then(lepas, lepas);
+  }
+
   function ganti(tombol) {
     /* Klik lagi saat lingkaran masih melebar: animasi yang berjalan diselesaikan seketika (tema sudah terpasang),
        lalu klik ini berlaku. Menolak klik itu membuat tombol terasa mati dan tema tersangkut di keadaan yang tidak
        diminta (uji Broadcast menekan dua kali berturut-turut dan mengharapkan kembali ke terang). */
     if (sedang && animKini) { try { animKini.cancel(); } catch (_) { /* sudah selesai */ } }
     sedang = false;
-    var g = !gelap();
+    var g = tujuan !== null ? !tujuan : !gelap();
     var root = document.documentElement;
     var kurangi = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (kurangi || !Element.prototype.animate || !document.body) { simpan(g); return; }
-    sedang = true;
-    bersihkan();
 
     var r = (tombol || document.body).getBoundingClientRect();
     var x = r.left + r.width / 2, y = r.top + r.height / 2;
     var w = window.innerWidth, h = window.innerHeight;
     var radius = Math.ceil(Math.hypot(Math.max(x, w - x), Math.max(y, h - y)));
+
+    if (typeof document.startViewTransition === 'function') { gantiSapu(g, x, y, radius); return; }
+
+    sedang = true;
+    bersihkan();
 
     var lama = latar();
     var dasar = document.createElement('div');
