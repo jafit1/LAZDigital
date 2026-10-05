@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/js/lz-tema.js"></script>
   <style>
     /* ================================================================
        PENGHIMPUNAN HARIAN (pemilik, 2 Oktober 2026)
@@ -44,7 +45,8 @@
     .lh-titik{ width:7px; height:7px; border-radius:50%; background:#b9f6ca; animation:lhDenyut 2s infinite; }
     .lh-langsung.diam .lh-titik{ background:rgba(255,255,255,.6); animation:none; }
     @keyframes lhDenyut{ 0%{box-shadow:0 0 0 0 rgba(185,246,202,.7)} 70%{box-shadow:0 0 0 7px rgba(185,246,202,0)} 100%{box-shadow:0 0 0 0 rgba(185,246,202,0)} }
-    .lh-tema{ width:30px; height:30px; border-radius:50%; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.16); color:#fff; cursor:pointer; font-size:13px; }
+    .lh-tema{ width:34px; height:34px; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.16); color:#fff; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+    .lh-tema .lz-tema-ikon{ width:19px; height:19px; display:block; }
 
     .lh-utama{ position:relative; margin-top:18px; }
     .lh-label{ font-size:12px; font-weight:600; opacity:.9; }
@@ -205,7 +207,7 @@
       var h = '<div class="lh-head"><div class="lh-atas"><div class="lh-id"><div class="lh-logo">' + logo + '</div>'
         + '<div class="lh-nama">' + esc(s.namaLembaga || 'Lazismu') + '</div></div>'
         + '<div class="lh-alat"><span class="lh-langsung" id="lhLangsung"><span class="lh-titik"></span><span id="lhLangsungT"></span></span>'
-        + '<button class="lh-tema" type="button" id="lhTema" onclick="gantiTema()" aria-label="Ganti tema"></button></div></div>'
+        + '<button class="lh-tema kepala-tema" type="button" id="lhTema" title="' + LZTema.judul(LZTema.gelap()) + '" aria-label="' + LZTema.judul(LZTema.gelap()) + '">' + LZTema.svg() + '</button></div></div>'
         + '<div class="lh-utama"><div class="lh-label" id="lhLabel"></div><div class="lh-total" id="lhTotal"></div>'
         + '<div class="lh-info" id="lhInfo"></div></div><div class="lh-metode-baris" id="lhMetode"></div></div>';
       h += '<div class="lh-bilah"><div class="lh-tgl-baris">'
@@ -233,7 +235,6 @@
       var jamPerbarui = new Date(d.diperbarui).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
       $('lhLangsung').classList.toggle('diam', !langsung);
       $('lhLangsungT').innerHTML = langsung ? 'Langsung<span class="lh-jam"> &middot; ' + esc(jamPerbarui) + '</span>' : 'Arsip';
-      $('lhTema').innerHTML = document.documentElement.getAttribute('data-theme') === 'dark' ? '&#9728;' : '&#9790;';
       var inp = $('lhTanggal');
       if (inp.value !== d.tanggal) inp.value = d.tanggal;
       $('lhBerikut').disabled = langsung;
@@ -335,12 +336,6 @@
       if (fokus && i) i.focus();
     }
     function pindahHari(n){ var t = geser(TGL, n); if (DATA && t > DATA.hariIni) return; muat(t); }
-    function gantiTema(){
-      var kini = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', kini);
-      try { localStorage.setItem('laz_theme', kini); } catch(e) {}
-      $('lhTema').innerHTML = kini === 'dark' ? '&#9728;' : '&#9790;';
-    }
 
     if (!TOKEN) galat('Alamatnya tidak lengkap.');
     else muat('');

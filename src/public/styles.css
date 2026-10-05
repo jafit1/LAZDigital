@@ -6451,13 +6451,22 @@ button,select{font-family:inherit}
    lama menurunkan padding 0 14px 0 20px dan justify-content:flex-start ke tombol ini. Dipatok di sini dengan
    !important supaya tepat di tengah. Bentuk matahari/bulan dikendalikan html[data-theme]; ikon menunjukkan
    tema TUJUAN (bulan di tema terang, matahari di tema gelap). */
-.tn-icon.kepala-tema{
-  width:40px !important; height:40px !important; padding:0 !important; gap:0 !important;
+.tn-icon.kepala-tema,
+.app .tn-icon.kepala-tema,
+.app.collapsed .tn-icon.kepala-tema,
+.app.collapsed .topnav:hover .tn-icon.kepala-tema,
+.dh-quick-btn.dh-ikon.kepala-tema{
+  width:40px !important; height:40px !important; min-width:40px !important; padding:0 !important; gap:0 !important;
+  margin:0 !important; box-sizing:border-box !important;
   display:inline-flex !important; align-items:center !important; justify-content:center !important;
   border-radius:12px !important; position:relative; overflow:hidden; flex:none;
   -webkit-tap-highlight-color:transparent;
   transition:transform .18s cubic-bezier(.3,.7,.3,1), border-color .18s ease, background-color .18s ease, box-shadow .18s ease, color .18s ease !important;
 }
+/* Aturan sidebar `.app.collapsed .tn-icon` (padding 0 18px, rata kiri, semuanya !important) lebih spesifik daripada
+   `.tn-icon.kepala-tema` dan menang saat menu kiri dalam keadaan ciut: ikon terdorong ke kanan tombol. Daftar selektor
+   di atas mengulang keadaan-keadaan itu supaya aturan tombol ini selalu yang terakhir dan tertinggi. */
+.dh-quick-btn.dh-ikon.kepala-tema{ background:var(--surface); border:1px solid var(--border); color:var(--text) !important; }
 .tn-icon.kepala-tema:hover{ transform:none; background:var(--surface2); box-shadow:0 4px 14px -6px rgba(0,0,0,.25); }
 .tn-icon.kepala-tema:active{ transform:scale(.9); }
 .tn-icon.kepala-tema:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
@@ -6488,3 +6497,19 @@ html.lz-tema-halus .lz-tema-ikon .t-sinar{ transition:transform .6s cubic-bezier
 @media (prefers-reduced-motion: reduce){
   .lz-tema-ikon, .lz-tema-ikon *{ transition:none !important; }
 }
+
+/* Kepala halaman utama: tombol tema ikut digeser ke .page-head-aksi. Kepala Saldo rata bawah (kotak tanggal punya label di atasnya). */
+.saldo-head .page-head-aksi{ align-items:flex-end; }
+.page-head .page-head-aksi{ flex-wrap:wrap; }
+
+/* Tombol tema di pojok kanan atas untuk halaman tanpa kepala (layar login, pelacakan). */
+.lz-tema-pojok{
+  position:fixed; top:14px; right:14px; z-index:50;
+  width:40px; height:40px; padding:0; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--surface,#fff); color:var(--text,#111); border:1px solid var(--border,rgba(0,0,0,.12));
+  box-shadow:0 2px 10px rgba(0,0,0,.12); cursor:pointer;
+}
+.lz-tema-pojok .lz-tema-ikon{ width:22px; height:22px; display:block; }
+.lz-tema-pojok:hover{ transform:scale(1.06); }
+.lz-tema-pojok:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }

@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/js/lz-tema.js"></script>
   <style>
     /* LACAK PENGAJUAN (pemilik, 2 Oktober 2026): pemohon bantuan, sponsorship,
        atau proposal melihat sudah sampai mana pengajuannya tanpa menelepon
@@ -59,6 +60,7 @@
       if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', t); })();
   </script>
+  <button type="button" class="lz-tema-pojok kepala-tema" data-lz-tema></button>
   <div class="lk-wrap">
     <div class="lk-head"><h1>Lacak Pengajuan</h1><p>Lihat progres pengajuan bantuan, sponsorship, atau proposal Anda.</p></div>
     <form class="lk-form" id="lkForm" autocomplete="off">

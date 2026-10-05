@@ -4138,6 +4138,9 @@ function renderDashboard(d){
     + '</button>'
     + '<div id="dashMenu_popover" class="dropdown-popover hidden"><div class="dropdown-section">'+menuItems+'</div></div>'
     + '</div>'):'';
+  /* Tombol tema sama dengan modul lain (js/lz-tema.js): ikon matahari/bulan satu SVG, lingkaran melebar dari tombol. */
+  var temaJudul=(document.documentElement.getAttribute('data-theme')==='dark')?'Ganti ke tema terang':'Ganti ke tema gelap';
+  var temaBtn=window.LZTema?('<button type="button" class="dh-quick-btn dh-ikon kepala-tema" id="tombolTema" title="'+temaJudul+'" aria-label="'+temaJudul+'">'+window.LZTema.svg()+'</button>'):'';
   var nm=(typeof ME!=='undefined'&&ME&&ME.nama)?ME.nama:'Admin';
   var today=new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
@@ -4176,7 +4179,7 @@ function renderDashboard(d){
         '<div class="dh-greeting"><div class="dh-hi">'+esc(salamRender((SETTINGS&&SETTINGS.salamJudul)||SALAM_DEFAULT,{nama:nm}))+'</div>'+
         '<div class="dh-sub">'+esc(salamSub(today))+'</div></div>'+
         '<div class="dh-acts">' +
-          '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + periodeChip + menuBtn + '</div>' +
+          '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + periodeChip + menuBtn + temaBtn + '</div>' +
         '</div>' +
       '</div>' +
       periodePanel +
@@ -10492,3 +10495,35 @@ function scanLepas(){
   document.querySelectorAll('.fld.terisi-ai').forEach(function(n){ n.classList.remove('terisi-ai'); n.classList.remove('ragu-ai'); });
   scanGambarPanel();
 }
+
+/* >>> pasangTemaKepala */
+/* Tombol tema di kepala SEMUA halaman utama (Penghimpunan, Pentasyarufan, Saldo, Saldo KLL, Donatur, Laporan, Rekening,
+   Layanan, User, Pengaturan, Log, Mutasi). Tiap tampilan menulis ulang #content, jadi tombolnya dipasang oleh pengamat
+   yang melihat kepala halaman baru, bukan disisipkan satu per satu ke dua belas pembangun HTML. Tombol yang sudah ada
+   di kepala (dashboard punya sendiri) tidak digandakan. Anak kepala selain judul dipindah (bukan disalin) ke
+   .page-head-aksi supaya onclick-nya tetap hidup dan susunannya [judul][tombol..., tema] rata kanan. */
+function pasangTemaKepala(){
+  if(!window.LZTema) return;
+  var c=document.getElementById('content'); if(!c) return;
+  if(c.querySelector('.kepala-tema')) return;
+  var ph=c.querySelector('.page-head');
+  if(!ph || ph.closest('#setRekBody,#setLayBody,.modal')) return;
+  var aksi=null,i;
+  for(i=0;i<ph.children.length;i++){ if(ph.children[i].classList.contains('page-head-aksi')){ aksi=ph.children[i]; break; } }
+  if(!aksi){
+    aksi=document.createElement('div'); aksi.className='page-head-aksi';
+    while(ph.children.length>1) aksi.appendChild(ph.children[1]);
+    ph.appendChild(aksi);
+  }
+  var j=(document.documentElement.getAttribute('data-theme')==='dark')?'Ganti ke tema terang':'Ganti ke tema gelap';
+  aksi.insertAdjacentHTML('beforeend','<button type="button" class="tn-icon kepala-tema" id="tombolTema" title="'+j+'" aria-label="'+j+'">'+window.LZTema.svg()+'</button>');
+}
+(function(){
+  var c=document.getElementById('content'); if(!c||!window.MutationObserver) return;
+  var menunggu=false;
+  new MutationObserver(function(){
+    if(menunggu) return; menunggu=true;
+    requestAnimationFrame(function(){ menunggu=false; pasangTemaKepala(); });
+  }).observe(c,{childList:true,subtree:true});
+})();
+/* <<< pasangTemaKepala */

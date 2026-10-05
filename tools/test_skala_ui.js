@@ -264,6 +264,12 @@ const BATAS = {
           tabel: ukur('table'),
           tombol: ukur('.btn'),
           isian: ukur('input:not([type=checkbox]):not([type=hidden])'),
+          tema: (() => {
+            const t = document.querySelector('.kepala-tema'); const v = t && t.querySelector('svg');
+            if (!t || !v) return null;
+            const r = t.getBoundingClientRect(), q = v.getBoundingClientRect();
+            return { lebar: Math.round(r.width), tinggi: Math.round(r.height), sel: Math.abs((q.x - r.x) - (r.right - q.right)), selY: Math.abs((q.y - r.y) - (r.bottom - q.bottom)) };
+          })(),
           navLebar: nav ? Math.round(nav.getBoundingClientRect().width) : null,
           navCiut: (document.getElementById('appView') || { classList: { contains: () => false } })
             .classList.contains('collapsed'),
@@ -291,6 +297,10 @@ const BATAS = {
       cek(`${tag}: tidak meluber ke samping`, u.luber, { lebarGulir: u.lebarGulir, layar: uk.w });
       cek(`${tag}: tidak ada elemen terdorong keluar layar`, u.keluarKanan === 0, u.keluarKanan);
 
+      /* Tombol tema di kepala halaman: ikonnya harus di tengah di keadaan menu terbuka maupun ciut. Pernah menempel
+         ke kanan (kiri 21 px, kanan -3 px) karena aturan sidebar `.app.collapsed .tn-icon` mengalahkan aturan tombol. */
+      if (!u.tema && !/layar masuk/.test(hal.nama)) cek(`${tag}: tombol tema ada di halaman`, false, 'tidak ada .kepala-tema');
+      if (u.tema) cek(`${tag}: ikon tombol tema tepat di tengah`, u.tema.sel <= 1 && u.tema.selY <= 1 && u.tema.lebar === 40 && u.tema.tinggi === 40, u.tema);
       if (u.judul !== null) {
         cek(`${tag}: judul tidak kebesaran`, u.judul <= BATAS.judul.maks[uk.perangkat], u.judul);
         cek(`${tag}: judul tidak kekecilan`, u.judul >= BATAS.judul.min, u.judul);

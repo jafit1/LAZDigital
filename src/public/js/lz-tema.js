@@ -107,5 +107,19 @@
     ganti(t);
   }, true);
 
+  /* Tombol yang cukup menulis <button class="kepala-tema" data-lz-tema> (layar login, halaman pelacakan): ikon dan judul
+     diisi di sini, jadi halaman itu tidak perlu menyalin SVG-nya. */
+  function isiOtomatis() {
+    var daftar = document.querySelectorAll('[data-lz-tema]');
+    for (var i = 0; i < daftar.length; i++) {
+      if (daftar[i].querySelector('.lz-tema-ikon')) continue;
+      daftar[i].classList.add('kepala-tema');
+      daftar[i].innerHTML = svg();
+      daftar[i].title = judul(gelap());
+      daftar[i].setAttribute('aria-label', judul(gelap()));
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', isiOtomatis); else isiOtomatis();
+
   window.LZTema = { svg: svg, ganti: ganti, gelap: gelap, judul: judul };
 })();

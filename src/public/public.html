@@ -12,6 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/js/lz-tema.js"></script>
   <style>
     /* ================================================================
        HALAMAN PUBLIK
@@ -59,7 +60,8 @@
       color:#fff; border-radius:999px; padding:7px 14px;
       font-size:12px; font-weight:600; white-space:nowrap;
     }
-    .pub-tema{ cursor:pointer; font-size:14px; line-height:1; padding:8px 12px; }
+    .pub-chip.pub-tema{ cursor:pointer; width:36px; height:36px; padding:0; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+    .pub-tema .lz-tema-ikon{ width:20px; height:20px; display:block; }
     .pub-head select.pub-chip{
       -webkit-appearance:none; appearance:none; cursor:pointer;
       padding-right:30px;
@@ -221,14 +223,6 @@
       }).catch(function(e){ root.style.opacity=''; showErr(e); });
     }
 
-    function gantiTema(){
-      var kini = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', kini);
-      try { localStorage.setItem('laz_theme', kini); } catch(e) {}
-      var b = document.getElementById('tombolTema');
-      if (b) b.textContent = kini === 'dark' ? '☀️' : '🌙';
-    }
-
     function showErr(e){
       document.getElementById('boot').classList.add('hidden');
       document.getElementById('root').classList.add('hidden');
@@ -348,7 +342,7 @@
         + '</div>'
         + '<div class="pub-head-alat">'
           + '<select class="pub-chip" onchange="gantiPeriode(this.value)" aria-label="Pilih periode">'+opsiBulan+'</select>'
-          + '<button class="pub-chip pub-tema" id="tombolTema" onclick="gantiTema()" title="Ganti tema terang / gelap" aria-label="Ganti tema">'+(gelap?'☀️':'🌙')+'</button>'
+          + '<button class="pub-chip pub-tema kepala-tema" id="tombolTema" type="button" title="'+LZTema.judul(gelap)+'" aria-label="'+LZTema.judul(gelap)+'">'+LZTema.svg()+'</button>'
         + '</div>'
       + '</div>';
 
