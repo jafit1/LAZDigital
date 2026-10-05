@@ -195,6 +195,13 @@ const server = http.createServer(async (req, res) => {
   await p.waitForTimeout(600);
   u = await baca(p);
   cek('kursor menyentuh bilah ciut: logo kembali penuh di tengah panel', Math.abs(u.lebar - 71.6) < 1.5 && u.meleset <= 1.5, u);
+  await p.mouse.move(900, 400);
+  await p.waitForTimeout(300);
+  cek('komputer: ikon Link Publik, Link Harian, Atur Layout, tema tetap di kepala dasbor',
+    await p.evaluate(() => ['dashLinkPublik', 'dashLinkHarian', 'dashEditBtn', 'tombolTema'].every((id) => document.getElementById(id).getBoundingClientRect().width > 0)));
+  await p.click('.user-chip');
+  await p.waitForSelector('#pf_nama', { timeout: 3000 }).catch(() => {});
+  cek('komputer: foto profil tetap langsung membuka pengaturan akun (tanpa menu)', await p.evaluate(() => !!document.getElementById('pf_nama') && !document.getElementById('akunMenu')));
   await ctx4.close();
 
   const ctx5 = await konteks({ viewport: { width: 390, height: 844 } });
@@ -203,6 +210,50 @@ const server = http.createServer(async (req, res) => {
   u = await baca(p);
   cek('HP: tinggi logo 38 px dan tampil', u.tinggiCss === 38 && u.lebar > 50, u);
   cek('HP: halaman tidak melebar ke samping', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+  /* Kepala dasbor (pemilik, 5 Oktober 2026): Link Publik, Link Harian, Atur Layout keluar dari menu titik tiga, tinggal
+     ikon. Di HP tujuh tombol tidak muat sebaris (406 px di ruang 342 px) dan tombol tema terpotong di tepi layar, jadi
+     di HP keempatnya (dengan tema) pindah ke menu yang muncul saat foto profil diketuk. */
+  const kepala = await p.evaluate(() => ['dashLinkPublik', 'dashLinkHarian', 'dashEditBtn', 'tombolTema'].map((id) => {
+    const e = document.getElementById(id); if (!e) return { id, ada: false };
+    const r = e.getBoundingClientRect();
+    return { id, ada: true, judul: e.getAttribute('aria-label') || '', teks: e.textContent.trim(), tampil: r.width > 0 };
+  }));
+  cek('kepala dasbor: Link Publik, Link Harian, Atur Layout berupa ikon tanpa tulisan, bernama di aria-label',
+    kepala.slice(0, 3).every((k) => k.ada && k.judul && !k.teks), kepala);
+  cek('kepala dasbor: menu titik tiga sudah tidak ada', await p.evaluate(() => !document.getElementById('dashMenu_trigger')));
+  cek('HP: keempat tombol sesekali disembunyikan dari kepala dasbor', kepala.every((k) => k.ada && !k.tampil), kepala);
+  /* Pemilik: di HP tombol catat masuk/keluar juga dibuang, chip periode naik sebaris dengan salam, salam diperkecil. */
+  const hpKepala = await p.evaluate(() => {
+    const chip = document.getElementById('dashPeriodeBtn').getBoundingClientRect();
+    const hi = document.querySelector('.dh-hi'), rh = hi.getBoundingClientRect();
+    return { catat: [...document.querySelectorAll('.dh-act-row .dh-catat')].map((e) => e.getBoundingClientRect().width),
+      chipLebar: chip.width, chipKanan: chip.right, layar: window.innerWidth, selisihAtas: Math.abs(chip.top - rh.top),
+      tumpang: chip.left < rh.right && rh.width > 0 && chip.left < rh.left + hi.scrollWidth,
+      salamPx: parseFloat(getComputedStyle(hi).fontSize), salamBaris: Math.round(rh.height / parseFloat(getComputedStyle(hi).lineHeight)) };
+  });
+  cek('HP: tombol catat masuk dan keluar tidak tampil di kepala dasbor', hpKepala.catat.length === 2 && hpKepala.catat.every((w) => w === 0), hpKepala);
+  cek('HP: chip periode tetap ada, sebaris dengan salam di kanan atas', hpKepala.chipLebar > 0 && hpKepala.selisihAtas <= 12 && hpKepala.chipKanan <= hpKepala.layar, hpKepala);
+  cek('HP: salam diperkecil dan tetap satu baris di samping chip', hpKepala.salamPx <= 20 && hpKepala.salamBaris === 1, hpKepala);
+  await p.click('.user-chip');
+  const menu = await p.evaluate(() => {
+    const m = document.getElementById('akunMenu'); if (!m) return null;
+    const r = m.getBoundingClientRect();
+    return { isi: [...m.querySelectorAll('.akun-butir span')].map((x) => x.textContent), dalam: r.left >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight };
+  });
+  cek('HP: ketuk foto profil membuka menu berisi pengaturan, Link Publik, Link Harian, tata letak, tema',
+    menu && ['Pengaturan akun', 'Pengaturan aplikasi', 'Link Publik', 'Link Harian', 'Atur layout dasbor', 'Tema gelap'].every((x) => menu.isi.includes(x)) && menu.dalam, menu);
+  cek('HP: profil tidak langsung membuka jendela pengaturan akun', await p.evaluate(() => !document.querySelector('.modal-bg.show #pf_nama')));
+  await p.click('#akunTema');
+  await p.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark', null, { timeout: 3000 }).catch(() => {});
+  cek('HP: "Tema gelap" dari menu mengganti tema dan menutup menunya',
+    await p.evaluate(() => document.documentElement.getAttribute('data-theme') === 'dark' && !document.getElementById('akunMenu')));
+  await p.click('.user-chip');
+  await p.mouse.click(200, 700);
+  cek('HP: ketuk di luar menu menutupnya', await p.evaluate(() => !document.getElementById('akunMenu')));
+  await p.click('.user-chip');
+  await p.click('#akunProfil');
+  await p.waitForSelector('#pf_nama', { timeout: 3000 }).catch(() => {});
+  cek('HP: "Pengaturan akun" membuka jendela pengaturan akun', await p.evaluate(() => !!document.getElementById('pf_nama') && !document.getElementById('akunMenu')));
   await ctx5.close();
 
   const ctx6 = await konteks({ reducedMotion: 'reduce' });

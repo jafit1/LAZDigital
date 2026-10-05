@@ -405,6 +405,12 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   Ukuran: 48 px (38 px di bawah 1024 px), dan saat bilah ciut 78% (bukan 56% milik logo unggahan 3:1) dengan geseran
   `--lz-logo-x-ciut` yang diukur `lz-logo.js`. Pemilih CSS memakai `#brandBox` supaya menang atas tumpukan aturan
   `.logo-img` di bagian 31 dan 55. Dijaga `test_logo_ui.js`.
+- **Kepala dasbor dan menu akun HP** (5 Oktober 2026): Link Publik, Link Harian, Atur Layout tidak lagi di menu titik
+  tiga, tetapi ikon (`dh-sekali`) di samping tombol catat dan periode. Di HP (`html.plat-hp`, di bawah 640 px) ikon
+  itu dan tombol tema kepala halaman disembunyikan, dan foto profil (`klikProfil`) membuka menu akun (`#akunMenu`:
+  pengaturan akun, Pengaturan aplikasi, Link Publik, Link Harian, Atur layout bila di dasbor, tema). Di layar lebar
+  foto profil tetap langsung `openProfile()`. Di HP tombol catat (`dh-catat`) juga disembunyikan; chip periode naik
+  sebaris dengan salam (salam 19 px). Dijaga `test_logo_ui.js`.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
 

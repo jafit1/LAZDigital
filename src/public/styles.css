@@ -4547,10 +4547,13 @@ td.actions-cell > .btn + .btn{ margin-left:6px }
 }
 
 @media (max-width:640px){
-  .dh-act-row{ flex-wrap:nowrap; width:100%; }
-  /* Keempatnya sekarang berukuran tetap dan kecil — tiga ikon dan satu chip
-     berisi angka — jadi tidak ada yang perlu menyusut, dan tidak ada yang
-     bisa terdorong keluar layar. */
+  /* Boleh turun baris. Dulu nowrap karena isinya hanya empat (dua ikon catat, satu chip, satu ikon menu). Sejak
+     Link Publik, Link Harian, dan Atur Layout dikeluarkan dari menu titik tiga (5 Oktober 2026) isinya tujuh, total
+     406 px di ruang 342 px pada layar 390: tombol tema terdorong keluar layar dan terpotong. */
+  .dh-act-row{ flex-wrap:wrap; row-gap:8px; width:100%; }
+  /* Patahnya diatur, bukan dibiarkan jatuh di mana saja (tombol tema sendirian di baris kedua): baris pertama
+     tindakan harian (catat masuk, catat keluar, periode), baris kedua yang sesekali (tautan, tata letak, tema). */
+  .dh-act-row > .dh-pisah{ display:block; flex:0 0 100% !important; height:0; }
   .dh-act-row > *{ flex:none; }
   .pr-baris{ flex-direction:column; gap:6px; }
   .pr-label{ width:auto; padding-top:0; }
@@ -6591,3 +6594,50 @@ html:not([data-theme="dark"]) #brandBox .lz-logo-svg .lzm-glow{ display:none; }
     transform:translateX(var(--lz-logo-x-ciut, var(--u-logo-x-ciut, 0px))) scale(var(--lz-logo-ciut, .56)) !important;
   }
 }
+
+/* Ikon di dalam butir menu tarik-turun menempel ke tulisannya (.dropdown-item tidak punya jarak sama sekali; terukur
+   0 px antara ikon tautan dan "Link Publik"). */
+.dropdown-item{ gap:10px; }
+/* Pemisah baris tombol kepala dasbor; hanya berlaku di layar sempit (lihat @media max-width:640px). */
+.dh-pisah{ display:none; }
+
+/* ================================================================
+   MENU AKUN DI HP (app.js: klikProfil, bukaMenuAkun)
+   ================================================================
+   Di HP tombol sesekali di kepala halaman (Link Publik, Link Harian, Atur Layout, tema) disembunyikan dan dibuka
+   dari foto profil. html.plat-hp dipasang app.js (bacaPlatform) di bawah 640 px; halaman uji tanpa app.js tidak
+   terkena aturan ini. */
+html.plat-hp .dh-act-row .dh-sekali,
+html.plat-hp .dh-act-row .dh-pisah,
+html.plat-hp #content .page-head-aksi .kepala-tema,
+html.plat-hp .dh-act-row .dh-catat{ display:none !important; }
+/* Kepala dasbor di HP (pemilik, 5 Oktober 2026): tombol catat masuk/keluar juga dibuang (keduanya ada di halaman
+   Penghimpunan dan Pentasyarufan), yang tersisa hanya chip periode, dan chip itu naik sebaris dengan salam di kanan
+   atasnya. Salam diperkecil supaya muat berdampingan: 22 px membuat "Selamat malam, Petugas" patah dua baris di
+   samping chip pada layar 390. */
+html.plat-hp .dh-row{ flex-direction:row !important; flex-wrap:nowrap !important; align-items:flex-start !important; gap:10px !important; }
+html.plat-hp .dh-greeting{ flex:1 1 auto; min-width:0; gap:2px; }
+html.plat-hp .dh-hi{ font-size:19px !important; line-height:1.25; }
+html.plat-hp .dh-sub{ font-size:12px !important; line-height:1.4; }
+html.plat-hp .dh-acts{ flex:none !important; width:auto !important; align-items:flex-end !important; }
+html.plat-hp .dh-act-row{ width:auto !important; flex-wrap:nowrap !important; }
+html.plat-hp .dh-act-row .dh-periode{ padding:7px 10px; font-size:12.5px; gap:6px; }
+.akun-menu{
+  position:fixed; z-index:99999; padding:6px;
+  background:var(--surface); color:var(--text);
+  border:1px solid var(--border); border-radius:14px;
+  box-shadow:var(--shadow-lg), 0 12px 32px rgba(0,0,0,.18);
+  animation:akunMuncul .16s ease-out;
+}
+@keyframes akunMuncul{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+.akun-kepala{ padding:8px 12px 10px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+.akun-nama{ font-family:var(--head); font-weight:700; font-size:14px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.akun-peran{ font-size:12px; color:var(--muted); margin-top:1px; }
+.akun-menu .akun-butir{
+  width:100%; border:0; background:none; font:inherit; font-size:14px; font-weight:600; text-align:left;
+  min-height:44px; padding:10px 12px; gap:12px; color:var(--text);
+}
+.akun-menu .akun-butir svg{ flex:none; width:18px; height:18px; color:var(--text2); }
+.akun-menu .akun-tema .lz-tema-ikon{ width:18px; height:18px; }
+.akun-garis{ height:1px; background:var(--border); margin:4px 6px; }
+@media (prefers-reduced-motion: reduce){ .akun-menu{ animation:none; } }

@@ -4259,26 +4259,27 @@ function renderDashboard(d){
      panah turun, pasangan yang sama persis dengan dua kartu KPI tepat di
      bawahnya. title dan aria-label tetap menyebutkan namanya, jadi yang
      hilang cuma tulisannya, bukan keterangannya. */
-  var addHimpunBtn=canDo('penghimpunan','add')?'<button class="dh-quick-btn dh-ikon primary" onclick="go(\'penghimpunan\');setTimeout(openModalAddPenghimpunan,200)" title="Catat Penghimpunan" aria-label="Catat Penghimpunan">' + SVG_ICONS.arrowUp + '</button>':'';
-  var addSalurBtn=canDo('pentasyarufan','add')?'<button class="dh-quick-btn dh-ikon dh-tasyaruf" onclick="go(\'pentasyarufan\');setTimeout(openModalAddPentasyarufan,200)" title="Catat Pentasyarufan" aria-label="Catat Pentasyarufan">' + SVG_ICONS.arrowDown + '</button>':'';
+  var addHimpunBtn=canDo('penghimpunan','add')?'<button class="dh-quick-btn dh-ikon dh-catat primary" onclick="go(\'penghimpunan\');setTimeout(openModalAddPenghimpunan,200)" title="Catat Penghimpunan" aria-label="Catat Penghimpunan">' + SVG_ICONS.arrowUp + '</button>':'';
+  var addSalurBtn=canDo('pentasyarufan','add')?'<button class="dh-quick-btn dh-ikon dh-catat dh-tasyaruf" onclick="go(\'pentasyarufan\');setTimeout(openModalAddPentasyarufan,200)" title="Catat Pentasyarufan" aria-label="Catat Pentasyarufan">' + SVG_ICONS.arrowDown + '</button>':'';
 
-  /* Link Publik dan Atur Layout dipakai sesekali, bukan tiap hari. Keduanya
-     masuk ke satu ikon — dan kalau tidak ada yang boleh dipakai, ikonnya pun
-     tidak digambar, bukan digambar lalu membuka menu kosong. */
-  var menuItems='';
-  if(canView) menuItems+='<div class="dropdown-item" onclick="dashMenuPilih(openPublicLink)">'+SVG_ICONS.link+'<span>Link Publik</span></div>';
-  menuItems+='<div class="dropdown-item" onclick="dashMenuPilih(toggleDashEdit)">'+SVG_ICONS.sliders+'<span>'+(window.DASH_EDIT?'Selesai atur layout':'Atur Layout')+'</span></div>';
-  var menuBtn=menuItems?('<div class="custom-dropdown dh-menu">'
-    + '<button class="dh-quick-btn dh-ikon'+(window.DASH_EDIT?' primary':'')+'" id="dashMenu_trigger" aria-haspopup="menu"'
-    + ' title="Menu lainnya" aria-label="Menu lainnya" onclick="toggleCustomDropdown(\'dashMenu_popover\')">'
-    + '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">'
-    + '<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>'
-    + '</button>'
-    + '<div id="dashMenu_popover" class="dropdown-popover hidden"><div class="dropdown-section">'+menuItems+'</div></div>'
-    + '</div>'):'';
+  /* Link Publik, Link Harian, dan Atur Layout: dulu dilipat ke menu titik tiga, dan ikon di dalam menu itu menempel
+     ke tulisannya. Pemilik (5 Oktober 2026): keluarkan, sisakan ikonnya saja. Sekarang tiga ikon sejajar dengan
+     tombol catat dan tombol tema; namanya tetap ada di title dan aria-label. Link Harian (donatur dan KLL/ULL) ikut
+     dikeluarkan: di dasbor ini ia sebelumnya tidak punya pintu sama sekali, hanya ada di renderDashboard lama.
+     Ukuran ikon disamakan 18 px dengan ikon tombol di sebelahnya (SVG_ICONS memakai 14 px untuk menu). */
+  /* Bukan ikon kalender: kalender sudah dipakai chip periode tepat di sebelahnya, dua ikon kembar terbaca sebagai
+     dua tombol yang sama. Garis denyut = catatan yang diperbarui langsung. */
+  var IKON_LINK_HARIAN='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>';
+  var ikon18=function(svg){ return String(svg).replace(/width="\d+"/,'width="18"').replace(/height="\d+"/,'height="18"'); };
+  var dashIkon=function(id,judul,svg,klik,aktif){
+    return '<button type="button" class="dh-quick-btn dh-ikon dh-sekali'+(aktif?' primary':'')+'" id="'+id+'" onclick="'+klik+'" title="'+judul+'" aria-label="'+judul+'">'+ikon18(svg)+'</button>';
+  };
+  var menuBtn=(canView?dashIkon('dashLinkPublik','Link Publik',SVG_ICONS.link,'openPublicLink()')
+      + dashIkon('dashLinkHarian','Link Harian (donatur dan KLL/ULL)',IKON_LINK_HARIAN,'openLinkHarian()'):'')
+    + dashIkon('dashEditBtn',window.DASH_EDIT?'Selesai atur layout':'Atur Layout',SVG_ICONS.sliders,'toggleDashEdit()',window.DASH_EDIT);
   /* Tombol tema sama dengan modul lain (js/lz-tema.js): ikon matahari/bulan satu SVG, lingkaran melebar dari tombol. */
   var temaJudul=(document.documentElement.getAttribute('data-theme')==='dark')?'Ganti ke tema terang':'Ganti ke tema gelap';
-  var temaBtn=window.LZTema?('<button type="button" class="dh-quick-btn dh-ikon kepala-tema" id="tombolTema" title="'+temaJudul+'" aria-label="'+temaJudul+'">'+window.LZTema.svg()+'</button>'):'';
+  var temaBtn=window.LZTema?('<button type="button" class="dh-quick-btn dh-ikon dh-sekali kepala-tema" id="tombolTema" title="'+temaJudul+'" aria-label="'+temaJudul+'">'+window.LZTema.svg()+'</button>'):'';
   var nm=(typeof ME!=='undefined'&&ME&&ME.nama)?ME.nama:'Admin';
   var today=new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
@@ -4317,7 +4318,7 @@ function renderDashboard(d){
         '<div class="dh-greeting"><div class="dh-hi">'+esc(salamRender((SETTINGS&&SETTINGS.salamJudul)||SALAM_DEFAULT,{nama:nm}))+'</div>'+
         '<div class="dh-sub">'+esc(salamSub(today))+'</div></div>'+
         '<div class="dh-acts">' +
-          '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + periodeChip + menuBtn + temaBtn + '</div>' +
+          '<div class="dh-act-row">' + addHimpunBtn + addSalurBtn + periodeChip + '<span class="dh-pisah" aria-hidden="true"></span>' + menuBtn + temaBtn + '</div>' +
         '</div>' +
       '</div>' +
       periodePanel +
@@ -10665,3 +10666,71 @@ function pasangTemaKepala(){
   }).observe(c,{childList:true,subtree:true});
 })();
 /* <<< pasangTemaKepala */
+
+/* ============================================================
+   MENU AKUN DI HP (pemilik, 5 Oktober 2026)
+   Di layar HP (html.plat-hp, di bawah 640 px) tombol yang jarang dipakai di kepala halaman, yaitu Link Publik,
+   Link Harian, Atur Layout, dan tombol tema, disembunyikan (styles.css, "MENU AKUN DI HP") dan dipindah ke menu
+   yang muncul saat foto profil diketuk, bersama pintu ke pengaturan akun dan Pengaturan aplikasi. Di HP tujuh
+   tombol tidak muat sebaris (406 px di ruang 342 px). Di layar lebar foto profil tetap langsung membuka
+   pengaturan akun seperti sebelumnya. Tombol catat dan periode tetap di dasbor: itu dipakai setiap hari.
+   ============================================================ */
+function menuAkunHp(){ return document.documentElement.classList.contains('plat-hp'); }
+function klikProfil(ev){
+  if(!menuAkunHp()){ openProfile(); return; }
+  if(ev) ev.stopPropagation();
+  if(document.getElementById('akunMenu')){ tutupMenuAkun(); return; }
+  bukaMenuAkun();
+}
+function tutupMenuAkun(){
+  var m=document.getElementById('akunMenu'); if(m) m.remove();
+  var c=document.querySelector('.user-chip'); if(c) c.setAttribute('aria-expanded','false');
+}
+function menuAkunPilih(fn){ tutupMenuAkun(); if(typeof fn==='function') fn(); }
+function bukaMenuAkun(){
+  tutupMenuAkun();
+  var chip=document.querySelector('.user-chip'); if(!chip) return;
+  var ik=function(d){ return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>'; };
+  var IK={
+    akun:ik('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>'),
+    atur:ik('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+    link:ik('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+    harian:ik('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'),
+    layout:ik('<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>')
+  };
+  var butir=function(id,ikon,label,klik){ return '<button type="button" class="dropdown-item akun-butir" id="'+id+'" role="menuitem" onclick="'+klik+'">'+ikon+'<span>'+label+'</span></button>'; };
+  var nama=(typeof ME!=='undefined'&&ME&&ME.nama)?ME.nama:'';
+  var peran=(el('uRole')&&el('uRole').textContent)||'';
+  var diDasbor=!!document.querySelector('#nav_dashboard.active');
+  var gelapKini=document.documentElement.getAttribute('data-theme')==='dark';
+  var h='<div class="akun-kepala"><div class="akun-nama">'+esc(nama)+'</div><div class="akun-peran">'+esc(peran)+'</div></div>';
+  h+=butir('akunProfil',IK.akun,'Pengaturan akun','menuAkunPilih(openProfile)');
+  if(canDo('settings','view')) h+=butir('akunPengaturan',IK.atur,'Pengaturan aplikasi',"menuAkunPilih(function(){go('settings');})");
+  var kedua='';
+  if(canDo('dashboard','view')){
+    kedua+=butir('akunLinkPublik',IK.link,'Link Publik','menuAkunPilih(openPublicLink)');
+    kedua+=butir('akunLinkHarian',IK.harian,'Link Harian','menuAkunPilih(openLinkHarian)');
+  }
+  if(diDasbor) kedua+=butir('akunLayout',IK.layout,window.DASH_EDIT?'Selesai atur layout':'Atur layout dasbor','menuAkunPilih(toggleDashEdit)');
+  /* Tema: lingkaran sapuannya berangkat dari foto profil (tombolnya), sesudah menu ditutup supaya menunya tidak
+     ikut terpotret di halaman lama. */
+  if(window.LZTema) kedua+='<button type="button" class="dropdown-item akun-butir akun-tema" id="akunTema" role="menuitem" onclick="menuAkunPilih(function(){LZTema.ganti(document.querySelector(\'.user-chip .avatar\'));})">'
+    + LZTema.svg()+'<span>'+(gelapKini?'Tema terang':'Tema gelap')+'</span></button>';
+  if(kedua) h+='<div class="akun-garis" role="separator"></div>'+kedua;
+  var m=document.createElement('div');
+  m.id='akunMenu'; m.className='akun-menu'; m.setAttribute('role','menu'); m.setAttribute('aria-label','Menu akun');
+  m.innerHTML=h;
+  document.body.appendChild(m);
+  var r=chip.getBoundingClientRect(), lebar=Math.min(260, window.innerWidth-24);
+  m.style.width=lebar+'px';
+  m.style.top=Math.round(r.bottom+8)+'px';
+  m.style.left=Math.round(Math.max(12, Math.min(r.right-lebar, window.innerWidth-lebar-12)))+'px';
+  chip.setAttribute('aria-expanded','true');
+}
+document.addEventListener('click',function(e){
+  var m=document.getElementById('akunMenu'); if(!m) return;
+  if(m.contains(e.target)||(e.target.closest&&e.target.closest('.user-chip'))) return;
+  tutupMenuAkun();
+});
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') tutupMenuAkun(); });
+window.addEventListener('resize',function(){ if(!menuAkunHp()) tutupMenuAkun(); });
