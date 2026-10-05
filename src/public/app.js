@@ -807,10 +807,10 @@ function renderPenghimpunan(rows){
     +'<div class="form-actions"><button class="btn btn-ghost" onclick="formHimpun(\'\',\'himpunFormHost\')">'+SVG_ICONS.putar+' Reset</button>'
     +'<button class="btn btn-primary" onclick="saveHimpun(\'\')">Simpan Penerimaan</button></div></div>';
   var delBtn = canDo('penghimpunan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'himpun\')">'+SVG_ICONS.sampah+' Hapus Rentang Tanggal</button>' : '';
-  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'himpun\')">'+SVG_ICONS.unggah+' Impor Data</button><button class="btn btn-sm btn-ghost" onclick="openImportJurnalBerkas()">'+SVG_ICONS.unggah+' Impor Jurnal per Berkas</button>'+delBtn+'</div>';
+  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'himpun\')">'+SVG_ICONS.unggah+' Impor Data</button><button class="btn btn-sm btn-ghost" onclick="openImportJurnalBerkas()">'+SVG_ICONS.unggah+' Impor Jurnal per Berkas</button>'+(kwBisaSinkron()?'<button class="btn btn-sm btn-ghost" title="Simpan nomor WhatsApp donatur ke kontak Broadcast. Yang sudah ada tidak digandakan." onclick="kwSinkronSemua()">'+SVG_ICONS.kirim+' Sinkron Kontak ke Broadcast</button>':'')+delBtn+'</div>';
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
-    '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Donatur / Kwitansi</label><input type="text" id="himpunTable_search" placeholder="Cari..." oninput="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
+    '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Donatur / Kwitansi</label><input type="text" id="himpunTable_search" placeholder="Cari... (mis. belum dikirim)" oninput="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Rentang Tanggal</label>' + rentangHTML('himpunTable_rt', '', '', {rapat:true, kosong:'Semua tanggal'}) + '</div>' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Jenis Dana</label>' +
       '<select id="himpunTable_filter_type" onchange="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px">' +
@@ -835,19 +835,15 @@ function renderPenghimpunan(rows){
   '</div>';
   
   h+= filterHtml;
-  h+='<div style="overflow:auto"><table id="himpunTable"><thead><tr><th>No. Kwitansi</th><th>Tanggal</th><th>Donatur</th><th>Jenis / Detail</th><th>Metode</th><th>Jumlah</th><th></th></tr></thead><tbody>';
-  if(!rows.length)h+='<tr><td colspan="7"><div class="empty"><div class="big">'+SVG_ICONS.bsrKosong+'</div>Belum ada penghimpunan.</div></td></tr>';
+  h+='<div style="overflow:auto"><table id="himpunTable"><thead><tr><th>No. Kwitansi</th><th>Tanggal</th><th>Donatur</th><th>Jenis / Detail</th><th>Metode</th><th>Jumlah</th><th>Kwitansi WA</th><th></th></tr></thead><tbody>';
+  if(!rows.length)h+='<tr><td colspan="8"><div class="empty"><div class="big">'+SVG_ICONS.bsrKosong+'</div>Belum ada penghimpunan.</div></td></tr>';
   var baris=[];
-  rows.forEach(function(r){
-    var det=(r.subJenis||r.jenisDana)+((String(r.subJenis).toLowerCase().indexOf('pilar')>=0&&r.pilar)?(' — '+r.pilar):'');
-    var frCleaned = cleanFR(r.fundraising);
-    var frText = '<div class="muted" style="font-size:11px;margin-top:2px">FR: ' + esc(frCleaned) + '</div>';
-    var htr='<tr data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
-    baris.push({h:htr, tg:String(r.tanggal||'').slice(0,10), jn:String(r.jenisDana||''), mt:String(r.metode||''), fr:String(frCleaned||'').toLowerCase(), c:[r.noKwitansi,fdate(r.tanggal),r.tanggal,r.namaDonatur||'-','FR: '+frCleaned,r.jenisDana,det,r.metode||'-',rp(r.jumlah),r.jumlah].join(' ').toLowerCase()});
-  });
+  HIMPUN_IDX={};
+  rows.forEach(function(r){var e=himpunBaris(r);baris.push(e);HIMPUN_IDX[r.id]=e;});
   h+='</tbody></table></div></div>';el('content').innerHTML=h;
   rtPasangFilter('himpunTable');
-  tabelBertahap('himpunTable', baris, 7);
+  tabelBertahap('himpunTable', baris, 8);
+  kwMuatStatus();
   if(canDo('penghimpunan','create'))formHimpun('','himpunFormHost');
 }
 function setupSearchDropdown(inputId, menuId, suggestions, onSelect) {
@@ -1015,13 +1011,13 @@ function saveHimpun(id){
   if(!d.fundraising){markFieldError('f_fundraising','Fundraising wajib dipilih');bad=true;}
   if(bad){toast('Lengkapi field yang ditandai',true);return;}
   if(id)d.id=id;
-  gas('apiSavePenghimpunan')(TOKEN,d).then(function(saved){closeModal();/* kwitansi penuntun dilepas — tugasnya sudah selesai */if(typeof scanLepas==='function')scanLepas();toast('Penghimpunan tersimpan');viewPenghimpunan();if(!id)setTimeout(function(){confirmDialog({title:'Berhasil Disimpan',message:'Cetak kwitansi sekarang?',okText:'Cetak Sekarang',cancelText:'Nanti Saja',icon:SVG_ICONS.dlgBeres}).then(function(__ok){if(__ok)cetakKwitansi(saved.id);});},300);}).catch(handleErr);
+  gas('apiSavePenghimpunan')(TOKEN,d).then(function(saved){closeModal();/* kwitansi penuntun dilepas — tugasnya sudah selesai */if(typeof scanLepas==='function')scanLepas();toast('Penghimpunan tersimpan');viewPenghimpunan();if(!id)setTimeout(function(){if(kwBisaKirim()){kwPopup(saved.id,{baru:true});return;}confirmDialog({title:'Berhasil Disimpan',message:'Cetak kwitansi sekarang?',okText:'Cetak Sekarang',cancelText:'Nanti Saja',icon:SVG_ICONS.dlgBeres}).then(function(__ok){if(__ok)cetakKwitansi(saved.id);});},300);}).catch(handleErr);
 }
 function delHimpun(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)return;gas('apiDeletePenghimpunan')(TOKEN,id).then(function(){toast('Terhapus');viewPenghimpunan();}).catch(handleErr);});}
 
 /* ============ KWITANSI ============ */
 function terbilang(n){n=Math.floor(Math.abs(Number(n))||0);var s=['','satu','dua','tiga','empat','lima','enam','tujuh','delapan','sembilan','sepuluh','sebelas'];function t(x){if(x<12)return s[x];if(x<20)return t(x-10)+' belas';if(x<100)return t(Math.floor(x/10))+' puluh'+(x%10?' '+t(x%10):'');if(x<200)return 'seratus'+(x%100?' '+t(x%100):'');if(x<1000)return t(Math.floor(x/100))+' ratus'+(x%100?' '+t(x%100):'');if(x<2000)return 'seribu'+(x%1000?' '+t(x%1000):'');if(x<1000000)return t(Math.floor(x/1000))+' ribu'+(x%1000?' '+t(x%1000):'');if(x<1000000000)return t(Math.floor(x/1000000))+' juta'+(x%1000000?' '+t(x%1000000):'');return t(Math.floor(x/1000000000))+' miliar'+(x%1000000000?' '+t(x%1000000000):'');}if(n===0)return 'nol';return t(n).replace(/\s+/g,' ').trim();}
-function cetakKwitansi(id){gas('apiGetKwitansi')(TOKEN,id).then(function(res){printDoc(buildKwitansiHTML(res.data,res.settings));}).catch(handleErr);}
+function cetakKwitansi(id){gas('apiGetKwitansi')(TOKEN,id).then(function(res){kwBukaCetak(res.data,res.settings);}).catch(handleErr);}
 function buildKwitansiHTML(d,s){
   var det=(d.subJenis||d.jenisDana)+((String(d.subJenis).toLowerCase().indexOf('pilar')>=0&&d.pilar)?' - '+d.pilar:'');
   /* Kode acak (10 huruf pertama id) ikut di QR: tanpa kode itu, halaman
@@ -1049,6 +1045,133 @@ function buildKwitansiHTML(d,s){
     signHTML(s,d.petugas,'Penyetor','Petugas / Amil')+
     '<div class="note">Kwitansi ini sah sebagai bukti pembayaran yang dapat diverifikasi secara publik via QR Code. Jazakumullah khairan katsiran. ('+(d.statusBayar==='Pending'?'PENDING':'LUNAS')+')</div>'
   );
+}
+
+/* ============ KWITANSI KE WHATSAPP DONATUR ============
+   Satu gambar kwitansi (js/lz-kwitansi.js) dipakai untuk dikirim, dilihat, dan dicetak. Pengirimannya lewat mesin
+   Broadcast (api/blast.js: kwitansi.kirim): kontak donatur dicari lewat nomor dan TIDAK digandakan, pesan masuk antrean
+   dengan jeda aman, statusnya dibaca dari pesan itu sendiri (Terkirim / Menunggu / Gagal). */
+var HIMPUN_IDX={}, KWWA={};
+function kwBisaKirim(){return canDo('broadcast','create');}
+function kwBisaSinkron(){return canDo('broadcast','edit');}
+function blastCall(tindakan,data){
+  return fetch('/api/blast',{method:'POST',headers:{'Content-Type':'application/json','X-Laz-Token':TOKEN},body:JSON.stringify({tindakan:tindakan,data:data||{},token:TOKEN})})
+    .then(function(r){return r.json().catch(function(){throw new Error('Balasan server tidak dikenali');});})
+    .then(function(j){if(!j||!j.ok)throw new Error((j&&j.pesan)||'Gagal menghubungi Broadcast');return j;});
+}
+function kwNomorBersih(v){return String(v||'').replace(/[^0-9+]/g,'');}
+function kwNomorSah(v){var n=kwNomorBersih(v).replace(/^\+/,'');return /^(0|62)?8[0-9]{8,12}$/.test(n)||/^[1-9][0-9]{8,16}$/.test(n);}
+function kwBadge(r){
+  var st=KWWA[r.id];
+  if(st){
+    var tl=st.waktu?(' pada '+fdate(String(st.waktu).slice(0,10))):'';
+    var k={terkirim:['green','Terkirim'],menunggu:['amber','Menunggu'],gagal:['red','Gagal']}[st.status]||['grey','Belum dikirim'];
+    return '<span class="badge '+k[0]+'" title="'+esc(k[1]+' ke '+(st.nomor||'')+tl)+'">'+k[1]+'</span>';
+  }
+  return '<span class="badge grey">'+(kwNomorBersih(r.telepon)?'Belum dikirim':'Belum dikirim (tanpa nomor)')+'</span>';
+}
+function kwTeks(r){var st=KWWA[r.id];return st?('wa kwitansi '+({terkirim:'terkirim',menunggu:'menunggu',gagal:'gagal'}[st.status]||'')):'wa kwitansi belum dikirim';}
+function himpunBaris(r){
+  var det=(r.subJenis||r.jenisDana)+((String(r.subJenis).toLowerCase().indexOf('pilar')>=0&&r.pilar)?(' — '+r.pilar):'');
+  var frCleaned = cleanFR(r.fundraising);
+  var frText = '<div class="muted" style="font-size:11px;margin-top:2px">FR: ' + esc(frCleaned) + '</div>';
+  var wa = kwBisaKirim() ? '<button class="icon-btn" title="'+(KWWA[r.id]?'Kirim ulang kwitansi ke WhatsApp':'Kirim kwitansi ke WhatsApp')+'" onclick="kwPopup(\''+r.id+'\')">'+SVG_ICONS.kirim+'</button>' : '';
+  var htr='<tr data-id="'+esc(r.id)+'" data-tanggal="'+esc(r.tanggal)+'" data-jenis="'+esc(r.jenisDana)+'" data-metode="'+esc(r.metode)+'" data-fr="'+esc(frCleaned)+'"><td><b>'+esc(r.noKwitansi)+'</b></td><td>'+fdate(r.tanggal)+'</td><td><b>'+esc(r.namaDonatur||'-')+'</b>'+frText+'</td><td><span class="badge blue">'+esc(r.jenisDana)+'</span><div class="muted" style="font-size:11px;margin-top:3px">'+esc(det)+'</div></td><td><span class="badge '+(isTransferMethod(r.metode)?'amber':'green')+'">'+esc(r.metode||'-')+'</span></td><td style="font-weight:700;color:var(--green)">'+rp(r.jumlah)+'</td><td class="kw-wa">'+kwBadge(r)+'</td><td><div class="actions-cell"><button class="icon-btn" title="Kwitansi" onclick="cetakKwitansi(\''+r.id+'\')">'+SVG_ICONS.kwitansi+'</button>'+wa+(canDo('penghimpunan','edit')?'<button class="icon-btn" onclick="formHimpun(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('penghimpunan','delete')?'<button class="icon-btn" onclick="delHimpun(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';
+  return {r:r, h:htr, tg:String(r.tanggal||'').slice(0,10), jn:String(r.jenisDana||''), mt:String(r.metode||''), fr:String(frCleaned||'').toLowerCase(), c:[r.noKwitansi,fdate(r.tanggal),r.tanggal,r.namaDonatur||'-','FR: '+frCleaned,r.jenisDana,det,r.metode||'-',rp(r.jumlah),r.jumlah,kwTeks(r)].join(' ').toLowerCase()};
+}
+/* Hanya baris yang statusnya berubah digambar ulang (daftar bisa belasan ribu baris). */
+function kwTerapkan(lama){
+  var ids={},k;
+  for(k in KWWA)ids[k]=1;
+  for(k in (lama||{}))ids[k]=1;
+  Object.keys(ids).forEach(function(id){
+    var a=KWWA[id],b=(lama||{})[id];
+    if(lama&&a&&b&&a.status===b.status&&a.nomor===b.nomor)return;
+    var e=HIMPUN_IDX[id]; if(!e)return;
+    var n=himpunBaris(e.r); e.h=n.h; e.c=n.c;
+    var tr=document.querySelector('#himpunTable tbody tr[data-id="'+id+'"]');
+    if(tr){var td=tr.querySelector('td.kw-wa'); if(td)td.innerHTML=kwBadge(e.r); var bt=tr.querySelector('.actions-cell .icon-btn[onclick^="kwPopup"]'); if(bt)bt.title=a?'Kirim ulang kwitansi ke WhatsApp':'Kirim kwitansi ke WhatsApp';}
+  });
+}
+function kwMuatStatus(){
+  if(!canDo('broadcast','view'))return Promise.resolve();
+  var lama=KWWA;
+  return blastCall('kwitansi.status').then(function(j){KWWA=j.peta||{};kwTerapkan(lama);}).catch(function(){/* Broadcast tidak terjangkau: kolom tetap "belum" */});
+}
+function kwPantau(){[4000,12000,30000].forEach(function(ms){setTimeout(function(){if(el('himpunTable'))kwMuatStatus();},ms);});}
+
+function kwBukaCetak(d,s){
+  var w=window.open('','_blank');
+  d=Object.assign({},d,{__verifikasi:window.location.host+'/public.html?kwitansi='+encodeURIComponent(d.noKwitansi||d.id)});
+  LZKwitansi.png(d,s).then(function(g){
+    w.document.open();
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kwitansi '+esc(d.noKwitansi)+'</title><style>@page{size:A5 landscape;margin:6mm}html,body{margin:0;background:#e9eaec}.bar{text-align:center;padding:10px;font:14px Arial}.bar a,.bar button{margin:0 4px;padding:8px 14px;border:1px solid #bbb;border-radius:8px;background:#fff;cursor:pointer;text-decoration:none;color:#222;font:14px Arial}img{display:block;width:100%;max-width:1000px;margin:0 auto;background:#fff}@media print{.bar{display:none}html,body{background:#fff}img{max-width:none;width:100%}}</style></head><body><div class="bar"><button onclick="print()">Cetak</button><a href="'+g.dataUrl+'" download="'+esc(g.nama)+'">Unduh gambar</a></div><img src="'+g.dataUrl+'" alt="Kwitansi"></body></html>');
+    w.document.close();
+  }).catch(function(e){try{w.close();}catch(x){}handleErr(e);});
+}
+
+function kwPopup(id,opsi){
+  opsi=opsi||{};
+  gas('apiGetKwitansi')(TOKEN,id).then(function(res){
+    var d=res.data,s=res.settings,sudah=KWWA[id];
+    if(!d){toast('Data penghimpunan tidak ditemukan',true);return;}
+    if(!kwBisaKirim()){kwBukaCetak(d,s);return;}
+    var st=sudah?({terkirim:'sudah terkirim',menunggu:'masih menunggu di antrean',gagal:'gagal terkirim'}[sudah.status]||''):'';
+    var info=sudah?'<div class="kw-info kw-info-'+esc(sudah.status)+'">Kwitansi ini '+esc(st)+' ke <b>'+esc(sudah.nomor||'')+'</b>'+(sudah.waktu?' ('+esc(fdate(String(sudah.waktu).slice(0,10)))+')':'')+'. Mengirim lagi akan mengirim satu pesan baru.</div>':'';
+    var body='<div class="kw-pop">'+(opsi.baru?'<div class="kw-ok">Penghimpunan tersimpan.</div>':'')+info
+      +'<div class="kw-prev"><img id="kwPrev" alt="Pratinjau kwitansi"><div class="kw-prev-ket" id="kwPrevKet">Menyiapkan kwitansi...</div></div>'
+      +'<div class="field"><label>Nomor WhatsApp donatur</label><input id="kwNomor" inputmode="tel" placeholder="0812 3456 7890" value="'+esc(d.telepon||'')+'">'
+      +'<div class="muted" style="font-size:11.5px;margin-top:4px">Nomor disimpan sebagai kontak Broadcast. Kalau nomornya sudah ada di kontak, yang lama dipakai dan tidak dibuat ganda.</div></div>'
+      +'<div class="field"><label>Pesan (ucapan terima kasih)</label><textarea id="kwTeks" rows="9"></textarea></div></div>';
+    var foot='<button class="btn btn-ghost" id="kwTidak">Tidak, nanti saja</button><button class="btn btn-ghost" id="kwCetak">'+SVG_ICONS.cetak+' Cetak</button><button class="btn btn-primary" id="kwKirim">'+SVG_ICONS.kirim+' '+(sudah?'Kirim ulang':'Kirim ke WhatsApp')+'</button>';
+    openModal('Kirim kwitansi ke WhatsApp donatur',body,foot);
+    var mc=el('modalCard'); if(mc)mc.classList.add('kw-modal');
+    el('kwTeks').value=LZKwitansi.pesan(d,s);
+    var dk=Object.assign({},d,{__verifikasi:window.location.host+'/public.html?kwitansi='+encodeURIComponent(d.noKwitansi||d.id)});
+    var gambar=null;
+    LZKwitansi.png(dk,s).then(function(g){gambar=g;el('kwPrev').src=g.dataUrl;el('kwPrevKet').textContent='Gambar ini yang dikirim ('+Math.round(g.base64.length*0.75/1024)+' KB).';}).catch(function(){var k=el('kwPrevKet');if(k)k.textContent='Pratinjau gagal dibuat.';});
+    el('kwCetak').onclick=function(){kwBukaCetak(d,s);};
+    el('kwTidak').onclick=function(){
+      var n=el('kwNomor')?el('kwNomor').value:'';
+      closeModal();
+      /* Memilih "Tidak" tidak mengirim apa pun, tetapi nomor yang ada tetap disinkronkan ke kontak Broadcast. */
+      if(kwNomorSah(n)&&kwBisaSinkron())blastCall('kontak.sinkronDonatur',{daftar:[{nama:d.namaDonatur,nomor:n,alamat:d.alamat}]}).catch(function(){});
+    };
+    el('kwKirim').onclick=function(){
+      var nomor=el('kwNomor').value, teks=el('kwTeks').value.trim(), btn=el('kwKirim');
+      clearFieldErrors('.kw-pop');
+      if(!kwNomorSah(nomor)){markFieldError('kwNomor','Isi nomor WhatsApp yang sah, mis. 0812 3456 7890');return;}
+      if(!teks){markFieldError('kwTeks','Pesan tidak boleh kosong');return;}
+      if(!gambar){toast('Tunggu sebentar, kwitansi sedang disiapkan',true);return;}
+      btn.disabled=true;btn.textContent='Mengirim...';
+      blastCall('kwitansi.kirim',{penghimpunanId:id,nama:d.namaDonatur,nomor:nomor,alamat:d.alamat,teks:teks,base64:gambar.base64,tipe:gambar.tipe,namaBerkas:gambar.nama,paksa:!!sudah})
+        .then(function(j){
+          closeModal();toast(j.pesan||'Kwitansi masuk antrean WhatsApp');
+          if(!j.sudah){var lama=KWWA;KWWA=Object.assign({},KWWA);KWWA[id]={status:'menunggu',waktu:new Date().toISOString(),nomor:nomor,percobaan:1};kwTerapkan(lama);kwPantau();
+            /* Nomor yang baru diketik ikut disimpan di data penghimpunan bila sebelumnya kosong. */
+            if(!kwNomorBersih(d.telepon)&&canDo('penghimpunan','edit')){gas('apiSavePenghimpunan')(TOKEN,Object.assign({},d,{telepon:nomor})).catch(function(){});}}
+        })
+        .catch(function(e){btn.disabled=false;btn.innerHTML=SVG_ICONS.kirim+' '+(sudah?'Kirim ulang':'Kirim ke WhatsApp');toast(e.message,true);});
+    };
+  }).catch(handleErr);
+}
+
+function kwSinkronSemua(){
+  var seen={},daftar=[];
+  (CACHE.himpun||[]).forEach(function(r){
+    var n=kwNomorBersih(r.telepon); if(!kwNomorSah(n))return;
+    var k=n.replace(/^\+/,'').replace(/^0/,'62'); if(seen[k])return; seen[k]=1;
+    daftar.push({nama:r.namaDonatur,nomor:n,alamat:r.alamat});
+  });
+  if(!daftar.length){toast('Belum ada donatur dengan nomor WhatsApp yang sah');return;}
+  confirmDialog({title:'Sinkron Kontak ke Broadcast',message:'Simpan '+daftar.length.toLocaleString('id-ID')+' nomor donatur ke kontak Broadcast? Nomor yang sudah ada tidak digandakan.',okText:'Sinkronkan',cancelText:'Batal',icon:SVG_ICONS.dlgGabung}).then(function(ok){
+    if(!ok)return;
+    var tot={baru:0,sudahAda:0,tidakSah:0},i=0;
+    (function lanjut(){
+      if(i>=daftar.length){toast(tot.baru+' kontak baru, '+tot.sudahAda+' sudah ada (tidak digandakan), '+tot.tidakSah+' tidak sah.');return;}
+      blastCall('kontak.sinkronDonatur',{daftar:daftar.slice(i,i+300)}).then(function(j){tot.baru+=j.baru;tot.sudahAda+=j.sudahAda;tot.tidakSah+=j.tidakSah;i+=300;lanjut();}).catch(function(e){toast(e.message,true);});
+    })();
+  });
 }
 
 /* ============ PENTASYARUFAN ============ */

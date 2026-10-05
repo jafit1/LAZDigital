@@ -65,6 +65,8 @@ const DAFTAR = [
   { label: 'Tampilan halaman Media', berkas: 'test_media_ui.js' },
   { label: 'Fitur Surat dan Pengajuan', berkas: 'test_surat_fitur.js' },
   { label: 'Tampilan Surat dan Pengajuan', berkas: 'test_surat_ui.js' },
+  { label: 'Kwitansi WhatsApp (server)', berkas: 'test_kwitansi_wa.js' },
+  { label: 'Kwitansi WhatsApp (tampilan)', berkas: 'test_kwitansi_ui.js' },
   { label: 'Fitur AI Asisten', berkas: 'test_ai_fitur.js' },
   { label: 'Tampilan halaman AI Asisten', berkas: 'test_ai_ui.js' },
   { label: 'Sambungan ke PostgreSQL', berkas: 'cek-postgres.js' },

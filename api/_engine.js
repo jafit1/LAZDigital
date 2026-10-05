@@ -578,7 +578,11 @@ async function apiDeletePenghimpunan(t,id){ var u=_requirePerm(t,'penghimpunan',
   if (oldMonth) await syncMonthlySpreadsheet(oldMonth);
   return {ok:true};
 }
-function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view'); return {data:findById(SHEETS.PENGHIMPUNAN,id),settings:getAllSettings()}; }
+function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view');
+  var d=findById(SHEETS.PENGHIMPUNAN,id);
+  /* Kwitansi hanya menampilkan 3 angka terakhir nomor rekening; nomor lengkapnya tidak ikut dikirim ke peramban. */
+  if(d&&d.rekeningId){ var rk=findById(SHEETS.REKENING,d.rekeningId); var no=String((rk&&rk.nomor)||'').replace(/\D/g,''); if(no) d=Object.assign({},d,{rekeningAkhir:no.slice(-3)}); }
+  return {data:d,settings:getAllSettings()}; }
 
 /* ===== PENTASYARUFAN ===== */
 function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='BPT/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENTASYARUFAN,'noBukti',awalan)+1)).slice(-4); }

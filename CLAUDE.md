@@ -503,6 +503,23 @@ ke basis data produksi:
   `--cari <kata>`, `--rinci "<nama>"`, `--semua`
 - `tools/ukur-media.js`: mengukur bentuk UI modul Media di 7 lebar layar
 
+**Ditambahkan 5 Oktober 2026: kwitansi ke WhatsApp donatur.**
+
+- `src/public/js/lz-kwitansi.js` (`LZKwitansi`) menggambar kwitansi di kanvas
+  1600x1238 PNG mengikuti blanko Lazismu. Tidak butuh internet. Model cetak
+  untuk printer portable BELUM dibuat (ditunda, menunggu printernya siap).
+- Blok "KWITANSI KE WHATSAPP DONATUR" di `app.js`: kolom ke-8 "Kwitansi WA"
+  di Penghimpunan, popup Kirim/Tidak sesudah simpan, tombol "Sinkron Kontak
+  ke Broadcast". Status disimpan di Broadcast (kunci `kwitansi:wa:<id>`),
+  bukan di tabel Penghimpunan, jadi skema PostgreSQL tidak berubah.
+- Tindakan baru di `api/blast.js`: `kwitansi.kirim` (izin `pesan.kirim`),
+  `kwitansi.status` (`pesan.lihat`), `kontak.sinkronDonatur` (`kontak.ubah`).
+  Kontak dicari lewat nomor ternormalisasi, tidak pernah digandakan; yang
+  sudah ada hanya diberi label Donatur. Kontak berhenti/daftar hitam tidak
+  dikirimi. Pengurus kantor layanan tidak boleh menyinkronkan kontak.
+- Uji: `test_kwitansi_wa.js` (server), `test_kwitansi_ui.js` (tampilan).
+- Teks legal di kwitansi dari setelan `kwSk` (belum ada kolom di Pengaturan).
+
 ---
 
 ## 8. Jebakan yang sudah pernah menggigit
