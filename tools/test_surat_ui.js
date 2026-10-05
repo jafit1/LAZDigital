@@ -189,6 +189,10 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     const det = await page.evaluate(() => ({ nomor: document.querySelector('.sr-nomor').textContent, judul: document.querySelector('.sr-d-judul').textContent,
       langkah: [...document.querySelectorAll('.sr-step-i')].map((x) => x.className), lamp: [...document.querySelectorAll('.sr-lamp')].map((x) => x.textContent) }));
     cek('surat tercatat dan detailnya terbuka', /\/SM\//.test(det.nomor) && det.judul === 'Undangan rapat koordinasi', det);
+    /* Tautan publik: surat masuk juga punya (dulu hanya pengajuan). Nomor dan kode sudah ada di tautannya. */
+    const tautanMasuk = await page.inputValue('#srTautan').catch(() => '');
+    cek('surat masuk punya tautan publik dengan nomor dan kode terisi', /\/lacak\.html\?n=.+SM.+&k=[A-Z2-9]{6}$/.test(tautanMasuk), tautanMasuk);
+    cek('tombol WhatsApp dan Buka memakai tautan itu', await page.evaluate(() => /wa\.me\/\?text=/.test(document.getElementById('srWaLacak').href) && document.getElementById('srWaLacak').href.includes(encodeURIComponent('lacak.html')) && document.getElementById('srBukaLacak').getAttribute('href') === document.getElementById('srTautan').value));
     cek('progres empat langkah, langkah pertama aktif', det.langkah.length === 4 && /kini/.test(det.langkah[0]), det.langkah);
     const L = await page.evaluate(() => window.KINI && window.KINI.lampiran);
     const lampSrv = JSON.parse(JSON.stringify(await (async () => { const r = await suratApi.T['surat.detail'](await suratApi._uji.pengguna({ headers: {} }, { token: SU }), { id: await page.evaluate(() => location.hash.slice(3)) }); return r.surat.lampiran; })()));
@@ -262,6 +266,7 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await page.waitForFunction(() => /^s\//.test(document.body.getAttribute('data-halaman-siap') || ''), null, { timeout: 15000 });
     const kode = await page.evaluate(() => (document.querySelector('.sr-kode span') || {}).textContent);
     const nomorP = await page.textContent('.sr-nomor');
+    const tautanP = await page.inputValue('#srTautan');
     cek('kode lacak 6 huruf tampil untuk diberikan ke pemohon', /^[A-Z2-9]{6}$/.test(kode || ''), kode);
     await page.goto(A + '/surat.html#pengajuan');
     await siap('pengajuan');
@@ -307,6 +312,51 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await lacak.setViewportSize({ width: 390, height: 800 });
     cek('lacak di HP tanpa geser ke samping', await lacak.evaluate(() => document.documentElement.scrollWidth <= 391));
     await lacak.close();
+
+    console.log('\n=== F2. TAUTAN PUBLIK LANGSUNG TERBUKA ===');
+    {
+      const tp = await ctx.newPage();
+      await tp.goto(tautanP);
+      await tp.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
+      const a = await tp.evaluate(() => document.body.innerText);
+      cek('tautan pengajuan langsung menampilkan progres tanpa mengetik apa pun', /Status sekarang: Asesmen/.test(a), a.slice(0, 200));
+      await tp.goto(tautanMasuk);
+      await tp.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
+      const m = await tp.evaluate(() => ({ teks: document.body.innerText, langkah: document.querySelectorAll('.lk-langkah li').length }));
+      cek('tautan surat masuk menampilkan progres 4 langkah', /Surat Masuk/.test(m.teks) && /Status sekarang: Didisposisi/.test(m.teks) && m.langkah === 4, m);
+      cek('tautan publik tanpa nama pengirim dan nomor surat asal', !/PCM Contoh|45\/PCM/.test(m.teks), m.teks.slice(0, 200));
+      await tp.goto(tautanMasuk.replace(/k=[A-Z2-9]{6}/, 'k=AAAAAA'));
+      await tp.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
+      cek('kode salah tidak menampilkan apa pun', (await tp.evaluate(() => !!document.getElementById('lkGalat') && !document.getElementById('lkKartu'))));
+      await tp.close();
+    }
+
+    console.log('\n=== F3. TEMA GELAP: TEKS TERBACA ===');
+    {
+      const PINDAI = require('./_kontras.js');
+      await page.evaluate(() => { localStorage.setItem('laz_theme', 'dark'); document.documentElement.setAttribute('data-theme', 'dark'); });
+      for (const rute of ['dasbor', 'masuk', 'keluar', 'pengajuan', 'disposisi']) {
+        await page.goto(A + '/surat.html#' + rute);
+        await siap(rute);
+        await page.waitForTimeout(500);
+        const r = await page.evaluate(PINDAI, 2.5);
+        cek('surat ' + rute + ' di tema gelap: semua teks terbaca', r.length === 0, r.slice(0, 3));
+      }
+      await page.goto(A + '/surat.html#masuk'); await siap('masuk');
+      await page.evaluate(() => { location.hash = '#s/' + document.querySelector('.sr-baris').dataset.id; });
+      await page.waitForFunction(() => /^s\//.test(document.body.getAttribute('data-halaman-siap') || ''), null, { timeout: 10000 });
+      await page.waitForTimeout(500);
+      const rd = await page.evaluate(PINDAI, 2.5);
+      cek('detail surat (kartu tautan publik, riwayat) di tema gelap: semua teks terbaca', rd.length === 0, rd.slice(0, 3));
+      const lg = await ctx.newPage();
+      await lg.addInitScript(() => { try { localStorage.setItem('laz_theme', 'dark'); } catch (_) {} });
+      await lg.goto(tautanP);
+      await lg.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
+      const rl = await lg.evaluate(PINDAI, 2.5);
+      cek('halaman lacak berisi hasil di tema gelap: semua teks terbaca', rl.length === 0, rl.slice(0, 3));
+      await lg.close();
+      await page.evaluate(() => { localStorage.setItem('laz_theme', 'light'); document.documentElement.setAttribute('data-theme', 'light'); });
+    }
 
     console.log('\n=== G. HP DAN KEBERSIHAN ===');
     await page.setViewportSize({ width: 390, height: 844 });

@@ -6513,3 +6513,11 @@ html.lz-tema-halus .lz-tema-ikon .t-sinar{ transition:transform .6s cubic-bezier
 .lz-tema-pojok .lz-tema-ikon{ width:22px; height:22px; display:block; }
 .lz-tema-pojok:hover{ transform:scale(1.06); }
 .lz-tema-pojok:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
+
+.sr-tautan-in{width:100%;height:38px;border-radius:10px;font-size:12.5px;margin-bottom:8px}
+.sr-tautan-aksi{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.sr-tautan-aksi .btn{text-decoration:none}
+
+/* Tombol tanpa warna sendiri memakai warna bawaan peramban (hitam), yang tidak terbaca di tema gelap. */
+button{ color:var(--text); }
+.user-chip, .uc-name{ color:var(--text); }

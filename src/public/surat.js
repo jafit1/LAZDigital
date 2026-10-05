@@ -447,9 +447,13 @@ async function gambarDetail(el, id) {
       <b>${H(N.labelStatus[h.status] || h.status)}</b> <span class="muted sr-kecil">${H(fmtWaktu(h.waktu))} · ${H(h.olehNama)}</span>
       ${h.catatan ? `<div class="sr-kecil">${H(h.catatan)}</div>` : ''}</div></div>`).join('');
 
-  const lacak = r.kodeLacak ? `<div class="card sr-kartu-d"><h3>Lacak untuk pemohon</h3>
-      <div class="sr-kode"><span>${H(r.kodeLacak)}</span><button type="button" class="btn btn-sm" id="srSalinLacak">${IKON.salin} Salin pesan</button></div>
-      <p class="muted sr-kecil">Pemohon membuka halaman Lacak Pengajuan dengan nomor ${H(r.nomor)} dan kode ini. Catatan internal tidak terlihat oleh mereka.</p></div>` : '';
+  const lacak = r.kodeLacak ? `<div class="card sr-kartu-d"><h3>Tautan publik progres</h3>
+      <input class="sr-tautan-in" id="srTautan" readonly value="${H(tautanLacak(r))}" aria-label="Tautan publik">
+      <div class="sr-tautan-aksi"><button type="button" class="btn btn-sm btn-primary" id="srSalinLacak">${IKON.salin} Salin tautan</button>
+        <a class="btn btn-sm" id="srWaLacak" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(pesanLacak(r))}">Kirim lewat WhatsApp</a>
+        <a class="btn btn-sm" id="srBukaLacak" target="_blank" rel="noopener" href="${H(tautanLacak(r))}">Buka</a></div>
+      <div class="sr-kode"><span>${H(r.kodeLacak)}</span><span class="muted sr-kecil">kode lacak</span></div>
+      <p class="muted sr-kecil">Siapa pun yang memegang tautan ini bisa melihat langkah dan tanggalnya, tanpa masuk. Catatan internal, nominal, nama petugas, dan lampiran tidak ikut. Surat berstatus rahasia tidak punya tautan.</p></div>` : '';
 
   const balasan = (r.balasan || []).length ? `<div class="card sr-kartu-d"><h3>Balasan</h3>${r.balasan.map((b) => `<a class="sr-tautan-surat" href="#s/${H(b.id)}">${H(b.nomor)} · ${H(b.perihal)} ${pil(b.status)}</a>`).join('')}</div>` : '';
 
@@ -481,8 +485,7 @@ function pasangDetail(el, r) {
   t('srBalas', () => bukaCatat('keluar', null, r));
   t('srHapus', () => bukaHapus(r));
   t('srSalinLacak', () => {
-    const teks = `Pengajuan Anda tercatat dengan nomor ${r.nomor}. Cek progresnya di ${location.origin}/lacak.html?n=${encodeURIComponent(r.nomor)} dengan kode ${r.kodeLacak}.`;
-    salin(teks);
+    salin(tautanLacak(r), 'Tautan disalin. Tempel di WhatsApp atau email.');
   });
   $$('[data-selesai]', el).forEach((b) => { b.onclick = () => bukaSelesaiDisposisi(r, b.dataset.selesai); });
   $$('[data-cetak]', el).forEach((b) => { b.onclick = () => cetakDisposisi(r, b.dataset.cetak); });
@@ -496,10 +499,16 @@ function pasangDetail(el, r) {
   pasangZonaUnggah(el, r.id, r.lampiran.length);
 }
 function muatUlangDetail() { if (KINI) buka('s/' + KINI.id); }
-function salin(teks) {
-  const ok = () => toast('Disalin. Tempel di WhatsApp untuk pemohon.');
-  if (navigator.clipboard) navigator.clipboard.writeText(teks).then(ok).catch(() => prompt('Salin pesan ini:', teks));
-  else prompt('Salin pesan ini:', teks);
+/* Tautan langsung: nomor dan kode sudah terisi di lacak.html, jadi penerima cukup membukanya. */
+function tautanLacak(r) { return location.origin + '/lacak.html?n=' + encodeURIComponent(r.nomor) + '&k=' + encodeURIComponent(r.kodeLacak); }
+function pesanLacak(r) {
+  const apa = r.jenis === 'masuk' || r.jenis === 'keluar' ? 'Surat' : 'Pengajuan';
+  return apa + ' Anda tercatat dengan nomor ' + r.nomor + '. Pantau progresnya kapan saja di ' + tautanLacak(r);
+}
+function salin(teks, pesan) {
+  const ok = () => toast(pesan || 'Disalin.');
+  if (navigator.clipboard) navigator.clipboard.writeText(teks).then(ok).catch(() => prompt('Salin tautan ini:', teks));
+  else prompt('Salin tautan ini:', teks);
 }
 
 // ------------------------------------------------------------ pindah langkah

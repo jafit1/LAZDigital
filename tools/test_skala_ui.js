@@ -386,6 +386,30 @@ const BATAS = {
     await ctx.close();
   }
 
+  /* Tema gelap: tiap menu tiap modul dipindai kontras teksnya (pemindai di _kontras.js). Pernah ada nama pengguna di
+     bilah kiri yang tetap hitam karena <button> tanpa warna sendiri memakai hitam bawaan peramban. */
+  console.log('\n=== KONTRAS TEKS DI TEMA GELAP ===');
+  {
+    const PINDAI = require('./_kontras.js');
+    for (const hal of HALAMAN.filter((h) => /^\/(blast|fund|ai|media)\.html$/.test(h.url))) {
+      const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
+      const p = await ctx.newPage();
+      p.on('pageerror', () => { /* data tiruan sengaja secukupnya: menu yang butuh lebih banyak bisa galat, bukan urusan uji ini */ });
+      await p.addInitScript(() => { try { localStorage.setItem('laz_token', 'uji'); localStorage.setItem('laz_theme', 'dark'); } catch (_) {} });
+      await p.goto(A + hal.url, { waitUntil: 'domcontentloaded' });
+      await p.waitForSelector(hal.siap, { timeout: 15000 });
+      const jumlah = await p.evaluate(() => document.querySelectorAll('.topnav .tn-item').length);
+      for (let i = 0; i < Math.max(jumlah, 1); i++) {
+        if (jumlah) await p.evaluate((n) => document.querySelectorAll('.topnav .tn-item')[n].click(), i);
+        await p.waitForTimeout(600);
+        const nama = await p.evaluate(() => (location.hash || '#awal'));
+        const r = await p.evaluate(PINDAI, 2.3);
+        cek(`${hal.nama} ${nama}: semua teks terbaca di tema gelap`, r.length === 0, r.slice(0, 3));
+      }
+      await ctx.close();
+    }
+  }
+
   console.log('\n=== TIDAK ADA GALAT JS ===');
   cek('tidak ada galat JavaScript di semua halaman & lebar', galat.length === 0, galat.slice(0, 3));
 

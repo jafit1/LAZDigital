@@ -95,8 +95,9 @@ const jpg = (n) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.
   const sm = r.surat;
   r = await pintu('surat.simpan', { jenis: 'masuk', perihal: 'Pemberitahuan', pengirim: 'Dinas Contoh', tanggalTerima: tahun + '-10-03' }, T_STAF);
   cek('nomor berikutnya 002', r.surat && r.surat.nomor === '002/SM/X/' + tahun, r.surat && r.surat.nomor);
+  const sm2 = r.surat;
   cek('surat masuk mulai di langkah Diterima', sm.status === 'diterima' && sm.riwayat.length === 1);
-  cek('surat (bukan pengajuan) tidak punya kode lacak', !sm.kodeLacak);
+  cek('surat masuk juga punya kode lacak 6 huruf untuk tautan publik', /^[A-Z2-9]{6}$/.test(sm.kodeLacak || ''), sm.kodeLacak);
 
   console.log('\n=== C. DISPOSISI ===');
   r = await pintu('surat.akun', {}, T_KABID);
@@ -209,6 +210,7 @@ const jpg = (n) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.
   await unggah(rh.id, pdf(500), 'application/pdf', 'rahasia.pdf');
   r = await pintu('surat.detail', { id: rh.id }, T_LAIN);
   cek('surat rahasia: isi dan lampiran tertutup bagi yang bukan pencatat/penerima', r.ok && r.surat.rahasiaTertutup && !r.surat.ringkasan && !r.surat.lampiran.length, r.surat);
+  cek('surat rahasia tidak punya kode lacak (tidak ada tautan publik)', !rh.kodeLacak, rh.kodeLacak);
   r = await pintu('surat.hapus', { id: sm.id }, T_KABID);
   cek('menghapus butuh izin hapus', r.kode === 403, r);
   r = await pintu('surat.hapus', { id: sm.id }, SU);
@@ -223,6 +225,21 @@ const jpg = (n) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.
   cek('lacak tidak membawa catatan, asesmen, nominal, atau nama petugas', !/Rumah sederhana|Petugas Survei|Budi Program|Rina Sekretariat|2000000|Pemohon Contoh/.test(isi), isi.slice(0, 300));
   r = await pintu('surat.lacak', { nomor: sp.nomor, kode: sp.kodeLacak }, '', '10.9.9.1');
   cek('pengajuan ditolak terbaca ditolak, tanpa alasan internalnya', r.ok && r.pengajuan.ditolak && !/Di luar program/.test(JSON.stringify(r)), r);
+  r = await pintu('surat.lacak', { nomor: sm2.nomor, kode: sm2.kodeLacak }, '', '10.9.9.2');
+  cek('surat masuk bisa dilacak publik: jenis, 4 langkah, tanpa pengirim', r.ok && r.pengajuan.jenis === 'masuk' && r.pengajuan.langkah.length === 4 && !/Dinas Contoh/.test(JSON.stringify(r)), r);
+  r = await pintu('surat.lacak', { nomor: rh.nomor, kode: 'ABCDEF' }, '', '10.9.9.2');
+  cek('surat rahasia tidak bisa dilacak publik', r.kode === 404, r);
+  /* Surat lama (dibuat sebelum semua jenis punya kode) dapat kode saat petugas berhak membuka detailnya. */
+  { const rek = await db.ambil('item:' + sm2.id); delete rek.kodeLacak; await db.simpan('item:' + sm2.id, rek); }
+  r = await pintu('surat.detail', { id: sm2.id }, T_LAIN);
+  cek('orang lain di kantor tidak memicu atau melihat kode', r.ok && !r.surat.kodeLacak && !(await db.ambil('item:' + sm2.id)).kodeLacak, r.surat && r.surat.kodeLacak);
+  r = await pintu('surat.detail', { id: sm2.id }, SU);
+  cek('surat lama dibuatkan kode lacak saat pemegang izin membukanya', r.ok && /^[A-Z2-9]{6}$/.test(r.surat.kodeLacak || ''), r.surat && r.surat.kodeLacak);
+  const kodeBaru = r.surat.kodeLacak;
+  r = await pintu('surat.detail', { id: sm2.id }, SU);
+  cek('kode tidak berubah pada pembukaan berikutnya', r.surat.kodeLacak === kodeBaru, [kodeBaru, r.surat.kodeLacak]);
+  r = await pintu('surat.ubah', { id: sm2.id, perihal: 'Pemberitahuan', sifat: 'rahasia' }, SU);
+  cek('surat dijadikan rahasia: kode lacak dicabut, tautan lama mati', r.ok && !(await db.ambil('item:' + sm2.id)).kodeLacak && (await pintu('surat.lacak', { nomor: sm2.nomor, kode: kodeBaru }, '', '10.9.9.3')).kode === 404, r);
   let terakhir;
   for (let i = 0; i < 31; i++) terakhir = await pintu('surat.lacak', { nomor: 'X', kode: 'Y' }, '', '10.7.7.7');
   cek('lebih dari 30 percobaan per 10 menit dari satu alamat ditolak', terakhir.kode === 429, terakhir);
