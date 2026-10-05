@@ -1458,7 +1458,7 @@ halaman.massal = {
               </div>
               <textarea name="teks" rows="8" required placeholder="Assalamu'alaikum {{nama}}, ..."></textarea>
               ${kepingPenanda()}
-              <div class="muted" style="font-size:11.5px;margin-top:4px">Tiap penerima dikirimi terpisah dengan namanya sendiri. Donatur anonim disapa &ldquo;Bapak/Ibu&rdquo;.</div>
+              <div class="muted" style="font-size:11.5px;margin-top:4px">Tiap penerima dikirimi terpisah, dengan namanya sendiri.</div>
             </div>
             ${kotakLampiran('fm')}
             <div style="border-radius:var(--radius);background:var(--accent-soft);padding:14px;font-size:12px;color:var(--text2);margin-bottom:12px">

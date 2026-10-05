@@ -359,8 +359,7 @@ function pemilihLokasi(el, awal) {
         <input id="lokAlamat" value="${H(state.alamat)}" placeholder="Alamat terisi otomatis dari titik peta"></div>
       <div class="muted" id="lokKoor" style="font-size:11.5px">${state.lat != null ? `Titik: ${state.lat.toFixed(5)}, ${state.lng.toFixed(5)}` : 'Belum ada titik dipilih.'}</div>
       <div class="muted" style="font-size:11.5px;line-height:1.55;margin-top:4px">
-        Tidak ketemu di pencarian? Buka Google Maps, tahan titiknya sampai muncul koordinat,
-        salin, lalu tempel ke kotak pencarian di atas.
+        Tidak ketemu? Salin koordinat dari Google Maps, lalu tempel di kotak pencarian.
       </div>
     </div>`;
 
@@ -1281,7 +1280,7 @@ halaman.akun = {
         </div>
         <div class="field"><label>Nama fundraising <span class="muted" style="font-weight:400">— kunci pencocokan dengan buku utama</span></label>
           <input name="namaFundraising" value="${H(a.namaFundraising)}" ${bolehUbah ? '' : 'disabled'} placeholder="mis. Tim Bantul Kota">
-          <div class="muted" style="font-size:11.5px;margin-top:4px">Harus sama persis dengan nama pada kolom "fundraising" di penghimpunan utama LAZDigital, agar halaman Cocokkan bisa mempertemukannya.</div></div>
+          <div class="muted" style="font-size:11.5px;margin-top:4px">Samakan persis dengan nama fundraising di penghimpunan utama.</div></div>
         <div class="field"><label>Catatan</label><textarea name="catatan" rows="2" ${bolehUbah ? '' : 'disabled'}>${H(a.catatan || '')}</textarea></div>
       </form>`);
 

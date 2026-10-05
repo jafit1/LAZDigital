@@ -518,7 +518,12 @@ ke basis data produksi:
   sudah ada hanya diberi label Donatur. Kontak berhenti/daftar hitam tidak
   dikirimi. Pengurus kantor layanan tidak boleh menyinkronkan kontak.
 - Uji: `test_kwitansi_wa.js` (server), `test_kwitansi_ui.js` (tampilan).
-- Teks legal di kwitansi dari setelan `kwSk` (belum ada kolom di Pengaturan).
+- Teks di kwitansi bisa diubah di Pengaturan, tab Identitas Lembaga: `kwSk` (legalitas di panel kiri, satu baris
+  tiap teks) dan `kwPesan` (template ucapan terima kasih WhatsApp; isian `{nama} {jumlah} {jenis} {nomor} {lembaga}
+  {tanggal}`). Isi yang sama dengan bawaan tidak disimpan, supaya bawaan versi baru ikut terpakai.
+- Penerima di kwitansi = fundraising (`penerima()` di `lz-kwitansi.js`); bila kosong/"Tanpa fundraising"/kantor,
+  dipakai nama petugas penginput. `apiGetKwitansi` hanya mengirim 3 angka terakhir rekening (`rekeningAkhir`).
+- Gambar kelopak kiri bawah: `src/public/ikon/kwitansi-hias.png` (dimuat saat menggambar; bila gagal dipakai teratai vektor).
 
 ---
 

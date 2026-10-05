@@ -1116,20 +1116,20 @@ function kwPopup(id,opsi){
     var d=res.data,s=res.settings,sudah=KWWA[id];
     if(!d){toast('Data penghimpunan tidak ditemukan',true);return;}
     if(!kwBisaKirim()){kwBukaCetak(d,s);return;}
-    var st=sudah?({terkirim:'sudah terkirim',menunggu:'masih menunggu di antrean',gagal:'gagal terkirim'}[sudah.status]||''):'';
-    var info=sudah?'<div class="kw-info kw-info-'+esc(sudah.status)+'">Kwitansi ini '+esc(st)+' ke <b>'+esc(sudah.nomor||'')+'</b>'+(sudah.waktu?' ('+esc(fdate(String(sudah.waktu).slice(0,10)))+')':'')+'. Mengirim lagi akan mengirim satu pesan baru.</div>':'';
+    var st=sudah?({terkirim:'Sudah terkirim ke',menunggu:'Menunggu antrean ke',gagal:'Gagal terkirim ke'}[sudah.status]||'Dikirim ke'):'';
+    var info=sudah?'<div class="kw-info kw-info-'+esc(sudah.status)+'">'+esc(st)+' <b>'+esc(sudah.nomor||'')+'</b>'+(sudah.waktu?' ('+esc(fdate(String(sudah.waktu).slice(0,10)))+')':'')+'</div>':'';
     var body='<div class="kw-pop">'+(opsi.baru?'<div class="kw-ok">Penghimpunan tersimpan.</div>':'')+info
-      +'<div class="kw-prev"><img id="kwPrev" alt="Pratinjau kwitansi"><div class="kw-prev-ket" id="kwPrevKet">Menyiapkan kwitansi...</div></div>'
-      +'<div class="field"><label>Nomor WhatsApp donatur</label><input id="kwNomor" inputmode="tel" placeholder="0812 3456 7890" value="'+esc(d.telepon||'')+'">'
-      +'<div class="muted" style="font-size:11.5px;margin-top:4px">Nomor disimpan sebagai kontak Broadcast. Kalau nomornya sudah ada di kontak, yang lama dipakai dan tidak dibuat ganda.</div></div>'
-      +'<div class="field"><label>Pesan (ucapan terima kasih)</label><textarea id="kwTeks" rows="9"></textarea></div></div>';
+      +'<div class="kw-prev"><img id="kwPrev" alt="Pratinjau kwitansi" onclick="this.classList.toggle(\'kw-besar\')"><div class="kw-prev-ket" id="kwPrevKet">Menyiapkan kwitansi...</div></div>'
+      +'<div class="field"><label>Nomor WhatsApp</label><input id="kwNomor" inputmode="tel" placeholder="0812 3456 7890" value="'+esc(d.telepon||'')+'">'
+      +'<div class="muted" style="font-size:11.5px;margin-top:4px">Otomatis tersimpan di kontak Broadcast, tanpa dobel.</div></div>'
+      +'<div class="field"><label>Ucapan terima kasih</label><textarea id="kwTeks" rows="6"></textarea></div></div>';
     var foot='<button class="btn btn-ghost" id="kwTidak">Tidak, nanti saja</button><button class="btn btn-ghost" id="kwCetak">'+SVG_ICONS.cetak+' Cetak</button><button class="btn btn-primary" id="kwKirim">'+SVG_ICONS.kirim+' '+(sudah?'Kirim ulang':'Kirim ke WhatsApp')+'</button>';
     openModal('Kirim kwitansi ke WhatsApp donatur',body,foot);
     var mc=el('modalCard'); if(mc)mc.classList.add('kw-modal');
     el('kwTeks').value=LZKwitansi.pesan(d,s);
     var dk=Object.assign({},d,{__verifikasi:window.location.host+'/public.html?kwitansi='+encodeURIComponent(d.noKwitansi||d.id)});
     var gambar=null;
-    LZKwitansi.png(dk,s).then(function(g){gambar=g;el('kwPrev').src=g.dataUrl;el('kwPrevKet').textContent='Gambar ini yang dikirim ('+Math.round(g.base64.length*0.75/1024)+' KB).';}).catch(function(){var k=el('kwPrevKet');if(k)k.textContent='Pratinjau gagal dibuat.';});
+    LZKwitansi.png(dk,s).then(function(g){gambar=g;el('kwPrev').src=g.dataUrl;el('kwPrevKet').textContent='Ketuk gambar untuk memperbesar ('+Math.round(g.base64.length*0.75/1024)+' KB).';}).catch(function(){var k=el('kwPrevKet');if(k)k.textContent='Pratinjau gagal dibuat.';});
     el('kwCetak').onclick=function(){kwBukaCetak(d,s);};
     el('kwTidak').onclick=function(){
       var n=el('kwNomor')?el('kwNomor').value:'';
@@ -1340,7 +1340,7 @@ function renderFundraising(d){
       + '</div></td></tr>';
   });
   h+='</tbody></table></div></div>';
-  h+='<div class="muted" style="font-size:12px;margin-top:10px">Mengubah nama ikut memperbarui transaksi lama supaya rincian sumber di Closing tidak terpecah. Menghapus nama hanya mengeluarkannya dari pilihan — transaksi lama tetap utuh.</div>';
+  h+='<div class="muted" style="font-size:12px;margin-top:10px">Mengubah nama ikut memperbarui transaksi lama. Menghapus hanya mengeluarkannya dari pilihan.</div>';
   el('setFrBody').innerHTML=h;
 }
 function formFr(nama){
@@ -1384,7 +1384,7 @@ function lihatAliasKantor(){
       + rows.map(function(r){ return '<tr><td><b>' + esc(r.tertulis) + '</b></td><td>' + esc(r.daerah ? 'Milik Daerah (bukan kantor)' : r.sendiri ? 'Nama sendiri, kelompok ' + r.tipe + ', tidak didaftarkan' : r.tipe + ' ' + r.nama) + '</td><td class="muted">' + esc(r.oleh || '-') + '</td><td>'
         + (boleh ? '<button class="btn btn-mini btn-ghost" onclick="hapusAliasKantor(\'' + esc(String(r.tertulis).replace(/'/g, '')) + '\')">Hapus</button>' : '') + '</td></tr>'; }).join('')
       + '</tbody></table></div>'
-      : '<div class="muted">Belum ada. Nama lain tercatat saat Anda memilih kantor untuk nama yang tidak terdaftar di layar Impor Jurnal per Berkas.</div>';
+      : '<div class="muted">Belum ada nama lain.</div>';
     openModal('Nama lain kantor dari jurnal', '<p class="muted" style="margin-bottom:10px;font-size:12.5px">Nama di jurnal yang tidak sama dengan daftar kantor, dan kantor yang dipilih untuknya. Dipakai otomatis setiap impor.</p>' + b,
       '<button class="btn btn-ghost" onclick="closeModal()">Tutup</button>');
   }).catch(handleErr);
@@ -1400,7 +1400,7 @@ function renderLayanan(rows){var add=canDo('layanan','create')?'<button class="b
   rows.forEach(function(r){h+='<tr><td><span class="badge '+(r.tipe==='KLL'?'blue':'purple')+'">'+esc(r.tipe)+'</span></td><td>'+esc(r.kode||'-')+'</td><td><b>'+esc(r.nama)+'</b></td><td>'+esc(r.wilayah||'-')+'</td><td>'+esc(r.penanggungJawab||'-')+'</td><td><span class="badge '+(String(r.aktif)!=='false'?'green':'amber')+'">'+(String(r.aktif)!=='false'?'Aktif':'Nonaktif')+'</span></td><td><div class="actions-cell">'+(canDo('layanan','edit')?'<button class="icon-btn" onclick="formLay(\''+r.id+'\')">'+SVG_ICONS.pensil+'</button>':'')+(canDo('layanan','delete')?'<button class="icon-btn" onclick="delLay(\''+r.id+'\')">'+SVG_ICONS.sampah+'</button>':'')+'</div></td></tr>';});
   h+='</tbody></table></div></div>';el(window.LAY_HOST||'content').innerHTML=h;}
 function formLay(id){var r=id?CACHE.layanan.find(function(x){return x.id===id;}):{tipe:'KLL'};
-  var b='<div class="row"><div class="field"><label>Tipe *</label>'+selOpt('l_tipe',['KLL','ULL'],r.tipe||'KLL')+'</div><div class="field"><label>Kode</label><input id="l_kode" value="'+esc(r.kode||'')+'" placeholder="cth: KLL-01"></div></div><div class="field"><label>Nama '+'*</label><input id="l_nama" value="'+esc(r.nama||'')+'" placeholder="cth: Pajangan / Masjid Aceh"></div><div class="row"><div class="field"><label>Wilayah</label><input id="l_wilayah" value="'+esc(r.wilayah||'')+'"></div><div class="field"><label>Penanggung Jawab</label><input id="l_penanggungJawab" value="'+esc(r.penanggungJawab||'')+'"></div></div><div class="row"><div class="field"><label>Telepon</label><input id="l_telepon" value="'+esc(r.telepon||'')+'"></div><div class="field"><label>Status</label>'+selOpt('l_aktif',['true','false'],String(r.aktif!==false&&String(r.aktif)!=='false'))+'</div></div><div class="muted" style="font-size:12px">KLL = Kantor Layanan • ULL = Unit Layanan. Data ini muncul sebagai pilihan donatur di form Penghimpunan.</div>';
+  var b='<div class="row"><div class="field"><label>Tipe *</label>'+selOpt('l_tipe',['KLL','ULL'],r.tipe||'KLL')+'</div><div class="field"><label>Kode</label><input id="l_kode" value="'+esc(r.kode||'')+'" placeholder="cth: KLL-01"></div></div><div class="field"><label>Nama '+'*</label><input id="l_nama" value="'+esc(r.nama||'')+'" placeholder="cth: Pajangan / Masjid Aceh"></div><div class="row"><div class="field"><label>Wilayah</label><input id="l_wilayah" value="'+esc(r.wilayah||'')+'"></div><div class="field"><label>Penanggung Jawab</label><input id="l_penanggungJawab" value="'+esc(r.penanggungJawab||'')+'"></div></div><div class="row"><div class="field"><label>Telepon</label><input id="l_telepon" value="'+esc(r.telepon||'')+'"></div><div class="field"><label>Status</label>'+selOpt('l_aktif',['true','false'],String(r.aktif!==false&&String(r.aktif)!=='false'))+'</div></div><div class="muted" style="font-size:12px">KLL = Kantor Layanan, ULL = Unit Layanan.</div>';
   openModal(id?'Edit KLL/ULL':'Tambah KLL/ULL',b,'<button class="btn btn-ghost" onclick="closeModal()">Batal</button><button class="btn btn-primary" onclick="saveLay(\''+(id||'')+'\')">Simpan</button>');}
 function saveLay(id){var d={tipe:el('l_tipe').value,kode:el('l_kode').value,nama:el('l_nama').value,wilayah:el('l_wilayah').value,penanggungJawab:el('l_penanggungJawab').value,telepon:el('l_telepon').value,aktif:el('l_aktif').value};if(!d.nama){toast('Nama wajib diisi',true);return;}if(id)d.id=id;gas('apiSaveLayanan')(TOKEN,d).then(function(){closeModal();toast('Tersimpan');viewLayanan();}).catch(handleErr);}
 function delLay(id){uiConfirm('Hapus data ini?').then(function(__ok){if(!__ok)return;gas('apiDeleteLayanan')(TOKEN,id).then(function(){toast('Terhapus');viewLayanan();}).catch(handleErr);});}
@@ -2243,7 +2243,7 @@ function formUser(id){var u=id?CACHE.users.find(function(x){return x.id===id;}):
     +'<div class="field"><label>Password '+(id?'(kosongkan jika tetap)':'*')+'</label><input type="password" id="u_password" placeholder="'+(id?'••••••':'min 8 karakter, huruf + angka')+'"></div>'
     +'<div class="field"><label>Role</label>'+selOpt('u_role',(ME&&ME.role==='superadmin')||u.role==='superadmin'?['staff','admin','superadmin']:['staff','admin'],u.role)+'</div>'
     +'<div class="field"><label>Batasi ke kantor layanan</label><select id="u_layanan">'+_opsiLayananUser(u.layanan||'')+'</select>'
-      +'<div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun ini hanya melihat saldo kantor tersebut. Superadmin selalu melihat semua.</div></div>'
+      +'<div class="muted" style="font-size:11px;margin-top:4px">Bila diisi, akun hanya melihat saldo kantor itu.</div></div>'
     /* Dulu dropdown berisi teks mentah "true"/"false" — tidak jelas artinya dan
        mudah tersimpan terbalik. Diganti sakelar berlabel. */
     +'<div class="uf-status"><div><div class="uf-status-j">Akun aktif</div>'
@@ -2306,6 +2306,8 @@ function lembagaHTML(s){
     + fld(4,'Telepon','<input id="s_telepon" value="' + esc(s.telepon||'') + '">')
     + fld(4,'Email','<input id="s_email" value="' + esc(s.email||'') + '">')
     + fld(4,'Website','<input id="s_website" value="' + esc(s.website||'') + '">')
+    + fld(6,'Legalitas di kwitansi (satu baris tiap teks)','<textarea id="s_kwSk" rows="4">' + esc(s.kwSk||LZKwitansi.skBawaan) + '</textarea>')
+    + fld(6,'Ucapan terima kasih kwitansi (WhatsApp)','<textarea id="s_kwPesan" rows="4">' + esc(s.kwPesan||LZKwitansi.templateBawaan) + '</textarea><div class="fld-ket">Isi otomatis: {nama} {jumlah} {jenis} {nomor} {lembaga}</div>')
     + '</div>';
 
   var salam = '<div class="fgrid">'
@@ -2409,7 +2411,7 @@ function setTheme(t){applyTheme(t);applyBranding();if(canDo('settings','edit'))g
 function onLogoUpload(e){var f=e.target.files[0];if(!f)return;resizeImg(f,240,function(data){gas('apiSaveSettings')(TOKEN,{logoData:data}).then(function(s){SETTINGS=s;applyBranding();renderSetTab(s);toast('Logo tersimpan');}).catch(handleErr);});}
 function removeLogo(){gas('apiSaveSettings')(TOKEN,{logoData:''}).then(function(s){SETTINGS=s;applyBranding();renderSetTab(s);toast('Logo dihapus');}).catch(handleErr);}
 function saveDashLayout(){var def=getDashLayout();var vis={};document.querySelectorAll('[data-w]').forEach(function(c){vis[c.getAttribute('data-w')]=c.checked;});var obj={order:def.order,vis:vis};localStorage.setItem('laz_dashlayout',JSON.stringify(obj));if(canDo('settings','edit'))gas('apiSaveSettings')(TOKEN,{dashLayout:JSON.stringify(obj)}).then(function(s){SETTINGS=s;}).catch(function(){});toast('Layout disimpan');}
-function saveSettings(){var d={};['namaLembaga','singkatan','alamat','telepon','email','website','salamJudul','salamSub'].forEach(function(k){var e=el('s_'+k);if(e)d[k]=e.value;});gas('apiSaveSettings')(TOKEN,d).then(function(s){SETTINGS=s;applyBranding();toast('Pengaturan disimpan');}).catch(handleErr);}
+function saveSettings(){var d={};['namaLembaga','singkatan','alamat','telepon','email','website','salamJudul','salamSub','kwSk','kwPesan'].forEach(function(k){var e=el('s_'+k);if(e)d[k]=e.value;});if(d.kwSk===LZKwitansi.skBawaan)d.kwSk='';if(d.kwPesan===LZKwitansi.templateBawaan)d.kwPesan='';gas('apiSaveSettings')(TOKEN,d).then(function(s){SETTINGS=s;applyBranding();toast('Pengaturan disimpan');}).catch(handleErr);}
 
 /* ============ SHARED ============ */
 /* ============ HELPER FORM v8 (seksi, grid, input nominal) ============ */
@@ -4998,7 +5000,7 @@ function tarikImportData() {
         }
         
         if (res.valid.length === 0) {
-          h += '<div class="muted" style="text-align:center;padding:12px;border:1px dashed var(--border);border-radius:10px">Tidak ada baris valid yang ditemukan. Periksa apakah nama kolom sesuai (Tanggal, Nama, Jumlah, dll.).</div>';
+          h += '<div class="muted" style="text-align:center;padding:12px;border:1px dashed var(--border);border-radius:10px">Tidak ada baris valid. Periksa nama kolom (Tanggal, Nama, Jumlah).</div>';
           el('importSimpanBtn').classList.add('hidden');
         } else {
           h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>' +
@@ -9930,7 +9932,7 @@ function a2Panel(){
       + fld(12,'Nama Bagian Keuangan','<input id="a2_keuangan" value="'+esc(s.formA2Keuangan||'')+'" placeholder="nama bagian keuangan">')
       + fld(12,'Jumlah lembar kuitansi','<input type="number" min="0" id="a2_lembar" value="'+((A2_DATA&&A2_DATA.ringkas.himpunCount)||0)+'">')
     + '</div>'
-    + '<div class="muted" style="font-size:11.5px;margin-top:8px">Tempat dan kedua nama disimpan sebagai bawaan saat formulir dicetak, jadi tidak perlu diketik ulang besok.</div>'
+    + '<div class="muted" style="font-size:11.5px;margin-top:8px">Tempat dan nama tersimpan sebagai bawaan cetak.</div>'
     + '</div>';
 
   h += '</div></div>';
@@ -9942,7 +9944,7 @@ function a2Panel(){
 function renderA2Form(){
   var form = '<div class="fgrid">'
     + fld(3,'Tanggal Formulir','<input type="date" id="a2_tanggal" value="'+esc(A2_DATA?A2_DATA.tanggal:today())+'">')
-    + fld(9,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Lembar serah terima kasir ukuran A5 melintang. Penerimaan hanya dipisah tunai dan bank; semua digabung per jenis dana, tidak dipecah per KLL atau daerah.</div>')
+    + fld(9,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Serah terima kasir A5 melintang, penerimaan dipisah tunai dan bank.</div>')
     + '</div>';
   var acts = '<button class="btn" onclick="a2Geser(-1)">&laquo; Hari sebelumnya</button>'
     + '<button class="btn" onclick="a2Geser(1)">Hari berikutnya &raquo;</button>'

@@ -1743,7 +1743,7 @@ halaman.penyedia = {
          <div class="field">
            <label class="set-switch"><input type="checkbox" id="pvGambar"${d0.dukungGambar === false ? '' : ' checked'}>
              <span>Model di provider ini bisa membaca gambar</span></label>
-           <div class="muted" style="font-size:11.5px;margin-top:4px">Matikan bila modelnya hanya menerima teks — tanpa ini, foto yang dikirim akan ditolak provider dengan pesan yang membingungkan.</div>
+           <div class="muted" style="font-size:11.5px;margin-top:4px">Matikan bila modelnya hanya menerima teks.</div>
          </div>
          <div class="field"><label>Catatan</label><input id="pvCatatan" maxlength="300" value="${H(d0.catatan || '')}"></div>`,
         () => {

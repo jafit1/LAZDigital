@@ -818,7 +818,7 @@ function tawarPilihan(baris, teks, bisaKompres) {
 function bukaTautan(id, nama) {
   modal('Simpan tautan', `<div class="fgrid"><div class="fld" data-col="12"><label>Nama lampiran</label><input id="tNama" value="${H(nama || '')}" placeholder="Misalnya: Proposal lengkap"></div>
     <div class="fld" data-col="12"><label>Tautan (Google Drive atau penyimpanan lain)</label><input id="tUrl" placeholder="https://drive.google.com/..."></div>
-    <div class="fld-ket" style="grid-column:span 12">Unggah berkasnya ke Google Drive lembaga, pilih "Bagikan" lalu "Salin link", dan tempel di sini. Tidak memakan ruang basis data.</div></div>`,
+    <div class="fld-ket" style="grid-column:span 12">Unggah ke Google Drive, bagikan, lalu tempel tautannya di sini.</div></div>`,
   '<button class="btn" type="button" onclick="tutupModal()">Batal</button><button class="btn btn-primary" type="button" id="tSimpan">Simpan</button>', 'sr-modal-kecil');
   $('#tSimpan').onclick = () => sibuk($('#tSimpan'), async () => {
     await rpc('surat.lampiran.tambah', { id, nama: $('#tNama').value || 'Tautan', tautan: $('#tUrl').value.trim() });

@@ -109,6 +109,20 @@ const server = http.createServer(async (req, res) => {
     const teks = await p.inputValue('#kwTeks');
     cek('ucapan terima kasih memuat nama, jumlah, dan nomor kwitansi', /Donatur 2/.test(teks) && /Rp 200\.000/.test(teks) && /KW\/202610\/0002/.test(teks) && /Jazakumullah/i.test(teks), teks.slice(0, 200));
     await p.waitForFunction(() => document.getElementById('kwPrev').src.startsWith('data:image/png'), null, { timeout: 8000 });
+    const kecil = await p.evaluate(() => { const i = document.getElementById('kwPrev'); return Math.round(i.getBoundingClientRect().width); });
+    cek('pratinjau di popup kecil (tidak memenuhi lebar popup)', kecil > 0 && kecil <= 150, kecil);
+    await p.click('#kwPrev');
+    cek('ketuk pratinjau memperbesarnya', await p.evaluate(() => document.getElementById('kwPrev').classList.contains('kw-besar')));
+    await p.click('#kwPrev');
+    cek('ketuk lagi mengecilkannya', await p.evaluate(() => !document.getElementById('kwPrev').classList.contains('kw-besar')));
+    const tpl = await p.evaluate(() => ({
+      bawaan: LZKwitansi.templateBawaan,
+      kustom: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 150000, subJenis: 'Infak Umum', noKwitansi: 'KW/1', tanggal: '2026-10-05' }, { namaLembaga: 'Lazismu Bantul', kwPesan: 'Halo {nama}, {jenis} Rp {jumlah} no {nomor} ({tanggal}) dari {lembaga}.' }),
+      kosong: LZKwitansi.pesan({ namaDonatur: 'Budi', jumlah: 1000, noKwitansi: 'KW/2' }, { namaLembaga: 'Lazismu Bantul', kwPesan: '   ' })
+    }));
+    cek('template ucapan dari Pengaturan memakai isian {nama} {jenis} {jumlah} {nomor} {tanggal} {lembaga}', tpl.kustom === 'Halo Budi, infak umum Rp 150.000 no KW/1 (2026-10-05) dari Lazismu Bantul.', tpl.kustom);
+    cek('template kosong memakai ucapan bawaan', /Jazakumullah/.test(tpl.kosong) && /KW\/2/.test(tpl.kosong) && !/\{nama\}/.test(tpl.kosong), tpl.kosong.slice(0, 120));
+    cek('ucapan bawaan menyediakan isian untuk Pengaturan', /\{nama\}/.test(tpl.bawaan) && /\{lembaga\}/.test(tpl.bawaan));
     const dim = await p.evaluate(() => { const i = document.getElementById('kwPrev'); return { w: i.naturalWidth, h: i.naturalHeight }; });
     cek('pratinjau kwitansi berupa PNG 1600 x 1238', dim.w === 1600 && dim.h === 1238, dim);
     PANGGILAN.length = 0;
@@ -136,7 +150,7 @@ const server = http.createServer(async (req, res) => {
     cek('penanda tetap Belum dikirim', /Belum dikirim/.test(await sel(p, 'h4')));
     await p.click('#himpunTable tr[data-id="h1"] button[onclick^="kwPopup"]');
     await p.waitForSelector('#kwKirim');
-    cek('yang sudah terkirim ditawari "Kirim ulang" dengan keterangan', /Kirim ulang/.test(await p.textContent('#kwKirim')) && /sudah terkirim/.test(await p.textContent('.kw-info')), await p.textContent('.kw-pop'));
+    cek('yang sudah terkirim ditawari "Kirim ulang" dengan keterangan', /Kirim ulang/.test(await p.textContent('#kwKirim')) && /[Ss]udah terkirim/.test(await p.textContent('.kw-info')), await p.textContent('.kw-pop'));
     PANGGILAN.length = 0;
     await p.waitForFunction(() => document.getElementById('kwPrev').src.startsWith('data:image/png'));
     await p.click('#kwKirim');

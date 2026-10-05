@@ -165,7 +165,7 @@
     }
 
     garis(c, 32, 256, 304, '#555', 1.4);
-    var legal = String(s.kwSk || 'Lembaga Amil Zakat Nasional\nSK. Menteri Agama RI\nNo. 463 Tahun 2024\nTanggal 26 Juli 2024').split(/\n/).map(function (x) { return teksAman(x, 50); }).filter(Boolean).slice(0, 5);
+    var legal = String(s.kwSk || SK_BAWAAN).split(/\n/).map(function (x) { return teksAman(x, 50); }).filter(Boolean).slice(0, 5);
     var y = 282;
     legal.forEach(function (t, i) { tulis(c, t, cx, y, (i === 0 ? '700' : '500') + ' 13.5px', '#333', 'center'); y += 19; });
     y += 4;
@@ -389,18 +389,29 @@
     });
   }
 
-  /* Ucapan terima kasih bawaan. {nama}, {jumlah}, dst. diisi di sini supaya petugas melihat teks akhirnya di popup. */
+  /* Ucapan terima kasih. Teksnya bisa diubah di Pengaturan > Identitas Lembaga (setelan kwPesan); {nama}, {jumlah},
+     {jenis}, {nomor}, {lembaga}, {tanggal} diisi di sini supaya petugas melihat teks akhirnya di popup. */
+  var TEMPLATE_BAWAAN = 'Assalamu\'alaikum warahmatullahi wabarakatuh.\n\n'
+    + 'Yth. Bapak/Ibu {nama},\n\n'
+    + 'Jazakumullahu khairan katsiran atas {jenis} sebesar Rp {jumlah} yang telah Bapak/Ibu tunaikan melalui {lembaga}. Semoga Allah menerima amal kebaikan Bapak/Ibu, membersihkan dan menyucikan harta, serta melipatgandakan keberkahannya.\n\n'
+    + 'Berikut kami lampirkan kwitansi nomor {nomor} sebagai bukti penerimaan.\n\n'
+    + 'Wassalamu\'alaikum warahmatullahi wabarakatuh.\n{lembaga}';
+  var SK_BAWAAN = 'Lembaga Amil Zakat Nasional\nSK. Menteri Agama RI\nNo. 463 Tahun 2024\nTanggal 26 Juli 2024';
   function pesan(data, setelan) {
     var d = data || {}, s = setelan || {};
     var lembaga = teksAman(s.namaLembaga, 80) || 'LAZISMU';
     var jenis = teksAman(d.subJenis || d.jenisDana, 60);
-    return 'Assalamu\'alaikum warahmatullahi wabarakatuh.\n\n'
-      + 'Yth. Bapak/Ibu ' + (teksAman(d.namaDonatur, 80) || 'Donatur') + ',\n\n'
-      + 'Jazakumullahu khairan katsiran atas ' + (jenis ? jenis.toLowerCase() + ' ' : 'donasi ') + 'sebesar Rp ' + rpFmt(d.jumlah)
-      + ' yang telah Bapak/Ibu tunaikan melalui ' + lembaga + '. Semoga Allah menerima amal kebaikan Bapak/Ibu, membersihkan dan menyucikan harta, serta melipatgandakan keberkahannya.\n\n'
-      + 'Berikut kami lampirkan kwitansi dengan nomor ' + teksAman(d.noKwitansi, 40) + ' sebagai bukti penerimaan.\n\n'
-      + 'Wassalamu\'alaikum warahmatullahi wabarakatuh.\n' + lembaga;
+    var isi = {
+      nama: teksAman(d.namaDonatur, 80) || 'Donatur',
+      jumlah: rpFmt(d.jumlah),
+      jenis: jenis ? jenis.toLowerCase() : 'donasi',
+      nomor: teksAman(d.noKwitansi, 40),
+      lembaga: lembaga,
+      tanggal: teksAman(d.tanggal, 10)
+    };
+    var t = String(s.kwPesan || '').trim() || TEMPLATE_BAWAAN;
+    return t.replace(/\{(nama|jumlah|jenis|nomor|lembaga|tanggal)\}/g, function (_, k) { return isi[k]; });
   }
 
-  window.LZKwitansi = { gambar: gambar, png: png, pesan: pesan, baca: baca, rp: rpFmt };
+  window.LZKwitansi = { gambar: gambar, png: png, pesan: pesan, baca: baca, rp: rpFmt, templateBawaan: TEMPLATE_BAWAAN, skBawaan: SK_BAWAAN };
 })();
