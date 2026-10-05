@@ -405,12 +405,24 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   Ukuran: 48 px (38 px di bawah 1024 px), dan saat bilah ciut 78% (bukan 56% milik logo unggahan 3:1) dengan geseran
   `--lz-logo-x-ciut` yang diukur `lz-logo.js`. Pemilih CSS memakai `#brandBox` supaya menang atas tumpukan aturan
   `.logo-img` di bagian 31 dan 55. Dijaga `test_logo_ui.js`.
-- **Kepala dasbor dan menu akun HP** (5 Oktober 2026): Link Publik, Link Harian, Atur Layout tidak lagi di menu titik
+- **Kepala dasbor dan menu akun HP** (5 Oktober 2026): Link Harian dan Atur Layout tidak lagi di menu titik
   tiga, tetapi ikon (`dh-sekali`) di samping tombol catat dan periode. Di HP (`html.plat-hp`, di bawah 640 px) ikon
   itu dan tombol tema kepala halaman disembunyikan, dan foto profil (`klikProfil`) membuka menu akun (`#akunMenu`:
   pengaturan akun, Pengaturan aplikasi, Link Publik, Link Harian, Atur layout bila di dasbor, tema). Di layar lebar
   foto profil tetap langsung `openProfile()`. Di HP tombol catat (`dh-catat`) juga disembunyikan; chip periode naik
   sebaris dengan salam (salam 19 px). Dijaga `test_logo_ui.js`.
+- **Ikon Link Publik lama dihapus** (pemilik, 5 Oktober 2026): tombolnya tidak ada lagi di kepala dasbor dan menu akun
+  HP. Yang tersisa: `openPublicLink()` dan tombol "Kelola Link Publik" di Pengaturan (pengelolaan token), halaman
+  `public.html`, dan `apiGetPublicLinkInfo`; `test_keamanan_lanjutan.js` menjaga fungsi itu.
+- **Layar loading logo** (5 Oktober 2026, `LZLogo.muat()` di `js/lz-logo.js`, gaya di akhir `styles.css`): logo SVG besar
+  berlatar blur (`backdrop-filter`, putih 62% di tema terang, biru malam 62% di gelap; tanpa dukungan blur latarnya
+  hampir pekat). Tampil di link publik (`harian.html`, `lacak.html`, `public.html`) hanya saat pertama dibuka per sesi
+  (kunci sessionStorage `lz_muat_harian|lacak|publik`), dan di web utama hanya sesudah login lewat formulir
+  (`window.__muatSetelahLogin` di `doLogin`, dibaca `startApp`), bukan saat muat ulang atau masuk otomatis. Linimasa 55%
+  (sekitar 2,5 detik). Menutup menunggu animasi selesai DAN data siap (`MUAT.selesai()` di halaman publik), pengaman
+  9 detik; gerak dikurangi tidak menampilkannya. Selama aktif `html.lz-muat-aktif` menahan animasi logo bilah menu
+  (`siapDilihat`), yang baru bergerak sesudah penutup lepas. Kepala halaman publik memakai `LZLogo.statis()` (logo SVG
+  baru), bukan logo unggahan Pengaturan. Dijaga `test_muat_logo.js`.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
 
@@ -498,6 +510,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_kontras_gelap.js`, `_kontras.js` | teks terbaca di tema gelap: pemindai menghitung rasio kontras tiap teks terhadap latar efektifnya (gradien dinilai dari henti terbaik, latar gambar dilewati) di layar masuk, tiap menu, tab Pengaturan, modal, dan halaman publik; `test_skala_ui.js` memindai tiap menu empat modul, `test_surat_ui.js` memindai Surat dan lacak |
 | `test_tema_ui.js` | tombol tema terang/gelap (`js/lz-tema.js`): ikon tepat di tengah tombol (dulu menempel ke kanan, 21 px dari kiri pada tombol 38 px), bentuk bulan/matahari berganti lewat CSS, sapuan lingkaran membuka SELURUH halaman bertema baru lewat View Transitions (kartu yang belum tersentuh lingkaran masih berwarna lama; dulu terukur sudah gelap pada 370 ms), cara lama tetap jalan di peramban tanpa View Transitions, gerak dikurangi berganti langsung, lima halaman modul memuat skripnya |
 | `test_logo_ui.js` | logo SVG di bilah menu (`js/lz-logo.js`): 22 bagian, rasio 3840:2574, 48 px (38 px di HP), di tengah panel dan rel, bergerak hanya saat menu pertama kali dibuka di sesi itu, diam saat kembali atau muat ulang, cahaya hanya di tema gelap, gerak dikurangi tidak bergerak, lima modul memuat logonya |
+| `test_muat_logo.js` | layar loading logo: tampil sekali per sesi di link publik dan sesudah login di web utama, blur dan latar mengikuti tema, bertahan sampai data datang, tidak menahan layar bila data galat, logo bilah menunggu penutup, gerak dikurangi tanpa penutup, kepala halaman publik memakai logo SVG baru |
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |

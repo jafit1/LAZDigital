@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script src="/js/lz-tema.js"></script>
   <script src="/js/lz-perangkat.js"></script>
+  <script src="/js/lz-logo.js"></script>
   <style>
     /* LACAK PENGAJUAN (pemilik, 2 Oktober 2026): pemohon bantuan, sponsorship,
        atau proposal melihat sudah sampai mana pengajuannya tanpa menelepon
@@ -84,8 +85,9 @@
       if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', t); })();
   </script>
+  <script>LZLogo.muat({ kunci: 'lz_muat_lacak' });</script>
   <div class="lk-wrap">
-    <div class="lk-atas-bar"><div class="lk-id"><div class="lk-logo" id="lkLogo"><img src="/ikon/lazismu.svg" alt=""></div><div class="lk-lembaga" id="lkLembaga">Lazismu Daerah Bantul</div></div>
+    <div class="lk-atas-bar"><div class="lk-id"><div class="lk-logo lz-logo-kepala" id="lkLogo"><script>document.write(LZLogo.statis("Lazismu Bantul"));</script></div><div class="lk-lembaga" id="lkLembaga">Lazismu Daerah Bantul</div></div>
       <button type="button" class="lk-tema kepala-tema" data-lz-tema></button></div>
     <div class="lk-head"><h1>Lacak Progres</h1><p>Lihat progres pengajuan bantuan, sponsorship, proposal, atau surat Anda.</p></div>
     <div class="lk-muat hidden" id="lkMuat">Mencari pengajuan Anda...</div>
@@ -106,7 +108,6 @@
       return d.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' }); }
     function pasangLembaga(l){
       if (l.namaLembaga) $('lkLembaga').textContent = l.namaLembaga;
-      if (l.logoData) { var im = new Image(); im.alt = ''; im.onload = function(){ $('lkLogo').innerHTML = ''; $('lkLogo').appendChild(im); }; im.src = l.logoData; }
     }
     var q = new URLSearchParams(location.search);
     if (q.get('n')) $('lkNomor').value = q.get('n');

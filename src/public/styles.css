@@ -6641,3 +6641,50 @@ html.plat-hp .dh-act-row .dh-periode{ padding:7px 10px; font-size:12.5px; gap:6p
 .akun-menu .akun-tema .lz-tema-ikon{ width:18px; height:18px; }
 .akun-garis{ height:1px; background:var(--border); margin:4px 6px; }
 @media (prefers-reduced-motion: reduce){ .akun-menu{ animation:none; } }
+
+/* ==========================================================================================================
+   LAYAR LOADING LOGO + LOGO DI KEPALA HALAMAN PUBLIK (js/lz-logo.js: LZLogo.muat, LZLogo.statis)
+   Penutup tetap satu lapis: blur latar mengikuti tema (terang: putih 62%, gelap: biru malam 62%). Peramban tanpa
+   backdrop-filter mendapat latar hampir pekat, bukan halaman setengah terbaca. Cahaya logo hanya di tema gelap,
+   sama dengan logo bilah menu.
+   ========================================================================================================== */
+.lz-muat{
+  position:fixed; inset:0; z-index:100000; display:grid; place-items:center;
+  background:rgba(255,255,255,.94);
+  animation:lz-muat-masuk .22s ease-out both; will-change:opacity;
+}
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  .lz-muat{ background:rgba(255,255,255,.62); -webkit-backdrop-filter:blur(16px) saturate(1.15); backdrop-filter:blur(16px) saturate(1.15); }
+}
+html[data-theme="dark"] .lz-muat{ background:rgba(11,14,20,.94); }
+@supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){
+  html[data-theme="dark"] .lz-muat{ background:rgba(11,14,20,.62); }
+}
+.lz-muat.lz-muat-keluar{ opacity:0; transition:opacity .46s ease-in; pointer-events:none; animation:none; }
+@keyframes lz-muat-masuk{ from{ opacity:0; } to{ opacity:1; } }
+html.lz-muat-aktif{ overflow:hidden; }
+
+.lz-logo-muat, .lz-logo-statis{
+  --lzm-ink:var(--text); --lzm-orange:#F59A1F;
+  position:relative; display:block; flex:none; aspect-ratio:3840 / 2574; color:var(--text);
+}
+.lz-logo-muat{ width:min(58vw, 280px); }
+.lz-logo-statis{ width:calc(var(--lz-logo-t, 38px) * 1.4918); height:var(--lz-logo-t, 38px); }
+.lz-logo-muat svg, .lz-logo-statis svg{ display:block; width:100%; height:100%; overflow:visible; }
+.lz-logo-muat .lzm-main path, .lz-logo-statis .lzm-main path{ fill:currentColor; fill-rule:evenodd; }
+.lz-logo-muat .lzm-main .w, .lz-logo-statis .lzm-main .w{ color:var(--lzm-ink); }
+.lz-logo-muat .lzm-main .o, .lz-logo-statis .lzm-main .o{ color:var(--lzm-orange); }
+.lz-logo-muat .lzm-zoom{ transform-box:view-box; transform-origin:50% 50%; }
+.lz-logo-muat .lzm-glow{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:.45; }
+.lz-logo-muat .lzm-glow-isi{ fill:var(--lzm-orange); fill-rule:evenodd; }
+html:not([data-theme="dark"]) .lz-logo-muat .lzm-glow{ display:none; }
+
+/* Kepala halaman publik: logo diam tanpa kotak, selaras dengan teks di sebelahnya. */
+.lh-logo.lz-logo-kepala, .lk-logo.lz-logo-kepala, .pub-logo.lz-logo-kepala{
+  width:auto; height:auto; background:none; border:0; border-radius:0; overflow:visible; display:block;
+}
+.lh-logo.lz-logo-kepala .lz-logo-statis{ --lz-logo-t:36px; }
+.lk-logo.lz-logo-kepala .lz-logo-statis{ --lz-logo-t:40px; }
+.pub-logo.lz-logo-kepala{ background:rgba(255,255,255,.94); border-radius:14px; padding:6px 8px; }
+.pub-logo.lz-logo-kepala .lz-logo-statis{ --lz-logo-t:36px; --lzm-ink:#1b2433; color:#1b2433; }
+@media (prefers-reduced-motion: reduce){ .lz-muat{ animation:none; } .lz-muat.lz-muat-keluar{ transition:none; } }

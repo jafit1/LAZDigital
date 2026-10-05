@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script src="/js/lz-tema.js"></script>
   <script src="/js/lz-perangkat.js"></script>
+  <script src="/js/lz-logo.js"></script>
   <style>
     /* ================================================================
        PENGHIMPUNAN HARIAN (pemilik, 2 Oktober 2026)
@@ -164,6 +165,7 @@
 
   <div id="boot" class="lz lz--full"><div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div></div>
   <div id="root" class="lh-wrap hidden"></div>
+  <script>var MUAT = LZLogo.muat({ kunci: 'lz_muat_harian', tahan: true });</script>
 
   <script src="/js/lz-ui.js" defer></script>
   <script>
@@ -210,7 +212,7 @@
     document.addEventListener('visibilitychange', function(){ if (!document.hidden && DATA && DATA.tanggal === DATA.hariIni) muat(TGL, true); });
 
     function galat(pesan){
-      $('boot').classList.add('hidden');
+      $('boot').classList.add('hidden'); MUAT.selesai();
       var r = $('root'); r.classList.remove('hidden');
       KERANGKA = '';
       r.innerHTML = '<div class="lh-galat" id="lhGalat"><b>Link tidak bisa dibuka</b>' + esc(pesan)
@@ -224,8 +226,8 @@
        diketik tidak hilang. */
     function gambarKerangka(){
       var d = DATA, kantor = d.jenis === 'kantor', s = d.lembaga || {};
-      var logo = s.logoData ? '<img src="' + esc(s.logoData) + '" alt="">' : esc((s.singkatan || 'LZ').slice(0, 2).toUpperCase());
-      var h = '<div class="lh-head"><div class="lh-atas"><div class="lh-id"><div class="lh-logo">' + logo + '</div>'
+      var logo = LZLogo.statis(s.namaLembaga || 'Lazismu Bantul');   /* logo SVG baru, bukan unggahan Pengaturan */
+      var h = '<div class="lh-head"><div class="lh-atas"><div class="lh-id"><div class="lh-logo lz-logo-kepala">' + logo + '</div>'
         + '<div class="lh-nama">' + esc(s.namaLembaga || 'Lazismu') + '</div></div>'
         + '<div class="lh-alat"><span class="lh-langsung" id="lhLangsung"><span class="lh-titik"></span><span id="lhLangsungT"></span></span>'
         + '<button class="lh-tema kepala-tema" type="button" id="lhTema" title="' + LZTema.judul(LZTema.gelap()) + '" aria-label="' + LZTema.judul(LZTema.gelap()) + '">' + LZTema.svg() + '</button></div></div>'
@@ -247,7 +249,7 @@
 
     function gambar(){
       var d = DATA, kantor = d.jenis === 'kantor', s = d.lembaga || {};
-      $('boot').classList.add('hidden');
+      $('boot').classList.add('hidden'); MUAT.selesai();
       $('root').classList.remove('hidden');
       document.title = (kantor ? 'Setoran KLL & ULL' : 'Penghimpunan Harian') + ' | ' + (s.singkatan || s.namaLembaga || 'Lazismu');
       if (KERANGKA !== d.jenis || !$('lhIsi')) gambarKerangka();

@@ -266,7 +266,7 @@ function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.
     TOKEN=r.token;localStorage.setItem('laz_token',TOKEN);ME=r.user;
     hapusCredsWarisan();
     if(remember&&r.ingat){ setIngat(r.ingat); try{localStorage.setItem('laz_user',u);}catch(e){} } else { setIngat(''); try{localStorage.removeItem('laz_user');}catch(e){} }
-    return gas('apiBootstrap')(TOKEN).then(function(bs){SETTINGS=bs.settings;startApp();});
+    return gas('apiBootstrap')(TOKEN).then(function(bs){SETTINGS=bs.settings;window.__muatSetelahLogin=true;startApp();});
   }).catch(function(e){el('loginErr').textContent=(e.message||e);b.disabled=false;b.textContent='Masuk';});
   return false;}
 /* Token ingat dicabut di server, bukan cuma dihapus dari peramban: salinan
@@ -291,6 +291,8 @@ function muatFundraising(paksa){
 function startApp(){
   try{ LZ.bootSelesai(); }catch(e){}
   el('boot').classList.add('hidden');el('loginView').classList.add('hidden');el('appView').classList.remove('hidden');
+  /* Layar loading logo hanya sesudah masuk lewat formulir, bukan saat muat ulang atau masuk otomatis. */
+  if(window.__muatSetelahLogin){ window.__muatSetelahLogin=false; try{ if(window.LZLogo) LZLogo.muat(); }catch(e){} }
   muatFundraising();
   // Default sidebar ciut (ikon saja); klik logo untuk melebarkan.
   if (localStorage.getItem('sidebar_collapsed') !== 'false') {
@@ -658,7 +660,7 @@ function dashMenuPilih(fn) {
 
 function renderDashboard(d){
   window.DASH=d;
-  var pubBtn=canDo('dashboard','view')?'<button class="btn btn-ghost" onclick="openPublicLink()">\uD83D\uDD17 Link Publik</button><button class="btn btn-ghost" onclick="openLinkHarian()">\uD83D\uDCC5 Link Harian</button>':'';
+  var pubBtn=canDo('dashboard','view')?'<button class="btn btn-ghost" onclick="openLinkHarian()">\uD83D\uDCC5 Link Harian</button>':'';
   var editBtn='<button class="btn '+(window.DASH_EDIT?'btn-primary':'btn-ghost')+'" id="dashEditBtn" onclick="toggleDashEdit()">'+(window.DASH_EDIT?'\u2705 Selesai':'\u2699\uFE0F Atur Layout')+'</button>';
   var hr=new Date().getHours();var salam=hr<11?'Selamat pagi':hr<15?'Selamat siang':hr<19?'Selamat sore':'Selamat malam';
   var h='<div class="dash-hero"><div class="dash-hero-in"><div><div class="dh-greet">'+salam+', '+esc((ME&&ME.nama||'').split(' ')[0]||'Sahabat')+' \uD83D\uDC4B</div><div class="dh-sub">Ringkasan amanah '+esc(SETTINGS.namaLembaga||'Lembaga Amil Zakat')+' \u2014 '+new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})+'</div></div><div style="display:flex;gap:10px;flex-wrap:wrap">'+editBtn+pubBtn+'</div></div></div>';
@@ -4274,8 +4276,7 @@ function renderDashboard(d){
   var dashIkon=function(id,judul,svg,klik,aktif){
     return '<button type="button" class="dh-quick-btn dh-ikon dh-sekali'+(aktif?' primary':'')+'" id="'+id+'" onclick="'+klik+'" title="'+judul+'" aria-label="'+judul+'">'+ikon18(svg)+'</button>';
   };
-  var menuBtn=(canView?dashIkon('dashLinkPublik','Link Publik',SVG_ICONS.link,'openPublicLink()')
-      + dashIkon('dashLinkHarian','Link Harian (donatur dan KLL/ULL)',IKON_LINK_HARIAN,'openLinkHarian()'):'')
+  var menuBtn=(canView?dashIkon('dashLinkHarian','Link Harian (donatur dan KLL/ULL)',IKON_LINK_HARIAN,'openLinkHarian()'):'')
     + dashIkon('dashEditBtn',window.DASH_EDIT?'Selesai atur layout':'Atur Layout',SVG_ICONS.sliders,'toggleDashEdit()',window.DASH_EDIT);
   /* Tombol tema sama dengan modul lain (js/lz-tema.js): ikon matahari/bulan satu SVG, lingkaran melebar dari tombol. */
   var temaJudul=(document.documentElement.getAttribute('data-theme')==='dark')?'Ganti ke tema terang':'Ganti ke tema gelap';
@@ -10708,7 +10709,6 @@ function bukaMenuAkun(){
   if(canDo('settings','view')) h+=butir('akunPengaturan',IK.atur,'Pengaturan aplikasi',"menuAkunPilih(function(){go('settings');})");
   var kedua='';
   if(canDo('dashboard','view')){
-    kedua+=butir('akunLinkPublik',IK.link,'Link Publik','menuAkunPilih(openPublicLink)');
     kedua+=butir('akunLinkHarian',IK.harian,'Link Harian','menuAkunPilih(openLinkHarian)');
   }
   if(diDasbor) kedua+=butir('akunLayout',IK.layout,window.DASH_EDIT?'Selesai atur layout':'Atur layout dasbor','menuAkunPilih(toggleDashEdit)');

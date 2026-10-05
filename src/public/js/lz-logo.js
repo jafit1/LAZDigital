@@ -118,7 +118,7 @@
     el.classList.remove('lz-logo-tunggu', 'lz-logo-gerak');
   }
 
-  function mainkan(el) {
+  function mainkan(el, skala) {
     diam(el);
     var lebar = el.getBoundingClientRect().width || 70;
     if (!el.querySelector('.lzm-glow') || Math.abs((el.__lzLebar || 0) - lebar) > 8) pasangCahaya(el);
@@ -131,7 +131,7 @@
     var s = { anim: [] };
     el.__lz = s;
     /* Uji boleh mempercepat linimasa (window.__ujiLogoSkala = 0.1) supaya tidak menunggu 5 detik per menu. */
-    var kali = Number(window.__ujiLogoSkala) > 0 ? Number(window.__ujiLogoSkala) : 1;
+    var kali = (Number(skala) > 0 ? Number(skala) : 1) * (Number(window.__ujiLogoSkala) > 0 ? Number(window.__ujiLogoSkala) : 1);
     var tambah = function (x, kf, o) {
       o.duration *= kali;
       if (o.delay) o.delay *= kali;
@@ -233,8 +233,76 @@
      animasi pertama dulu habis diputar tanpa penonton. Terukur di rekaman uji: 20 bingkai pertama layar masih kosong
      sementara logonya sudah setengah tergambar. */
   function siapDilihat() {
-    return !document.hidden && !document.documentElement.classList.contains('tunggu-huruf');
+    return !document.hidden && !document.documentElement.classList.contains('tunggu-huruf')
+      && !document.documentElement.classList.contains('lz-muat-aktif');
   }
+
+  /* ---- layar loading (permintaan pemilik 5 Oktober 2026) ------------------------------------------------------- */
+  /* Logo yang sama tampil besar di tengah layar berlatar blur sesuai tema, sekali saja: di link publik hanya saat
+     dibuka pertama kali di sesi itu (kunci sessionStorage per halaman), dan di web utama hanya sesudah login (app.js
+     memanggilnya tanpa kunci, jadi muat ulang halaman tidak memutarnya lagi). Linimasa dipercepat ke 55% (sekitar
+     2,5 detik dari 4,5), karena ini layar yang menahan orang, bukan hiasan bilah.
+     Stabil: satu penutup tetap (position:fixed) yang tidak pernah dibuat ulang, yang bergerak hanya garis logo dan
+     opacity penutup. Menutup menunggu DUA hal: animasi selesai dan data halaman siap (selesai()). Pengaman 9 detik
+     supaya data yang macet tidak menahan layar selamanya. Gerak dikurangi: tidak ditampilkan sama sekali. */
+  var SKALA_MUAT = 0.55, BATAS_MUAT = 9000, SUDAH_MUAT = { selesai: function () {}, tutup: function () {} };
+  function muat(opsi) {
+    opsi = opsi || {};
+    var html = document.documentElement;
+    if (!document.body || kurangi() || document.querySelector('.lz-muat')) return SUDAH_MUAT;
+    if (opsi.kunci) {
+      try {
+        if (sessionStorage.getItem(opsi.kunci)) return SUDAH_MUAT;
+        sessionStorage.setItem(opsi.kunci, '1');
+      } catch (_) { /* mode privat: tanpa catatan, tampil tiap muat */ }
+    }
+    var tutup = document.createElement('div');
+    tutup.className = 'lz-muat';
+    tutup.setAttribute('role', 'status');
+    tutup.setAttribute('aria-live', 'polite');
+    tutup.setAttribute('aria-label', 'Memuat');
+    tutup.innerHTML = '<span class="lz-logo-svg lz-logo-muat" aria-hidden="true">' + svgUtama() + '</span>';
+    document.body.appendChild(tutup);
+    html.classList.add('lz-muat-aktif');
+    var el = tutup.firstChild;
+    var kondisi = { gerak: false, data: !opsi.tahan, selesai: false };
+    var tutupnya = function () {
+      if (kondisi.selesai) return;
+      kondisi.selesai = true;
+      tutup.classList.add('lz-muat-keluar');
+      var bersih = function () {
+        if (tutup.parentNode) tutup.parentNode.removeChild(tutup);
+        html.classList.remove('lz-muat-aktif');
+        nanti();
+      };
+      /* Dilepas lewat pewaktu, bukan transitionend: tab di belakang tidak menjalankan transisi, dan penutup yang
+         tak pernah lepas menahan seluruh halaman. */
+      setTimeout(bersih, 520);
+    };
+    var coba = function () { if (kondisi.gerak && kondisi.data) tutupnya(); };
+    /* Dua bingkai: sempat tergambar penuh dan terukur lebarnya sebelum animasi dimulai. */
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (kondisi.selesai) return;
+        mainkan(el, SKALA_MUAT);
+        var s = el.__lz;
+        Promise.all(s.anim.map(function (a) { return a.finished; })).then(function () {
+          kondisi.gerak = true; coba();
+        }, function () { kondisi.gerak = true; coba(); });
+      });
+    });
+    setTimeout(tutupnya, BATAS_MUAT);
+    return {
+      selesai: function () { kondisi.data = true; coba(); },
+      tutup: tutupnya
+    };
+  }
+
+  /* Logo diam untuk kepala halaman publik (tanpa animasi, tanpa menu): menggantikan logo unggahan dan inisial. */
+  function statis(nama) {
+    return '<span class="lz-logo-svg lz-logo-statis" role="img" aria-label="' + esc(nama || 'Lazismu Bantul') + '">' + svgUtama() + '</span>';
+  }
+
 
   var jadwal = 0;
   function nanti() {
@@ -273,5 +341,5 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pasang); else pasang();
 
-  window.LZLogo = { html: html, mainkan: function (el) { el = el || logo(); if (el) mainkan(el); }, diam: diam, periksa: periksa };
+  window.LZLogo = { html: html, muat: muat, statis: statis, mainkan: function (el) { el = el || logo(); if (el) mainkan(el); }, diam: diam, periksa: periksa };
 })();

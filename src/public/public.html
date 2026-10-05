@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="/styles.css">
   <script src="/js/lz-tema.js"></script>
+  <script src="/js/lz-logo.js"></script>
   <style>
     /* ================================================================
        HALAMAN PUBLIK
@@ -178,6 +179,7 @@
     })();
   </script>
 
+  <script>var MUAT = LZLogo.muat({ kunci: 'lz_muat_publik', tahan: true });</script>
   <div id="boot" class="lz lz--full">
     <div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div>
   </div>
@@ -224,7 +226,7 @@
     }
 
     function showErr(e){
-      document.getElementById('boot').classList.add('hidden');
+      document.getElementById('boot').classList.add('hidden'); MUAT.selesai();
       document.getElementById('root').classList.add('hidden');
       var b = document.getElementById('errBox');
       b.classList.remove('hidden');
@@ -314,7 +316,7 @@
 
     function render(d){
       DATA = d;
-      document.getElementById('boot').classList.add('hidden');
+      document.getElementById('boot').classList.add('hidden'); MUAT.selesai();
       document.getElementById('errBox').classList.add('hidden');
       var r = document.getElementById('root');
       r.classList.remove('hidden');
@@ -328,13 +330,11 @@
             return '<option value="'+esc(m)+'"'+(periode===m?' selected':'')+'>'+esc(namaBulan(m))+'</option>';
           }).join('');
 
-      var logo = s.logoData
-        ? '<img src="'+esc(s.logoData)+'" alt="">'
-        : esc((s.singkatan || 'LZ').slice(0,2).toUpperCase());
+      var logo = LZLogo.statis(s.namaLembaga || 'Lazismu Bantul');   /* logo SVG baru, bukan unggahan Pengaturan */
 
       var kepala = '<div class="pub-head">'
         + '<div class="pub-id">'
-          + '<div class="pub-logo">'+logo+'</div>'
+          + '<div class="pub-logo lz-logo-kepala">'+logo+'</div>'
           + '<div style="min-width:0">'
             + '<div class="pub-nama">'+esc(s.namaLembaga || 'LAZ Digital')+'</div>'
             + '<div class="pub-sub">Laporan transparansi penghimpunan &amp; pentasyarufan dana</div>'

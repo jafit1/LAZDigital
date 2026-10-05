@@ -315,9 +315,9 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await oto.goto(A + '/lacak.html?n=' + encodeURIComponent(nomorP) + '&k=' + encodeURIComponent(kode));
     await oto.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
     const ot = await oto.evaluate(() => ({ form: getComputedStyle(document.getElementById('lkForm')).display, lain: !document.getElementById('lkLain').classList.contains('hidden'),
-      nama: document.getElementById('lkLembaga').textContent.trim(), logo: !!document.querySelector('#lkLogo img'), kartu: !!document.getElementById('lkKartu') }));
+      nama: document.getElementById('lkLembaga').textContent.trim(), logo: document.querySelectorAll('#lkLogo .lz-logo-statis .lzm-main path').length === 22, kartu: !!document.getElementById('lkKartu') }));
     cek('tautan bernomor dan berkode: isian disembunyikan dan hasil langsung tampil', ot.form === 'none' && ot.kartu && ot.lain, ot);
-    cek('kepala memuat logo dan nama lembaga', ot.logo && ot.nama.length > 3, ot);
+    cek('kepala memuat logo SVG baru dan nama lembaga', ot.logo && ot.nama.length > 3, ot);
     await oto.click('#lkLain');
     cek('"Cari pengajuan lain" menampilkan isian lagi', (await oto.evaluate(() => getComputedStyle(document.getElementById('lkForm')).display)) !== 'none');
     await oto.close();

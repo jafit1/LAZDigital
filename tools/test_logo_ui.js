@@ -197,8 +197,8 @@ const server = http.createServer(async (req, res) => {
   cek('kursor menyentuh bilah ciut: logo kembali penuh di tengah panel', Math.abs(u.lebar - 71.6) < 1.5 && u.meleset <= 1.5, u);
   await p.mouse.move(900, 400);
   await p.waitForTimeout(300);
-  cek('komputer: ikon Link Publik, Link Harian, Atur Layout, tema tetap di kepala dasbor',
-    await p.evaluate(() => ['dashLinkPublik', 'dashLinkHarian', 'dashEditBtn', 'tombolTema'].every((id) => document.getElementById(id).getBoundingClientRect().width > 0)));
+  cek('komputer: ikon Link Harian, Atur Layout, tema tetap di kepala dasbor',
+    await p.evaluate(() => ['dashLinkHarian', 'dashEditBtn', 'tombolTema'].every((id) => document.getElementById(id).getBoundingClientRect().width > 0)));
   await p.click('.user-chip');
   await p.waitForSelector('#pf_nama', { timeout: 3000 }).catch(() => {});
   cek('komputer: foto profil tetap langsung membuka pengaturan akun (tanpa menu)', await p.evaluate(() => !!document.getElementById('pf_nama') && !document.getElementById('akunMenu')));
@@ -213,15 +213,15 @@ const server = http.createServer(async (req, res) => {
   /* Kepala dasbor (pemilik, 5 Oktober 2026): Link Publik, Link Harian, Atur Layout keluar dari menu titik tiga, tinggal
      ikon. Di HP tujuh tombol tidak muat sebaris (406 px di ruang 342 px) dan tombol tema terpotong di tepi layar, jadi
      di HP keempatnya (dengan tema) pindah ke menu yang muncul saat foto profil diketuk. */
-  const kepala = await p.evaluate(() => ['dashLinkPublik', 'dashLinkHarian', 'dashEditBtn', 'tombolTema'].map((id) => {
+  const kepala = await p.evaluate(() => ['dashLinkHarian', 'dashEditBtn', 'tombolTema'].map((id) => {
     const e = document.getElementById(id); if (!e) return { id, ada: false };
     const r = e.getBoundingClientRect();
     return { id, ada: true, judul: e.getAttribute('aria-label') || '', teks: e.textContent.trim(), tampil: r.width > 0 };
   }));
-  cek('kepala dasbor: Link Publik, Link Harian, Atur Layout berupa ikon tanpa tulisan, bernama di aria-label',
+  cek('kepala dasbor: Link Harian, Atur Layout berupa ikon tanpa tulisan, bernama di aria-label',
     kepala.slice(0, 3).every((k) => k.ada && k.judul && !k.teks), kepala);
   cek('kepala dasbor: menu titik tiga sudah tidak ada', await p.evaluate(() => !document.getElementById('dashMenu_trigger')));
-  cek('HP: keempat tombol sesekali disembunyikan dari kepala dasbor', kepala.every((k) => k.ada && !k.tampil), kepala);
+  cek('HP: ketiga tombol sesekali disembunyikan dari kepala dasbor', kepala.every((k) => k.ada && !k.tampil), kepala);
   /* Pemilik: di HP tombol catat masuk/keluar juga dibuang, chip periode naik sebaris dengan salam, salam diperkecil. */
   const hpKepala = await p.evaluate(() => {
     const chip = document.getElementById('dashPeriodeBtn').getBoundingClientRect();
@@ -240,8 +240,8 @@ const server = http.createServer(async (req, res) => {
     const r = m.getBoundingClientRect();
     return { isi: [...m.querySelectorAll('.akun-butir span')].map((x) => x.textContent), dalam: r.left >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight };
   });
-  cek('HP: ketuk foto profil membuka menu berisi pengaturan, Link Publik, Link Harian, tata letak, tema',
-    menu && ['Pengaturan akun', 'Pengaturan aplikasi', 'Link Publik', 'Link Harian', 'Atur layout dasbor', 'Tema gelap'].every((x) => menu.isi.includes(x)) && menu.dalam, menu);
+  cek('HP: ketuk foto profil membuka menu berisi pengaturan, Link Harian, tata letak, tema (tanpa Link Publik lama)',
+    menu && ['Pengaturan akun', 'Pengaturan aplikasi', 'Link Harian', 'Atur layout dasbor', 'Tema gelap'].every((x) => menu.isi.includes(x)) && !menu.isi.includes('Link Publik') && menu.dalam, menu);
   cek('HP: profil tidak langsung membuka jendela pengaturan akun', await p.evaluate(() => !document.querySelector('.modal-bg.show #pf_nama')));
   await p.click('#akunTema');
   await p.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark', null, { timeout: 3000 }).catch(() => {});
