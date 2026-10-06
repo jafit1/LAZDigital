@@ -1772,7 +1772,7 @@ function renderLapRekap(mode){
 
 function renderLaporanShell(){
   var tabs=[['himpun','Detail Penghimpunan'],['salur','Detail Pentasyarufan'],
-            ['harian','Cetak Harian'],['a2','Formulir A2'],
+            ['harian','Cetak Harian'],['kwitansi','Cetak Kwitansi'],['a2','Formulir A2'],
             ['jurnal','Jurnal Penerimaan'],['closing','Closing Bulanan'],['broadcast','Broadcast WhatsApp']];
   var h='<div class="page-head"><div><h2>Laporan</h2><div class="desc">Rekap per kantor layanan, jurnal, dan broadcast</div></div></div>';
   h+='<div class="lap-tabs">'+tabs.map(function(t){
@@ -1783,6 +1783,7 @@ function renderLaporanShell(){
   if(LAP_TAB==='himpun')renderLapRekap('himpun');
   else if(LAP_TAB==='salur')renderLapRekap('salur');
   else if(LAP_TAB==='harian')renderHarianForm();
+  else if(LAP_TAB==='kwitansi')renderKwForm();
   else if(LAP_TAB==='a2')renderA2Form();
   else if(LAP_TAB==='jurnal')renderJurnalForm();
   else if(LAP_TAB==='closing')renderClosingForm();
@@ -1797,6 +1798,7 @@ function setLapTab(t){
   if(t==='himpun')renderLapRekap('himpun');
   else if(t==='salur')renderLapRekap('salur');
   else if(t==='harian')renderHarianForm();
+  else if(t==='kwitansi')renderKwForm();
   else if(t==='a2')renderA2Form();
   else if(t==='jurnal')renderJurnalForm();
   else if(t==='closing')renderClosingForm();
@@ -9443,6 +9445,145 @@ function lhTabelCetak(judul, kolom, baris, total, warnaTotal){
 
 function rpCetak(n){ return (Number(n)||0).toLocaleString('id-ID'); }
 
+
+/* ============================================================
+   CETAK KWITANSI MASSAL (Laporan) — PDF A5 mendatar
+   Semua kwitansi pada rentang tanggal/bulan dibuat dengan gambar kwitansi yang SAMA seperti di Penghimpunan
+   (LZKwitansi.gambar), satu kwitansi satu halaman A5, lalu dirakit jadi berkas PDF oleh LZPdf (tanpa pustaka luar).
+   ============================================================ */
+var K_MODE = 'bulan';
+var K_DATA = null;
+var K_SIBUK = false;
+
+function renderKwForm(){
+  var now = new Date();
+  var yopt='';for(var y=now.getFullYear()+1;y>=now.getFullYear()-3;y--)yopt+='<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>';
+  var mopt='';for(var m=1;m<=12;m++)mopt+='<option value="'+m+'" '+((m-1)===now.getMonth()?'selected':'')+'>'+BULAN[m]+'</option>';
+  var kDari = window.__kDari || rtIso(new Date(now.getFullYear(), now.getMonth(), 1));
+  var kSampai = window.__kSampai || today();
+  var pilihMode = '<div class="j-mode">'
+    + '<button type="button" class="j-mode-btn'+(K_MODE==='bulan'?' on':'')+'" onclick="kwMode(\'bulan\')">Per Bulan</button>'
+    + '<button type="button" class="j-mode-btn'+(K_MODE==='rentang'?' on':'')+'" onclick="kwMode(\'rentang\')">Rentang Tanggal</button>'
+    + '</div>';
+  var form = pilihMode + '<div class="fgrid">'
+    + (K_MODE==='bulan'
+        ? fld(3,'Bulan','<select id="k_bulan">'+mopt+'</select>') + fld(3,'Tahun','<select id="k_tahun">'+yopt+'</select>')
+        : fld(6,'Rentang Tanggal', rentangHTML('k_rt', kDari, kSampai)))
+    + '</div>';
+  var acts = '<button class="btn btn-primary" onclick="kwTampilkan()">Tampilkan</button>';
+  el('lapBody').innerHTML = lapPanel('Cetak Kwitansi',
+      'Pilih bulan atau rentang tanggal. Semua kwitansi pada periode itu dibuat otomatis, satu kwitansi satu halaman A5 mendatar, dalam satu berkas PDF.',
+      form, acts)
+    + '<div id="kwHasil" class="lap-result"></div>';
+  if (K_MODE==='rentang'){
+    rentangPasang('k_rt', { dari:kDari, sampai:kSampai, onTerap:function(a,b){ window.__kDari=a; window.__kSampai=b; } });
+  }
+  if (K_DATA) kwTampilHasil(K_DATA);
+}
+function kwMode(m){ if (K_MODE===m) return; K_MODE=m; K_DATA=null; renderKwForm(); }
+
+function kwRentang(){
+  if (K_MODE==='rentang'){
+    var v = rentangNilai('k_rt');
+    if (!v.dari || !v.sampai) return null;
+    window.__kDari=v.dari; window.__kSampai=v.sampai;
+    return { dari:v.dari, sampai:v.sampai, nama:v.dari+'_sd_'+v.sampai };
+  }
+  var y = Number(el('k_tahun').value), m = Number(el('k_bulan').value);
+  var p2 = function(n){ return ('0'+n).slice(-2); };
+  var akhir = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { dari:y+'-'+p2(m)+'-01', sampai:y+'-'+p2(m)+'-'+p2(akhir), nama:y+'-'+p2(m) };
+}
+
+function kwTampilkan(){
+  var r = kwRentang();
+  if (!r){ toast('Lengkapi rentang tanggal', true); return; }
+  el('kwHasil').innerHTML = BOXES_SPINNER;
+  gas('apiKwitansiRentang')(TOKEN, r.dari, r.sampai).then(function(d){
+    d.__nama = r.nama; d.__dari = r.dari; d.__sampai = r.sampai;
+    K_DATA = d; kwTampilHasil(d);
+  }).catch(function(e){ el('kwHasil').innerHTML=''; handleErr(e); });
+}
+
+function kwTampilHasil(d){
+  var box = el('kwHasil'); if (!box) return;
+  if (!d.rows.length){
+    box.innerHTML = '<div class="card"><div class="empty" style="padding:30px"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada penghimpunan pada periode ini, jadi tidak ada kwitansi yang bisa dicetak.</div></div>';
+    return;
+  }
+  var h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+    + '<div><h3>'+d.rows.length+' kwitansi siap dibuat</h3><div class="muted" style="font-size:13px">'+esc(tglIndo(d.__dari))+' s.d. '+esc(tglIndo(d.__sampai))+' &middot; total '+rp(d.rows.reduce(function(a,r){return a+(Number(r.jumlah)||0);},0))+'</div></div>'
+    + '<div class="kw-aksi" id="kwAksi"><button class="btn" onclick="kwBuatPdf(\'buka\')">Buka / Cetak</button>'
+    + '<button class="btn btn-primary" onclick="kwBuatPdf(\'unduh\')">Unduh PDF A5</button></div></div>';
+  if (d.dipotong) h += '<div class="imp-note imp-warn" style="margin-bottom:12px">Ada '+d.total+' penghimpunan pada periode ini; yang dimuat baru '+d.batas+' pertama (urut tanggal). Pilih rentang yang lebih pendek untuk sisanya.</div>';
+  h += '<div id="kwProg" class="kw-prog" hidden><div class="kw-prog-bar"><i id="kwProgI"></i></div><div class="muted" id="kwProgT" style="font-size:12.5px;margin-top:6px"></div></div>';
+  h += '<div class="table-wrap"><div style="overflow:auto;max-height:340px"><table class="log-tabel"><thead><tr><th>No. Kwitansi</th><th>Tanggal</th><th>Donatur</th><th>Jenis Dana</th><th style="text-align:right">Jumlah</th></tr></thead><tbody>';
+  d.rows.slice(0, 60).forEach(function(r){
+    h += '<tr><td>'+esc(r.noKwitansi||'')+'</td><td class="muted">'+esc(String(r.tanggal||'').slice(0,10))+'</td><td><b>'+esc(r.namaDonatur||'')+'</b></td><td>'+esc(r.subJenis&&r.subJenis!==r.jenisDana?r.subJenis:(r.jenisDana||''))+'</td><td style="text-align:right;font-weight:700;white-space:nowrap">'+rp(r.jumlah)+'</td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+  if (d.rows.length > 60) h += '<div class="muted" style="font-size:12px;margin-top:8px">Menampilkan 60 baris pertama; semua '+d.rows.length+' kwitansi ikut dicetak.</div>';
+  h += '</div>';
+  box.innerHTML = h;
+}
+
+function kwProgres(i, n, teks){
+  var p = el('kwProg'); if (!p) return;
+  p.hidden = false;
+  el('kwProgI').style.width = Math.round(i / n * 100) + '%';
+  el('kwProgT').textContent = teks || ('Menyiapkan kwitansi ' + i + ' dari ' + n + '...');
+}
+
+/* Kanvas kwitansi dilukis di atas latar putih lalu dijadikan JPEG: JPEG tidak punya transparansi, tanpa ini bagian
+   bening jadi hitam di PDF. */
+function kwJpeg(canvas){
+  var c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+  var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(canvas, 0, 0);
+  return c.toDataURL('image/jpeg', 0.9);
+}
+
+function kwBuatPdf(cara){
+  if (K_SIBUK) return;
+  var d = K_DATA; if (!d || !d.rows.length){ toast('Tampilkan datanya dulu', true); return; }
+  if (!window.LZKwitansi || !window.LZPdf){ toast('Pembuat PDF belum termuat, coba lagi sebentar', true); return; }
+  K_SIBUK = true;
+  var s = Object.assign({}, d.settings, { __linkDonatur: d.linkDonatur ? location.origin + d.linkDonatur : '' });
+  var aksi = el('kwAksi'); if (aksi) aksi.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+  /* Jendela dibuka SEKARANG (saat klik) supaya tidak diblokir pencegah popup; isinya diisi setelah PDF jadi. */
+  var jendela = cara === 'buka' ? window.open('', '_blank') : null;
+  var hasil = [], n = d.rows.length, i = 0;
+  function selesaiGalat(e){
+    K_SIBUK = false; if (aksi) aksi.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+    if (jendela) { try{ jendela.close(); }catch(x){} }
+    var p = el('kwProg'); if (p) p.hidden = true;
+    handleErr(e);
+  }
+  function lanjut(){
+    if (i >= n){
+      kwProgres(n, n, 'Merakit PDF...');
+      LZPdf.buat(hasil).then(function(blob){
+        K_SIBUK = false; if (aksi) aksi.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+        var url = URL.createObjectURL(blob);
+        var nama = 'Kwitansi_' + d.__nama + '.pdf';
+        kwProgres(n, n, n + ' kwitansi jadi (' + Math.round(blob.size / 1024) + ' KB).');
+        if (jendela){ jendela.location.href = url; }
+        else { var a = document.createElement('a'); a.href = url; a.download = nama; document.body.appendChild(a); a.click(); a.remove(); }
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 120000);
+      }).catch(selesaiGalat);
+      return;
+    }
+    var row = d.rows[i];
+    var dk = Object.assign({}, row, { __verifikasi: window.location.host + '/public.html?kwitansi=' + encodeURIComponent(row.noKwitansi || row.id) });
+    LZKwitansi.gambar(dk, s).then(function(cv){
+      hasil.push(kwJpeg(cv)); i++;
+      kwProgres(i, n);
+      setTimeout(lanjut, 0);
+    }).catch(selesaiGalat);
+  }
+  kwProgres(0, n);
+  lanjut();
+}
+
 /* ============================================================
    CLOSING BULANAN — rekap bergaya "REKAP LAZISMU SE BANTUL"
    ============================================================ */
@@ -9663,8 +9804,8 @@ function buildHarianHTML(d){
     + '<div class="terbilang"><span>Terbilang penerimaan:</span> <i>'+esc(terbilang(r.himpunTotal))+' rupiah</i></div>'
 
     + lhTabelCetak('A. PENGHIMPUNAN',
-        [{t:'No. Kwitansi',lebar:'14%'},{t:'Donatur',lebar:'26%'},{t:'Jenis Dana',lebar:'16%'},
-         {t:'Metode',lebar:'18%'},{t:'Fundraising',lebar:'13%'},{t:'Jumlah (Rp)',kanan:true,lebar:'13%'}],
+        [{t:'No. Kwitansi',lebar:'17%'},{t:'Donatur',lebar:'24%'},{t:'Jenis Dana',lebar:'15%'},
+         {t:'Metode',lebar:'14%'},{t:'Fundraising',lebar:'15%'},{t:'Jumlah (Rp)',kanan:true,lebar:'14%'}],
         barisHimpun, r.himpunTotal, '#127a4b')
 
     + (d.himpun.length ? '<div class="rk-grid">'
@@ -9674,8 +9815,8 @@ function buildHarianHTML(d){
       + '</div>' : '')
 
     + lhTabelCetak('B. PENTASYARUFAN',
-        [{t:'No. Bukti',lebar:'14%'},{t:'Penerima',lebar:'26%'},{t:'Ashnaf',lebar:'16%'},
-         {t:'Program',lebar:'18%'},{t:'Sumber Dana',lebar:'13%'},{t:'Jumlah (Rp)',kanan:true,lebar:'13%'}],
+        [{t:'No. Bukti',lebar:'17%'},{t:'Penerima',lebar:'24%'},{t:'Ashnaf',lebar:'13%'},
+         {t:'Program',lebar:'17%'},{t:'Sumber Dana',lebar:'14%'},{t:'Jumlah (Rp)',kanan:true,lebar:'14%'}],
         barisSalur, r.salurTotal, '#b3282d')
 
     + (d.salur.length ? '<div class="rk-grid">'
@@ -9699,7 +9840,7 @@ function buildHarianHTML(d){
     + '@page{size:A4 portrait;margin:14mm 12mm}'
     + '*{box-sizing:border-box;margin:0;padding:0}'
     + 'body{font-family:"Segoe UI",Arial,Helvetica,sans-serif;color:#1b1f24;background:#f2f3f5;font-size:10.5pt;line-height:1.45}'
-    + '.lembar{max-width:210mm;margin:14px auto;background:#fff;padding:16mm 14mm;box-shadow:0 2px 18px rgba(0,0,0,.12)}'
+    + '.lembar{max-width:210mm;margin:14px auto;background:#fff;padding:8mm 8mm;box-shadow:0 2px 18px rgba(0,0,0,.12)}'
 
     + '.kop{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;'
       + 'border-bottom:2.5pt solid #1b1f24;padding-bottom:10px;margin-bottom:14px}'
@@ -9723,7 +9864,7 @@ function buildHarianHTML(d){
       + 'background:#f6f7f9;border-left:2.5pt solid #1b1f24;border-radius:0 5px 5px 0}'
     + '.terbilang span{color:#7a828c}'
 
-    + '.sec{margin-bottom:14px;break-inside:auto}'
+    + '.sec{margin-bottom:6px;break-inside:auto}'
     + '.sec-h{font-size:10pt;font-weight:800;letter-spacing:.5px;padding:6px 10px;'
       + 'background:#1b1f24;color:#fff;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}'
     + '.sec-n{font-weight:500;font-size:8.5pt;opacity:.8}'
@@ -9731,34 +9872,35 @@ function buildHarianHTML(d){
     + '.sec-h{break-after:avoid}'
     + '.kosong{border:1pt solid #d7dbe0;border-top:none;padding:14px;text-align:center;color:#7a828c;font-size:9pt;border-radius:0 0 4px 4px}'
 
-    + 'table.tbl{width:100%;border-collapse:collapse;font-size:8.8pt}'
-    + 'table.tbl th{background:#eef0f3;border:0.6pt solid #c9ced5;padding:5px 6px;text-align:left;'
+    + 'table.tbl{width:100%;border-collapse:collapse;font-size:9.2pt;border:0.6pt solid #c9ced5;border-top:none}'
+    + 'table.tbl th{background:#eef0f3;border-bottom:1pt solid #9aa3ad;padding:6px 7px;text-align:left;'
       + 'font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.3px}'
-    + 'table.tbl td{border:0.6pt solid #d7dbe0;padding:5px 6px;vertical-align:top}'
+    + 'table.tbl td{border-bottom:0.5pt solid #e1e4e8;padding:4px 7px;vertical-align:top;word-break:break-word}'
+    + 'table.tbl td:nth-child(2){white-space:nowrap;font-size:8.2pt}'
     + 'table.tbl td.no,table.tbl th.no{width:22px;text-align:center;color:#7a828c}'
     + 'table.tbl .kanan{text-align:right}'
     + 'table.tbl .nom{font-variant-numeric:tabular-nums;white-space:nowrap}'
-    + 'table.tbl .sub{font-size:7.6pt;color:#7a828c;margin-top:1px}'
-    + 'table.tbl tbody tr:nth-child(even){background:#fafbfc}'
-    + 'table.tbl tfoot td{background:#eef0f3;border:0.6pt solid #c9ced5;padding:6px;font-weight:800;font-size:9.2pt}'
+    + 'table.tbl .sub{font-size:7.8pt;color:#6b7480;margin-top:1px}'
+    + 'table.tbl tbody tr:nth-child(even){background:#f4f6f8}'
+    + 'table.tbl tfoot td{background:#e3e7ec;border-top:1.2pt solid #1b1f24;padding:7px;font-weight:800;font-size:10pt}'
     + 'table.tbl thead{display:table-header-group;break-after:avoid}'
     /* tfoot bawaannya diulang di tiap halaman; dijadikan baris biasa agar
        "JUMLAH" hanya muncul sekali di akhir tabel */
     + 'table.tbl tfoot{display:table-row-group}'
     + 'table.tbl tr{break-inside:avoid}'
 
-    + '.rk-grid{display:flex;gap:9px;margin:-4px 0 16px;flex-wrap:wrap}'
-    + '.rk{flex:1;min-width:52mm;border:0.6pt solid #d7dbe0;border-radius:5px;padding:8px 10px;break-inside:avoid}'
+    + '.rk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0 12px;break-inside:avoid}'
+    + '.rk{border:0.6pt solid #d7dbe0;border-radius:5px;padding:8px 10px;break-inside:avoid;background:#fbfcfd}'
     + '.rk-h{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.35px;color:#5b6470;'
       + 'border-bottom:0.6pt solid #e6e8ec;padding-bottom:4px;margin-bottom:5px}'
     + '.rk-r{display:flex;justify-content:space-between;gap:10px;font-size:8.6pt;padding:2px 0}'
     + '.rk-r span{color:#3d444d}'
     + '.rk-r b{font-variant-numeric:tabular-nums;white-space:nowrap}'
 
-    + '.ttd{display:flex;justify-content:space-between;gap:14px;margin-top:22px;break-inside:avoid}'
+    + '.ttd{display:flex;justify-content:space-between;gap:14px;margin-top:8px;break-inside:avoid}'
     + '.ttd-k{flex:1;text-align:center;font-size:9pt}'
     + '.ttd-j{color:#3d444d}'
-    + '.ttd-sp{height:56px}'
+    + '.ttd-sp{height:44px}'
     + '.ttd-n{border-top:0.8pt solid #1b1f24;padding-top:4px;font-weight:700}'
 
     + '.kaki{margin-top:18px;padding-top:8px;border-top:0.6pt solid #e6e8ec;'
@@ -9841,15 +9983,16 @@ function a2Kelompok(rows){
   return { tunai: barisT, bank: barisB, totalTunai: totalT, totalBank: totalB, total: totalT + totalB };
 }
 
-/* Susun pecahan dari total tunai, dari yang terbesar. */
+/* Pecahan disusun ACAK oleh js/lz-denominasi.js (lintas semua nominal kertas, koin 200/100 untuk ratusan, koin 500 atau
+   1.000 untuk kelipatan 1.000). Hasilnya disimpan per total supaya pratinjau, kotak pemeriksa, dan cetakan memakai
+   susunan yang SAMA; susunan baru hanya lahir saat totalnya berubah atau tombol "Acak ulang" ditekan. */
+var A2_ACAK = null;   /* { total, nilai } */
 function a2Otomatis(total){
-  var sisa = Math.max(0, Math.round(Number(total) || 0));
-  var hasil = {};
-  A2_PECAHAN.forEach(function(p){ var n = Math.floor(sisa / p); hasil[a2Kunci(p,false)] = n; sisa -= n * p; });
-  A2_KOIN.forEach(function(p){ var n = Math.floor(sisa / p); hasil[a2Kunci(p,true)] = n; sisa -= n * p; });
-  hasil.sisa = sisa;
-  return hasil;
+  total = Math.max(0, Math.round(Number(total) || 0));
+  if (!A2_ACAK || A2_ACAK.total !== total) A2_ACAK = { total: total, nilai: window.LZDenominasi.acak(total) };
+  return A2_ACAK.nilai;
 }
+function a2AcakUlang(){ A2_ACAK = null; a2Refresh(); }
 
 function a2Nilai(){
   if (A2_MODE === 'otomatis') return a2Otomatis(a2Kelompok(A2_DATA ? A2_DATA.himpun : []).totalTunai);
@@ -9927,7 +10070,7 @@ function a2Panel(){
     + '</div>'
     + '<div class="muted" style="font-size:11.5px;margin-bottom:9px">'
       + (A2_MODE === 'otomatis'
-          ? 'Pecahan disusun otomatis dari total tunai ' + rp(g.totalTunai) + ', dimulai dari yang terbesar.'
+          ? 'Pecahan disusun acak dari total tunai ' + rp(g.totalTunai) + '. <a href="#" class="a2-acak" onclick="a2AcakUlang();return false">Acak ulang</a>'
           : 'Isi sendiri jumlah tiap pecahan. Dikosongkan pun boleh — kolomnya akan dicetak kosong untuk diisi tangan.')
     + '</div>'
     + '<div class="a2-den"><div class="a2-den-h">Pecahan Kertas</div>'

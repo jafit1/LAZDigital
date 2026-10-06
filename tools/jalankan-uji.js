@@ -60,6 +60,8 @@ const DAFTAR = [
   { label: 'Bentuk layar percakapan', berkas: 'ukur-percakapan.js' },
   { label: 'Fitur Fundraising', berkas: 'test_fund_fitur.js' },
   { label: 'Fundraising ke buku utama', berkas: 'test_fund_buku.js' },
+  { label: 'Cetak kwitansi massal PDF', berkas: 'test_kwitansi_massal.js' },
+  { label: 'Denominasi acak Formulir A2', berkas: 'test_denominasi.js' },
   { label: 'Fundraiser dan pencocokan', berkas: 'test_fundraiser.js' },
   { label: 'Tampilan halaman Fundraising', berkas: 'test_fund_ui.js' },
   { label: 'Fitur Media dan Desain', berkas: 'test_media_fitur.js' },

@@ -647,6 +647,26 @@ async function apiDeletePenghimpunan(t,id){ var u=_requirePerm(t,'penghimpunan',
 function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view');
   return apiGetKwitansi_(findById(SHEETS.PENGHIMPUNAN,id));
 }
+/* Kwitansi banyak sekaligus untuk dicetak (tab Cetak Kwitansi di Laporan). Rentang tanggal inklusif, paling lama 400 hari
+   dan paling banyak 300 baris per permintaan supaya jawabannya tidak melewati batas respons Vercel dan satu PDF tetap
+   masuk akal. Perlu DUA izin: Laporan (lihat) dan Penghimpunan (lihat), karena baris kwitansi memuat alamat dan nomor donatur. */
+function apiKwitansiRentang(t,dari,sampai){
+  _requirePerm(t,'laporan','view'); _requirePerm(t,'penghimpunan','view');
+  dari=String(dari||'').slice(0,10); sampai=String(sampai||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dari)||!/^\d{4}-\d{2}-\d{2}$/.test(sampai)) throw new Error('Tanggal tidak valid.');
+  if(dari>sampai) throw new Error('Tanggal awal harus sebelum tanggal akhir.');
+  if((new Date(sampai+'T00:00:00Z')-new Date(dari+'T00:00:00Z'))/864e5>400) throw new Error('Rentang terlalu panjang (maksimum 400 hari).');
+  var BATAS=300;
+  var rek={}; (readAll(SHEETS.REKENING)||[]).forEach(function(r){ if(r&&r.id) rek[r.id]=r; });
+  var baris=readAll(SHEETS.PENGHIMPUNAN).filter(function(r){ var x=String(r.tanggal||'').slice(0,10); return x>=dari&&x<=sampai; });
+  baris.sort(function(a,b){ var x=String(a.tanggal||''), y=String(b.tanggal||''); if(x!==y) return x.localeCompare(y); return String(a.noKwitansi||'').localeCompare(String(b.noKwitansi||'')); });
+  var total=baris.length, jumlah=0; baris.forEach(function(r){ jumlah+=Number(r.jumlah)||0; });
+  var dipotong=total>BATAS; if(dipotong) baris=baris.slice(0,BATAS);
+  var tk=getSetting('lhTokenDonatur')||'';
+  return {rows:baris.map(function(d){ var rk=d.rekeningId&&rek[d.rekeningId]; var no=rk?String(rk.nomor||'').replace(/\D/g,''):''; return no?Object.assign({},d,{rekeningAkhir:no.slice(-3)}):d; }),
+    total:total, jumlah:jumlah, dipotong:dipotong, batas:BATAS,
+    settings:_settingsAman(getAllSettings(),false), linkDonatur:tk?('/harian.html?t='+tk):''};
+}
 function apiGetKwitansi_(d){
   /* Kwitansi hanya menampilkan 3 angka terakhir nomor rekening; nomor lengkapnya tidak ikut dikirim ke peramban. */
   if(d&&d.rekeningId){ var rk=findById(SHEETS.REKENING,d.rekeningId); var no=String((rk&&rk.nomor)||'').replace(/\D/g,''); if(no) d=Object.assign({},d,{rekeningAkhir:no.slice(-3)}); }
@@ -8049,6 +8069,7 @@ REGISTRY['apiListLayananPublic']=apiListLayananPublic;
 REGISTRY['apiSavePenghimpunan']=apiSavePenghimpunan;
 REGISTRY['apiDeletePenghimpunan']=apiDeletePenghimpunan;
 REGISTRY['apiGetKwitansi']=apiGetKwitansi;
+REGISTRY['apiKwitansiRentang']=apiKwitansiRentang;
 REGISTRY['apiFundHimpunkan']=apiFundHimpunkan;
 REGISTRY['apiFundKwitansi']=apiFundKwitansi;
 REGISTRY['apiListPentasyarufan']=apiListPentasyarufan;

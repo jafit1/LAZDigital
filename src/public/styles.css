@@ -6722,3 +6722,13 @@ html:not([data-theme="dark"]) .lz-logo-muat .lzm-glow{ display:none; }
 .fa-baca .btn{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .field.fa-ai input,.field.fa-ai select,.field.fa-ai textarea{border-color:var(--green)}
 .field.fa-ai.fa-ragu input,.field.fa-ai.fa-ragu select,.field.fa-ai.fa-ragu textarea{border-color:#d99a1a}
+
+/* Cetak Kwitansi massal (Laporan) */
+.kw-aksi{display:flex;gap:8px;flex-wrap:wrap}
+.kw-prog{margin:0 0 14px}
+.kw-prog-bar{height:8px;border-radius:99px;background:var(--border);overflow:hidden}
+.kw-prog-bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--grad-accent,var(--accent));transition:width .15s}
+@media (max-width:520px){.kw-aksi{width:100%}.kw-aksi .btn{flex:1}}
+
+.a2-acak{color:var(--accent-d);font-weight:700;white-space:nowrap}
+.a2-acak:hover{text-decoration:underline}
