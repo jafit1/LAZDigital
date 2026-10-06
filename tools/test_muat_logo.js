@@ -204,9 +204,10 @@ const server = http.createServer(async (req, res) => {
 
   console.log('\n=== E. GERAK DIKURANGI ===');
   const c7 = await konteks({ reducedMotion: 'reduce' });
+  await c7.addInitScript(() => { try { localStorage.setItem('laz_logo_diam', '1'); } catch (_) {} });
   p = await buka(c7, '/harian.html?t=abc', { skala: 1 });
   await p.waitForTimeout(200);
-  cek('gerak dikurangi: tidak ada penutup loading', !(await penutup(p)).ada);
+  cek('pilihan sengaja laz_logo_diam: tidak ada penutup loading', !(await penutup(p)).ada);
   await p.waitForSelector('.lh-head', { timeout: 6000 });
   cek('gerak dikurangi: kepala tetap memakai logo SVG', (await kepalaLogo(p, '.lh-logo .lz-logo-statis')).bagian === 22);
   await c7.close();

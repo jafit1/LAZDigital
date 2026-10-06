@@ -414,6 +414,7 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
 - **Ikon Link Publik lama dihapus** (pemilik, 5 Oktober 2026): tombolnya tidak ada lagi di kepala dasbor dan menu akun
   HP. Yang tersisa: `openPublicLink()` dan tombol "Kelola Link Publik" di Pengaturan (pengelolaan token), halaman
   `public.html`, dan `apiGetPublicLinkInfo`; `test_keamanan_lanjutan.js` menjaga fungsi itu.
+- **Gerak logo tidak mengikuti pengaturan animasi sistem** (6 Oktober 2026): Windows dengan animasi dimatikan membuat peramban melaporkan `prefers-reduced-motion`, dan itu dulu mematikan semua gerak logo dan layar loading (pemilik: "logo nggak gerak"). `kurangi()` di `js/lz-logo.js` kini hanya membaca pilihan sengaja `localStorage laz_logo_diam = '1'`. Dijaga `test_logo_ui.js` dan `test_muat_logo.js`.
 - **Layar loading logo** (5 Oktober 2026, `LZLogo.muat()` di `js/lz-logo.js`, gaya di akhir `styles.css`): logo SVG besar
   berlatar blur (`backdrop-filter`, putih 62% di tema terang, biru malam 62% di gelap; tanpa dukungan blur latarnya
   hampir pekat). Tampil di link publik (`harian.html`, `lacak.html`, `public.html`) hanya saat pertama dibuka per sesi

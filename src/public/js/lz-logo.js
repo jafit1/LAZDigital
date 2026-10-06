@@ -60,8 +60,12 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  /* Pengaturan "animasi" di Windows yang dimatikan (umum di laptop hemat daya) membuat peramban melaporkan
+     prefers-reduced-motion, dan dulu itu mematikan SELURUH gerak logo: pemilik melihat logo diam dan layar loading
+     hilang (6 Oktober 2026). Gerak logo hanya garis yang tergambar sekali, singkat, tanpa guncangan, jadi pengaturan
+     sistem TIDAK lagi mematikannya. Yang menghentikan hanya pilihan sengaja: localStorage laz_logo_diam = '1'. */
   function kurangi() {
-    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
+    try { return localStorage.getItem('laz_logo_diam') === '1'; } catch (_) { return false; }
   }
 
   function svgUtama() {

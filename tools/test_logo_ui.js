@@ -256,11 +256,20 @@ const server = http.createServer(async (req, res) => {
   cek('HP: "Pengaturan akun" membuka jendela pengaturan akun', await p.evaluate(() => !!document.getElementById('pf_nama') && !document.getElementById('akunMenu')));
   await ctx5.close();
 
+  /* Pengaturan sistem "gerak dikurangi" TIDAK mematikan logo lagi (pemilik melihat logo diam, 6 Okt 2026):
+     tanpa pilihan sengaja logonya tetap bergerak. */
+  const ctx6a = await konteks({ reducedMotion: 'reduce' });
+  p = await halaman(ctx6a, {});
+  await p.waitForTimeout(400);
+  u = await baca(p);
+  cek('sistem gerak dikurangi: logo tetap bergerak', u.anim > 0, u);
+  await ctx6a.close();
   const ctx6 = await konteks({ reducedMotion: 'reduce' });
+  await ctx6.addInitScript(() => { try { localStorage.setItem('laz_logo_diam', '1'); } catch (_) {} });
   p = await halaman(ctx6, {});
   await p.waitForTimeout(400);
   u = await baca(p);
-  cek('gerak dikurangi: tidak bergerak, logo tetap tampil utuh', u.anim === 0 && !u.tunggu && u.tampakSvg === '1', u);
+  cek('pilihan sengaja laz_logo_diam: tidak bergerak, logo tetap tampil utuh', u.anim === 0 && !u.tunggu && u.tampakSvg === '1', u);
   await ctx6.close();
 
   console.log('\n=== F. HALAMAN MODUL ===');
