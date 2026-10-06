@@ -1115,6 +1115,8 @@ function kwMuatStatus(){
 }
 function kwPantau(){[4000,12000,30000].forEach(function(ms){setTimeout(function(){if(el('himpunTable'))kwMuatStatus();},ms);});}
 
+/* Logo WhatsApp (gelembung dengan gagang telepon), satu warna mengikuti teks tombol. */
+var KW_WA='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35zM12.05 21.5h-.01a9.45 9.45 0 0 1-4.82-1.32l-.35-.2-3.58.94.96-3.49-.23-.36a9.43 9.43 0 0 1-1.45-5.03c0-5.21 4.24-9.45 9.46-9.45 2.52 0 4.9.99 6.68 2.77a9.4 9.4 0 0 1 2.76 6.68c0 5.21-4.24 9.46-9.42 9.46zM20.5 3.49A11.4 11.4 0 0 0 12.05 0C5.73 0 .58 5.15.58 11.47c0 2.02.53 3.99 1.53 5.73L.5 24l6.95-1.82a11.43 11.43 0 0 0 5.6 1.43h.01c6.32 0 11.47-5.15 11.47-11.47 0-3.06-1.19-5.94-3.35-8.1z" transform="translate(.4 0) scale(.98)"/></svg>';
 function kwBukaCetak(d,s){
   var w=window.open('','_blank');
   d=Object.assign({},d,{__verifikasi:window.location.host+'/public.html?kwitansi='+encodeURIComponent(d.noKwitansi||d.id)});
@@ -1138,7 +1140,7 @@ function kwPopup(id,opsi){
       +'<div class="field"><label>Nomor WhatsApp</label><input id="kwNomor" inputmode="tel" placeholder="0812 3456 7890" value="'+esc(d.telepon||'')+'">'
       +'<div class="muted" style="font-size:11.5px;margin-top:4px">Otomatis tersimpan di kontak Broadcast, tanpa dobel.</div></div>'
       +'<div class="field"><label>Ucapan terima kasih</label><textarea id="kwTeks" rows="6"></textarea></div></div>';
-    var foot='<button class="btn btn-ghost" id="kwTidak">Tidak, nanti saja</button><button class="btn btn-ghost" id="kwCetak">'+SVG_ICONS.cetak+' Cetak</button><button class="btn btn-primary" id="kwKirim">'+SVG_ICONS.kirim+' '+(sudah?'Kirim ulang':'Kirim ke WhatsApp')+'</button>';
+    var foot='<button class="btn btn-ghost" id="kwTidak">Nanti</button><button class="btn btn-ghost" id="kwCetak">'+SVG_ICONS.cetak+' Cetak</button><button class="btn btn-primary" id="kwKirim">'+KW_WA+' '+(sudah?'Kirim ulang':'Kirim')+'</button>';
     openModal('Kirim kwitansi ke WhatsApp donatur',body,foot);
     var mc=el('modalCard'); if(mc)mc.classList.add('kw-modal');
     el('kwTeks').value=LZKwitansi.pesan(d,s);
@@ -1166,7 +1168,7 @@ function kwPopup(id,opsi){
             /* Nomor yang baru diketik ikut disimpan di data penghimpunan bila sebelumnya kosong. */
             if(!kwNomorBersih(d.telepon)&&canDo('penghimpunan','edit')){gas('apiSavePenghimpunan')(TOKEN,Object.assign({},d,{telepon:nomor})).catch(function(){});}}
         })
-        .catch(function(e){btn.disabled=false;btn.innerHTML=SVG_ICONS.kirim+' '+(sudah?'Kirim ulang':'Kirim ke WhatsApp');toast(e.message,true);});
+        .catch(function(e){btn.disabled=false;btn.innerHTML=KW_WA+' '+(sudah?'Kirim ulang':'Kirim');toast(e.message,true);});
     };
   }).catch(handleErr);
 }

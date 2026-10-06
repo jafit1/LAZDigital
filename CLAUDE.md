@@ -423,6 +423,10 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   9 detik; gerak dikurangi tidak menampilkannya. Selama aktif `html.lz-muat-aktif` menahan animasi logo bilah menu
   (`siapDilihat`), yang baru bergerak sesudah penutup lepas. Kepala halaman publik memakai `LZLogo.statis()` (logo SVG
   baru), bukan logo unggahan Pengaturan. Dijaga `test_muat_logo.js`.
+- **Tombol tema di HP** (6 Oktober 2026): di bawah 520 px tombol di `.page-head-aksi` menempel di pojok kanan atas kepala,
+  sebaris dengan judul (`position:absolute !important`, `top:-5px`), judul diberi ruang kanan 50 px; tombol lain (Tambah,
+  Impor) tetap di baris bawah. Berlaku untuk semua modul. Di aplikasi utama tombolnya memang disembunyikan di HP (ada di
+  menu akun). Dijaga `test_tema_ui.js`.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
 

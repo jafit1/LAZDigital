@@ -235,6 +235,16 @@ const DASBOR = '<!doctype html><link rel=stylesheet href="/styles.css"><script>d
             cek(`${tag}: ikon tepat di tengah tombol 40 px`, r.sel <= 1 && r.selY <= 1 && r.ukuran[0] === 40 && r.ukuran[1] === 40, r);
             cek(`${tag}: tidak keluar kepala dan tidak meluber`, r.dalamKepala && r.luber, r);
             if (lebar >= 1100) cek(`${tag}: rata kanan kepala`, r.kananRapat, r);
+            if (lebar <= 520) {
+              /* Pemilik 6 Oktober 2026: di HP tombol harus sebaris dengan judul, bukan di baris sendiri di bawahnya. */
+              const j = await p.evaluate(() => {
+                const t = document.querySelector('#content .kepala-tema').getBoundingClientRect();
+                const h = document.querySelector('#content .page-head h1, #content .page-head h2').getBoundingClientRect();
+                const ph = document.querySelector('#content .page-head').getBoundingClientRect();
+                return { selisihPusat: Math.round(Math.abs((t.top + t.height / 2) - (h.top + h.height / 2))), tumpuk: t.left < h.right && t.right > h.left && h.width > 0 && document.querySelector('#content .page-head h1, #content .page-head h2').scrollWidth > h.width + 1, kananRapat: Math.abs(ph.right - t.right) <= 1, tinggiKepala: Math.round(ph.height) };
+              });
+              cek(`${tag}: tombol tema sebaris dengan judul (pusat selisih <= 6 px), rata kanan, tidak menabrak`, j.selisihPusat <= 6 && j.kananRapat && !j.tumpuk, j);
+            }
           }
         }
         const hid = await p.evaluate(() => {

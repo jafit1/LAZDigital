@@ -4472,6 +4472,17 @@ td.actions-cell > .btn + .btn{ margin-left:6px }
   .page-head{ flex-wrap:wrap; }
   .page-head-aksi{ width:100%; margin-left:0; justify-content:flex-end; }
 }
+/* Tombol tema di HP (pemilik, 6 Oktober 2026): dulu jatuh ke baris sendiri di bawah judul dan keterangan, terlihat
+   menggantung. Sekarang menempel di pojok kanan atas kepala, sebaris dengan judul (pusat tombol dengan pusat baris
+   judul). Tombol lain di .page-head-aksi (Tambah, Impor) tetap di baris bawah. Wadah yang isinya hanya tombol tema
+   dikeluarkan dari alur supaya tidak meninggalkan jarak kosong. Judul diberi ruang kanan 48 px agar tidak tertabrak. */
+@media (max-width:520px){
+  .page-head{ position:relative; }
+  .page-head:has(> .page-head-aksi > .kepala-tema) > div:first-child{ padding-right:50px; min-width:0; }
+  .page-head .page-head-aksi > .kepala-tema{ position:absolute !important; top:-5px !important; right:0 !important; left:auto !important; margin:0 !important; }
+  .page-head-aksi:not(:has(> :not(.kepala-tema))){ position:static; width:0; height:0; padding:0; margin:0; }
+  .page-head:has(> .page-head-aksi:not(:has(> :not(.kepala-tema)))){ row-gap:0; }
+}
 
 /* ========================================================================
    43. KENDALI KEPALA DASBOR — satu baris, satu chip, satu ikon
@@ -6688,3 +6699,10 @@ html:not([data-theme="dark"]) .lz-logo-muat .lzm-glow{ display:none; }
 .pub-logo.lz-logo-kepala{ background:rgba(255,255,255,.94); border-radius:14px; padding:6px 8px; }
 .pub-logo.lz-logo-kepala .lz-logo-statis{ --lz-logo-t:36px; --lzm-ink:#1b2433; color:#1b2433; }
 @media (prefers-reduced-motion: reduce){ .lz-muat{ animation:none; } .lz-muat.lz-muat-keluar{ transition:none; } }
+
+/* Popup kwitansi WhatsApp: tiga tombol sebaris di HP (pemilik, 6 Oktober 2026). Sebelumnya "Tidak, nanti saja" terpotong
+   di tepi kiri (kaki jendela rata kanan dan meluber ke kiri). Sekarang grid: dua tombol biasa selebar isinya, tombol
+   utama (logo WhatsApp + Kirim) mengisi sisanya. */
+.kw-modal .modal-foot{ display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:8px; justify-content:stretch; align-items:center; }
+.kw-modal .modal-foot .btn{ min-width:0; white-space:nowrap; justify-content:center; padding-left:14px; padding-right:14px; }
+.kw-modal .modal-foot .btn svg{ flex:none; }

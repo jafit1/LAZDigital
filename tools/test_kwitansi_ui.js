@@ -105,6 +105,19 @@ const server = http.createServer(async (req, res) => {
     await p.click('#himpunTable tr[data-id="h2"] button[onclick^="kwPopup"]');
     await p.waitForSelector('#kwKirim', { timeout: 8000 });
     cek('popup punya tombol Kirim dan Tidak', !!(await p.$('#kwKirim')) && !!(await p.$('#kwTidak')));
+    /* Pemilik 6 Oktober 2026: di HP "Tidak, nanti saja" terpotong di tepi kiri. Tiga tombol harus sebaris, utuh di dalam
+       jendela, dan tombol utama memakai logo WhatsApp dengan tulisan pendek "Kirim". */
+    await p.setViewportSize({ width: 390, height: 800 });
+    await p.waitForTimeout(150);
+    const kaki = await p.evaluate(() => {
+      const card = document.getElementById('modalCard').getBoundingClientRect();
+      const r = ['kwTidak', 'kwCetak', 'kwKirim'].map((id) => { const e = document.getElementById(id), b = e.getBoundingClientRect(); return { id, kiri: b.left, kanan: b.right, atas: Math.round(b.top), tinggi: Math.round(b.height), teks: e.textContent.trim(), lebihLebar: e.scrollWidth > e.clientWidth + 1 }; });
+      return { r, kartuKiri: card.left, kartuKanan: card.right, wa: !!document.querySelector('#kwKirim svg path') };
+    });
+    cek('HP: tiga tombol sebaris, utuh di dalam jendela, tulisan tidak terpotong', kaki.r.every((x) => x.kiri >= kaki.kartuKiri - 0.5 && x.kanan <= kaki.kartuKanan + 0.5 && !x.lebihLebar) && new Set(kaki.r.map((x) => x.atas)).size === 1 && new Set(kaki.r.map((x) => x.tinggi)).size === 1, kaki);
+    cek('HP: tulisan tombol pendek (Nanti, Cetak, Kirim) dan tombol utama berlogo WhatsApp', kaki.r[0].teks === 'Nanti' && kaki.r[1].teks === 'Cetak' && /^Kirim/.test(kaki.r[2].teks) && kaki.wa, kaki);
+    if (process.env.LZ_FOTO) { await p.waitForFunction(() => !document.documentElement.classList.contains('tunggu-huruf'), null, { timeout: 5000 }).catch(() => {}); await p.waitForTimeout(500); } if (process.env.LZ_FOTO) await p.screenshot({ path: process.env.LZ_FOTO + '/kwitansi-hp.png' });
+    await p.setViewportSize({ width: 1440, height: 1000 });
     cek('nomor donatur terisi dari data', (await p.inputValue('#kwNomor')) === '081234567802');
     const teks = await p.inputValue('#kwTeks');
     cek('ucapan terima kasih memuat nama, jumlah, dan nomor kwitansi', /Donatur 2/.test(teks) && /Rp 200\.000/.test(teks) && /KW\/202610\/0002/.test(teks) && /Jazakumullah/i.test(teks), teks.slice(0, 200));
