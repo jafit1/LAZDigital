@@ -10,6 +10,7 @@
 const util = require('../lib/blast/util');
 const db = require('../lib/fund/db');
 const donaturLib = require('../lib/fund/donatur');
+const imporLib = require('../lib/fund/impor-donatur');
 const himpunanLib = require('../lib/fund/himpunan');
 const akunLib = require('../lib/fund/akun');
 const sesi = require('../lib/fund/sesi-laz');
@@ -17,6 +18,8 @@ const fu = require('../lib/fund/util');
 const pencocok = require('../lib/fund/pencocok');
 const fundraiserLib = require('../lib/fund/fundraiser');
 const rpc = require('./rpc.js');
+const kwitansiLib = require('../lib/blast/kwitansi');
+const antreanLib = require('../lib/blast/antrean');
 
 const { sukses, gagal, bacaBody, GalatAplikasi } = util;
 
@@ -170,6 +173,24 @@ tindakan['donatur.simpan'] = { izin: 'donatur.ubah', async jalankan({ data, peng
   return { donatur, baru };
 } };
 
+/* Impor banyak donatur dari teks/berkas (nama, alamat, nomor, jadwal). simpan=false hanya memeriksa. */
+tindakan['donatur.impor'] = { izin: 'donatur.ubah', async jalankan({ data, pengguna }) {
+  const teks = String(data.teks || '');
+  if (teks.length > 400000) throw new Error('Teks terlalu panjang (maksimum sekitar 400 ribu karakter).');
+  const punya = await donaturLib.saringDonatur({ pemilik: pengguna.id, lihatSemua: false });
+  const adaNomor = new Set(punya.map((d) => d.telepon));
+  const hasil = imporLib.periksa(teks, { adaNomor });
+  if (data.simpan !== true) return hasil;
+  if (hasil.baris.length > 500) throw new Error('Maksimum 500 baris sekali impor.');
+  let disimpan = 0;
+  for (const b of hasil.baris) {
+    if (b.status !== 'baru') continue;
+    await donaturLib.simpanDonatur({ nama: b.nama, telepon: b.telepon, alamat: b.alamat, jadwal: b.jadwal, grup: data.grup || [] }, pengguna.id, { tanpaLokasi: true });
+    disimpan++;
+  }
+  return { ...hasil, disimpan, pesan: `${disimpan} donatur ditambahkan, ${hasil.ringkas.ada} dilewati (sudah ada), ${hasil.ringkas.galat} baris bermasalah.` };
+} };
+
 tindakan['donatur.jadwal'] = { izin: 'donatur.ubah', async jalankan({ data, pengguna }) {
   const ada = await donaturLib.ambilDonatur(data.id);
   pastikanMilik(ada, pengguna, 'Donatur');
@@ -215,14 +236,81 @@ async function catat(data, pengguna, status) {
   return himpunanLib.catatKunjungan(data, { pengguna, namaFundraising, status });
 }
 
-tindakan['ambil.catat'] = { izin: 'ambil.catat', async jalankan({ data, pengguna }) {
-  const rec = await catat(data, pengguna, 'diambil');
-  return { rec, pesan: `Donasi ${util.rupiah(rec.jumlah)} dari ${rec.donaturNama} dicatat.` };
+/* Memanggil fungsi buku utama (api/rpc.js) dari dalam proses server dengan token pengguna yang sama. Objek req buatan
+   sendiri membawa __dalamProses, penanda yang tidak bisa dipalsukan dari luar: dengannya engine mempercayai nama
+   fundraising yang dikirim server ini (kunci pencocokan), bukan isian peramban. */
+function panggilBuku(fn, args, reqAsal) {
+  return new Promise((resolve, reject) => {
+    const req2 = { method: 'POST', headers: (reqAsal && reqAsal.headers) || {}, socket: reqAsal && reqAsal.socket, body: { fn, args }, __dalamProses: true };
+    let kode = 200;
+    const res2 = {
+      statusCode: 200,
+      setHeader() {},
+      status(k) { kode = k; return res2; },
+      json(o) { if (o && o.__error) reject(new GalatAplikasi(String(o.__error), kode >= 400 ? kode : 400)); else resolve(o ? o.result : undefined); },
+      end(t) { try { const o = JSON.parse(t); if (o && o.__error) reject(new GalatAplikasi(String(o.__error))); else resolve(o.result); } catch (e) { reject(e); } },
+    };
+    Promise.resolve(rpc(req2, res2)).catch(reject);
+  });
+}
+
+/* Menulis catatan lapangan yang berisi ke buku utama (Penghimpunan) lalu menautkannya. Aman diulang: apiFundHimpunkan
+   mengembalikan baris yang sama untuk catatan yang sama. Gagal di sini TIDAK membatalkan catatan lapangan; ia tetap
+   tersimpan dan muncul di halaman Cocokkan seperti sebelumnya, dan petugas diberi tahu. */
+async function tulisKeBuku(rec, pengguna, req) {
+  const token = sesi.tokenDari(req);
+  const hasil = await panggilBuku('apiFundHimpunkan', [token, {
+    himpunanId: rec.id, jenisDana: rec.jenisDana, subJenis: rec.subJenis, pilar: rec.pilar,
+    jumlah: rec.jumlah, metode: rec.metode, tanggal: rec.tanggal,
+    namaDonatur: rec.donaturNama, telepon: rec.donaturTelepon, catatan: rec.catatan, fundraising: rec.fundraising,
+  }], req);
+  const baris = hasil && hasil.row;
+  if (!baris || !baris.id) throw new GalatAplikasi('Buku utama tidak mengembalikan baris penghimpunan.', 502);
+  const tertaut = await himpunanLib.tautkanBuku(rec.id, { id: baris.id, noKwitansi: baris.noKwitansi });
+  return { rec: tertaut, baris };
+}
+
+tindakan['ambil.catat'] = { izin: 'ambil.catat', async jalankan({ data, pengguna, req }) {
+  let rec = await catat(data, pengguna, 'diambil');
+  let buku = null, galatBuku = '';
+  /* Bentuk baru (ada jenisDana): langsung masuk buku utama. Bentuk lama (hanya peruntukan) tetap berdiri sendiri. */
+  if (rec.jenisDana) {
+    try { const t = await tulisKeBuku(rec, pengguna, req); rec = t.rec; buku = t.baris; }
+    catch (e) { galatBuku = e.message || 'Gagal menulis ke buku utama.'; }
+  }
+  return {
+    rec, buku, galatBuku,
+    pesan: `Donasi ${util.rupiah(rec.jumlah)} dari ${rec.donaturNama} dicatat` + (buku ? ` dan masuk buku utama (${buku.noKwitansi}).` : '.'),
+  };
+} };
+
+/* Mengulang penulisan ke buku utama untuk catatan yang tadinya gagal (jaringan, izin, dll.). */
+tindakan['ambil.tulisBuku'] = { izin: 'ambil.catat', async jalankan({ data, pengguna, req }) {
+  const rec = await himpunanLib.ambil(String(data.himpunanId || ''));
+  if (!rec) throw new GalatAplikasi('Catatan tidak ditemukan', 404);
+  pastikanMilik(rec, pengguna, 'Catatan');
+  if (rec.status !== 'diambil' || !rec.jenisDana) throw new GalatAplikasi('Catatan ini tidak punya jenis dana, jadi tidak bisa ditulis otomatis. Gunakan halaman Cocokkan.');
+  const t = await tulisKeBuku(rec, pengguna, req);
+  return { rec: t.rec, buku: t.baris, pesan: `Masuk buku utama (${t.baris.noKwitansi}).` };
 } };
 
 tindakan['ambil.kosong'] = { izin: 'ambil.catat', async jalankan({ data, pengguna }) {
   const rec = await catat(data, pengguna, 'kosong');
   return { rec, pesan: `Kunjungan ke ${rec.donaturNama} dicatat kosong (tidak ada donasi).` };
+} };
+
+/* Kirim kwitansi dan ucapan terima kasih ke WhatsApp donatur dari modul Fundraising. Memakai mesin Broadcast yang sama
+   (lib/blast/kwitansi.js), tetapi izinnya fundraising dan hanya untuk catatan yang sudah masuk buku utama dan milik
+   pemanggil: penggalang tidak mendapat kemampuan mengirim pesan WhatsApp bebas. */
+tindakan['kwitansi.kirim'] = { izin: 'ambil.catat', async jalankan({ data, pengguna, req }) {
+  const rec = await himpunanLib.ambil(String(data.himpunanId || ''));
+  if (!rec || !rec.buku || !rec.buku.id) throw new GalatAplikasi('Catatan ini belum masuk buku utama, jadi kwitansinya belum ada.', 409);
+  pastikanMilik(rec, pengguna, 'Catatan');
+  const dorong = async () => { try { await antreanLib.prosesAntrean(2500); } catch (e) { console.error('[dorong]', e.message); } };
+  return kwitansiLib.kirimKwitansi({
+    data: { ...data, penghimpunanId: rec.buku.id },
+    pengguna, req, dorong,
+  });
 } };
 
 tindakan['ambil.reschedule'] = { izin: 'donatur.ubah', async jalankan({ data, pengguna }) {

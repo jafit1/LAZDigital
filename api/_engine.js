@@ -537,6 +537,11 @@ var FN_PADAT = {apiListPenghimpunan:'apiListPenghimpunanPadat', apiListPentasyar
 function apiListPenghimpunan(t){ _requirePerm(t,'penghimpunan','view'); return readAll(SHEETS.PENGHIMPUNAN).sort(function(a,b){ var tA=String(a.tanggal||''), tB=String(b.tanggal||''); if(tA!==tB) return tB.localeCompare(tA); return new Date(b.dibuat||0)-new Date(a.dibuat||0); }); }
 function apiListPenghimpunanPadat(t){ return _padatkan(apiListPenghimpunan(t)); }
 async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.id?'edit':'create');
+  return _simpanPenghimpunan(u,d);
+}
+/* Badan penyimpanan dipisah dari pemeriksaan izin supaya jalur Fundraising (apiFundHimpunkan) memakai satu-satunya
+   aturan tulis yang sama (nomor kwitansi, audit, donatur terdaftar, sinkron bulanan) dengan izin modul fundraising. */
+async function _simpanPenghimpunan(u,d){
   d.fundraising = cleanFundraisingName(d.fundraising);
   var oldMonth = '';
   if(d.id){
@@ -568,6 +573,67 @@ async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.i
   if (oldMonth && oldMonth !== newMonth) await syncMonthlySpreadsheet(oldMonth);
   return res;
 }
+/* ===== PENGHIMPUNAN DARI FUNDRAISING (pemilik, 6 Oktober 2026) =====
+   Pengambilan donasi di modul Fundraising langsung menjadi baris Penghimpunan di buku utama. Izinnya modul
+   'fundraising' (create), BUKAN 'penghimpunan': penggalang lapangan tidak perlu, dan tidak boleh, membuka menu
+   Penghimpunan. Yang dibolehkan sengaja sempit: hanya baris baru, hanya bidang yang dikenal, jenis dana dan detailnya
+   divalidasi ke daftar resmi, dan fundraising selalu nama akun sendiri kecuali superadmin/koordinator. Tiap baris
+   membawa penanda "(h_xxx)" di keterangan: memanggil dua kali untuk catatan yang sama mengembalikan baris yang sama
+   (jaringan putus lalu coba lagi tidak menggandakan uang). */
+var KATEGORI_TERIKAT_FR=['Kesehatan','Pendidikan','Sosial Dakwah','DAM','Kemanusiaan','Fidyah','Qurban'];
+var METODE_FR={'tunai':'Cash/Tunai','cash/tunai':'Cash/Tunai','transfer':'Transfer Bank','transfer bank':'Transfer Bank','qris':'QRIS','e-wallet':'E-Wallet','debit/kartu':'Debit/Kartu'};
+function _frPenanda(himpunanId){ return '('+String(himpunanId)+')'; }
+function _frCariBaris(himpunanId){
+  var pn=_frPenanda(himpunanId), r=readAll(SHEETS.PENGHIMPUNAN);
+  for(var i=0;i<r.length;i++) if(String(r[i].keterangan||'').indexOf(pn)>=0) return r[i];
+  return null;
+}
+function _frBolehLihat(u,row){
+  if(u.role==='superadmin'||can(u,'fundraising','delete')) return true;
+  return String(row.petugas||'')===String(u.nama||'');
+}
+async function apiFundHimpunkan(t,d){
+  var u=_requirePerm(t,'fundraising','create');
+  d=d||{};
+  var hid=String(d.himpunanId||'').replace(/[^\w\-]/g,'').slice(0,60);
+  if(!hid) throw new Error('Catatan pengambilan tidak diketahui.');
+  var ada=_frCariBaris(hid);
+  if(ada) return {row:ada,sudahAda:true};
+  var jenis=String(d.jenisDana||'');
+  if(JENIS_TOP.indexOf(jenis)<0 || jenis==='Amil') throw new Error('Jenis dana tidak dikenal.');
+  var sub=String(d.subJenis||'');
+  if((SUBJENIS[jenis]||[]).indexOf(sub)<0 || sub==='Bagi Hasil Bank') throw new Error('Detail jenis dana tidak sesuai.');
+  var terikat=/terikat/i.test(sub), pilar='';
+  if(terikat){
+    pilar=String(d.pilar||'');
+    if(KATEGORI_TERIKAT_FR.indexOf(pilar)<0) throw new Error('Pilih pilar untuk dana terikat.');
+  }
+  var jumlah=Math.round(Number(d.jumlah)||0);
+  if(!(jumlah>0) || jumlah>100000000000) throw new Error('Nominal tidak sah.');
+  var metode=METODE_FR[String(d.metode||'').toLowerCase()]||'Cash/Tunai';
+  var tgl=String(d.tanggal||''); if(!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) tgl=Utilities.formatDate(new Date(),TZ,'yyyy-MM-dd');
+  var nama=String(d.namaDonatur||'').replace(/\s+/g,' ').trim().slice(0,120)||'Hamba Allah';
+  var ket='Dari Fundraising '+_frPenanda(hid)+(d.catatan?' · '+String(d.catatan).replace(/\s+/g,' ').trim().slice(0,200):'');
+  /* Nama fundraising (kunci pencocokan) hanya dipercaya dari server Fundraising atau koordinator; panggilan langsung dari
+     peramban memakai nama akunnya sendiri. */
+  var fr=((u.role==='superadmin'||can(u,'fundraising','delete')||(_LOG_CTX&&_LOG_CTX.dalam))&&d.fundraising)?d.fundraising:u.nama;
+  var baris={tanggal:tgl,jenisDana:jenis,subJenis:sub,pilar:pilar,program:pilar,namaDonatur:nama,
+    tipeDonatur:nama==='Hamba Allah'||/^nn$/i.test(nama)?'Hamba Allah':'Perorangan',
+    telepon:String(d.telepon||'').replace(/[^\d+]/g,'').slice(0,20),jumlah:jumlah,metode:metode,
+    keterangan:ket,fundraising:fr};
+  var row=await _simpanPenghimpunan(u,baris);
+  return {row:row,sudahAda:false};
+}
+/* Data kwitansi untuk popup Fundraising: bentuk sama dengan apiGetKwitansi, tetapi izinnya fundraising dan hanya untuk
+   baris yang lahir dari Fundraising (bertanda "(h_...)") dan milik pemanggil, kecuali koordinator/superadmin. */
+function apiFundKwitansi(t,id){
+  var u=_requirePerm(t,'fundraising','view');
+  var d=findById(SHEETS.PENGHIMPUNAN,id);
+  if(!d||!/\(h_[\w\-]+\)/.test(String(d.keterangan||''))||!_frBolehLihat(u,d)) throw new Error('IZIN: kwitansi ini bukan dari catatan Fundraising Anda.');
+  var out=apiGetKwitansi_(d);
+  return out;
+}
+
 async function apiDeletePenghimpunan(t,id){ var u=_requirePerm(t,'penghimpunan','delete');
   var oldRow = findById(SHEETS.PENGHIMPUNAN, id);
   var oldMonth = oldRow ? getMonthFromDate(oldRow.tanggal) : '';
@@ -579,13 +645,16 @@ async function apiDeletePenghimpunan(t,id){ var u=_requirePerm(t,'penghimpunan',
   return {ok:true};
 }
 function apiGetKwitansi(t,id){ _requirePerm(t,'penghimpunan','view');
-  var d=findById(SHEETS.PENGHIMPUNAN,id);
+  return apiGetKwitansi_(findById(SHEETS.PENGHIMPUNAN,id));
+}
+function apiGetKwitansi_(d){
   /* Kwitansi hanya menampilkan 3 angka terakhir nomor rekening; nomor lengkapnya tidak ikut dikirim ke peramban. */
   if(d&&d.rekeningId){ var rk=findById(SHEETS.REKENING,d.rekeningId); var no=String((rk&&rk.nomor)||'').replace(/\D/g,''); if(no) d=Object.assign({},d,{rekeningAkhir:no.slice(-3)}); }
   /* Alamat halaman publik donatur (bila sudah diaktifkan), untuk disisipkan di ucapan terima kasih. Tautan ini memang
      untuk dibagikan ke donatur; token link KLL/ULL tidak ikut. */
   var tk=getSetting('lhTokenDonatur')||'';
-  return {data:d,settings:getAllSettings(),linkDonatur:tk?('/harian.html?t='+tk):''}; }
+  /* Disaring: dulu seluruh Settings ikut, termasuk lg_* dan token link harian KLL/ULL, ke siapa pun yang boleh melihat Penghimpunan. */
+  return {data:d,settings:_settingsAman(getAllSettings(),false),linkDonatur:tk?('/harian.html?t='+tk):''}; }
 
 /* ===== PENTASYARUFAN ===== */
 function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='BPT/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENTASYARUFAN,'noBukti',awalan)+1)).slice(-4); }
@@ -7368,7 +7437,8 @@ function apiPerbaikiDataLama(t, terapkan){
 var LOG_MAKS_BAWAAN = 1500;
 var _LOG_CTX = { ip: '', ua: '' };
 
-function auditKonteks(ctx){ _LOG_CTX = { ip: (ctx && ctx.ip) || '', ua: (ctx && ctx.ua) || '' }; }
+/* dalam: true hanya bila fungsi dipanggil dari dalam proses server (api/fund.js lewat api/rpc.js), bukan dari peramban. */
+function auditKonteks(ctx){ _LOG_CTX = { ip: (ctx && ctx.ip) || '', ua: (ctx && ctx.ua) || '', dalam: !!(ctx && ctx.dalamProses) }; }
 
 function _logMaks(){
   var n = parseInt(getSetting('logMaks') || '', 10);
@@ -7979,6 +8049,8 @@ REGISTRY['apiListLayananPublic']=apiListLayananPublic;
 REGISTRY['apiSavePenghimpunan']=apiSavePenghimpunan;
 REGISTRY['apiDeletePenghimpunan']=apiDeletePenghimpunan;
 REGISTRY['apiGetKwitansi']=apiGetKwitansi;
+REGISTRY['apiFundHimpunkan']=apiFundHimpunkan;
+REGISTRY['apiFundKwitansi']=apiFundKwitansi;
 REGISTRY['apiListPentasyarufan']=apiListPentasyarufan;
 REGISTRY['apiListPentasyarufanPadat']=apiListPentasyarufanPadat;
 REGISTRY['apiSavePentasyarufan']=apiSavePentasyarufan;

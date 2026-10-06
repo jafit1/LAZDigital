@@ -6706,3 +6706,19 @@ html:not([data-theme="dark"]) .lz-logo-muat .lzm-glow{ display:none; }
 .kw-modal .modal-foot{ display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:8px; justify-content:stretch; align-items:center; }
 .kw-modal .modal-foot .btn{ min-width:0; white-space:nowrap; justify-content:center; padding-left:14px; padding-right:14px; }
 .kw-modal .modal-foot .btn svg{ flex:none; }
+
+/* Kartu Tunai dan Non Tunai di dasbor (pemilik, 6 Oktober 2026): di HP nama dan angka berdempetan dalam satu baris
+   ("Total Kas Tunai Terhimpun" menempel ke "Total Penerimaan: Rp ..."). Di bawah 640 px angka turun ke baris sendiri,
+   rata kiri, dipisah garis tipis. Gaya inline hanya mengatur flex dasar, jadi aturan ini memakai !important. */
+@media (max-width:640px){
+  .wc .tn-baris{ flex-wrap:wrap !important; align-items:flex-start !important; row-gap:10px; }
+  .wc .tn-baris > div:first-child{ flex:1 1 100% !important; min-width:0; }
+  .wc .tn-baris .tn-angka{ flex:1 1 100% !important; text-align:left !important; white-space:normal !important; padding-top:10px; border-top:1px solid var(--border); }
+  .wc .tn-baris .tn-angka > div{ display:flex; justify-content:space-between; gap:12px; margin:0 0 4px !important; }
+}
+
+/* Fundraising: baca kwitansi di form Diambil */
+.fa-baca{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.fa-baca .btn{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.field.fa-ai input,.field.fa-ai select,.field.fa-ai textarea{border-color:var(--green)}
+.field.fa-ai.fa-ragu input,.field.fa-ai.fa-ragu select,.field.fa-ai.fa-ragu textarea{border-color:#d99a1a}

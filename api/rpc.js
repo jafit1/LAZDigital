@@ -146,7 +146,9 @@ module.exports = async (req, res) => {
     const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     const ctx = {
       ip: fwd || (req.socket && req.socket.remoteAddress) || '',
-      ua: String(req.headers['user-agent'] || '').slice(0, 160)
+      ua: String(req.headers['user-agent'] || '').slice(0, 160),
+      /* Penanda dalam proses: hanya objek req buatan api/fund.js yang membawanya; permintaan HTTP asli tidak bisa memalsukannya. */
+      dalamProses: req.__dalamProses === true
     };
 
     /* ── PostgreSQL ──

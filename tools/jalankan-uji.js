@@ -59,6 +59,7 @@ const DAFTAR = [
   { label: 'Kotak masuk percakapan', berkas: 'test_percakapan.js' },
   { label: 'Bentuk layar percakapan', berkas: 'ukur-percakapan.js' },
   { label: 'Fitur Fundraising', berkas: 'test_fund_fitur.js' },
+  { label: 'Fundraising ke buku utama', berkas: 'test_fund_buku.js' },
   { label: 'Fundraiser dan pencocokan', berkas: 'test_fundraiser.js' },
   { label: 'Tampilan halaman Fundraising', berkas: 'test_fund_ui.js' },
   { label: 'Fitur Media dan Desain', berkas: 'test_media_fitur.js' },
@@ -85,6 +86,7 @@ const DAFTAR = [
   { label: 'Tombol tema terang/gelap dan sapuannya', berkas: 'test_tema_ui.js' },
   { label: 'Logo SVG bilah menu, bergerak sekali per menu', berkas: 'test_logo_ui.js' },
   { label: 'Layar loading logo SVG (link publik dan setelah login)', berkas: 'test_muat_logo.js' },
+  { label: 'Dasbor di HP: ukuran widget tersimpan tidak ikut', berkas: 'test_dasbor_hp.js' },
   { label: 'Teks terbaca di tema gelap', berkas: 'test_kontras_gelap.js' },
   /* sendiri: mengukur milidetik hitung tata letak, gagal palsu kalau prosesor
      dibagi dengan uji lain (terukur 78 ms lawan batas 45 ms saat bersamaan,

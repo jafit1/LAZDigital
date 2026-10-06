@@ -3109,12 +3109,12 @@ function rekeningWidget(byRekening) {
   var renderTunaiBlock = function() {
     var colorH = 'var(--green)';
     return '<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--border2);margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,0.02)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+      '<div class="tn-baris" style="display:flex;justify-content:space-between;align-items:center">' +
         '<div>' +
           '<div style="font-weight:750;font-size:15px;color:var(--text);margin-bottom:4px">Tunai</div>' +
           '<div style="font-size:12px;color:var(--text2)">Total Kas Tunai Terhimpun</div>' +
         '</div>' +
-        '<div style="text-align:right;white-space:nowrap;flex:0 0 auto;line-height:1.4">' +
+        '<div class="tn-angka" style="text-align:right;white-space:nowrap;flex:0 0 auto;line-height:1.4">' +
           '<div style="font-size:13px;color:var(--text2)">Total Penerimaan: <span style="font-weight:700;color:' + colorH + '">' + rp(cashTotal) + '</span></div>' +
         '</div>' +
       '</div>' +
@@ -3143,12 +3143,12 @@ function rekeningWidget(byRekening) {
     subHtml += '</div>';
 
     return '<div style="border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--border2);margin-bottom:12px;transition:all 0.2s;box-shadow:0 1px 2px rgba(0,0,0,0.02)" class="wc-row-clickable">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBankDetail(\'' + badgeId + '\')">' +
+      '<div class="tn-baris" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleBankDetail(\'' + badgeId + '\')">' +
         '<div>' +
           '<div style="font-weight:750;font-size:15px;color:var(--text);margin-bottom:4px">' + esc(g.name) + ' <span style="font-size:11px;color:var(--text2);font-weight:normal">▼</span></div>' +
           '<div style="font-size:12px;color:var(--text2)">' + g.accounts.length + ' rekening/kas</div>' +
         '</div>' +
-        '<div style="text-align:right;white-space:nowrap;flex:0 0 auto;line-height:1.4">' +
+        '<div class="tn-angka" style="text-align:right;white-space:nowrap;flex:0 0 auto;line-height:1.4">' +
           '<div style="font-size:12px;color:var(--text2);margin-bottom:3px">Penerimaan: <span style="font-weight:700;color:' + colorH + '">' + rp(g.penerimaan) + '</span></div>' +
           '<div style="font-size:12px;color:var(--text2)">Penyaluran: <span style="font-weight:700;color:' + colorS + '">' + rp(g.pentasyarufan) + '</span></div>' +
         '</div>' +
@@ -4359,7 +4359,10 @@ function renderDashboard(d){
       '<button class="cbtn hide-btn" title="Sembunyikan kartu" onclick="event.stopPropagation();dashHide(\''+id+'\')">' + SVG_ICONS.close + '</button>' +
     '</div>'):'';
     
-    var dim=(lay.dimensions&&lay.dimensions[id])||{};
+    /* Ukuran hasil tarik di komputer hanya berlaku di layar lebar. Gayanya sebaris dan ber-!important, jadi menang atas
+       aturan HP di stylesheet (flex-basis:100% !important): kartu terukur 240 px di layar 390 dan tingginya terkunci,
+       isinya meluber dan terpotong. Di bawah 1024 px ukuran tersimpan diabaikan (tidak dihapus, komputer tetap memakainya). */
+    var dim=(dashSempit()?{}:(lay.dimensions&&lay.dimensions[id]))||{};
     var dimStyle='';
     // !important wajib: aturan .dgrid .wc di stylesheet juga memakai !important
     if(dim.pct)dimStyle+='flex: 0 0 calc('+dim.pct+'% - 16px) !important;';
@@ -4434,6 +4437,9 @@ function playAsymmetricalAnimation() {
 }
 
 /* ===== flexible layout ===== */
+function dashSempit(){ try{ return window.matchMedia('(max-width:1023px)').matches; }catch(e){ return false; } }
+/* Memutar layar atau mengubah lebar jendela melewati 1024 px: dasbor digambar ulang agar ukuran tersimpan dipakai atau dilepas. */
+(function(){ try{ var mq=window.matchMedia('(max-width:1023px)'); var f=function(){ if(window.DASH && document.getElementById('dgrid') && !window.DASH_EDIT) renderDashboard(window.DASH); }; if(mq.addEventListener) mq.addEventListener('change',f); }catch(e){} })();
 function getDashLayout(){
   var def={
     order:['rekening','jenis','activity','pilar','bank','ashnaf','program','fundraising','rhimpun','rtasyaruf','tren','rapb'],

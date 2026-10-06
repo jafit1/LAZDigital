@@ -496,8 +496,15 @@ module.exports = async (req, res) => {
   try {
     const r = await rpc._internal.muat();
     const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-    engine.cekIzin(r.db, token, 'penghimpunan', perlu,
-      { ip: ip, ua: String(req.headers['user-agent'] || '').slice(0, 160) });
+    const jejak = { ip: ip, ua: String(req.headers['user-agent'] || '').slice(0, 160) };
+    try {
+      engine.cekIzin(r.db, token, 'penghimpunan', perlu, jejak);
+    } catch (e1) {
+      /* Fundraiser lapangan membaca kwitansi dari form Diambil di modul Fundraising;
+         izin modul itu (create) cukup untuk membaca, bukan untuk mengatur model. */
+      if (!/IZIN:/.test(String((e1 && e1.message) || e1)) || (aksi !== 'baca' && aksi !== 'status')) throw e1;
+      engine.cekIzin(r.db, token, 'fundraising', aksi === 'baca' ? 'create' : 'view', jejak);
+    }
   } catch (e) {
     const pesan = (e && e.message) || String(e);
     const kode = /AUTH:/.test(pesan) ? 401 : (/IZIN:/.test(pesan) ? 403 : 500);

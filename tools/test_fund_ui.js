@@ -36,6 +36,11 @@ const JAWABAN = {
     akun: { namaTampil: 'Ahmad Maruf', namaFundraising: 'Tim Bantul Kota', foto: '', telepon: '628129998888', catatan: '' },
     upstash: true,
   },
+  'ambil.catat': { rec: { id: 'hx', donaturNama: 'Budi Santosa', jumlah: 150000, status: 'diambil', buku: { id: 'p1', noKwitansi: 'KW-001' } }, buku: { id: 'p1', noKwitansi: 'KW-001' }, pesan: 'Donasi Rp 150.000 dari Budi Santosa dicatat.' },
+  'donatur.impor': { ringkas: { total: 3, baru: 2, ada: 1, galat: 0 }, pesan: '2 donatur ditambahkan.', disimpan: 2, baris: [
+    { no: 1, nama: 'Hasan', alamat: 'Sewon', telepon: '6281270000001', jadwal: { tanggal: HARI, ulang: 'mingguan' }, status: 'baru', alasan: '' },
+    { no: 2, nama: 'Laila', alamat: 'Pundong', telepon: '6281270000002', jadwal: null, status: 'baru', alasan: '' },
+    { no: 3, nama: 'Umar', alamat: 'Imogiri', telepon: '6281270000003', jadwal: null, status: 'ada', alasan: 'Nomor ini sudah ada di daftar donatur' }] },
   'dasbor.ringkas': {
     tanggal: HARI, tanggalPanjang: 'Kamis, 17 September 2026',
     ringkasHari: { kunjungan: 3, berhasil: 2, kosong: 1, total: 350000 },
@@ -59,7 +64,6 @@ const JAWABAN = {
   'grup.daftar': { baris: [{ nama: 'Rutin', jumlah: 2 }, { nama: 'Ramadan', jumlah: 1 }] },
   'donatur.simpan': { donatur: { id: 'd9', nama: 'Baru' }, baru: true },
   'donatur.jadwal': { donatur: { id: 'd1' } },
-  'ambil.catat': { pesan: 'Donasi Rp 150.000 dari Budi Santosa dicatat.' },
   'ambil.kosong': { pesan: 'Kunjungan dicatat kosong.' },
   'ambil.reschedule': { pesan: 'Jadwal dipindah.' },
   'himpunan.daftar': {
@@ -142,6 +146,22 @@ const server = http.createServer((req, res) => {
       try { t = JSON.parse(body).tindakan; } catch (_) {}
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, ...(JAWABAN[t] || {}) }));
+    });
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/api/ocr') {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ result: { terbaca: true, isi: { jumlah: 250000, jenisDana: 'Infak', subJenis: 'Infak Terikat', pilar: 'Pendidikan', metode: 'Transfer', namaDonatur: 'Budi Santosa', noKwitansi: 'K-77' }, raguRagu: ['pilar'] } }));
+    });
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/api/rpc') {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ result: { data: { id: 'p1', noKwitansi: 'KW-001', namaDonatur: 'Budi Santosa', telepon: '081211112222', jumlah: 150000, tanggal: HARI, jenis: 'Infak', subJenis: 'Infak Terikat', keterangan: 'Kesehatan', alamat: 'Bantul' }, settings: {}, linkDonatur: '' } }));
     });
     return;
   }
@@ -334,13 +354,39 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
   const modalAmbil = await p.evaluate(() => ({
     ada: document.getElementById('modalBg').classList.contains('show'),
     nominal: !!document.querySelector('[name=jumlah]'),
-    peruntukan: !!document.querySelector('[name=peruntukan]'),
+    peruntukan: !!document.getElementById('faJenis') && !!document.getElementById('faSub'),
   }));
   cek('modal Diambil meminta nominal & peruntukan', modalAmbil.ada && modalAmbil.nominal && modalAmbil.peruntukan, modalAmbil);
   await p.fill('[name=jumlah]', '150000');
   await p.waitForTimeout(150);
   cek('nominal langsung diformat rupiah', /Rp\s?150\.000/.test(await p.$eval('#faHint', (e) => e.textContent)));
+  /* Baca kwitansi (OCR): isian terisi dari foto, ditandai, pilar ragu bertanda kuning */
+  const GAMBAR = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  await p.setInputFiles('#faBerkas', { name: 'kw.png', mimeType: 'image/png', buffer: GAMBAR });
+  await p.waitForFunction(() => /terbaca/.test((document.getElementById('faBacaInfo') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  const ocrHasil = await p.evaluate(() => ({ jumlah: document.querySelector('[name=jumlah]').value, jenis: document.getElementById('faJenis').value, sub: document.getElementById('faSub').value, pilar: document.getElementById('faPilar').value, metode: document.querySelector('[name=metode]').value, catatan: document.querySelector('[name=catatan]').value, hijau: document.querySelectorAll('#modalBody .field.fa-ai').length, ragu: document.querySelectorAll('#modalBody .field.fa-ragu').length, info: document.getElementById('faBacaInfo').textContent }));
+  cek('baca kwitansi mengisi nominal, jenis, detail, pilar, metode', /250/.test(ocrHasil.jumlah) && ocrHasil.jenis === 'Infak' && ocrHasil.sub === 'Infak Terikat' && ocrHasil.pilar === 'Pendidikan' && ocrHasil.metode === 'Transfer', ocrHasil);
+  cek('isian hasil bacaan ditandai dan yang ragu berbeda', ocrHasil.hijau >= 5 && ocrHasil.ragu === 1 && /terbaca/.test(ocrHasil.info), ocrHasil);
+  const setSel = (id, v) => p.evaluate(([i, x]) => { const e = document.getElementById(i); e.value = x; e.dispatchEvent(new Event('change', { bubbles: true })); }, [id, v]);
+  await setSel('faJenis', 'Infak');
+  const jenisOpsi = await p.$$eval('#faSub option', (o) => o.map((x) => x.textContent));
+  cek('pilihan Infak Umum dan Infak Terikat ada', jenisOpsi.some((x) => /Umum/.test(x)) && jenisOpsi.some((x) => /Terikat/.test(x)), jenisOpsi);
+  await setSel('faSub', 'Infak Terikat');
+  await p.waitForTimeout(150);
+  const pilarOpsi = await p.evaluate(() => { const w = document.getElementById('faPilarWrap'); return { tampil: !!w && getComputedStyle(w).display !== 'none' && w.offsetHeight > 0, n: document.querySelectorAll('#faPilar option').length }; });
+  cek('pilar muncul saat Infak Terikat dipilih', pilarOpsi.tampil && pilarOpsi.n >= 7, pilarOpsi);
   await p.screenshot({ path: path.join(LUAR, 'fund-ambil.png') });
+  await setSel('faPilar', 'Kesehatan');
+  await p.click('#faSimpan');
+  await p.waitForSelector('#kwKirim', { timeout: 8000 }).catch(() => {});
+  await p.waitForTimeout(800);
+  const kw = await p.evaluate(() => {
+    const r = ['kwTidak', 'kwCetak', 'kwKirim'].map((i) => { const e = document.getElementById(i); return e ? e.getBoundingClientRect() : null; });
+    return { ada: r.every(Boolean), sejajar: r.every(Boolean) && r.every((x) => Math.abs(x.top - r[0].top) < 4), dalam: r.every((x) => x && x.right <= innerWidth + 1 && x.left >= 0), ucapan: (document.getElementById('kwTeks') || {}).value || '', gambar: !!(document.getElementById('kwPrev') || {}).src };
+  });
+  cek('popup kwitansi muncul dengan tiga tombol sejajar', kw.ada && kw.sejajar && kw.dalam, kw);
+  cek('ada ucapan terima kasih siap kirim', /terima kasih|syukron|jaza/i.test(kw.ucapan), kw.ucapan.slice(0, 80));
+  await p.screenshot({ path: path.join(LUAR, 'fund-kwitansi.png') });
   await p.keyboard.press('Escape');
   await p.waitForTimeout(200);
 
@@ -386,6 +432,17 @@ const PNG1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlE
   cek('daftar donatur tergambar', (await p.$$('#isiHalaman tbody tr')).length === 3);
   await p.screenshot({ path: path.join(LUAR, 'fund-donatur.png') });
 
+  await p.click('#imporD');
+  await p.waitForSelector('#idTeks', { timeout: 4000 });
+  await p.fill('#idTeks', 'Hasan, Sewon, 0812 7000 0001, setiap Senin');
+  await p.click('#idPeriksa');
+  await p.waitForSelector('#idHasil table', { timeout: 4000 }).catch(() => {});
+  const imp = await p.evaluate(() => ({ baris: document.querySelectorAll('#idHasil tbody tr').length, simpan: document.getElementById('idSimpan').textContent, aktif: !document.getElementById('idSimpan').disabled }));
+  cek('impor: pratinjau tampil dan tombol simpan menyebut jumlah', imp.baris === 3 && imp.aktif && /Simpan 2 donatur/.test(imp.simpan), imp);
+  await p.screenshot({ path: path.join(LUAR, 'fund-impor.png') });
+  await p.click('#idSimpan');
+  await p.waitForTimeout(500);
+  cek('impor: dialog menutup setelah simpan', !(await p.$('#idTeks')));
   await p.click('#tambahD');
   await p.waitForTimeout(700); // beri waktu Leaflet membangun peta
   const form = await p.evaluate(() => ({

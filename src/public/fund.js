@@ -188,7 +188,18 @@ function tandaiMenu(kode) {
   if (a) a.classList.add('active');
 }
 
-const PERUNTUKAN = ['Zakat', 'Infak', 'Sedekah', 'Zakat Fitrah', 'Fidyah', 'Wakaf', 'Kemanusiaan'];
+/* Master data sama dengan buku utama (lib/fund/himpunan.js, dijaga test_fund_buku.js): catatan pengambilan langsung
+   menjadi baris Penghimpunan. */
+const JENIS_DANA = ['Zakat', 'Infak', 'Sedekah', 'Wakaf', 'Fidyah'];
+const SUBJENIS = {
+  Zakat: ['Zakat Mal', 'Zakat Fitrah', 'Zakat Profesi/Penghasilan', 'Zakat Perdagangan', 'Zakat Pertanian', 'Zakat Emas & Perak', 'Zakat Simpanan'],
+  Infak: ['Infak Umum', 'Infak Terikat'],
+  Sedekah: ['Sedekah Umum', 'Sedekah Terikat'],
+  Wakaf: ['Wakaf Uang', 'Wakaf Melalui Uang'],
+  Fidyah: ['Fidyah'],
+};
+const PILAR_TERIKAT = ['Kesehatan', 'Pendidikan', 'Sosial Dakwah', 'DAM', 'Kemanusiaan', 'Fidyah', 'Qurban'];
+const KW_WA = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35zM12.05 21.5h-.01a9.45 9.45 0 0 1-4.82-1.32l-.35-.2-3.58.94.96-3.49-.23-.36a9.43 9.43 0 0 1-1.45-5.03c0-5.21 4.24-9.45 9.46-9.45 2.52 0 4.9.99 6.68 2.77a9.4 9.4 0 0 1 2.76 6.68c0 5.21-4.24 9.46-9.42 9.46zM20.5 3.49A11.4 11.4 0 0 0 12.05 0C5.73 0 .58 5.15.58 11.47c0 2.02.53 3.99 1.53 5.73L.5 24l6.95-1.82a11.43 11.43 0 0 0 5.6 1.43h.01c6.32 0 11.47-5.15 11.47-11.47 0-3.06-1.19-5.94-3.35-8.1z" transform="translate(.4 0) scale(.98)"/></svg>';
 const METODE = ['Tunai', 'Transfer', 'QRIS'];
 
 // ============================================================ tandai & hapus
@@ -561,6 +572,8 @@ halaman.dasbor = {
         <button class="btn btn-sm" data-reschedule="${j.id}" title="Pindah ke hari kerja berikutnya">Reschedule</button>
         <button class="btn btn-sm" data-kosong="${j.id}">Kosong</button>`;
       const petaBtn = petaBtnAda ? tombolRute(j.lokasi) : '';
+      const kwBtn = (boleh && j.hasilKunjungan && j.hasilKunjungan.status === 'diambil' && j.hasilKunjungan.bukuId)
+        ? `<button class="btn btn-ghost btn-sm" data-kwd="${j.id}" title="Kwitansi dan kirim ke WhatsApp">${KW_WA} Kwitansi</button>` : '';
       /* Donatur yang sudah dikunjungi tidak punya tombol aksi lagi. Kalau baris
          aksinya tetap digambar hanya untuk menampung satu tautan "peta", yang
          muncul adalah satu baris kosong melompong di tiap baris yang sudah
@@ -569,9 +582,9 @@ halaman.dasbor = {
         <div class="jw-kepala">
           <div style="min-width:0">
             <div class="jw-nama">${H(j.nama)}</div>
-            <div class="jw-sub">${H(j.telepon)}${j.lokasi && j.lokasi.alamat ? ' \u00B7 ' + H(j.lokasi.alamat) : ''}</div>
+            <div class="jw-sub">${H(j.telepon)}${(j.lokasi && j.lokasi.alamat) || j.alamat ? ' \u00B7 ' + H((j.lokasi && j.lokasi.alamat) || j.alamat) : ''}</div>
           </div>
-          <span class="jw-status-hp">${lencanaStatus(j)}${aksi ? '' : petaBtn}</span>
+          <span class="jw-status-hp">${lencanaStatus(j)}${kwBtn}${aksi ? '' : petaBtn}</span>
         </div>
         <span class="jw-status-desk">${lencanaStatus(j)}</span>
         ${aksi ? `<div class="jw-aksi">${aksi}${petaBtn}</div>` : '<span class="jw-peta-desk">' + petaBtn + '</span>'}
@@ -601,6 +614,10 @@ halaman.dasbor = {
         : kosong('Tidak ada donatur yang dijadwalkan diambil hari ini. Atur jadwal di menu Donatur.', '\u{1F5D3}\uFE0F')}
       `)}`;
 
+    $$('[data-kwd]', el).forEach((b) => b.onclick = () => {
+      const j = jadwal.find((x) => x.id === b.dataset.kwd);
+      bukaKwitansi({ id: j.hasilKunjungan.id, buku: { id: j.hasilKunjungan.bukuId }, donaturTelepon: j.telepon }, {}, el);
+    });
     $$('[data-ambil]', el).forEach((b) => b.onclick = () => bukaAmbil(jadwal.find((x) => x.id === b.dataset.ambil), el));
     $$('[data-kosong]', el).forEach((b) => b.onclick = () => {
       const j = jadwal.find((x) => x.id === b.dataset.kosong);
@@ -622,38 +639,284 @@ halaman.dasbor = {
 function bukaAmbil(j, el) {
   modal(`Catat donasi — ${j.nama}`, `
     <form id="fa">
+      <div class="fa-baca" id="faBaca">
+        <label class="btn btn-sm" id="faBacaTombol" title="Foto atau pilih gambar kwitansi, isian terisi otomatis">${IKON_BACA} Baca kwitansi
+          <input type="file" id="faBerkas" accept="image/*" capture="environment" hidden></label>
+        <span class="muted" id="faBacaInfo" style="font-size:12px">Isian bisa terisi otomatis dari foto kwitansi.</span>
+      </div>
       <div class="field"><label>Nominal donasi <span style="color:var(--red)">*</span></label>
         <input name="jumlah" inputmode="numeric" required placeholder="mis. 150.000" autocomplete="off">
         <div class="muted" id="faHint" style="font-size:12px;margin-top:4px"></div></div>
       <div class="grid-2">
-        <div class="field"><label>Peruntukan <span style="color:var(--red)">*</span></label>
-          <select name="peruntukan" required>${PERUNTUKAN.map((p) => `<option>${p}</option>`).join('')}</select></div>
-        <div class="field"><label>Metode</label>
-          <select name="metode">${METODE.map((m) => `<option>${m}</option>`).join('')}</select></div>
+        <div class="field"><label>Jenis dana <span style="color:var(--red)">*</span></label>
+          <select name="jenisDana" id="faJenis" required>${JENIS_DANA.map((p) => `<option${p === 'Infak' ? ' selected' : ''}>${p}</option>`).join('')}</select></div>
+        <div class="field"><label>Detail <span style="color:var(--red)">*</span></label>
+          <select name="subJenis" id="faSub" required></select></div>
       </div>
+      <div class="field" id="faPilarWrap" hidden><label>Pilar <span style="color:var(--red)">*</span></label>
+        <select name="pilar" id="faPilar"><option value="">Pilih pilar...</option>${PILAR_TERIKAT.map((p) => `<option>${H(p)}</option>`).join('')}</select>
+        <div class="muted" style="font-size:12px;margin-top:4px">Dana terikat harus jelas pilar penyalurannya.</div></div>
+      <div class="field"><label>Metode</label>
+        <select name="metode">${METODE.map((m) => `<option>${m}</option>`).join('')}</select></div>
       <div class="field"><label>Catatan (opsional)</label>
         <textarea name="catatan" rows="2" placeholder="mis. minta dikirimi kwitansi"></textarea></div>
     </form>`, (wadah) => {
     const inp = $('[name=jumlah]', wadah);
     const hint = $('#faHint', wadah);
+    const jenisEl = $('#faJenis', wadah), subEl = $('#faSub', wadah), pilarEl = $('#faPilar', wadah), pilarWrap = $('#faPilarWrap', wadah);
+    /* Detail mengikuti jenis; pilar hanya muncul untuk dana terikat. */
+    const isiDetail = () => {
+      subEl.innerHTML = (SUBJENIS[jenisEl.value] || []).map((x) => `<option>${H(x)}</option>`).join('');
+      terapkanPilar();
+    };
+    const terapkanPilar = () => {
+      const terikat = /terikat/i.test(subEl.value);
+      pilarWrap.hidden = !terikat;
+      pilarEl.required = terikat;
+      if (!terikat) pilarEl.value = '';
+    };
+    jenisEl.onchange = isiDetail;
+    subEl.onchange = terapkanPilar;
+    isiDetail();
+    if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
     inp.oninput = () => {
       const n = Number(String(inp.value).replace(/[^\d]/g, ''));
       hint.textContent = n > 0 ? '= ' + rupiah(n) : '';
     };
     $('#faBatal').onclick = tutupModal;
+    pasangBacaKwitansi(wadah, { inp, jenisEl, subEl, pilarEl, isiDetail, terapkanPilar });
     $('#fa', wadah).onsubmit = async (ev) => {
       ev.preventDefault();
       const f = new FormData(ev.target);
       const jumlah = Number(String(f.get('jumlah')).replace(/[^\d]/g, ''));
       try {
-        const h = await rpc('ambil.catat', { donaturId: j.id, jumlah, peruntukan: f.get('peruntukan'), metode: f.get('metode'), catatan: f.get('catatan'), tanggal: tglHariIni() });
-        tutupModal(); toast(h.pesan); halaman.dasbor.gambar(el);
-      } catch (e) { toast(e.message, 'galat'); }
+        const tombol = $('#faSimpan'); if (tombol) { tombol.disabled = true; tombol.textContent = 'Menyimpan...'; }
+        const h = await rpc('ambil.catat', { donaturId: j.id, jumlah, jenisDana: f.get('jenisDana'), subJenis: f.get('subJenis'), pilar: f.get('pilar') || '', metode: f.get('metode'), catatan: f.get('catatan'), tanggal: tglHariIni() });
+        tutupModal(); halaman.dasbor.gambar(el);
+        if (h.buku) { toast(h.pesan); bukaKwitansi(h.rec, { baru: true, donatur: j }, el); }
+        else if (h.galatBuku) gagalKeBuku(h.rec, h.galatBuku, el);
+        else toast(h.pesan);
+      } catch (e) {
+        const tombol = $('#faSimpan'); if (tombol) { tombol.disabled = false; tombol.textContent = 'Simpan donasi'; }
+        toast(e.message, 'galat');
+      }
     };
   }, `<button type="button" id="faBatal" class="btn">Batal</button>
-      <button type="submit" form="fa" class="btn btn-primary">Simpan donasi</button>`);
+      <button type="submit" form="fa" class="btn btn-primary" id="faSimpan">Simpan donasi</button>`);
 }
 
+// ------------------------------------------------------------ Kwitansi dan ucapan terima kasih
+/* Sesudah donasi masuk buku utama: kwitansi (gambar), ucapan terima kasih yang bisa disunting, dan pilihan kirim ke WhatsApp
+   donatur lewat mesin Broadcast (api/fund.js kwitansi.kirim). Data kwitansi diambil dari baris Penghimpunan-nya (apiFundKwitansi),
+   jadi isinya sama persis dengan yang dicetak bendahara. Kalau Anda memilih "Nanti", donasinya tetap tersimpan; kwitansi bisa
+   dibuka lagi dari Riwayat atau daftar hari ini. */
+async function lazRpc(fn, args) {
+  const res = await fetch('/api/rpc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fn, args: [tokenLaz(), ...args] }) });
+  let j; try { j = await res.json(); } catch (_) { throw new Error('Balasan server tidak dikenali'); }
+  if (j.__error) throw new Error(j.__error);
+  return j.result;
+}
+const nomorSah = (n) => /^(\+?62|0)8\d{7,12}$/.test(String(n || '').replace(/[\s\-().]/g, ''));
+function cetakKwitansi(d, s) {
+  const w = window.open('', '_blank');
+  const dk = Object.assign({}, d, { __verifikasi: window.location.host + '/public.html?kwitansi=' + encodeURIComponent(d.noKwitansi || d.id) });
+  window.LZKwitansi.png(dk, s).then((g) => {
+    w.document.open();
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kwitansi ' + H(d.noKwitansi) + '</title><style>@page{size:A5 landscape;margin:6mm}html,body{margin:0;background:#e9eaec}.bar{text-align:center;padding:10px;font:14px Arial}.bar a,.bar button{margin:0 4px;padding:8px 14px;border:1px solid #bbb;border-radius:8px;background:#fff;cursor:pointer;text-decoration:none;color:#222;font:14px Arial}img{display:block;width:100%;max-width:1000px;margin:0 auto;background:#fff}@media print{.bar{display:none}html,body{background:#fff}img{max-width:none;width:100%}}</style></head><body><div class="bar"><button onclick="print()">Cetak</button><a href="' + g.dataUrl + '" download="' + H(g.nama) + '">Unduh gambar</a></div><img src="' + g.dataUrl + '" alt="Kwitansi"></body></html>');
+    w.document.close();
+  }).catch((e) => { try { w.close(); } catch (_) { /* sudah tertutup */ } toast(e.message, 'galat'); });
+}
+async function bukaKwitansi(rec, opsi, el) {
+  opsi = opsi || {};
+  if (!rec || !rec.buku || !rec.buku.id) { toast('Catatan ini belum masuk buku utama.', 'galat'); return; }
+  if (!window.LZKwitansi) { toast('Pembuat kwitansi belum termuat, coba lagi sebentar lagi.', 'galat'); return; }
+  let res;
+  try { res = await lazRpc('apiFundKwitansi', [rec.buku.id]); } catch (e) { toast(e.message, 'galat'); return; }
+  const d = res.data;
+  if (!d) { toast('Data kwitansi tidak ditemukan.', 'galat'); return; }
+  const s = Object.assign({}, res.settings, { __linkDonatur: res.linkDonatur ? location.origin + res.linkDonatur : '' });
+  const telepon = d.telepon || rec.donaturTelepon || '';
+  modal('Kwitansi donasi', `
+    <div class="kw-pop">${opsi.baru ? '<div class="kw-ok">Donasi tersimpan di buku utama.</div>' : ''}
+      <div class="kw-prev"><img id="kwPrev" alt="Pratinjau kwitansi"><div class="kw-prev-ket" id="kwPrevKet">Menyiapkan kwitansi...</div></div>
+      <div class="field"><label>Nomor WhatsApp</label><input id="kwNomor" inputmode="tel" placeholder="0812 3456 7890" value="${H(telepon)}"></div>
+      <div class="field"><label>Ucapan terima kasih</label><textarea id="kwTeks" rows="6"></textarea></div>
+    </div>`, (wadah) => {
+    const mc = $('#modalCard'); if (mc) mc.classList.add('kw-modal');
+    $('#kwTeks', wadah).value = window.LZKwitansi.pesan(d, s);
+    let gambar = null;
+    const dk = Object.assign({}, d, { __verifikasi: window.location.host + '/public.html?kwitansi=' + encodeURIComponent(d.noKwitansi || d.id) });
+    window.LZKwitansi.png(dk, s).then((g) => {
+      gambar = g; $('#kwPrev', wadah).src = g.dataUrl;
+      $('#kwPrev', wadah).onclick = (ev) => ev.target.classList.toggle('kw-besar');
+      $('#kwPrevKet', wadah).textContent = 'Ketuk gambar untuk memperbesar (' + Math.round(g.base64.length * 0.75 / 1024) + ' KB).';
+    }).catch(() => { const k = $('#kwPrevKet', wadah); if (k) k.textContent = 'Pratinjau gagal dibuat.'; });
+    $('#kwTidak').onclick = () => { tutupModal(); if (el) halaman[negara.halaman] && halaman[negara.halaman].gambar && halaman[negara.halaman].gambar(el); };
+    $('#kwCetak').onclick = () => cetakKwitansi(d, s);
+    $('#kwKirim').onclick = async () => {
+      const nomor = $('#kwNomor').value, teks = $('#kwTeks').value.trim(), btn = $('#kwKirim');
+      if (!nomorSah(nomor)) { toast('Isi nomor WhatsApp yang sah, mis. 0812 3456 7890', 'galat'); $('#kwNomor').focus(); return; }
+      if (!teks) { toast('Ucapan tidak boleh kosong', 'galat'); return; }
+      if (!gambar) { toast('Tunggu sebentar, kwitansi sedang disiapkan', 'galat'); return; }
+      btn.disabled = true; btn.textContent = 'Mengirim...';
+      try {
+        const j = await rpc('kwitansi.kirim', { himpunanId: rec.id, nama: d.namaDonatur, nomor, alamat: d.alamat, teks, base64: gambar.base64, tipe: gambar.tipe, namaBerkas: gambar.nama, paksa: Boolean(opsi.paksa) });
+        tutupModal();
+        toast(j.sudah ? j.pesan : (j.pesan || 'Kwitansi masuk antrean WhatsApp'));
+      } catch (e) { btn.disabled = false; btn.innerHTML = KW_WA + ' Kirim'; toast(e.message, 'galat'); }
+    };
+  }, `<button type="button" class="btn btn-ghost" id="kwTidak">Nanti</button>
+      <button type="button" class="btn btn-ghost" id="kwCetak">Cetak</button>
+      <button type="button" class="btn btn-primary" id="kwKirim">${KW_WA} Kirim</button>`);
+}
+
+/* ------------------------------------------------------------ Baca kwitansi (OCR)
+   Memakai /api/ocr yang sama dengan Penghimpunan utama. Hasilnya USULAN:
+   hanya mengisi kolom yang belum disentuh petugas, ditandai hijau (kuning bila
+   ragu), dan tetap harus diperiksa sebelum disimpan. Fotonya tidak disimpan. */
+const IKON_BACA = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>';
+function kecilkanDataUrl(dataUrl, maks) {
+  maks = maks || 1600;
+  return new Promise((ok) => {
+    const im = new Image();
+    im.onload = () => {
+      const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+      if (!w || !h) return ok(dataUrl);
+      const r = Math.min(1, maks / Math.max(w, h));
+      if (r >= 1 && dataUrl.indexOf('data:image/jpeg') === 0) return ok(dataUrl);
+      const c = document.createElement('canvas'); c.width = Math.round(w * r); c.height = Math.round(h * r);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      try { ok(c.toDataURL('image/jpeg', 0.82)); } catch (_) { ok(dataUrl); }
+    };
+    im.onerror = () => ok(dataUrl);
+    im.src = dataUrl;
+  });
+}
+async function ocrKwitansi(gambar) {
+  const res = await fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ aksi: 'baca', token: tokenLaz(), gambar,
+      pilihan: { jenisDana: JENIS_DANA, subJenis: SUBJENIS, metode: METODE, pilar: PILAR_TERIKAT } }) });
+  let j; try { j = await res.json(); } catch (_) { throw new Error('Balasan server tidak dikenali'); }
+  if (j.__error) throw new Error(j.__error);
+  return j.result;
+}
+function pasangBacaKwitansi(wadah, f) {
+  const info = $('#faBacaInfo', wadah), berkas = $('#faBerkas', wadah);
+  if (!berkas) return;
+  const tandai = (node, ragu) => { const w = node && node.closest ? node.closest('.field') : null; if (!w) return; w.classList.add('fa-ai'); w.classList.toggle('fa-ragu', !!ragu); const lepas = () => { w.classList.remove('fa-ai', 'fa-ragu'); node.removeEventListener('input', lepas); node.removeEventListener('change', lepas); }; node.addEventListener('input', lepas); node.addEventListener('change', lepas); };
+  const set = (node, nilai) => { node.value = nilai; node.dispatchEvent(new Event('input', { bubbles: true })); node.dispatchEvent(new Event('change', { bubbles: true })); };
+  berkas.onchange = async (ev) => {
+    const file = ev.target.files && ev.target.files[0]; if (!file) return;
+    info.textContent = 'Membaca kwitansi...';
+    const awal = { jumlah: f.inp.value, jenis: f.jenisEl.value, sub: f.subEl.value, pilar: f.pilarEl.value };
+    const catatanEl = $('[name=catatan]', wadah);
+    try {
+      const url = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.onerror = () => no(new Error('Gambar tidak bisa dibuka')); fr.readAsDataURL(file); });
+      const h = await ocrKwitansi(await kecilkanDataUrl(url));
+      if (!h || !h.terbaca) { info.textContent = 'Tulisan belum terbaca. Isi manual sambil melihat foto.'; return; }
+      const isi = h.isi || {}, ragu = h.raguRagu || [];
+      let n = 0;
+      /* Hanya kolom yang belum diubah petugas selama menunggu. */
+      if (isi.jumlah && f.inp.value === awal.jumlah) { set(f.inp, String(isi.jumlah)); tandai(f.inp, ragu.includes('jumlah')); n++; }
+      if (isi.jenisDana && JENIS_DANA.includes(isi.jenisDana) && f.jenisEl.value === awal.jenis) {
+        f.jenisEl.value = isi.jenisDana; f.isiDetail(); f.jenisEl.dispatchEvent(new Event('change', { bubbles: true })); tandai(f.jenisEl, ragu.includes('jenisDana')); n++;
+        if (isi.subJenis && (SUBJENIS[isi.jenisDana] || []).includes(isi.subJenis)) {
+          f.subEl.value = isi.subJenis; f.terapkanPilar(); f.subEl.dispatchEvent(new Event('change', { bubbles: true })); tandai(f.subEl, ragu.includes('subJenis')); n++;
+          if (isi.pilar && PILAR_TERIKAT.includes(isi.pilar) && /terikat/i.test(isi.subJenis)) { f.pilarEl.value = isi.pilar; f.pilarEl.dispatchEvent(new Event('change', { bubbles: true })); tandai(f.pilarEl, ragu.includes('pilar')); n++; }
+        }
+      }
+      const metodeEl = $('[name=metode]', wadah);
+      if (isi.metode && metodeEl && [...metodeEl.options].some((o) => o.value === isi.metode || o.textContent === isi.metode)) { set(metodeEl, isi.metode); tandai(metodeEl, ragu.includes('metode')); n++; }
+      const ket = [isi.namaDonatur ? 'a.n. ' + isi.namaDonatur : '', isi.noKwitansi ? 'No. ' + isi.noKwitansi : ''].filter(Boolean).join(', ');
+      if (ket && catatanEl && !catatanEl.value) { catatanEl.value = ket; tandai(catatanEl, false); }
+      info.textContent = n ? n + ' isian terbaca, mohon diperiksa sebelum disimpan.' : 'Tidak ada isian baru yang bisa diisikan.';
+    } catch (e) { info.textContent = e.message || 'Pembacaan gagal.'; }
+    berkas.value = '';
+  };
+}
+/* Donasi sudah tercatat di Fundraising tetapi gagal masuk buku utama (jaringan, izin, dll.): jangan dibiarkan diam. */
+function gagalKeBuku(rec, pesan, el) {
+  modal('Belum masuk buku utama', `
+    <p style="font-size:14px;line-height:1.55">Donasi <b>${H(rec.donaturNama)}</b> (${rupiah(rec.jumlah)}) sudah tercatat di Fundraising, tetapi belum masuk buku utama.</p>
+    <p class="muted" style="font-size:13px;line-height:1.5;margin-top:8px">${H(pesan)}</p>`, null,
+  `<button type="button" class="btn" id="gbTutup">Nanti</button>
+   <button type="button" class="btn btn-primary" id="gbUlang">Coba lagi</button>`);
+  $('#gbTutup').onclick = tutupModal;
+  $('#gbUlang').onclick = async () => {
+    try {
+      const h = await rpc('ambil.tulisBuku', { himpunanId: rec.id });
+      tutupModal(); toast(h.pesan); bukaKwitansi(h.rec, { baru: true }, el);
+    } catch (e) { toast(e.message, 'galat'); }
+  };
+}
+
+
+/* ------------------------------------------------------------ Impor donatur
+   Teks atau berkas (txt, csv, xlsx): satu baris satu donatur, urutan
+   nama, alamat, nomor, jadwal. Diperiksa dulu di server, baru disimpan. */
+function muatXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, gagal) => {
+    const sk = document.createElement('script'); sk.src = '/js/vendor/xlsx.full.min.js';
+    sk.onload = () => ok(); sk.onerror = () => gagal(new Error('Pembaca Excel gagal dimuat'));
+    document.head.appendChild(sk);
+  });
+}
+async function bacaBerkasDonatur(f) {
+  if (/\.(xlsx|xls)$/i.test(f.name)) {
+    await muatXlsx();
+    const wb = window.XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: false });
+    const lembar = wb.Sheets[wb.SheetNames[0]];
+    return window.XLSX.utils.sheet_to_json(lembar, { header: 1, raw: false, defval: '' })
+      .map((r) => r.map((x) => String(x).replace(/[\t\r\n]+/g, ' ').trim()).join('\t')).join('\n');
+  }
+  return await f.text();
+}
+function imporDonatur(el) {
+  modal('Impor donatur', `
+    <div class="field"><label>Tempel teks atau pilih berkas</label>
+      <textarea id="idTeks" rows="7" placeholder="Nama, Alamat, Nomor, Jadwal&#10;Budi Santoso, Jl. Mawar 3 Bantul, 0812 3456 7890, 15 Oktober 2026&#10;Siti Aminah; Sewon; 0813 1111 2222; setiap Senin"></textarea>
+      <div class="muted" style="font-size:12px;margin-top:4px">Satu baris satu donatur. Urutan: nama, alamat, nomor, jadwal. Pemisah boleh koma, titik koma, atau tab. Jadwal boleh dikosongkan (contoh: 15 Oktober 2026, setiap Senin, tanggal 5). Lokasi di peta bisa ditandai belakangan lewat tombol ubah.</div></div>
+    <div class="field"><input type="file" id="idBerkas" accept=".txt,.csv,.tsv,.xlsx,.xls"></div>
+    <div id="idHasil"></div>`, (wadah) => {
+    let siap = false;
+    const hasil = $('#idHasil', wadah);
+    const periksa = async () => {
+      const teks = $('#idTeks', wadah).value;
+      if (!teks.trim()) { toast('Isi teks atau pilih berkas dulu', 'galat'); return; }
+      const tb = $('#idPeriksa'); tb.disabled = true;
+      try {
+        const h = await rpc('donatur.impor', { teks, simpan: false });
+        const tag = { baru: '<span class="badge green">baru</span>', ada: '<span class="badge amber">dilewati</span>', galat: '<span class="badge red">masalah</span>' };
+        hasil.innerHTML = `<p style="font-size:13px;margin:6px 0"><b>${h.ringkas.baru}</b> baru, ${h.ringkas.ada} dilewati, ${h.ringkas.galat} bermasalah dari ${h.ringkas.total} baris.</p>
+          <div style="max-height:220px;overflow:auto"><table><thead><tr><th>Nama</th><th>Alamat</th><th>Nomor</th><th>Jadwal</th><th></th></tr></thead><tbody>${h.baris.map((b) => `<tr>
+            <td>${H(b.nama)}</td><td>${H(b.alamat)}</td><td>${H(b.telepon)}</td>
+            <td style="font-size:12px">${b.jadwal ? H(fmtTanggal(b.jadwal.tanggal)) + (b.jadwal.ulang !== 'sekali' ? ' · ' + H(b.jadwal.ulang) : '') : '<span class="muted">—</span>'}</td>
+            <td>${tag[b.status]}${b.alasan ? `<div class="muted" style="font-size:11px">${H(b.alasan)}</div>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+        siap = h.ringkas.baru > 0;
+        const sb = $('#idSimpan'); sb.disabled = !siap; sb.textContent = siap ? `Simpan ${h.ringkas.baru} donatur` : 'Tidak ada yang baru';
+      } catch (e) { toast(e.message, 'galat'); }
+      tb.disabled = false;
+    };
+    $('#idBerkas', wadah).onchange = async (ev) => {
+      const f = ev.target.files && ev.target.files[0]; if (!f) return;
+      try { $('#idTeks', wadah).value = await bacaBerkasDonatur(f); periksa(); } catch (e) { toast(e.message, 'galat'); }
+    };
+    $('#idTeks', wadah).oninput = () => { siap = false; const sb = $('#idSimpan'); if (sb) { sb.disabled = true; sb.textContent = 'Simpan'; } };
+    $('#idPeriksa').onclick = periksa;
+    $('#idBatal').onclick = tutupModal;
+    $('#idSimpan').onclick = async () => {
+      if (!siap) return;
+      const sb = $('#idSimpan'); sb.disabled = true; sb.textContent = 'Menyimpan...';
+      try {
+        const h = await rpc('donatur.impor', { teks: $('#idTeks', wadah).value, simpan: true });
+        tutupModal(); toast(h.pesan); halaman.donatur.gambar(el);
+      } catch (e) { sb.disabled = false; sb.textContent = 'Simpan'; toast(e.message, 'galat'); }
+    };
+  }, `<button type="button" class="btn" id="idBatal">Batal</button>
+      <button type="button" class="btn" id="idPeriksa">Periksa</button>
+      <button type="button" class="btn btn-primary" id="idSimpan" disabled>Simpan</button>`);
+}
 // ------------------------------------------------------------ Donatur
 halaman.donatur = {
   judul: 'Donatur',
@@ -670,7 +933,7 @@ halaman.donatur = {
         <div class="toolbar">
           <input id="cariD" class="search" value="${H(s.cari)}" placeholder="Cari nama, nomor, atau alamat…">
           <span style="width:190px;flex:none"><select id="grupD"></select></span>
-          ${bolehUbah ? '<button id="tambahD" class="btn btn-primary">+ Donatur</button>' : ''}
+          ${bolehUbah ? '<button id="imporD" class="btn">Impor</button><button id="tambahD" class="btn btn-primary">+ Donatur</button>' : ''}
         </div>
         <div id="tabelD">${rangka(6)}</div>
       </div>`;
@@ -712,6 +975,7 @@ halaman.donatur = {
     const sb = $('#sebelumD', el); if (sb) sb.onclick = () => { s.halaman--; halaman.donatur.gambar(el); };
     const ss = $('#sesudahD', el); if (ss) ss.onclick = () => { s.halaman++; halaman.donatur.gambar(el); };
     const tb = $('#tambahD', el); if (tb) tb.onclick = () => formDonatur(null, el);
+    const ib = $('#imporD', el); if (ib) ib.onclick = () => imporDonatur(el);
     $$('[data-ubahd]', el).forEach((b) => b.onclick = () => formDonatur(d.baris.find((x) => x.id === b.dataset.ubahd), el));
     $$('[data-jadwal]', el).forEach((b) => b.onclick = () => formJadwal(d.baris.find((x) => x.id === b.dataset.jadwal), el));
     $$('[data-hapusd]', el).forEach((b) => b.onclick = () => {
@@ -859,7 +1123,7 @@ halaman.himpunan = {
         <span class="bt-jumlah">${fmtAngka(d.ringkas.berhasil)} berisi · ${fmtAngka(d.ringkas.kosong)} kosong</span>
         <span style="font-weight:800;color:var(--accent-d)">${rupiah(d.ringkas.total)}</span>
       </div>` + (d.baris.length ? `
-      <table><thead><tr><th>Donatur</th><th>Peruntukan</th><th style="text-align:right">Nominal</th><th>Tanggal</th><th>Cocok</th>${bolehHapus ? '<th></th>' : ''}</tr></thead>
+      <table><thead><tr><th>Donatur</th><th>Peruntukan</th><th style="text-align:right">Nominal</th><th>Tanggal</th><th>Cocok</th><th></th></tr></thead>
       <tbody>${d.baris.map((r) => `<tr>
         <td><div style="font-weight:600">${H(r.donaturNama)}</div>
           <div class="muted" style="font-size:11px">${H(r.olehNama || '')}${r.fundraising ? ' · ' + H(r.fundraising) : ''}</div></td>
@@ -867,7 +1131,7 @@ halaman.himpunan = {
         <td style="text-align:right;font-weight:600">${r.status === 'kosong' ? '—' : rupiah(r.jumlah)}</td>
         <td class="muted" style="font-size:12px">${fmtTanggal(r.tanggal)}</td>
         <td>${r.cocok && r.cocok.sudah ? `<span class="badge green" title="Ref ${H(r.cocok.ref)}">✓ ${H(r.cocok.ref || 'cocok')}</span>` : '<span class="muted">—</span>'}</td>
-        ${bolehHapus ? `<td class="actions-cell" style="text-align:right"><button data-hapush="${r.id}" class="btn btn-ghost btn-sm" style="color:var(--red)">hapus</button></td>` : ''}
+        <td class="actions-cell" style="text-align:right;white-space:nowrap">${r.status === 'diambil' && r.buku && r.buku.id && bisa('ambil.catat') ? `<button data-kwh="${r.id}" class="btn btn-ghost btn-sm" title="Kwitansi dan kirim ke WhatsApp">${KW_WA} Kwitansi</button>` : ''}${bolehHapus ? `<button data-hapush="${r.id}" class="btn btn-ghost btn-sm" style="color:var(--red)">hapus</button>` : ''}</td>
       </tr>`).join('')}</tbody></table>
       <div class="toolbar" style="border-bottom:none;border-top:1px solid var(--border)">
         <p class="muted" style="flex:1;font-size:11.5px">${fmtAngka(d.total)} catatan · halaman ${d.halaman} dari ${halamanTotal}</p>
@@ -877,9 +1141,10 @@ halaman.himpunan = {
 
     const sb = $('#sebelumH', el); if (sb) sb.onclick = () => { s.halaman--; halaman.himpunan.gambar(el); };
     const ss = $('#sesudahH', el); if (ss) ss.onclick = () => { s.halaman++; halaman.himpunan.gambar(el); };
+    $$('[data-kwh]', el).forEach((b) => b.onclick = () => bukaKwitansi(d.baris.find((x) => x.id === b.dataset.kwh), {}, el));
     $$('[data-hapush]', el).forEach((b) => b.onclick = () => {
       const r = d.baris.find((x) => x.id === b.dataset.hapush);
-      konfirmasi('Hapus catatan ini?', `Catatan donasi ${r.donaturNama} (${r.status === 'kosong' ? 'kosong' : rupiah(r.jumlah)}) dihapus. Buku utama tidak ikut berubah.`, async () => {
+      konfirmasi('Hapus catatan ini?', `Catatan donasi ${r.donaturNama} (${r.status === 'kosong' ? 'kosong' : rupiah(r.jumlah)}) dihapus. ${r.buku && r.buku.id ? `Baris di buku utama (${r.buku.noKwitansi}) tetap ada; hapus di menu Penghimpunan bila memang salah.` : 'Buku utama tidak ikut berubah.'}`, async () => {
         try { await rpc('himpunan.hapus', { id: r.id }); toast('Catatan dihapus.'); halaman.himpunan.gambar(el); }
         catch (e) { toast(e.message, 'galat'); }
       }, 'Ya, hapus');

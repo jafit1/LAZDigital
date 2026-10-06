@@ -33,6 +33,7 @@ const cek = (n, syarat, info) => {
 const U = (id, perm, role) => ({ id, nama: 'User ' + id, peran: 'x', _laz: { id, role: role || 'staff', permissions: { fundraising: perm || {} } } });
 const FUND1 = U('u1', { view: true, create: true, edit: true, delete: false });
 const FUND2 = U('u2', { view: true, create: true, edit: true });
+const FUND9 = U('u9', { view: true, create: true, edit: true });
 const KOOR = U('uk', { view: true, create: true, edit: true, delete: true });
 const SUPER = U('us', {}, 'superadmin');
 const RELAWAN = U('ur', { view: true });
@@ -170,6 +171,32 @@ async function lewatPintu(nama, data, pengguna) {
   const amb2 = await jalan('ambil.catat', { donaturId: budi.id, jumlah: 20000, peruntukan: 'Infak', tanggal: HARI }, FUND1);
   cek('catatan baru memakai nama fundraising dari profil', amb2.rec.fundraising === 'Tim Bantul Kota', amb2.rec.fundraising);
   cek('catatan lama tidak berubah surut', amb.rec.fundraising === 'User u1');
+
+  console.log('\n=== J. IMPOR DONATUR DARI TEKS (nama, alamat, nomor, jadwal) ===');
+  const TEKS = [
+    'Nama,Alamat,Nomor,Jadwal',
+    'Hasan Basri, Jl. Kenanga 5, Sewon, 0812 7000 0001, 2031-03-15',
+    'Laila;Pundong;0813 7000 0002;setiap Senin',
+    'Umar|Imogiri|08147000003|tanggal 5',
+    'Fatimah\tBantul\t08157000004\t',
+    'Hasan Kembar, x, 0812 7000 0001,',
+    'Tanpa Nomor, Bantul, abc,',
+    'Jadwal Aneh, Bantul, 08167000005, kapan-kapan',
+  ].join('\n');
+  const per = await jalan('donatur.impor', { teks: TEKS, simpan: false }, FUND9);
+  cek('pemeriksaan: 4 baru, 1 dilewati, 2 bermasalah', per.ringkas.baru === 4 && per.ringkas.ada === 1 && per.ringkas.galat === 2, per.ringkas);
+  cek('pemeriksaan tidak menyimpan apa pun', (await donaturLib.saringDonatur({ pemilik: 'u9' })).length === 0);
+  cek('alamat bersama koma tidak merusak urutan', per.baris[0].alamat === 'Jl. Kenanga 5, Sewon' && per.baris[0].telepon === '6281270000001', per.baris[0]);
+  cek('jadwal tanggal, mingguan, dan bulanan terbaca', per.baris[0].jadwal.tanggal === '2031-03-15' && per.baris[1].jadwal.ulang === 'mingguan' && per.baris[2].jadwal.ulang === 'bulanan', per.baris.slice(0, 3).map((b) => b.jadwal));
+  const sim = await jalan('donatur.impor', { teks: TEKS, simpan: true }, FUND9);
+  const punya = await donaturLib.saringDonatur({ pemilik: 'u9' });
+  cek('hanya yang baru tersimpan, milik pemanggil', sim.disimpan === 4 && punya.length === 4, sim.pesan);
+  cek('tersimpan tanpa lokasi, alamat dan jadwal terbawa', punya.every((d) => d.lokasi === null) && punya.some((d) => d.alamat === 'Sewon' || d.alamat === 'Jl. Kenanga 5, Sewon') && punya.some((d) => d.jadwal && d.jadwal.ulang === 'mingguan'));
+  const ulang = await jalan('donatur.impor', { teks: TEKS, simpan: true }, FUND9);
+  cek('impor ulang tidak menggandakan', ulang.disimpan === 0 && (await donaturLib.saringDonatur({ pemilik: 'u9' })).length === 4, ulang.pesan);
+  cek('donatur manual tetap wajib lokasi', /Lokasi wajib/i.test(await tolak('donatur.simpan', { nama: 'X', telepon: '08123456789' }, FUND9)));
+  cek('tanpa izin ubah donatur ditolak', (await lewatPintu('donatur.impor', { teks: TEKS, simpan: true }, RELAWAN)).statusCode === 403);
+  cek('batas 500 baris', /500/.test(await tolak('donatur.impor', { teks: Array.from({ length: 501 }, (_, i) => `N${i}, a, 08199${String(100000 + i)}, `).join('\n'), simpan: true }, FUND9) || ''));
 
   console.log('\ntest_fund_fitur.js  ' + ok + '/' + (ok + g) + (g ? '  ADA GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);
