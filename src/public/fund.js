@@ -876,7 +876,7 @@ function imporDonatur(el) {
   modal('Impor donatur', `
     <div class="field"><label>Tempel teks atau pilih berkas</label>
       <textarea id="idTeks" rows="7" placeholder="Nama, Alamat, Nomor, Jadwal&#10;Budi Santoso, Jl. Mawar 3 Bantul, 0812 3456 7890, 15 Oktober 2026&#10;Siti Aminah; Sewon; 0813 1111 2222; setiap Senin"></textarea>
-      <div class="muted" style="font-size:12px;margin-top:4px">Satu baris satu donatur. Urutan: nama, alamat, nomor, jadwal. Pemisah boleh koma, titik koma, atau tab. Jadwal boleh dikosongkan (contoh: 15 Oktober 2026, setiap Senin, tanggal 5). Lokasi di peta bisa ditandai belakangan lewat tombol ubah.</div></div>
+      <div class="muted" style="font-size:12px;margin-top:4px">Satu baris satu donatur. Urutan: nama, alamat, nomor, jadwal. Nomor boleh dikosongkan. Pemisah boleh koma, titik koma, atau tab. Jadwal boleh dikosongkan (contoh: 15 Oktober 2026, setiap Senin, tanggal 5). Lokasi di peta bisa ditandai belakangan lewat tombol ubah.</div></div>
     <div class="field"><input type="file" id="idBerkas" accept=".txt,.csv,.tsv,.xlsx,.xls"></div>
     <div id="idHasil"></div>`, (wadah) => {
     let siap = false;
@@ -956,7 +956,7 @@ halaman.donatur = {
         return `<tr>
           ${t.td(k.id)}
           <td style="font-weight:600">${H(k.nama)}${d.lihatSemua ? '' : ''}</td>
-          <td class="muted">${H(k.telepon)}</td>
+          <td class="muted">${k.telepon ? H(k.telepon) : "—"}</td>
           <td><div class="row" style="gap:4px;flex-wrap:wrap">${(k.grup || []).map((g) => `<span class="badge blue">${H(g)}</span>`).join('') || '<span class="muted">—</span>'}</div></td>
           <td style="font-size:12px">${jadwalTxt}</td>
           <td class="actions-cell" style="white-space:nowrap;text-align:right">
@@ -1007,8 +1007,8 @@ function formDonatur(k, el) {
       <div class="grid-2">
         <div class="field"><label>Nama lengkap <span style="color:var(--red)">*</span></label>
           <input name="nama" required value="${k ? H(k.nama) : ''}"></div>
-        <div class="field"><label>No HP / WA <span style="color:var(--red)">*</span></label>
-          <input name="telepon" required inputmode="tel" value="${k ? H(k.telepon) : ''}" placeholder="08xxxxxxxxxx"></div>
+        <div class="field"><label>No HP / WA <span class="muted" style="font-weight:400">(opsional)</span></label>
+          <input name="telepon" inputmode="tel" value="${k ? H(k.telepon) : ''}" placeholder="08xxxxxxxxxx"></div>
       </div>
       <div id="petaWadah"></div>
       <div class="field"><label>Grup (pisahkan dengan koma)</label>

@@ -74,7 +74,7 @@ async function lewatPintu(nama, data, pengguna) {
   cek('nomor dinormalkan', budi.telepon === '6281211110001', budi.telepon);
   cek('tanpa lokasi ditolak', /Lokasi wajib/i.test(await tolak('donatur.simpan', { nama: 'X', telepon: '08123456789' })));
   cek('lokasi (0,0) ditolak', /Lokasi wajib/i.test(await tolak('donatur.simpan', { nama: 'X', telepon: '08123456789', lokasi: { lat: 0, lng: 0 } })));
-  cek('tanpa nomor ditolak', /HP\/WA/i.test(await tolak('donatur.simpan', { nama: 'X', lokasi })));
+  cek('nomor yang salah ditolak', /HP\/WA/i.test(await tolak('donatur.simpan', { nama: 'X', lokasi, telepon: '12' })));
   cek('tanpa nama ditolak', /Nama lengkap/i.test(await tolak('donatur.simpan', { telepon: '08123456789', lokasi })));
 
   console.log('\n=== B. KEPEMILIKAN PER-FUNDRAISER ===');
@@ -194,6 +194,11 @@ async function lewatPintu(nama, data, pengguna) {
   cek('tersimpan tanpa lokasi, alamat dan jadwal terbawa', punya.every((d) => d.lokasi === null) && punya.some((d) => d.alamat === 'Sewon' || d.alamat === 'Jl. Kenanga 5, Sewon') && punya.some((d) => d.jadwal && d.jadwal.ulang === 'mingguan'));
   const ulang = await jalan('donatur.impor', { teks: TEKS, simpan: true }, FUND9);
   cek('impor ulang tidak menggandakan', ulang.disimpan === 0 && (await donaturLib.saringDonatur({ pemilik: 'u9' })).length === 4, ulang.pesan);
+  const tanpaNo = (await jalan('donatur.simpan', { nama: 'Tanpa Nomor', lokasi, telepon: '' }, FUND9)).donatur;
+  cek('nomor WA donatur tidak wajib', tanpaNo && tanpaNo.telepon === '', tanpaNo);
+  cek('nomor yang diisi tetap harus benar', /nomor yang benar/i.test(await tolak('donatur.simpan', { nama: 'X', lokasi, telepon: '123' }, FUND9)));
+  const imp0 = await jalan('donatur.impor', { teks: 'Pak A, Sewon, , setiap Senin\nPak B, Pundong\nPak C, x, abc,', simpan: false }, FUND9);
+  cek('impor: kolom nomor kosong sah, isi bukan nomor ditandai', imp0.ringkas.baru === 2 && imp0.ringkas.galat === 1 && imp0.baris[0].jadwal.ulang === 'mingguan', imp0.ringkas);
   cek('donatur manual tetap wajib lokasi', /Lokasi wajib/i.test(await tolak('donatur.simpan', { nama: 'X', telepon: '08123456789' }, FUND9)));
   cek('tanpa izin ubah donatur ditolak', (await lewatPintu('donatur.impor', { teks: TEKS, simpan: true }, RELAWAN)).statusCode === 403);
   cek('batas 500 baris', /500/.test(await tolak('donatur.impor', { teks: Array.from({ length: 501 }, (_, i) => `N${i}, a, 08199${String(100000 + i)}, `).join('\n'), simpan: true }, FUND9) || ''));
