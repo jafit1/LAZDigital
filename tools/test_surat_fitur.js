@@ -196,13 +196,193 @@ const jpg = (n) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.
   r = await pintu('surat.lampiran.tambah', { id: sm.id, nama: 't7', tautan: 'https://drive.google.com/t7' }, T_KABID);
   cek('lampiran ketujuh ditolak', r.kode === 400 && /6 lampiran/.test(r.pesan), r);
   /* Google Drive: kalau disetel, berkas tidak masuk basis data. */
-  const driveTiruan = { driveSiap: () => true, unggahBiner: async (n, b) => ({ id: 'drv-' + b.length }), unduh: async () => pdf(300), hapus: async () => {} };
+  const driveTiruan = { driveSiap: () => true, driveSiapSurat: () => true, folderSurat: () => '', unggahBiner: async (n, b) => ({ id: 'drv-' + b.length }), unduh: async () => pdf(300), hapus: async () => {} };
   const rec = await S.buat({ jenis: 'keluar', perihal: 'Balasan undangan', tujuan: 'PCM Contoh', balasanDari: sm.id }, { id: 'x', nama: 'Uji' });
   const rd = await S.tambahLampiran(rec.id, { nama: 'surat.pdf', mime: 'application/pdf', isi: pdf(300).toString('base64') }, { nama: 'Uji' }, driveTiruan);
   cek('kalau Google Drive disetel, lampiran disimpan di Drive, bukan basis data', rd.lampiran[0].simpan === 'drive' && rd.lampiran[0].driveId === 'drv-300' && !(await db.ambil('berkas:' + rd.lampiran[0].id)), rd.lampiran[0]);
   cek('surat keluar mulai di Draf dan tersambung ke surat masuknya', rec.status === 'draf' && rec.balasanDari === sm.id);
   r = await pintu('surat.detail', { id: sm.id }, T_KABID);
   cek('surat masuk menampilkan balasannya', r.ok && r.surat.balasan.length === 1 && r.surat.balasan[0].id === rec.id, r.surat && r.surat.balasan);
+
+  console.log('\n=== E2. LAMPIRAN: driveSiapSurat dan folder surat (Property 5 dan 6) ===');
+  /* Berkas PDF kecil, supaya kuota ruang lampiran (2,5 MB untuk uji ini) tidak
+     terpengaruh oleh ratusan iterasi acak di bawah ini. */
+  const kecil = () => pdf(20);
+
+  /* Property 5: drive tiruan dengan driveSiapSurat() selalu benar, Folder_Surat
+     diacak terisi/kosong. Folder yang diteruskan ke unggahBiner harus sama
+     dengan Folder_Surat kalau terisi, atau Folder_Cadangan kalau Folder_Surat
+     kosong. */
+  {
+    const ITERASI = 120;
+    let semuaBenar = true, contohGagal = null;
+    for (let i = 0; i < ITERASI; i++) {
+      const folderSuratNilai = Math.random() < 0.5 ? '' : ('folder-surat-' + Math.random().toString(36).slice(2, 10));
+      const folderCadanganNilai = 'folder-cadangan-' + Math.random().toString(36).slice(2, 10);
+      let folderTertangkap;
+      const driveP5 = {
+        driveSiap: () => true,
+        driveSiapSurat: () => true,
+        folderSurat: () => folderSuratNilai || folderCadanganNilai,
+        unggahBiner: async (nama, buf, mime, folder) => { folderTertangkap = folder; return { id: 'drv-p5-' + i }; },
+        unduh: async () => kecil(),
+        hapus: async () => {},
+      };
+      const harapan = folderSuratNilai || folderCadanganNilai;
+      const suratP5 = await S.buat({ jenis: 'masuk', perihal: 'Uji P5 ' + i, pengirim: 'Pemohon Uji' }, { id: 'x', nama: 'Uji' });
+      await S.tambahLampiran(suratP5.id, { nama: 'berkas.pdf', mime: 'application/pdf', isi: kecil().toString('base64') }, { nama: 'Uji' }, driveP5);
+      if (folderTertangkap !== harapan) {
+        semuaBenar = false;
+        contohGagal = { i, folderSuratNilai, folderCadanganNilai, harapan, folderTertangkap };
+        break;
+      }
+    }
+    cek('Property 5: folder yang diteruskan ke unggahBiner sama dengan Folder_Surat jika terisi atau Folder_Cadangan jika kosong, ' + ITERASI + ' iterasi acak', semuaBenar, contohGagal);
+  }
+
+  /* Property 6: drive tiruan dengan driveSiap() dan driveSiapSurat() ditiru
+     mengembalikan nilai berbeda secara acak dan independen. Keputusan Modul
+     Surat (naik ke Drive atau tidak; memanggil drive.hapus atau tidak) harus
+     mengikuti driveSiapSurat(), bukan driveSiap(). */
+  {
+    const ITERASI = 120;
+    let semuaBenar = true, contohGagal = null;
+    for (let i = 0; i < ITERASI; i++) {
+      /* --- tambahLampiran: keputusan naik ke Drive mengikuti driveSiapSurat --- */
+      const siapA = Math.random() < 0.5, siapSuratA = Math.random() < 0.5;
+      const driveA = {
+        driveSiap: () => siapA,
+        driveSiapSurat: () => siapSuratA,
+        folderSurat: () => 'folder-p6-' + i,
+        unggahBiner: async () => ({ id: 'drv-p6-' + i }),
+        unduh: async () => kecil(),
+        hapus: async () => {},
+      };
+      const suratA = await S.buat({ jenis: 'masuk', perihal: 'Uji P6a ' + i, pengirim: 'Pemohon Uji' }, { id: 'x', nama: 'Uji' });
+      const hasilTambah = await S.tambahLampiran(suratA.id, { nama: 'berkas.pdf', mime: 'application/pdf', isi: kecil().toString('base64') }, { nama: 'Uji' }, driveA);
+      const lampA = hasilTambah.lampiran[0];
+      const harapanSimpan = siapSuratA ? 'drive' : 'db';
+      if (lampA.simpan !== harapanSimpan) {
+        semuaBenar = false;
+        contohGagal = { tahap: 'tambahLampiran', i, siapA, siapSuratA, harapanSimpan, hasil: lampA.simpan };
+        break;
+      }
+
+      /* --- ambilLampiran: tidak bergantung pada driveSiap/driveSiapSurat, hanya pada simpan === 'drive' --- */
+      const siapB = Math.random() < 0.5, siapSuratB = Math.random() < 0.5;
+      const driveB = {
+        driveSiap: () => siapB,
+        driveSiapSurat: () => siapSuratB,
+        folderSurat: () => 'folder-p6-' + i,
+        unggahBiner: async () => ({ id: 'drv-p6-' + i }),
+        unduh: async () => kecil(),
+        hapus: async () => {},
+      };
+      const hasilAmbil = await S.ambilLampiran(suratA.id, lampA.id, driveB);
+      const isiCocok = lampA.simpan === 'drive' ? Buffer.from(hasilAmbil.isi, 'base64').equals(kecil()) : !!hasilAmbil.isi;
+      if (!isiCocok) {
+        semuaBenar = false;
+        contohGagal = { tahap: 'ambilLampiran', i, siapB, siapSuratB, hasilAmbil };
+        break;
+      }
+
+      /* --- hapusLampiran: drive.hapus terpanggil mengikuti driveSiapSurat, hanya ketika simpan === 'drive' --- */
+      const siapC = Math.random() < 0.5, siapSuratC = Math.random() < 0.5;
+      let hapusTerpanggilC = false;
+      const driveC = {
+        driveSiap: () => siapC,
+        driveSiapSurat: () => siapSuratC,
+        folderSurat: () => 'folder-p6-' + i,
+        unggahBiner: async () => ({ id: 'drv-p6-' + i }),
+        unduh: async () => kecil(),
+        hapus: async () => { hapusTerpanggilC = true; },
+      };
+      await S.hapusLampiran(suratA.id, lampA.id, driveC);
+      const harapanHapusC = lampA.simpan === 'drive' ? siapSuratC : false;
+      if (hapusTerpanggilC !== harapanHapusC) {
+        semuaBenar = false;
+        contohGagal = { tahap: 'hapusLampiran', i, siapC, siapSuratC, simpan: lampA.simpan, hapusTerpanggilC, harapanHapusC };
+        break;
+      }
+
+      /* --- hapus: drive.hapus terpanggil pada tiap lampiran 'drive' mengikuti driveSiapSurat --- */
+      const siapD = Math.random() < 0.5, siapSuratD = Math.random() < 0.5;
+      let hapusTerpanggilD = false;
+      const driveD1 = {
+        driveSiap: () => true, driveSiapSurat: () => true, folderSurat: () => 'folder-p6-' + i,
+        unggahBiner: async () => ({ id: 'drv-p6-hapus-' + i }), unduh: async () => kecil(), hapus: async () => {},
+      };
+      const suratD = await S.buat({ jenis: 'masuk', perihal: 'Uji P6d ' + i, pengirim: 'Pemohon Uji' }, { id: 'x', nama: 'Uji' });
+      await S.tambahLampiran(suratD.id, { nama: 'berkas.pdf', mime: 'application/pdf', isi: kecil().toString('base64') }, { nama: 'Uji' }, driveD1);
+      const driveD2 = {
+        driveSiap: () => siapD,
+        driveSiapSurat: () => siapSuratD,
+        folderSurat: () => 'folder-p6-' + i,
+        unggahBiner: async () => ({ id: 'drv-p6-' + i }),
+        unduh: async () => kecil(),
+        hapus: async () => { hapusTerpanggilD = true; },
+      };
+      await S.hapus(suratD.id, driveD2);
+      if (hapusTerpanggilD !== siapSuratD) {
+        semuaBenar = false;
+        contohGagal = { tahap: 'hapus', i, siapD, siapSuratD, hapusTerpanggilD };
+        break;
+      }
+    }
+    cek('Property 6: keputusan naik ke Drive dan pemanggilan drive.hapus mengikuti driveSiapSurat(), bukan driveSiap(), ' + ITERASI + ' iterasi acak', semuaBenar, contohGagal);
+  }
+
+  console.log('\n=== E3. STATUS DAN RUANG SURAT: field drive mengikuti driveSiapSurat (Property 7) ===');
+  /* lib/surat/api.js men-require modul drive sekali secara statis di awal
+     berkas (bukan drive tiruan yang disuntikkan lewat parameter seperti pada
+     tambahLampiran dkk), jadi Property 7 di sini diuji lewat variabel
+     lingkungan GDRIVE_* sungguhan yang disetel sementara, dibandingkan
+     dengan hasil driveSiap()/driveSiapSurat() yang dihitung langsung dari
+     api/_drive.js. Kedua fungsi itu membaca process.env setiap kali
+     dipanggil (lihat ENV() di dalamnya), jadi perubahan env sesaat sebelum
+     memanggil pintu() tetap berlaku walau require() modulnya sendiri sudah
+     di-cache Node.js (modul drive yang dipakai lib/surat/api.js dan yang
+     diminta langsung di sini adalah objek yang sama). */
+  {
+    const driveAsli = require(path.join(AKAR, 'api', '_drive.js'));
+    const VAR_DRIVE = ['GDRIVE_CLIENT_ID', 'GDRIVE_CLIENT_SECRET', 'GDRIVE_REFRESH_TOKEN', 'GDRIVE_FOLDER_ID', 'GDRIVE_FOLDER_SURAT_ID'];
+    const envAsli = {};
+    for (const k of VAR_DRIVE) envAsli[k] = process.env[k];
+
+    const setEnvDrive = (id, secret, refresh, folder, folderSurat) => {
+      process.env.GDRIVE_CLIENT_ID = id;
+      process.env.GDRIVE_CLIENT_SECRET = secret;
+      process.env.GDRIVE_REFRESH_TOKEN = refresh;
+      process.env.GDRIVE_FOLDER_ID = folder;
+      process.env.GDRIVE_FOLDER_SURAT_ID = folderSurat;
+    };
+
+    /* 2-3 skenario konkret, bukan iterasi acak (lihat design.md: Property 7
+       Classification EXAMPLE). */
+    const skenario = [
+      { nama: 'driveSiap dan driveSiapSurat keduanya benar (kredensial lengkap, Folder_Cadangan dan Folder_Surat terisi)', id: 'id-p7', secret: 'secret-p7', refresh: 'refresh-p7', folder: 'folder-cadangan-p7', folderSurat: 'folder-surat-p7' },
+      { nama: 'driveSiap dan driveSiapSurat keduanya salah (kredensial tidak lengkap)', id: '', secret: 'secret-p7', refresh: 'refresh-p7', folder: 'folder-cadangan-p7', folderSurat: 'folder-surat-p7' },
+      { nama: 'driveSiap salah tapi driveSiapSurat benar (Folder_Cadangan kosong, Folder_Surat terisi)', id: 'id-p7', secret: 'secret-p7', refresh: 'refresh-p7', folder: '', folderSurat: 'folder-surat-p7' },
+    ];
+
+    for (const sk of skenario) {
+      setEnvDrive(sk.id, sk.secret, sk.refresh, sk.folder, sk.folderSurat);
+      const harapanSiap = driveAsli.driveSiap();
+      const harapanSiapSurat = driveAsli.driveSiapSurat();
+
+      r = await pintu('surat.status', {}, T_LIHAT);
+      cek('Property 7, surat.status (' + sk.nama + '): field drive sama dengan driveSiapSurat(), bukan driveSiap()', r.ok && r.drive === harapanSiapSurat, { drive: r.drive, harapanSiapSurat, harapanSiap });
+
+      r = await pintu('surat.ruang', {}, T_LIHAT);
+      cek('Property 7, surat.ruang (' + sk.nama + '): field drive sama dengan driveSiapSurat(), bukan driveSiap()', r.ok && r.drive === harapanSiapSurat, { drive: r.drive, harapanSiapSurat, harapanSiap });
+    }
+
+    /* Kembalikan env ke nilai asli supaya tidak bocor ke bagian uji lain. */
+    for (const k of VAR_DRIVE) {
+      if (envAsli[k] === undefined) delete process.env[k];
+      else process.env[k] = envAsli[k];
+    }
+  }
 
   console.log('\n=== F. RAHASIA DAN HAPUS ===');
   r = await pintu('surat.simpan', { jenis: 'masuk', perihal: 'Data pribadi', pengirim: 'Instansi Contoh', sifat: 'rahasia', ringkasan: 'Isi rahasia' }, T_KABID);

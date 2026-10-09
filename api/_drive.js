@@ -16,10 +16,26 @@ const ENV = () => ({
   id: process.env.GDRIVE_CLIENT_ID,
   secret: process.env.GDRIVE_CLIENT_SECRET,
   refresh: process.env.GDRIVE_REFRESH_TOKEN,
-  folder: process.env.GDRIVE_FOLDER_ID
+  folder: process.env.GDRIVE_FOLDER_ID,
+  folderSurat: process.env.GDRIVE_FOLDER_SURAT_ID
 });
 
 function driveSiap(){ const e = ENV(); return !!(e.id && e.secret && e.refresh && e.folder); }
+
+/* Kesiapan Drive khusus lampiran Modul_Surat: kredensial dasar harus lengkap,
+   dan salah satu dari Folder_Surat atau Folder_Cadangan harus terisi sebagai
+   jalan cadangan. Tidak bergantung pada driveSiap() supaya driveSiap() yang
+   dipakai api/backup.js tetap tidak terpengaruh variabel baru ini. */
+function driveSiapSurat(){
+  const e = ENV();
+  return !!(e.id && e.secret && e.refresh && (e.folderSurat || e.folder));
+}
+
+/* Helper tunggal logika fallback folder lampiran surat: Folder_Surat kalau
+   terisi, kalau kosong jatuh ke Folder_Cadangan. Pemanggil (lib/surat/surat.js)
+   tidak perlu tahu nama variabel lingkungan ini maupun urutan fallback-nya,
+   cukup minta folder tujuan lewat fungsi ini. */
+function folderSurat(){ const e = ENV(); return e.folderSurat || e.folder; }
 
 async function tokenAkses(){
   const e = ENV();
@@ -94,11 +110,12 @@ async function pangkas(awalan, simpan){
    sebagai teks, dan PDF atau JPEG yang dijadikan teks rusak tanpa galat:
    berkasnya tersimpan, tetapi tidak bisa dibuka. Jadi badannya disusun
    sebagai Buffer. */
-async function unggahBiner(nama, buf, mime){
+async function unggahBiner(nama, buf, mime, folder){
   const e = ENV();
+  const tujuan = folder || e.folder;
   const token = await tokenAkses();
   const batas = 'laz-batas-' + Date.now();
-  const meta = JSON.stringify({ name: nama, parents: [e.folder], mimeType: mime || 'application/octet-stream' });
+  const meta = JSON.stringify({ name: nama, parents: [tujuan], mimeType: mime || 'application/octet-stream' });
   const body = Buffer.concat([
     Buffer.from('--' + batas + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n'
       + '--' + batas + '\r\nContent-Type: ' + (mime || 'application/octet-stream') + '\r\n\r\n'),
@@ -122,4 +139,4 @@ async function unduh(id){
   return Buffer.from(await res.arrayBuffer());
 }
 
-module.exports = { driveSiap, tokenAkses, unggah, unggahBiner, unduh, daftar, hapus, pangkas };
+module.exports = { driveSiap, driveSiapSurat, folderSurat, tokenAkses, unggah, unggahBiner, unduh, daftar, hapus, pangkas };

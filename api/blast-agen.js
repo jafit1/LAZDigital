@@ -110,7 +110,7 @@ async function halo({ data }) {
   const perangkat = (await db.ambilBanyak(idDaftar.map(KUNCI_PERANGKAT)))
     .filter(Boolean)
     .filter((p) => (p.driver || setelan.pengirim.driver) === 'mandiri')
-    .map((p) => ({ id: p.id, nama: p.nama, nomor: p.nomor || '', aktif: p.aktif !== false }));
+    .map((p) => ({ id: p.id, nama: p.nama, nomor: p.nomor || '', aktif: p.aktif !== false, status: p.status || 'terputus' }));
 
   return {
     waktuServer: sekarang(),

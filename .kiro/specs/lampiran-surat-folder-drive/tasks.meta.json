@@ -1,0 +1,329 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Tulis tools/test_drive_surat_folder.js dengan uji Property 1 dan 2": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350115
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515361377
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515664866
+      }
+    ],
+    "1.2 Tambah uji Property 3 dan 4 di tools/test_drive_surat_folder.js": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350258
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515669336
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516009962
+      }
+    ],
+    "2.1 Tambah driveSiapSurat, folderSurat, dan parameter folder di api/_drive.js (CRLF)": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350350
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516015100
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516554036
+      }
+    ],
+    "2.2 Jalankan tools/test_drive_surat_folder.js sampai lulus": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350451
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516559083
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516768457
+      }
+    ],
+    "3. Checkpoint - pastikan uji folder Drive lulus": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350572
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516779161
+      }
+    ],
+    "4.1 Tambah skenario Property 5 dan 6 di tools/test_surat_fitur.js": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350652
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516779925
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791517502325
+      }
+    ],
+    "4.2 Tambah skenario Property 7 di tools/test_surat_fitur.js": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350737
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791517508370
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791517959077
+      }
+    ],
+    "5.1 Ubah lib/surat/surat.js memakai driveSiapSurat dan folderSurat (LF)": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350855
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791517967006
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518216130
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518222981
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518321581
+      }
+    ],
+    "5.2 Ubah lib/surat/api.js memakai driveSiapSurat (LF)": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515350984
+      },
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791517967672
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518216732
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518223713
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518322300
+      }
+    ],
+    "5.3 Jalankan ulang tools/test_surat_fitur.js dan tools/test_drive_surat_folder.js sampai lulus semua": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351110
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518327554
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518855676
+      }
+    ],
+    "6. Checkpoint - pastikan semua uji surat dan drive lulus": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351209
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518856164
+      }
+    ],
+    "7.1 Tambah GDRIVE_FOLDER_SURAT_ID ke .env.example": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351301
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518864307
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518945392
+      }
+    ],
+    "7.2 Buat dokumen PANDUAN-LAMPIRAN-SURAT.md": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351436
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518865422
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518946220
+      }
+    ],
+    "7.3 Daftarkan test_drive_surat_folder.js ke DAFTAR di tools/jalankan-uji.js": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351521
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518866256
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518947393
+      }
+    ],
+    "8.1 Verifikasi cadangan basis data (Property 8) tidak terdampak": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351614
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518954500
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791519333650
+      }
+    ],
+    "8.2 Jalankan rangkaian uji surat, drive, dan cadangan secara menyeluruh": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791515351740
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791519334731
+      },
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791519414187
+      }
+    ],
+    "1. Uji properti folder Drive khusus surat (gagal dulu)": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516010106
+      }
+    ],
+    "2. Implementasi folder Drive khusus surat di api/_drive.js": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791516768599
+      }
+    ],
+    "4. Uji Modul Surat memakai driveSiapSurat (gagal dulu)": [
+      {
+        "executionId": "62c738d5-6da7-42a1-8905-1e672cc86abf",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791517959174
+      }
+    ],
+    "5. Implementasi driveSiapSurat di Modul Surat": [
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518855812
+      }
+    ],
+    "7. Konfigurasi dan dokumentasi": [
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791518947488
+      }
+    ],
+    "8. Verifikasi akhir tidak ada regresi": [
+      {
+        "executionId": "9fabc172-acc2-4297-abf1-b32bf525af0f",
+        "chatSessionId": "sess_92e4e761-5e11-4ace-9202-659ec6e587b7",
+        "timestamp": 1791519414338
+      }
+    ]
+  }
+}

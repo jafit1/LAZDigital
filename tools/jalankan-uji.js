@@ -67,6 +67,7 @@ const DAFTAR = [
   { label: 'Fitur Media dan Desain', berkas: 'test_media_fitur.js' },
   { label: 'Tampilan halaman Media', berkas: 'test_media_ui.js' },
   { label: 'Fitur Surat dan Pengajuan', berkas: 'test_surat_fitur.js' },
+  { label: 'Folder Drive khusus lampiran Surat', berkas: 'test_drive_surat_folder.js' },
   { label: 'Tampilan Surat dan Pengajuan', berkas: 'test_surat_ui.js' },
   { label: 'Kwitansi WhatsApp (server)', berkas: 'test_kwitansi_wa.js' },
   { label: 'Kwitansi WhatsApp (tampilan)', berkas: 'test_kwitansi_ui.js' },

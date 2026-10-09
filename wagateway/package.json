@@ -1,0 +1,16 @@
+{
+  "name": "lazdigital-wa-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Gateway WhatsApp mandiri untuk LAZDigital",
+  "main": "src/agen.js",
+  "scripts": {
+    "start": "node src/agen.js",
+    "uji": "node src/uji-kontrak.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.18",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4"
+  }
+}
