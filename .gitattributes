@@ -1,0 +1,50 @@
+# Aturan akhiran baris untuk repo ini.
+#
+# Kenapa file ini perlu ada.
+#
+# Dulu aturan ini hanya tertulis di tabel CLAUDE.md bagian 3.3, tapi tidak ada
+# yang memaksa git menerapkannya. Akibatnya setiap orang yang clone dengan
+# setelan autocrlf berbeda mendapat akhiran baris berbeda, dan dua uji gagal
+# karena isi repo tidak cocok dengan tabel:
+#
+#   9 berkas .js    tercatat CRLF padahal isinya LF
+#   5 berkas .bat   LF, padahal test_jalankan_uji mewajibkan CRLF
+#
+# Dua pilihan: konversi 9 berkas itu (diff raksasa yang menyembunyikan
+# perubahan sebenarnya, persis risiko yang disebut CLAUDE.md), atau koreksi
+# tabelnya. Yang dipilih: koreksi tabel, lalu file ini yang mengunci keputusan
+# itu supaya ditegakkan, bukan sekadar dicatat.
+#
+# Isinya:
+#   teks biasa (kode, dokumentasi)  -> LF di repo dan di working tree
+#   berkas .bat dan .ps1           -> CRLF, karena keduanya dijalankan Windows.
+#                                      Batch LF bisa membuat goto/label
+#                                      berperilaku aneh di cmd.exe.
+#
+# Aturan .bat dan .ps1 ditulis setelah yang umum, jadi menang.
+#
+# Baris "*" dipakai supaya berkas tanpa ekstensi ikut kena. Tanpa itu
+# .gitattributes dan .gitignore sendiri jatuh ke core.autocrlf milik orang
+# dan ikut berubah-ubah akhiran barisnya.
+*       text=auto eol=lf
+
+# Teks biasa: LF.
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.sql  text eol=lf
+
+# Berjalan di Windows: CRLF.
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+*.vbs  text eol=crlf
+
+# Isinya bukan teks: jangan dinormalisasi.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.pdf  binary
+*.zip  binary
+*.xlsx binary

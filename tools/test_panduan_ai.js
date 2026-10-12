@@ -26,6 +26,7 @@ const AKAR = path.join(__dirname, '..');
 const P_CLAUDE = path.join(AKAR, 'CLAUDE.md');
 
 let ok = 0, gagal = 0;
+
 const cek = (nama, syarat, info) => {
   if (syarat) { ok++; console.log('  OK   |', nama); }
   else { gagal++; console.log('  GAGAL|', nama, info === undefined ? '' : String(JSON.stringify(info)).slice(0, 220)); }
@@ -35,6 +36,8 @@ console.log('\n=== A. PANDUANNYA ADA DAN LENGKAP ===');
 cek('CLAUDE.md ada di akar proyek', fs.existsSync(P_CLAUDE));
 if (!fs.existsSync(P_CLAUDE)) { console.log('\nTidak bisa lanjut.\n'); process.exit(1); }
 const teks = fs.readFileSync(P_CLAUDE, 'utf8');
+/* Dipakai lagi di bagian D (cocokkan aturan akhiran baris) dan bagian E. */
+const baris = teks.split('\n');
 cek('AGENTS.md ada dan menunjuk ke CLAUDE.md',
   fs.existsSync(path.join(AKAR, 'AGENTS.md'))
   && /CLAUDE\.md/.test(fs.readFileSync(path.join(AKAR, 'AGENTS.md'), 'utf8')));
@@ -76,34 +79,78 @@ cek('setiap modul izin disebut di panduan', hilangDiDoc.length === 0, hilangDiDo
 cek('modul yang sudah dipecah tidak ditulis sebagai satu',
   teks.indexOf('Dashboard & Saldo') < 0);
 
-console.log('\n=== D. DAFTAR AKHIRAN BARIS MASIH BENAR ===');
-/* Yang diperiksa hanya berkas yang memang disebut di tabelnya. Kalau tabelnya
-   bertambah, pemeriksaannya ikut bertambah tanpa berkas ini perlu diubah. */
-const crlf = (p) => fs.readFileSync(p, 'utf8').indexOf('\r\n') >= 0;
-const baris = teks.split('\n');
-let iTabel = baris.findIndex((b) => /^\| CRLF \| LF \|/.test(b));
-cek('tabel akhiran baris ada di panduan', iTabel > 0, iTabel);
-let salah = [];
-if (iTabel > 0) {
-  for (let i = iTabel + 2; i < baris.length && baris[i].startsWith('|'); i++) {
-    const kolom = baris[i].split('|').slice(1, 3);
-    [['CRLF', kolom[0]], ['LF', kolom[1]]].forEach(([mau, isi]) => {
-      (String(isi || '').match(/`([^`]+)`/g) || []).forEach((g) => {
-        const rel = g.replace(/`/g, '');
-        if (rel.indexOf('*') >= 0) return;            // "semua tools/*.js"
-        const penuh = path.join(AKAR, rel);
-        if (!fs.existsSync(penuh)) { salah.push(rel + ' (tidak ada)'); return; }
-        const nyataEol = crlf(penuh) ? 'CRLF' : 'LF';
-        if (nyataEol !== mau) salah.push(rel + ' ditulis ' + mau + ' tetapi ' + nyataEol);
-      });
-    });
-  }
+console.log('\n=== D. AKHIRAN BARIS SESUAI .gitattributes ===');
+/* Dulunya bagian ini membaca tabel per berkas di CLAUDE.md dan hanya memeriksa
+ * berkas yang disebut di sana. Dua masalahnya:
+ *
+ *   1. Berkas yang tidak disebut di tabel tidak pernah diperiksa sama sekali.
+ *   2. Tabelnya hanya catatan. Tidak ada yang memaksa git menerapkannya, jadi
+ *      setiap orang yang clone dengan core.autocrlf berbeda mendapat akhiran
+ *      baris berbeda. Akibatnya 9 berkas .js tercatat CRLF padahal isinya LF,
+ *      dan 5 berkas .bat LF padahal test_jalankan_uji mewajibkan CRLF.
+ *
+ * Sekarang aturannya tinggal di .gitattributes, yang memang memaksa git.
+ * Bagian ini memeriksa SELURUH berkas repo, bukan cuma yang disebut di
+ * dokumentasi. Jadi kalau nanti ada berkas baru dengan akhiran baris salah,
+ * ketahuan tanpa perlu menambah namanya ke mana pun. */
+const ATURAN = [
+  { pola: /\.(bat|ps1|vbs)$/, mau: 'CRLF' },
+  { pola: /\.(js|json|md|css|html|sql)$/, mau: 'LF' },
+];
+const bacaEol = (p) => {
+  const t = fs.readFileSync(p, 'utf8');
+  const nCrlf = (t.match(/\r\n/g) || []).length;
+  const nLf = (t.match(/[^\r]\n/g) || []).length;
+  if (nCrlf && nLf) return 'CAMPUR';
+  if (nCrlf) return 'CRLF';
+  if (nLf) return 'LF';
+  return 'TANPA-BARIS';
+};
+
+const berkasAttr = path.join(AKAR, '.gitattributes');
+cek('.gitattributes ada', fs.existsSync(berkasAttr), berkasAttr);
+if (fs.existsSync(berkasAttr)) {
+  const isiAttr = fs.readFileSync(berkasAttr, 'utf8');
+  cek('.gitattributes memaksa LF untuk .js', /\*\.js\s+text\s+eol=lf/.test(isiAttr));
+  cek('.gitattributes memaksa CRLF untuk .bat', /\*\.bat\s+text\s+eol=crlf/.test(isiAttr));
 }
-cek('setiap berkas di tabel itu akhiran barisnya sesuai', salah.length === 0, salah);
+
+const salahEol = [];
+const leukasi = (d) => {
+  let isi = [];
+  try { isi = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
+  for (const x of isi) {
+    if (x.name === 'node_modules' || x.name === '.git' || x.name === '.data') continue;
+    if (x.name === '.gitattributes') continue;
+    const p = path.join(d, x.name);
+    if (x.isDirectory()) { leukasi(p); continue; }
+    const aturan = ATURAN.find((a) => a.pola.test(x.name));
+    if (!aturan) continue;
+    const nyata = bacaEol(p);
+    if (nyata !== aturan.mau && nyata !== 'TANPA-BARIS') {
+      salahEol.push(path.relative(AKAR, p).replace(/\\/g, '/') + ' harus ' + aturan.mau + ', nyata ' + nyata);
+    }
+  }
+};
+leukasi(AKAR);
+cek('seluruh berkas repo mengikuti aturan .gitattributes', salahEol.length === 0, salahEol);
+
+/* CLAUDE.md harus masih menjelaskan aturan ini. Kalau tidak, model berikutnya
+ * akan mengubah akhiran baris sambil mengira itu aman. Dicocokkan per baris,
+ * bukan satu teks panjang, karena aturan dan hasil ada di sel berbeda pada
+ * tabel yang sama. */
+const barisAda = (pola) => baris.some((b) => pola.test(b));
+cek('CLAUDE.md menyebut aturan LF untuk .js',
+  barisAda(/`\*\.js`[^\n]*\|\s*\*\*LF\*\*/));
+cek('CLAUDE.md menyebut aturan CRLF untuk .bat',
+  barisAda(/`\*\.bat`[^\n]*\|\s*\*\*CRLF\*\*/));
+cek('tabel akhiran baris per berkas yang lama sudah dihapus',
+  baris.findIndex((b) => /^\| CRLF \| LF \|/.test(b)) < 0);
 cek('semua tools/*.js memang LF',
   fs.readdirSync(path.join(AKAR, 'tools')).filter((f) => f.endsWith('.js'))
-    .every((f) => !crlf(path.join(AKAR, 'tools', f))),
-  fs.readdirSync(path.join(AKAR, 'tools')).filter((f) => f.endsWith('.js') && crlf(path.join(AKAR, 'tools', f))));
+    .every((f) => bacaEol(path.join(AKAR, 'tools', f)) === 'LF'),
+  fs.readdirSync(path.join(AKAR, 'tools'))
+    .filter((f) => f.endsWith('.js') && bacaEol(path.join(AKAR, 'tools', f)) !== 'LF'));
 
 console.log('\n=== E. UJI YANG DISEBUT PANDUAN MEMANG ADA ===');
 /* Sejak 1 Oktober 2026 daftar uji ada di tools/jalankan-uji.js (dijalankan

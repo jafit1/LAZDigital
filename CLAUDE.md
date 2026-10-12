@@ -88,30 +88,38 @@ version, bukan pesan yang jelas. Tambahkan tindakan baru sebagai action di
 dalam fungsi yang sudah ada (lewat `REGISTRY` di `_engine.js`), bukan sebagai
 berkas baru. Dijaga oleh `tools/uji_batas_vercel.js`.
 
-### 3.3 Akhiran baris berbeda per berkas
+### 3.3 Akhiran baris (satu aturan, ditegakkan `.gitattributes`)
 
-Repo ini campuran CRLF dan LF. **Mengubahnya diam-diam membuat diff seluruh
-berkas dan menyembunyikan perubahan yang sebenarnya.** Periksa dulu sebelum
-menulis:
+Repo ini **tidak lagi campuran**. Semuanya mengikuti `.gitattributes`:
 
-| CRLF | LF |
-|---|---|
-| `api/rpc.js`, `api/blast.js`, `api/fund.js` | `api/_engine.js`, `api/backup.js`, `api/media.js`, `api/ai.js` |
-| `lib/blast/db.js`, `lib/fund/himpunan.js`, `lib/media/db.js` | `lib/laz-pg.js`, `lib/laz-skema.js`, `lib/kv-postgres.js`, `lib/blast/percakapan.js`, `lib/media/permohonan.js` |
-| `src/public/app.js`, `src/public/blast.js`, `src/public/fund.js` | `src/public/ai.js`, `src/public/media.js`, `src/public/styles.css` |
-| `src/public/js/lz-ui.js`, semua `*.bat` | semua `tools/*.js`, `lib/surat/*.js`, `src/public/surat.js`, `src/public/surat.html`, `src/public/lacak.html`, `src/public/harian.html` |
+| Jenis | Akhiran | Alasan |
+|---|---|---|
+| `*.js`, `*.json`, `*.md`, `*.css`, `*.html`, `*.sql` | **LF** | dibaca peramban dan Node, yang tidak peduli akhiran baris |
+| `*.bat`, `*.ps1`, `*.vbs` | **CRLF** | dijalankan Windows. Batch LF bisa membuat `goto` dan `label` berperilaku aneh di `cmd.exe` |
 
-Cara aman menyunting dengan Python:
+Dulu aturan ini berupa tabel panjang per berkas dan **tidak ada yang memaksanya**.
+Akibatnya setiap orang yang clone dengan setelan `autocrlf` berbeda mendapat
+hasil berbeda, dan dua uji merah: 9 berkas `.js` tercatat CRLF padahal isinya LF,
+dan 5 berkas `.bat` LF padahal `test_jalankan_uji.js` mewajibkan CRLF. Tabel lama
+sudah dihapus. Yang menggantikannya adalah `.gitattributes`, yang mengunci aturan ini,
+dan `test_panduan_ai.js` bersama `test_jalankan_uji.js` yang menegakkannya.
 
-```python
-import io
-s = io.open(p, 'r', newline='', encoding='utf-8').read()   # newline='' menjaga apa adanya
-# ... ubah ...
-io.open(p, 'w', newline='', encoding='utf-8').write(s)
+**`.gitattributes` menang atas `core.autocrlf` milik orang.** Kalau setelah
+`git pull` akhiran baris terasa berubah sendiri, jangan mengubah setelan git
+sendiri; periksa dengan `git check-attr eol -- <berkas>`.
+
+Alat yang menulis ulang seluruh berkas bisa mengubah akhiran baris tanpa diminta,
+lalu membuat diff raksasa yang menyembunyikan perubahan yang sebenarnya. Ini
+pernah terjadi pada `src/public/app.js` dan `api/_drive.js`. Setelah menyunting
+berkas besar, cek sekali:
+
+```
+git diff --stat
 ```
 
-Saat menyusun teks baris baru, gabungkan dengan akhiran baris berkas itu
-(`nl.join([...])` dengan `nl = '\r\n'` atau `'\n'`), jangan asal `\n`.
+Kalau satu berkas utuh berubah padahal isinya hanya beberapa baris, berarti
+akhiran barisnya bergeser. Normalkan ulang seperti isi berkas itu: `*.js` ke LF,
+`*.bat` ke CRLF.
 
 ### 3.4 Pemuatan tabel bertahap (`PerluLembar`)
 
