@@ -54,13 +54,22 @@ Pemindahan folder ini **tidak perlu diikuti perubahan apa pun pada basis data**.
 
 ## Kalau lampiran tetap tidak naik ke Drive
 
-Ada satu hal yang penting diketahui: kalau kredensial OAuth belum lengkap, lampiran tidak gagal dan tidak menampilkan pesan apa pun. Ia diam-diam disimpan di basis data saja, seperti biasa. Itu sebabnya mengunggah lampiran terasa berhasil padahal Drive-nya tidak aktif.
+Ada satu hal yang penting diketahui: kalau kredensial OAuth belum lengkap atau folder tujuan salah, lampiran tidak gagal dan tidak menampilkan pesan apa pun. Ia diam-diam disimpan di basis data saja, seperti biasa. Itu sebabnya mengunggah lampiran terasa berhasil padahal Drive-nya tidak aktif.
 
-Untuk memastikan, buka **Pengaturan, lalu Perawatan, lalu Cadangan Otomatis**, lalu tekan **Periksa kenapa Drive belum jalan**. Layar itu menunjukkan:
+Untuk memastikan, buka **Pengaturan, lalu Perawatan, lalu Cadangan Otomatis**, lalu tekan **Periksa kenapa Drive belum jalan**. Layar itu menampilkan:
 
+- **vonis di atas**, plus setiap halangan beserta langkah perbaikannya,
 - variabel mana yang masih **KOSONG** di Vercel,
 - apakah **refresh token** masih berlaku,
 - apakah **folder tujuan** bisa dibuka atau tidak.
+
+Vonis di layar sengaja tidak hanya bergantung pada "semua variabel terisi". Variabel yang terisi tidak menjamin Drive API-nya aktif atau foldernya benar, jadi layar benar-benar mencoba membuka folder tujuan sebelum menyatakan siap. Lencana hijau bukan berarti "kuncinya ada", tapi berarti "sudah diuji dan berhasil".
+
+Kasus yang pernah terjadi di produksi:
+
+- **Folder tujuan tidak ditemukan.** Isi `GDRIVE_FOLDER_SURAT_ID` di Vercel berisi id folder yang salah atau foldernya sudah dihapus. Unggahan selalu ditolak Google. Perbaikannya: buka foldernya di Google Drive, salin id dari bagian URL setelah `/folders/`, lalu samakan dengan isian di Vercel.
+- **Google Drive API belum diaktifkan.** Google membalas `Google Drive API has not been used in project ... or it is disabled`. Buka Google Cloud Console, pilih proyek yang sama, lalu **APIs & Services > Library > Google Drive API > Enable**, tunggu 1-2 menit.
+- **Akunnya beda.** Refresh token bisa tetap berlaku padahal akunnya tidak punya akses ke folder tujuan, kalau folder itu dibuat oleh akun lain. Perbaikannya: buat foldernya dari akun yang sama dengan yang dipakai saat membuat refresh token.
 
 Kalau tokennya ditolak Google, pesan yang muncul memuat kata `invalid_grant`. Itu berarti refresh token sudah dicabut, paling sering karena aplikasi OAuth-nya masih berstatus **Testing** dan tidak dipakai selama 7 hari. Perbaikannya: ulangi langkah 2b di `PANDUAN-CADANGAN.md`. Supaya tidak terjadi lagi, ubah status aplikasi di Google Cloud Console menjadi **In production**.
 

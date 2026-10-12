@@ -199,6 +199,148 @@ async function fetchTiru(url) {
       r.token.ok === true && r.folder.length === 2 && r.folder.every((f) => f.ok === true), r.folder);
   }
 
+  console.log('\n=== PROPERTY 7: vonis siapSurat jujur, bukan sekadar "variabel ada" ===');
+  /* Ini inti perbaikan. driveSiapSurat() hanya memeriksa variabelnya ada
+     isinya atau tidak, dan tetap true walau Drive API belum diaktifkan atau
+     folder tujuan salah ID. Kalau verdict layar dibangun dari situ, pemilik
+     dibaca "Lampiran surat akan naik ke Google Drive" padahal setiap unggahan
+     pasti ditolak Google. Jadi untuk semua kombinasi variabel dan kegagalan,
+     siapSurat hanya boleh true kalau benar-benar tidak ada yang menghalangi. */
+  {
+    const KASUS = [
+      /* [id, secret, refresh, folder, folderSurat, modeToken, modeFolder, siapHarapan, alasan] */
+      ['id', 's', 'r', 'f', 'fs', 'ok', 'ok', true, 'semua lengkap dan bisa dibuka'],
+      ['id', 's', 'r', '', 'fs', 'ok', 'ok', true, 'folder cadangan opsional kosong'],
+      ['id', 's', 'r', 'f', '', 'ok', 'ok', true, 'folder surat opsional kosong, cadangan dipakai'],
+      ['id', 's', 'r', '', '', 'ok', 'ok', false, 'tidak ada folder tujuan sama sekali'],
+      ['', 's', 'r', 'f', 'fs', 'ok', 'ok', false, 'client id kosong'],
+      ['id', '', 'r', 'f', 'fs', 'ok', 'ok', false, 'client secret kosong'],
+      ['id', 's', '', 'f', 'fs', 'ok', 'ok', false, 'refresh token kosong'],
+      ['id', 's', 'r', 'f', 'fs', 'gagal', 'ok', false, 'token dicabut Google'],
+      ['id', 's', 'r', 'f', 'fs', 'ok', 'salah', false, 'folder surat tidak ditemukan'],
+      ['id', 's', 'r', 'f', 'fs', 'ok', 'izin', false, 'token tidak punya akses folder'],
+      /* Folder cadangan rusak tapi folder surat sehat: lampiran surat tetap
+         naik ke Drive, jadi ini TIDAK boleh jadi penghalang. */
+      ['id', 's', 'r', 'f', 'fs', 'ok', 'ok', true, 'keduanya sehat'],
+    ];
+    let benar = true, contoh = null;
+    for (const [id, secret, refresh, folder, folderSurat, mt, mf, harap, alasan] of KASUS) {
+      setEnv(id, secret, refresh, folder, folderSurat);
+      modeToken = mt; modeFolder = mf;
+      const r = await drive.rincianDrive();
+      /* Vonis dan daftar penghalang harus konsisten satu sama lain: siapSurat
+         true persis ketika tidak ada penghalang yang dicatat. */
+      const konsisten = r.siapSurat === (r.halangan.length === 0);
+      if (r.siapSurat !== harap || !konsisten) {
+        benar = false;
+        contoh = { alasan, harap, dapat: r.siapSurat, konsisten, halangan: r.halangan };
+        break;
+      }
+    }
+    cek('siapSurat benar untuk ' + KASUS.length + ' kombinasi, dan konsisten dengan daftar halangan', benar, contoh);
+  }
+
+  console.log('\n=== PROPERTY 8: folder cadangan rusak tidak halting lampiran surat ===');
+  /* Pemisahan dua hal yang tadinya tertukar: yang menentukan lampiran surat
+     adalah folderSurat(), bukan folder cadangan. Jadi folder cadangan yang
+     rusak tidak boleh memblokir, sedangkan folder surat yang rusak harus
+     memblokir meski folder cadangan sehat. */
+  {
+    /* Folder cadangan dipanggil lebih dulu di urutan, jadi untuk mengujinya
+       kedua fetch dibedakan lewat nama file yang diminta. */
+    const fetchCadanganRusak = async (url) => {
+      const u = String(url);
+      if (u.indexOf('oauth2.googleapis.com/token') !== -1) return respons({ access_token: 'token-tiruan' }, true, 200);
+      if (u.indexOf('folder-cadangan-rusak') !== -1) return respons({ error: { message: 'File not found: 1Cadangan.' } }, false, 404);
+      return respons({ id: 'id', name: 'Folder Surat', mimeType: 'application/vnd.google-apps.folder' }, true, 200);
+    };
+    const f = global.fetch;
+    global.fetch = fetchCadanganRusak;
+    setEnv('id-tiruan', 'secret-tiruan', 'refresh-tiruan', 'folder-cadangan-rusak', 'folder-surat-sehat');
+    modeToken = 'ok';
+    const rusakCadangan = await drive.rincianDrive();
+    global.fetch = f;
+    cek('folder cadangan rusak tidak membuat siapSurat false', rusakCadangan.siapSurat === true, rusakCadangan.halangan);
+
+    /* Kebalikannya: folder surat rusak, folder cadangan sehat. */
+    const fetchSuratRusak = async (url) => {
+      const u = String(url);
+      if (u.indexOf('oauth2.googleapis.com/token') !== -1) return respons({ access_token: 'token-tiruan' }, true, 200);
+      if (u.indexOf('folder-surat-rusak') !== -1) return respons({ error: { message: 'File not found: 1Surat.' } }, false, 404);
+      return respons({ id: 'id', name: 'Folder Cadangan', mimeType: 'application/vnd.google-apps.folder' }, true, 200);
+    };
+    global.fetch = fetchSuratRusak;
+    setEnv('id-tiruan', 'secret-tiruan', 'refresh-tiruan', 'folder-cadangan-sehat', 'folder-surat-rusak');
+    modeToken = 'ok';
+    const rusakSurat = await drive.rincianDrive();
+    global.fetch = f;
+    cek('folder surat yang rusak tetap memblokir walau cadangan sehat',
+      rusakSurat.siapSurat === false && rusakSurat.halangan.length === 1, rusakSurat);
+  }
+
+  console.log('\n=== PROPERTY 9: pesan galat Google diterjemah jadi langkah konkret ===');
+  /* Pesan galat Google panjang dan teknis ("Google Drive API has not been
+     used in project ... or it is disabled") tidak memberi tahu pemilik harus
+     menyentuh apa. Setiap kegagalan yang umum harus punya kalimat pendek dan
+     langkah perbaikan, sementara pesan aslinya tetap disimpan untuk detail. */
+  {
+    const PETA = [
+      ['Google Drive API has not been used in project 104483414062 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/drive.googleapis.com/overview', /belum diaktifkan/i],
+      ['File not found: 1AT3O19i9oFSjOUAY0dRnzpIm172k1O5m.', /tidak ditemukan/i],
+      ['The user does not have sufficient permissions.', /tidak punya akses/i],
+      ['invalid_grant', /dicabut/i],
+      ['Unauthorized', /ditolak/i],
+    ];
+    for (const [pesan, pola] of PETA) {
+      setEnv('id-tiruan', 'secret-tiruan', 'refresh-tiruan', 'folder-tiruan', 'folder-surat-tiruan');
+      modeFolder = 'salah';
+      const f = global.fetch;
+      global.fetch = async (url) => {
+        const u = String(url);
+        if (u.indexOf('oauth2.googleapis.com/token') !== -1) return respons({ access_token: 'token-tiruan' }, true, 200);
+        return respons({ error: { message: pesan } }, false, 400);
+      };
+      const r = await drive.rincianDrive();
+      global.fetch = f;
+      const hal = r.halangan[0] || {};
+      cek('ada ringkasan singkat untuk "' + pesan.slice(0, 40) + '..."',
+        typeof hal.ringkas === 'string' && pola.test(hal.ringkas || ''), hal);
+      cek('ada langkah perbaikan untuk "' + pesan.slice(0, 40) + '..."',
+        typeof hal.langkah === 'string' && hal.langkah.length > 20, hal);
+      cek('pesan asli Google tetap tersedia untuk detail',
+        r.folder.some((x) => x.pesan === pesan), r.folder);
+    }
+  }
+
+  console.log('\n=== PROPERTY 10: tidak ada secrets atau id folder di output ===');
+  /* Petunjuk langkah tidak boleh ikut menarik nilai kredensial atau id
+     folder ke dalam hasil, karena hasilnya dikirim ke peramban dan bisa
+     difoto. */
+  {
+    const TANDA = 'RAHASIA-JANGAN-BOCOR-77c1d0';
+    setEnv('id-' + TANDA, 'secret-' + TANDA, 'refresh-' + TANDA, 'folder-' + TANDA, 'folderSurat-' + TANDA);
+    /* Token succeeds supaya daftar folder benar-benar terisi. Kalau token
+       gagal, fungsi berhenti duluan dan daftar folder kosong, sehingga
+       pemeriksaan kebocoran id folder jadi tidak berarti apa-apa. */
+    modeToken = 'ok';
+    modeFolder = 'ok';
+    global.fetch = fetchTiru;
+    const r = await drive.rincianDrive();
+    const teks = JSON.stringify(r);
+    cek('tanda pengenal tetap tidak bocor saat ada penghalang', teks.indexOf(TANDA) === -1, teks);
+    /* field folder memang ada (daftar laporan per folder), tapi isinya hanya
+       nama variabel, bukan id folder. Yang dicek: id mentah tidak muncul di
+       seluruh hasil, dan folderDari hanya berisi nama variabel yang dipakai. */
+    cek('id folder tujuan tidak muncul sebagai nilai di seluruh hasil',
+      !/folderSurat-|folder-RAHASIA/i.test(teks) && !('folderSurat' in r), teks);
+    cek('folderDari hanya berisi nama variabel, bukan id folder',
+      r.folderDari === 'GDRIVE_FOLDER_SURAT_ID' && !/RAHASIA/.test(r.folderDari), r.folderDari);
+    cek('daftar laporan folder tidak memuat id folder mentah',
+      (r.folder || []).every((f) => !/RAHASIA/.test(JSON.stringify(f))), r.folder);
+    cek('halangan tidak memuat nilai kredensial',
+      (r.halangan || []).every((x) => Object.keys(x).every((k) => k === 'ringkas' || k === 'langkah')), r.halangan);
+  }
+
   global.fetch = fetchAsli;
   for (const k of VAR_ENV) {
     if (ASLI[k] === undefined) delete process.env[k];

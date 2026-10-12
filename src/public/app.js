@@ -8941,27 +8941,52 @@ function cadDriveCek(){
     var label = { GDRIVE_CLIENT_ID:'Client ID', GDRIVE_CLIENT_SECRET:'Client secret',
       GDRIVE_REFRESH_TOKEN:'Refresh token', GDRIVE_FOLDER_ID:'Folder cadangan',
       GDRIVE_FOLDER_SURAT_ID:'Folder lampiran surat' };
-    h += '<div style="margin-top:7px;font-size:11.5px"><b>Variabel di Vercel</b>';
+
+    /* Vonis memakai siapSurat, bukan driveSiapSurat. driveSiapSurat hanya
+       cek "variabelnya ada isinya atau tidak" dan tetap true walau Drive API
+       belum diaktifkan atau folder tujuan salah ID. Dulu verdict-nya
+       ditulis dari situ, jadi layar bisa bilang "akan naik ke Google Drive"
+       padahal setiap unggahan pasti ditolak Google. */
+    var siap = d.siapSurat === true;
+    h += '<div class="imp-note ' + (siap ? '' : 'imp-warn') + '" style="margin-top:9px">'
+      + (siap
+          ? '<b>Lampiran surat sudah naik ke Google Drive.</b>'
+          : '<b>Lampiran surat masih disimpan di basis data, bukan Drive.</b> Ada yang perlu diperbaiki:')
+      + '</div>';
+
+    /* Penghalang ditampilkan paling atas dan diberi langkahnya, karena itu
+       satu-satunya bagian yang wajib-act. Isian variabel dan pesan galat
+       Google yang panjang cuma detail pendukung, bukan jawaban. */
+    if (!siap) (d.halangan || []).forEach(function(x){
+      h += '<div style="margin:6px 0 0;padding:7px 9px;border-left:3px solid var(--red);background:var(--red-soft,rgba(220,38,38,.07));font-size:11.5px">'
+        + '<div>' + esc(x.ringkas) + '</div>'
+        + (x.langkah ? '<div class="muted" style="margin-top:3px">' + esc(x.langkah) + '</div>' : '')
+        + '</div>';
+    });
+
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:6px;margin-top:10px">';
     Object.keys(d.isi || {}).forEach(function(k){
-      h += '<div>' + (d.isi[k]
-          ? '<span style="color:var(--green)">terisi</span>'
-          : '<span style="color:var(--red)">KOSONG</span>') + ' &nbsp;' + esc(label[k] || k) + '</div>';
+      var kosong = !d.isi[k];
+      h += '<div class="cad-kotak" style="padding:6px 8px"><div class="muted" style="font-size:10.5px;font-weight:600">' + esc(label[k] || k).toUpperCase() + '</div>'
+        + '<div style="font-size:11.5px;color:' + (kosong ? 'var(--red)' : 'var(--green)') + '">' + (kosong ? 'kosong' : 'terisi') + '</div></div>';
     });
     h += '</div>';
-    h += '<div style="margin-top:6px;font-size:11.5px"><b>Refresh token</b>: '
+
+    h += '<div style="margin-top:9px;font-size:11.5px"><b>Refresh token</b>: '
       + (d.token && d.token.ok
           ? '<span style="color:var(--green)">masih berlaku</span>'
           : '<span style="color:var(--red)">gagal dipakai</span>') + '</div>';
-    if (d.token && !d.token.ok && d.token.pesan) h += '<div style="font-size:11.5px;color:var(--red)">' + esc(d.token.pesan) + '</div>';
+    if (d.token && !d.token.ok && d.token.pesan) h += '<div class="muted" style="font-size:11px">' + esc(d.token.pesan) + '</div>';
+
     (d.folder || []).forEach(function(f){
-      h += '<div style="font-size:11.5px">' + esc(label[f.nama] || f.nama) + ': '
-        + (f.ok ? '<span style="color:var(--green)">bisa dibuka</span>' : '<span style="color:var(--red)">tidak</span>')
+      h += '<div style="font-size:11.5px;margin-top:3px">' + esc(label[f.nama] || f.nama) + ': '
+        + (f.ok
+            ? '<span style="color:var(--green)">' + (f.ada ? 'bisa dibuka' : 'tidak diisi, opsional') + '</span>'
+            : '<span style="color:var(--red)">tidak bisa dibuka</span>')
         + (f.pesan ? ' &middot; ' + esc(f.pesan) : '') + '</div>';
     });
-    var t = d.driveSiapSurat
-      ? '<div class="imp-note" style="margin-top:7px">Lampiran surat baru akan naik ke Google Drive.</div>'
-      : '<div class="imp-note imp-warn" style="margin-top:7px">Lampiran surat baru masih disimpan di basis data, bukan Drive.</div>';
-    host.innerHTML = h + t;
+
+    host.innerHTML = h;
   }).catch(function(e){
     host.innerHTML = '<div style="font-size:11.5px;color:var(--red)">' + esc(e.message) + '</div>';
   });

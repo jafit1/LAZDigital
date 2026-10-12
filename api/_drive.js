@@ -146,6 +146,34 @@ async function unduh(id){
   return Buffer.from(await res.arrayBuffer());
 }
 
+/* Terjemahkan pesan galat Google yang panjang dan teknis jadi satu kalimat
+   pendek plus langkah konkret. Tanpa ini, pemilik hanya melihat kalimat
+   seperti "Google Drive API has not been used in project 104483414062
+   before or it is disabled", yang tidak memberi tahu harus menyentuh apa. */
+function petunjuk(pesan){
+  const p = String(pesan || '');
+  if (/has not been used in project|it is disabled|SERVICE_DISABLED/i.test(p)) {
+    return { ringkas: 'Google Drive API belum diaktifkan di proyek Google Cloud ini.',
+      langkah: 'Buka console.cloud.google.com, pilih proyek yang sama, lalu APIs & Services > Library, cari "Google Drive API", tekan Enable. Tunggu 1-2 menit lalu periksa lagi.' };
+  }
+  if (/invalid_grant/i.test(p)) {
+    return { ringkas: 'Refresh token sudah dicabut oleh Google.',
+      langkah: 'Buat token baru: node tools/dapatkan-token-drive.js <CLIENT_ID> <CLIENT_SECRET>. Supaya tidak dicabut lagi, ubah status aplikasi di OAuth consent screen menjadi In production.' };
+  }
+  if (/File not found|not found|404/i.test(p)) {
+    return { ringkas: 'Folder ini tidak ditemukan.',
+      langkah: 'Buka foldernya di Google Drive, salin ulang ID dari alamat setelah /folders/, lalu samakan dengan isian di Vercel. Pastikan folder belum dipindahkan ke sampah atau ID-nya salah salin.' };
+  }
+  if (/insufficient|permission|not authorized|403/i.test(p)) {
+    return { ringkas: 'Akun pemilik refresh token tidak punya akses ke folder ini.',
+      langkah: 'Pastikan folder dibuat oleh akun Google yang sama yang dipakai saat membuat refresh token.' };
+  }
+  if (/unauthorized|401/i.test(p)) {
+    return { ringkas: 'Token ditolak Google.', langkah: 'Buat ulang kredensial OAuth di PANDUAN-CADANGAN.md langkah 2a dan 2b.' };
+  }
+  return { ringkas: '', langkah: '' };
+}
+
 /* Rincian kesiapan Drive untuk diagnosa di layar Perawatan.
    Dulu layar itu hanya bisa tahu "Drive belum" atau "Drive sudah", sehingga
    pemilik yang sudah mengisi semua variabel di Vercel tetap tidak tahu yang
@@ -175,12 +203,26 @@ async function rincianDrive(){
     folderDari: e.folderSurat ? 'GDRIVE_FOLDER_SURAT_ID' : (e.folder ? 'GDRIVE_FOLDER_ID' : ''),
     token: null,
     folder: [],
+    halangan: [],
+    /* siapSurat TIDAK boleh disamakan dengan driveSiapSurat(). Yang itu
+       hanya memeriksa variabel ada isinya atau tidak, dan tidak tahu apakah
+       token sudah dicabut atau Drive API belum diaktifkan. Dulu layar
+       menampilkan "Lampiran surat baru akan naik ke Google Drive" padahal
+       unggahannya pasti ditolak Google, jadi pemilik mengira sudah beres
+       padahal setiap lampiran gagal diam-diam. */
+    siapSurat: false,
+  };
+
+  const simpulkan = () => {
+    out.siapSurat = out.halangan.length === 0;
+    return out;
   };
 
   if (!(e.id && e.secret && e.refresh)) {
     const kurang = ['GDRIVE_CLIENT_ID', 'GDRIVE_CLIENT_SECRET', 'GDRIVE_REFRESH_TOKEN'].filter((n) => !isi[n]);
     out.token = { ok: false, pesan: 'Kredensial OAuth belum lengkap. Masih kosong: ' + kurang.join(', ') + '.' };
-    return out;
+    out.halangan.push({ ringkas: 'Kredensial OAuth belum lengkap di Vercel.', langkah: 'Isi ' + kurang.join(', ') + ', lalu Redeploy.' });
+    return simpulkan();
   }
 
   let token = '';
@@ -192,24 +234,45 @@ async function rincianDrive(){
        Google (aplikasi berstatus "Testing" dicabut setelah 7 hari tidak
        dipakai, atau kata sandi Google diganti). Perbaikannya di
        PANDUAN-CADANGAN.md langkah 2b. */
-    out.token = { ok: false, pesan: err.message };
-    return out;
+    const t = petunjuk(err.message);
+    out.token = { ok: false, pesan: err.message, ringkas: t.ringkas || 'Refresh token tidak bisa dipakai.', langkah: t.langkah };
+    out.halangan.push({ ringkas: out.token.ringkas, langkah: out.token.langkah });
+    return simpulkan();
   }
 
   for (const [nama, id] of [['GDRIVE_FOLDER_SURAT_ID', e.folderSurat], ['GDRIVE_FOLDER_ID', e.folder]]) {
-    if (!id) { out.folder.push({ nama, ada: false, ok: false, pesan: 'Variabel ini kosong di Vercel.' }); continue; }
+    if (!id) {
+      /* Folder cadangan kosong BUKAN penghalang: fiturnya opsional, dan
+         lampiran surat tidak memakainya kalau Folder_Surat sendiri terisi. */
+      out.folder.push({ nama, ada: false, opsional: true, ok: true, pesan: 'Kosong di Vercel (opsional, tidak dipakai).' });
+      if (nama === 'GDRIVE_FOLDER_SURAT_ID' && !e.folder) {
+        out.halangan.push({ ringkas: 'Tidak ada folder tujuan untuk lampiran surat.', langkah: 'Isi GDRIVE_FOLDER_SURAT_ID atau GDRIVE_FOLDER_ID di Vercel, lalu Redeploy.' });
+      }
+      continue;
+    }
     try {
       const r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?fields=id,name,mimeType', {
         headers: { Authorization: 'Bearer ' + token }
       });
       const j = await r.json().catch(() => null);
-      out.folder.push({ nama, ada: true, ok: !!r.ok,
-        pesan: r.ok ? j.name : ((j && j.error && j.error.message) || ('HTTP ' + r.status)) });
+      const pesan = r.ok ? j.name : ((j && j.error && j.error.message) || ('HTTP ' + r.status));
+      const t = r.ok ? { ringkas: '', langkah: '' } : petunjuk(pesan);
+      out.folder.push({ nama, ada: true, opsional: false, ok: !!r.ok, pesan, ringkas: t.ringkas, langkah: t.langkah });
+      /* Folder lampiran surat yang rusak membuat unggahan pasti gagal.
+         Folder cadangan yang rusak tidak menghalangi unggahan surat, karena
+         yang dipakai lampiran surat adalah folderSurat() (lihat atas),
+         bukan folder cadangan ini. */
+      if (!r.ok && (nama === 'GDRIVE_FOLDER_SURAT_ID' || (nama === 'GDRIVE_FOLDER_ID' && !e.folderSurat))) {
+        out.halangan.push({ ringkas: t.ringkas || 'Folder tujuan lampiran tidak bisa dibuka.', langkah: t.langkah });
+      }
     } catch (err) {
-      out.folder.push({ nama, ada: true, ok: false, pesan: err.message });
+      out.folder.push({ nama, ada: true, opsional: false, ok: false, pesan: err.message });
+      if (nama === 'GDRIVE_FOLDER_SURAT_ID' || (nama === 'GDRIVE_FOLDER_ID' && !e.folderSurat)) {
+        out.halangan.push({ ringkas: 'Folder tujuan lampiran tidak bisa diperiksa.', langkah: err.message });
+      }
     }
   }
-  return out;
+  return simpulkan();
 }
 
 module.exports = { driveSiap, driveSiapSurat, folderSurat, rincianDrive, tokenAkses, unggah, unggahBiner, unduh, daftar, hapus, pangkas };
