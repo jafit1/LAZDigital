@@ -51,6 +51,7 @@ const DAFTAR = [
   { label: 'Nama kantor layanan kembar', berkas: 'test_kantor_kembar.js' },
   { label: 'Peringatan cadangan', berkas: 'test_cadangan_peringatan.js' },
   { label: 'Pemulihan cadangan hanya superadmin', berkas: 'test_pulihkan_aman.js' },
+  { label: 'Endpoint cron antrean tidak bisa dipicu tanpa kunci', berkas: 'test_cron_agen_aman.js' },
   { label: 'Keamanan gelombang kedua', berkas: 'test_keamanan_lanjutan.js' },
   { label: 'Kunci login dan sesi ter-hash', berkas: 'test_sesi_kuat.js' },
   { label: 'Fitur Broadcast', berkas: 'test_blast_fitur.js' },

@@ -553,6 +553,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_akun_nonaktif.js` | akun nonaktif atau terhapus langsung kehilangan akses |
 | `test_blast_masuk.js` | pintu pesan masuk WhatsApp menolak kiriman tanpa kunci |
 | `test_pulihkan_aman.js` | pemulihan cadangan hanya superadmin, titik batal tidak bisa ditimpa orang luar |
+| `test_cron_agen_aman.js` | endpoint cron antrean (`api/cron/blast-antrean.js`) yang memicu pengiriman WhatsApp: kunci salah atau kosong ditolak sebelum antrean disentuh, `CRON_SECRET` kosong/sesuai string kosong menjawab 503 tanpa menjalankan apa pun, kunci benar (header maupun `?kunci=`) tetap jalan, dan `bandingAman` memakai `timingSafeEqual` |
 | `test_sesi_kuat.js` | penyerang tidak bisa mengunci superadmin dari luar, token sesi tersimpan sebagai hash |
 | `test_keamanan_lanjutan.js` | tautan publik, Settings yang disaring, SSRF impor URL, hapus log, kwitansi publik, header, pengaman deploy |
 
