@@ -522,6 +522,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_izin_ui.js` | dialog Edit User, kolom kiri diam saat kanan digulir |
 | `test_kantor_kembar.js` | nama KLL/ULL bertumpuk, rincian transaksi, pembanding |
 | `test_cadangan_peringatan.js` | peringatan ukuran basis data tidak palsu |
+| `test_cek_drive.js` | diagnosis kesiapan Google Drive (`_drive.rincianDrive`): status tiap variabel akurat untuk semua kombinasi acak, nilai kredensial tidak pernah bocor ke hasil (yang dikirim ke peramban dan bisa difoto), OAuth belum lengkap tidak memanggil Google, `invalid_grant` diteruskan apa adanya ke layar dan folder tidak diperiksa tanpa token, folder salah/izin kurang dilaporkan per folder, folder surat kosong dilaporkan "kosong" bukan error |
 | `test_blast_fitur.js`, `test_blast_ui.js` | broadcast |
 | `test_percakapan.js`, `ukur-percakapan.js` | kotak masuk |
 | `test_fund_fitur.js`, `test_fundraiser.js`, `test_fund_ui.js` | fundraising |
@@ -795,10 +796,18 @@ HTML per baris hanya untuk baris yang digambar (membuka 15.000 baris terukur
 
 **Perlu dikerjakan pemilik, bukan kode:**
 
-1. **Google Drive untuk cadangan belum disetel.** Semua cadangan tersimpan di
+1. **Google Drive belum disetel di Vercel.** Semua cadangan tersimpan di
    tabel `cadangan` di dalam Supabase yang sama dengan basis datanya. Kalau
    Supabase-nya bermasalah, tidak ada salinan di tempat lain. Ikuti
    `PANDUAN-CADANGAN.md`.
+   Untuk yang sudah mengisi semua variabel tapi tetap tidak jalan, tekan tombol
+   **Periksa kenapa Drive belum jalan** di Pengaturan, atau jalankan
+   `node tools/cek-drive.js` di komputer. Keduanya memanggil
+   `_drive.rincianDrive()`: melaporkan variabel mana yang kosong, apakah
+   refresh token masih berlaku, dan apakah folder tujuan bisa dibuka.
+   Kemungkinan besar penyebabnya env yang ditambahkan tapi belum di-redeploy,
+   env yang hanya diisi di Preview, atau refresh token yang dicabut Google
+   (`invalid_grant`).
 2. **Tujuh rekening bank** muncul di jurnal tetapi belum terdaftar di menu
    Rekening.
 3. **Data yang belum valid di berkas Excel**: jurnal Jafit MAR baris 236

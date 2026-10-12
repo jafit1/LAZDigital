@@ -52,6 +52,31 @@ Kalau ingin merapikan, langkah manualnya (opsional, lewat antarmuka Google Drive
 
 Pemindahan folder ini **tidak perlu diikuti perubahan apa pun pada basis data**. Unduh dan hapus lampiran bekerja berdasarkan id berkas Drive yang tersimpan pada data surat, bukan berdasarkan folder tempat berkas berada. Jadi walau berkasnya dipindahkan ke folder lain, id-nya tetap sama dan aplikasi tetap bisa mengunduh atau menghapusnya seperti biasa.
 
+## Kalau lampiran tetap tidak naik ke Drive
+
+Ada satu hal yang penting diketahui: kalau kredensial OAuth belum lengkap, lampiran tidak gagal dan tidak menampilkan pesan apa pun. Ia diam-diam disimpan di basis data saja, seperti biasa. Itu sebabnya mengunggah lampiran terasa berhasil padahal Drive-nya tidak aktif.
+
+Untuk memastikan, buka **Pengaturan, lalu Perawatan, lalu Cadangan Otomatis**, lalu tekan **Periksa kenapa Drive belum jalan**. Layar itu menunjukkan:
+
+- variabel mana yang masih **KOSONG** di Vercel,
+- apakah **refresh token** masih berlaku,
+- apakah **folder tujuan** bisa dibuka atau tidak.
+
+Kalau tokennya ditolak Google, pesan yang muncul memuat kata `invalid_grant`. Itu berarti refresh token sudah dicabut, paling sering karena aplikasi OAuth-nya masih berstatus **Testing** dan tidak dipakai selama 7 hari. Perbaikannya: ulangi langkah 2b di `PANDUAN-CADANGAN.md`. Supaya tidak terjadi lagi, ubah status aplikasi di Google Cloud Console menjadi **In production**.
+
+Dua hal yang sering luput dan hanya bisa dicek di Vercel:
+
+1. **Harus Redeploy.** Environment variable baru hanya dibaca saat build. Menambah variabel tanpa redeploy tidak mengubah apa pun di produksi.
+2. **Pilih environment yang benar.** Vercel memisahkan Production, Preview, dan Development. Variabel yang hanya diisi di Preview tidak berlaku untuk lazdigital.my.id.
+
+Pemeriksaan yang sama bisa dijalankan di komputer sendiri, berguna untuk memastikan kredensialnya benar sebelum dikumpulkan ke Vercel:
+
+```
+node tools/cek-drive.js
+```
+
+Skrip ini hanya membaca, tidak mengubah apa pun, dan tidak pernah mencetak isi kredensial, hanya panjangnya.
+
 ## Fitur cadangan tidak terdampak
 
 Menyetel `GDRIVE_FOLDER_SURAT_ID` **tidak mengubah apa pun** pada fitur cadangan basis data. Cadangan harian tetap berjalan memakai folder cadangan (`GDRIVE_FOLDER_ID`) seperti dijelaskan di PANDUAN-CADANGAN.md, tanpa peduli variabel baru ini terisi atau kosong.

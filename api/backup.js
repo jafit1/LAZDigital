@@ -273,7 +273,7 @@ module.exports = async (req, res) => {
     /* jalur manual: izin diperiksa LEBIH DULU lewat jalur murah, baru
        seluruh buku besar dimuat. Aksi yang tidak dikenal ditolak sebelum
        apa pun dimuat. */
-    const perluIzin = { cadangkan: 'edit', daftar: 'view', ambil: 'edit', pulihkan: 'view' }[aksi];
+    const perluIzin = { cadangkan: 'edit', daftar: 'view', ambil: 'edit', pulihkan: 'view', 'cek-drive': 'view' }[aksi];
     if (!perluIzin) { res.status(200).json({ __error: 'Aksi tidak dikenal: ' + aksi }); return; }
     const pengguna = await cekIzinMurah(token, 'settings', perluIzin);
 
@@ -288,6 +288,12 @@ module.exports = async (req, res) => {
       const teks = await bacaSalinan(body.nama);
       if (!teks) { res.status(200).json({ __error: 'Salinan tidak ditemukan.' }); return; }
       res.status(200).json({ result: { nama: body.nama, isi: teks } }); return;
+    }
+    if (aksi === 'cek-drive') {
+      /* Diagnosa kesiapan Drive. Diletakkan SEBELUM muat() karena tidak
+         menyentuh buku besar sama sekali: cuma membaca environment lalu
+         satu panggilan ke Google. */
+      res.status(200).json({ result: await drive.rincianDrive() }); return;
     }
     const r = await muat();
     if (aksi === 'daftar') {

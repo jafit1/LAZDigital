@@ -47,7 +47,14 @@ async function tokenAkses(){
   });
   const j = await res.json().catch(() => null);
   if (!res.ok || !j || !j.access_token) {
-    throw new Error('Google Drive: gagal menukar refresh token (' + (j && (j.error_description || j.error) || 'HTTP ' + res.status) + ')');
+    /* Kode galat Google ikut disertakan, bukan hanya error_description.
+       "invalid_grant" adalah kata yang dicari pemilik saat refresh token-nya
+       dicabut, sedangkan error_description-nya ("Token has been expired or
+       revoked.") tidak menyebut kode itu sama sekali. */
+    const kode = j && j.error ? String(j.error) : '';
+    const jelas = j && j.error_description ? String(j.error_description) : '';
+    throw new Error('Google Drive: gagal menukar refresh token ('
+      + (kode && jelas ? kode + ': ' + jelas : kode || jelas || ('HTTP ' + res.status)) + ')');
   }
   return j.access_token;
 }
@@ -139,4 +146,70 @@ async function unduh(id){
   return Buffer.from(await res.arrayBuffer());
 }
 
-module.exports = { driveSiap, driveSiapSurat, folderSurat, tokenAkses, unggah, unggahBiner, unduh, daftar, hapus, pangkas };
+/* Rincian kesiapan Drive untuk diagnosa di layar Perawatan.
+   Dulu layar itu hanya bisa tahu "Drive belum" atau "Drive sudah", sehingga
+   pemilik yang sudah mengisi semua variabel di Vercel tetap tidak tahu yang
+   mana yang kurang, atau apakah refresh token-nya sudah dicabut Google.
+   Fungsi ini menjawab itu: variabel mana yang kosong, token masih berlaku
+   atau tidak, dan folder tujuan bisa dibuka atau tidak.
+
+   Isi kredensial SENGAJA tidak dikembalikan, hanya "terisi atau kosong".
+   Layar ini bisa difoto dan hasilnya ikut membocorkan keadaan produksi. */
+async function rincianDrive(){
+  const e = ENV();
+  const isi = {
+    GDRIVE_CLIENT_ID: !!e.id,
+    GDRIVE_CLIENT_SECRET: !!e.secret,
+    GDRIVE_REFRESH_TOKEN: !!e.refresh,
+    GDRIVE_FOLDER_ID: !!e.folder,
+    GDRIVE_FOLDER_SURAT_ID: !!e.folderSurat,
+  };
+  const out = {
+    isi,
+    driveSiap: driveSiap(),
+    driveSiapSurat: driveSiapSurat(),
+    /* Id folder tujuan tidak ikut dikembalikan sebagai nilai. Id folder bukan
+       rahasia seperti kredensial OAuth, tapi hasil fungsi ini dikirim ke
+       peramban dan bisa difoto. Yang dibutuhkan untuk diagnosis adalah
+       folder mana yang dipakai, bukan id persisnya. */
+    folderDari: e.folderSurat ? 'GDRIVE_FOLDER_SURAT_ID' : (e.folder ? 'GDRIVE_FOLDER_ID' : ''),
+    token: null,
+    folder: [],
+  };
+
+  if (!(e.id && e.secret && e.refresh)) {
+    const kurang = ['GDRIVE_CLIENT_ID', 'GDRIVE_CLIENT_SECRET', 'GDRIVE_REFRESH_TOKEN'].filter((n) => !isi[n]);
+    out.token = { ok: false, pesan: 'Kredensial OAuth belum lengkap. Masih kosong: ' + kurang.join(', ') + '.' };
+    return out;
+  }
+
+  let token = '';
+  try {
+    token = await tokenAkses();
+    out.token = { ok: true };
+  } catch (err) {
+    /* Pesan paling sering: invalid_grant. Itu berarti refresh token dicabut
+       Google (aplikasi berstatus "Testing" dicabut setelah 7 hari tidak
+       dipakai, atau kata sandi Google diganti). Perbaikannya di
+       PANDUAN-CADANGAN.md langkah 2b. */
+    out.token = { ok: false, pesan: err.message };
+    return out;
+  }
+
+  for (const [nama, id] of [['GDRIVE_FOLDER_SURAT_ID', e.folderSurat], ['GDRIVE_FOLDER_ID', e.folder]]) {
+    if (!id) { out.folder.push({ nama, ada: false, ok: false, pesan: 'Variabel ini kosong di Vercel.' }); continue; }
+    try {
+      const r = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?fields=id,name,mimeType', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const j = await r.json().catch(() => null);
+      out.folder.push({ nama, ada: true, ok: !!r.ok,
+        pesan: r.ok ? j.name : ((j && j.error && j.error.message) || ('HTTP ' + r.status)) });
+    } catch (err) {
+      out.folder.push({ nama, ada: true, ok: false, pesan: err.message });
+    }
+  }
+  return out;
+}
+
+module.exports = { driveSiap, driveSiapSurat, folderSurat, rincianDrive, tokenAkses, unggah, unggahBiner, unduh, daftar, hapus, pangkas };

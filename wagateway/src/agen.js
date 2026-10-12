@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const qrcode = require('qrcode');
 const pino = require('pino');
 const makeWASocket = require('@whiskeysockets/baileys').default;
@@ -20,8 +21,8 @@ const URL_API = process.env.LAZ_API_URL || '';
 const TOKEN = process.env.BLAST_AGEN_TOKEN || '';
 const AGEN = process.env.BLAST_AGEN_NAMA || 'gateway-lokal';
 const NAMA_PERANGKAT = process.env.BLAST_PERANGKAT_NAMA || '';
-const NOMOR_PERANGKAT = String(process.env.BLAST_PERANGKAT_NOMOR || '').replace(/\D/g, '');
 const JEDA = Number(process.env.BLAST_POLL_MS || 3000);
+const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 3333);
 const AKAR_SESI = process.env.BLAST_SESI || path.join(__dirname, '..', 'sessions');
 const FOLDER_AUTH = path.join(AKAR_SESI, 'whatsapp');
 let PERANGKAT = process.env.BLAST_PERANGKAT_ID || '';
@@ -34,10 +35,6 @@ let qrTerakhir = '';
 let berhenti = false;
 let sedangAmbil = false;
 
-if (!URL_API || !TOKEN) {
-  console.error('Setel LAZ_API_URL dan BLAST_AGEN_TOKEN.');
-  process.exitCode = 1;
-}
 
 function bacaPerangkatLokal() {
   try {
@@ -62,11 +59,11 @@ async function cariPerangkat() {
     console.log(`Perangkat dari sesi lokal: ${PERANGKAT}`);
     return PERANGKAT;
   }
+  if (!URL_API || !TOKEN) throw new Error('LAZ_API_URL dan BLAST_AGEN_TOKEN wajib diisi.');
   const hasil = await panggil('halo', {});
   const daftar = Array.isArray(hasil.perangkat) ? hasil.perangkat.filter((p) => p.aktif !== false) : [];
   let pilihan = daftar.filter((p) =>
-    (NAMA_PERANGKAT && String(p.nama).toLowerCase() === NAMA_PERANGKAT.toLowerCase()) ||
-    (NOMOR_PERANGKAT && String(p.nomor).replace(/\D/g, '') === NOMOR_PERANGKAT)
+    NAMA_PERANGKAT && String(p.nama).toLowerCase() === NAMA_PERANGKAT.toLowerCase()
   );
 
   /* Bila pengaturan kosong, gateway boleh memilih otomatis hanya pada keadaan
@@ -208,7 +205,21 @@ async function hapusSesiWhatsApp() {
   status = 'terputus';
 }
 
+function mulaiHttp() {
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, status, perangkatId: PERANGKAT }));
+    }
+    res.writeHead(404);
+    return res.end('Not found');
+  });
+  server.listen(PORT, '0.0.0.0', () => console.log(`Health server aktif di 0.0.0.0:${PORT}`));
+}
+
 async function mulai() {
+  mulaiHttp();
+  if (!URL_API || !TOKEN) throw new Error('LAZ_API_URL dan BLAST_AGEN_TOKEN wajib diisi di .env');
   await cariPerangkat();
   await buatSoket();
   setInterval(() => lapor(), 30000);

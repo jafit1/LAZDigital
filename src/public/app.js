@@ -8926,6 +8926,46 @@ function cadOtoMuat(){
   cadanganApi('daftar').then(function(d){ host.innerHTML = cadOtoRender(d); })
     .catch(function(e){ host.innerHTML = '<div class="imp-note imp-warn">' + esc(e.message) + '</div>'; });
 }
+
+/* Periksa kesiapan Drive satu per satu variabel.
+   "Drive belum" saja tidak pernah memberi tahu yang mana yang kurang.
+   Kalau pemilik sudah mengisi semua variabel di Vercel dan tetap gagal,
+   penyebabnya hampir selalu salah satu dari empat hal ini: env belum di
+   redeploy, env hanya diisi di Preview, refresh token dicabut Google, atau
+   folder tujuan bukan milik akun yang memberi token itu. */
+function cadDriveCek(){
+  var host = el('cadDriveHasil'); if (!host) return;
+  host.innerHTML = '<div class="muted" style="font-size:11.5px">Memeriksa...</div>';
+  cadanganApi('cek-drive').then(function(d){
+    var h = '';
+    var label = { GDRIVE_CLIENT_ID:'Client ID', GDRIVE_CLIENT_SECRET:'Client secret',
+      GDRIVE_REFRESH_TOKEN:'Refresh token', GDRIVE_FOLDER_ID:'Folder cadangan',
+      GDRIVE_FOLDER_SURAT_ID:'Folder lampiran surat' };
+    h += '<div style="margin-top:7px;font-size:11.5px"><b>Variabel di Vercel</b>';
+    Object.keys(d.isi || {}).forEach(function(k){
+      h += '<div>' + (d.isi[k]
+          ? '<span style="color:var(--green)">terisi</span>'
+          : '<span style="color:var(--red)">KOSONG</span>') + ' &nbsp;' + esc(label[k] || k) + '</div>';
+    });
+    h += '</div>';
+    h += '<div style="margin-top:6px;font-size:11.5px"><b>Refresh token</b>: '
+      + (d.token && d.token.ok
+          ? '<span style="color:var(--green)">masih berlaku</span>'
+          : '<span style="color:var(--red)">gagal dipakai</span>') + '</div>';
+    if (d.token && !d.token.ok && d.token.pesan) h += '<div style="font-size:11.5px;color:var(--red)">' + esc(d.token.pesan) + '</div>';
+    (d.folder || []).forEach(function(f){
+      h += '<div style="font-size:11.5px">' + esc(label[f.nama] || f.nama) + ': '
+        + (f.ok ? '<span style="color:var(--green)">bisa dibuka</span>' : '<span style="color:var(--red)">tidak</span>')
+        + (f.pesan ? ' &middot; ' + esc(f.pesan) : '') + '</div>';
+    });
+    var t = d.driveSiapSurat
+      ? '<div class="imp-note" style="margin-top:7px">Lampiran surat baru akan naik ke Google Drive.</div>'
+      : '<div class="imp-note imp-warn" style="margin-top:7px">Lampiran surat baru masih disimpan di basis data, bukan Drive.</div>';
+    host.innerHTML = h + t;
+  }).catch(function(e){
+    host.innerHTML = '<div style="font-size:11.5px;color:var(--red)">' + esc(e.message) + '</div>';
+  });
+}
 function _kb(n){ n = Number(n)||0; return n >= 1048576 ? (n/1048576).toFixed(2)+' MB' : Math.round(n/1024)+' KB'; }
 function _waktuID(iso){ try { return new Date(iso).toLocaleString('id-ID', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){ return iso||'-'; } }
 function cadOtoRender(d){
@@ -8936,7 +8976,10 @@ function cadOtoRender(d){
       + (d.cronSiap ? '' : '<div class="muted" style="font-size:11.5px">Setel <code>CRON_SECRET</code> di Vercel</div>') + '</div>'
     + '<div class="cad-kotak"><div class="muted" style="font-size:11px;font-weight:600">GOOGLE DRIVE</div>' + lampu(d.driveSiap)
       + (d.driveSiap ? '' : '<div class="muted" style="font-size:11.5px">Ikuti PANDUAN-CADANGAN.md</div>')
-      + (d.driveGalat ? '<div style="font-size:11.5px;color:var(--red)">' + esc(d.driveGalat) + '</div>' : '') + '</div>'
+      + (d.driveGalat ? '<div style="font-size:11.5px;color:var(--red)">' + esc(d.driveGalat) + '</div>' : '')
+      + '<div style="margin-top:7px"><button class="btn btn-ghost" style="font-size:11.5px;padding:4px 9px" onclick="cadDriveCek()">Periksa kenapa Drive belum jalan</button>'
+      + '<div id="cadDriveHasil"></div></div>'
+      + '</div>'
     + '<div class="cad-kotak"><div class="muted" style="font-size:11px;font-weight:600">UKURAN BASIS DATA</div>'
       + '<b>' + _kb(d.ukuranDB) + '</b>'
       + (d.ukuranDB > d.batasPeringatan

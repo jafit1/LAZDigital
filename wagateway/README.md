@@ -4,11 +4,11 @@ Gateway ini menghubungkan WhatsApp Web mandiri ke `api/blast-agen` LAZDigital. G
 
 ## Menjalankan lokal di Windows
 
-1. Salin `.env.example` menjadi `.env`, lalu isi `LAZ_API_URL`, `BLAST_AGEN_TOKEN`, dan `BLAST_PERANGKAT_ID`.
-2. Klik dua kali `start.bat`, atau jalankan `npm install` lalu `npm start`.
+1. Pastikan `.env` di folder ini berisi `LAZ_API_URL`, `BLAST_AGEN_TOKEN`, dan `BLAST_PERANGKAT_ID`. File tersebut sudah disiapkan untuk gateway lokal ini.
+2. Klik dua kali `start.bat`, atau jalankan `node --env-file=.env src/agen.js`.
 3. QR pertama tersimpan sebagai `qr.png` di folder sesi. Pindai dari WhatsApp > Perangkat tertaut.
 
-`start.bat` membuat folder sesi bila belum ada dan memasang dependensi bila `node_modules` belum tersedia. Instalasi pertama memerlukan Node.js dan Git for Windows. Jangan commit `.env`, `sessions/`, atau `qr.png`.
+`start.bat` membuat folder sesi bila belum ada dan memasang dependensi bila `node_modules` belum tersedia. Instalasi memakai `npm ci --ignore-scripts`, sehingga lockfile mengarahkan `libsignal` lewat HTTPS dan tidak membutuhkan Git SSH. Jangan commit `.env`, `sessions/`, atau `qr.png`.
 
 ## Deploy ke Botkeep
 
@@ -33,6 +33,8 @@ Isi ZIP harus memiliki `package.json` di akar, bukan di dalam folder tambahan. J
 
 ### Pengaturan di Botkeep
 
+Gateway membuka pemeriksaan kesehatan HTTP pada `0.0.0.0:3333` (`/health`) supaya platform mengetahui prosesnya aktif. Ia tetap membuat koneksi keluar ke WhatsApp dan LAZDigital; port ini bukan endpoint webhook.
+
 Buat workload baru:
 
 - Runtime: **Node.js**
@@ -44,6 +46,7 @@ Buat workload baru:
   - `BLAST_AGEN_NAMA=gateway-botkeep`
   - `BLAST_PERANGKAT_ID`, ID perangkat Gateway sendiri dari LAZDigital
   - `BLAST_POLL_MS=3000`
+  - `SERVER_PORT=3333`
   - `BLAST_SESI=/data/sessions`
 
 Sediakan persistent volume yang dipasang pada:
