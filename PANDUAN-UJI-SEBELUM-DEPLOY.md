@@ -44,6 +44,22 @@ npx playwright install chromium
 Data yang dipakai semuanya palsu. Tiap uji mendapat folder sementaranya
 sendiri, jadi data sungguhan tidak tersentuh dan uji tidak saling menimpa.
 
+### Menjalankan satu uji secara manual
+
+Kalau perlu menelusuri satu uji, jalankan berkasnya langsung:
+
+```
+node tools\test_impor_berkas.js
+```
+
+Uji fitur (nama berakhiran `_fitur.js`) membuat folder sendiri kalau belum
+diberi, jadi perintahnya aman dan hasilnya sama persis dengan saat lewat
+pelari. Jangan ragu memakainya untuk menelusuri kegagalan.
+
+Kalau hasilnya GAGAL padahal lewat `uji-sebelum-deploy.bat` lulus,
+laporkan sebagai bug: dua cara menjalankan yang berbeda tidak boleh memberi
+kesimpulan berbeda.
+
 **Kalau ada yang GAGAL: jangan deploy.** Baris di bawah nama uji yang gagal
 menjelaskan apa yang rusak.
 

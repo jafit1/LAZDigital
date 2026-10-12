@@ -19,6 +19,33 @@
  *   node tools/test_surat_fitur.js
  */
 'use strict';
+/* Uji modul Surat ini yang paling peka terhadap data sisa di antara semua uji
+ * fitur, karena memeriksa NOMOR dan ANGKA PERSIS: surat pertama harus bernomor
+ * 001/SM/X/2026, dan ringkasan harus persis "1 pengajuan aktif, disetujui
+ * Rp 2.000.000". Ketatatan itulah yang jadi masalah.
+ *
+ * Tanpa baris di bawah, menjalankan `node tools\test_surat_fitur.js` menulis ke
+ * .data/surat.json milik repo. Isi run sebelumnya tinggal, sehingga nomor jadi
+ * 364/SM/X/2026 dan ringkasan menghitung baris yang bukan milik uji ini:
+ *
+ *   lewat pelari (jalankan-uji.js menyetel LAZ_DATA_LOKAL) : 80 lulus, 0 gagal
+ *   dijalankan sendiri, folder .data sudah berisi           : 75 lulus, 5 gagal
+ *
+ * PANDUAN-UJI-SEBELUM-DEPLOY.md menyuruh menjalankan `node tools\test_x.js`
+ * untuk menelusuri uji yang gagal, jadi perbedaan ini bukan hal kecil: orang
+ * akan dituntun memperbaiki kode yang sebenarnya tidak rusak, atau loloskan
+ * kegagalan nyata.
+ *
+ * Guard di bawah membuat folder sendiri kalau pelari belum menyetelnya, sama
+ * seperti test_surat_ui.js. Kalau LAZ_DATA_LOKAL sudah ada (dari pelari), folder
+ * milik pelari yang dipakai, jadi uji tetap boleh jalan bersamaan tanpa saling
+ * menimpa. */
+const fsUji = require('fs');
+const osUji = require('os');
+const pathUji = require('path');
+if (!process.env.LAZ_DATA_LOKAL) {
+  process.env.LAZ_DATA_LOKAL = fsUji.mkdtempSync(pathUji.join(osUji.tmpdir(), 'uji-surat-fitur-'));
+}
 require('./_pagar-db.js')('Uji modul Surat');
 process.env.SURAT_KUOTA_MB = '2.5';
 
