@@ -566,6 +566,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_impor_jurnal_bank.js` | unggah Excel di zona WIB tidak memundurkan tanggal, akun "Penerimaan ..." di seksi mana pun (PERSEDIAAN, TRANSAKSI BANK) terhitung penghimpunan |
 | `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan, jenis berkas terbaca dari isinya, bagian atas jendela ringkas, pilihan massal rekap/jurnal yang mempertahankan pilihan sendiri, tombol Ubah, tombol bawah sama tinggi dan sejajar (Batal berbingkai di kiri, satu tombol utama), tombol temuan berbingkai, kotak Telusuri sejajar dengan pilihan di sampingnya, fokus tanpa rekap (tanggal dan nama KLL/ULL di depan, sisanya dilipat), fokus dengan rekap (tabel jurnal lawan rekap yang jadi "Sama" setelah disamakan), baris status di kaki jendela, kaki tidak terpotong di lebar 390 |
 | `test_samakan_rekap.js` | rekap bulanan jadi patokan: angka jurnal sama dengan rekap setelah disamakan, angka rekap untuk tabel perbandingan cocok dengan itu, biaya admin bank tidak dilewati, LPJ dan label rekap yang bentrok tidak dipindah diam-diam, Closing menghitung gaji KLL yang dibayar Daerah sebagai Daerah |
+| `test_impor_headerless_aman.js` | impor tempel tanpa kepala kolom: zakat tetap zakat, "Infak Umum" tidak dipaksa menjadi Sosial Dakwah, pilarnya hanya diambil dari yang tegas disebut, nama yang memuat "sma" di tengahnya tidak terpotong, **"Stor tunai ... nomor rekening" dipisah sebagai pergerakan kas dan bukan donasi**, nomor rekening yang terdaftar mengunci nama bank dan pos dana (Kas Zakat/Kas Infak), nomor yang tak terdaftar menjadi temuan `perlu` dan tidak masuk donasi, kolom FR dan rekening tampil di pratinjau, transfer dirinci per baris, baris tanpa rekening tujuan diberi tahu, dan analisis tidak menulis apa pun |
 | `test_tampilan_kll_menu.js` | rekap bulanan tidak wajib tetapi ditawarkan di pratinjau, Saldo KLL ringkas (sisa saldo hijau, belum LPJ bertanda merah), urutan menu kiri per akun (tarik atau panah, tersimpan di server, menu teratas jadi halaman pertama) |
 | `test_link_harian.js` | link Penghimpunan Harian (donatur dan KLL/ULL): token terpisah, data pribadi tidak keluar, nama anonim jadi Hamba Allah, tanggal masa depan ditolak, memperbarui sendiri, link mati tertutup, kalender dan dropdown lz-ui (bukan bawaan), kotak cari (kantor/donatur) tidak hilang saat halaman memperbarui diri, tampilan ringkas (angka di kepala, tanpa label kotak, kartu kantor jadi saringan) |
 | `test_izin_modul.js` | pemecahan izin Dashboard, akun lama tidak kehilangan menu |
@@ -757,6 +758,37 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   tetap dihitung saat menyimpan. Peringatan "belum diputuskan" tampil di
   baris status kaki jendela (`#imporKakiInfo`), bukan di label tombol.
   Kelas `.imp-chip` sudah dipakai keping berkas; penanda fokus `.imp-fchip`.
+- **Impor tempel tanpa kepala kolom** (13 Oktober 2026). Jalur ini dibaca
+  `detectHeaderlessTSV` dan `parseHeaderlessRows`, bukan `transformJurnalToImportData`.
+  Empat kebocoran yang ditutup, semuanya ketahuan dari 19 baris tempfile pemilik:
+  1. Kata jenis dana dicari sebagai **potongan huruf**, sehingga nama "Trismawati"
+     terpotong jadi "Tri" karena memuat "sma". Sekarang batas kata di kedua sisi wajib
+     (`parseUraianDetails`), dan frasa panjang didahulukan.
+  2. Pilar memakai `detectPilarFromText` yang **selalu mengembalikan sesuatu**,
+     termasuk "Sosial Dakwah" saat tidak ada kata kunci yang cocok. Jadi "KLL x - Infak
+     Umum" tercatat Infak Terikat Sosial Dakwah padahal tidak terikat. Sekarang
+     memakai `detectPilarTegas` yang mengembalikan `''` bila ragu; tebakan yang
+     tidak tegas menjadi temuan, bukan data.
+  3. **"Stor tunai" tidak dipisahkan**, jadi kas yang disetor ke bank tercatat
+     sebagai donatur bernama "Stor tunai BDW". Sekarang baris itu jadi
+     `transferRows` (jenis `setor`) seperti pada jurnal berpasangan, sehingga
+     uang tidak dihitung dua kali dan saldo rekening tetap bergerak. Nomor
+     rekening di ujung labelnya dicocokkan lewat `akunDariLabel`; pos dana
+     (`Kas Zakat`/`Kas Infak`) ikut terbaca dari teks labelnya.
+  4. Rekening yang tidak terdaftar **tidak pernah dilaporkan** pada jalur ini.
+     Sekarang jadi temuan `rekeningTakDikenal` tingkat `perlu`, dan barisnya tidak
+     masuk donasi.
+  Kolom FR dan rekening ditambahkan ke tabel pratinjau, pergerakan kas dirinci
+  per baris di balik "Rincian pergerakan kas", dan baris penerimaan yang tidak
+  punya rekening tujuan diberi tahu — karena saldo akhir hanya bisa dicocokkan
+  lewat rekening, dan format tempel ini memang tidak membawa info bank untuk
+  baris donatur (hanya untuk Stor tunai). Dijaga `test_impor_headerless_aman.js`.
+  Dua hal yang **dikonfirmasi pemilik** pada berkas tempfile 1-2 Oktober 2026,
+  jadi bukan lagi tebakan:
+  - "KLL Pandak Barat - Donasi NTT" memang **pilar Kemanusiaan**.
+  - "KLL Pandak Timur - Zakat" dibaca **Zakat Mal**. Teksnya hanya menulis
+    "Zakat"; kalau berkas lain ternyata memuat Zakat Fitrah atau Profesi, aturan
+    bacanya perlu ditambah di sini supaya tidak ditebak lagi.
 - **Rekap bulanan pemilik adalah patokan** (1 Oktober 2026). Jurnal tetap
   diimpor (hanya jurnal yang memuat setor tunai, mutasi, dan biaya admin
   bank), lalu `apiSamakanRekap` mengusulkan kantor, pilar (dari kolom

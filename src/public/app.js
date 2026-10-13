@@ -5018,7 +5018,7 @@ function tarikImportData() {
     btn.textContent = 'Tarik Ulang';
     
     if (res && res.success) {
-      if (res.isJurnal) {
+      if (res.isJurnal || (res.isHeaderless && (res.transferValid || []).length)) {
         window.IMPORT_TEMP_IS_JURNAL = true;
         /* Disimpan supaya pratinjau bisa digambar ulang tanpa menarik dan
            menguraikan berkasnya lagi. Dipakai sesudah tanggal dibetulkan di
@@ -5030,6 +5030,7 @@ function tarikImportData() {
         window.IMPORT_TEMP_SALUR_ROWS = res.salurValid;
         window.IMPORT_TEMP_UMP_ROWS = res.umpValid || [];
         window.IMPORT_TEMP_TRANSFER_ROWS = res.transferValid || [];
+        window.IMPORT_TEMP_AKUN_ASING = res.akunAsing || [];
         
         window.IMPORT_KONFIRM_SIMPAN = false;
         imporGambarJurnal(res);
@@ -5267,6 +5268,25 @@ function imporGambarJurnal(res) {
       + (nTrf ? '<b>' + nTrf + '</b> transfer antar akun — setor/tarik tunai, mutasi dana (' + rp(trfTotal) + ')' : '')
       + '.'
       + '</div>';
+    /* Rinciannya, bukan cuma jumlahnya: saldo akhir hanya bisa dicocokkan kalau
+       orang tahu Bara ke rekening mana setiap rupiah itu dipindahkan. */
+    if (nTrf) {
+      h += '<details class="imp-note imp-det" style="margin:-6px 0 12px"><summary>Rincian pergerakan kas <span class="imp-chip-s">' + nTrf + ' baris</span></summary>'
+        + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr><th>Tgl</th><th>Jenis</th><th>Dari</th><th>Ke</th><th>Jumlah</th><th>Keterangan</th></tr></thead><tbody>'
+        + res.transferValid.map(function(x){
+            var dari = (x.dariKas || '') + (x.dariAkun ? ' &rarr; ' + x.dariAkun : '');
+            var ke = (x.keKas || '') + (x.keAkun ? ' &rarr; ' + x.keAkun : '');
+            var jenis = x.jenis === 'setor' ? 'Setor tunai' : (x.jenis === 'tarik' ? 'Tarik tunai' : 'Mutasi dana');
+            return '<tr' + (x.akunDikenal === false ? ' style="background:rgba(239,68,68,.08)"' : '') + '>'
+              + '<td>' + esc(x.tanggal) + '</td>'
+              + '<td><b>' + jenis + '</b>' + (x.akunDikenal === false ? '<div style="font-size:10.5px;color:var(--red);font-weight:700">Rekening tujuan belum terdaftar</div>' : '') + '</td>'
+              + '<td class="muted">' + esc(dari || '-') + '</td>'
+              + '<td class="muted">' + esc(ke || '-') + '</td>'
+              + '<td class="jnum" style="font-weight:600">' + rp(x.nominal) + '</td>'
+              + '<td class="muted">' + esc(x.keterangan || '-') + '</td></tr>';
+          }).join('')
+        + '</tbody></table></div></details>';
+    }
   }
   /* Rekening yang disebut jurnal tetapi belum ada di daftar rekening:
      uangnya tetap masuk, tetapi tidak menempel ke rekening manapun. */
@@ -5278,13 +5298,26 @@ function imporGambarJurnal(res) {
         : 'Saldonya akan masuk ke akun "tidak terdaftar".')
       + '</div>';
   }
+  /* Baris penerimaan yang tidak menyebut rekening tujuan. Angkanya tetap
+     dicatat, tapi saldo rekening hanya cocok bila pemilik memilih rekening
+     bawaan di pengaturan impor di bawah pratinjau. */
+  var tanpaRek = (res.himpunValid || []).filter(function(r){ return !r.bank && !r.rekeningId && !r.kasNama; });
+  if (tanpaRek.length) {
+    var nilaiTanpaRek = tanpaRek.reduce(function(a, r){ return a + (Number(r.jumlah) || 0); }, 0);
+    h += '<div class="imp-note imp-warn" style="margin-bottom:12px"><b>' + tanpaRek.length + ' baris tanpa rekening tujuan</b> (' + rp(nilaiTanpaRek) + '). '
+      + 'Uangnya tetap dicatat, tetapi saldo rekening hanya akan cocok bila Anda memilih rekening bawaan di pengaturan impor di bawah pratinjau. '
+      + 'Kalau memang kas, biarkan; kalau masuk bank, pilih rekeningnya.</div>';
+  }
     
   h += '<h4 class="imp-h4 ok">Penghimpunan (Penerimaan) <span>' + res.himpunValid.length + ' baris</span></h4>';
   if (res.himpunValid.length === 0) {
     h += '<div class="muted" style="padding:8px;font-size:12px">Tidak ada data penghimpunan.</div>';
   } else {
+    /* Rekening tujuan dan nama fundraising jadi kolom sendiri. Tanpa kolom
+       rekening, saldo akhir tidak bisa dicocokkan, dan salah saldo baru
+       ketahuan saat tutup buku. */
     h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>' +
-      '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Akun Kredit</th><th>Jumlah</th><th>Metode</th>' +
+      '<th>Tgl</th><th>Donatur</th><th>Jenis / Pilar</th><th>Akun Kredit</th><th>Rekening</th><th>Jumlah</th><th>Metode</th><th>FR</th>' +
       '</tr></thead><tbody>';
     res.himpunValid.forEach(function(r, idx) {
       if (r._batal) return;
@@ -5297,8 +5330,10 @@ function imporGambarJurnal(res) {
         '<td><b>' + esc(r.namaDonatur) + '</b>' + dupWarn + bedaWarn + '</td>' +
         '<td>' + esc(r.subJenis + (r.pilar ? ' / ' + r.pilar : '') + (r.program ? ' · ' + r.program : '')) + '</td>' +
         '<td class="muted">' + esc(r.akunKredit || '-') + '</td>' +
+        '<td class="muted">' + esc(r.bank || '-') + '</td>' +
         '<td class="jnum" style="font-weight:600;color:' + (r.isDuplicate ? 'var(--red)' : 'var(--green)') + '">' + rp(r.jumlah) + '</td>' +
         '<td>' + esc(r.metode) + '</td>' +
+        '<td class="muted">' + esc(cleanFR(r.fundraising)) + '</td>' +
         '</tr>';
     });
     h += '</tbody></table></div>';
@@ -5467,6 +5502,7 @@ function imporBatalkanTemuan(t) {
 }
 function imporTombolTemuan(t) {
   var u = t.usulan || {};
+  if (t.jenis === 'rekeningTakDikenal') return '<span class="muted">Daftarkan/cocokkan rekening dulu; baris transfer belum aman disimpan.</span>';
   var tb = function(aksi, teks, utama){ return '<button type="button" class="btn btn-mini' + (utama ? ' btn-primary' : ' imp-aksi-2') + ' imp-temu-aksi" data-t="' + esc(t.id) + '" data-aksi="' + aksi + '">' + esc(teks) + '</button>'; };
   switch (t.jenis) {
     case 'rekapKantor': case 'rekapDana': case 'rekapJumlah': case 'rekapTanggal':
@@ -5601,7 +5637,7 @@ function imporBlokTemuan(res) {
   var semua = res.temuan || [];
   /* Impor jurnal lama (bukan per berkas) tidak punya bulan acuan, jadi tidak
      boleh mengaku "semua tanggal di dalam bulan berkas". */
-  if (!res.opsiBerkas) return '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
+  if (!res.opsiBerkas && !res.isHeaderless) return '<div id="imporTanggalBlok">' + imporBlokTanggal(res) + '</div>';
   var kel = imporKelompokkan(res);
   var adaRekap = !!(kel.ringkas && kel.ringkas.length);
   var h = '';
@@ -5971,6 +6007,8 @@ function imporBlokRingkasan(res) {
 
 function simpanImportData() {
   var isJurnal = window.IMPORT_TEMP_IS_JURNAL;
+  var isHeaderless = !!(window.IMPORT_TEMP_RES && window.IMPORT_TEMP_RES.isHeaderless);
+  var isJurnalAtauHeaderlessTransfer = isJurnal || (isHeaderless && (window.IMPORT_TEMP_TRANSFER_ROWS || []).length > 0);
   var rowsHimpun = isJurnal ? window.IMPORT_TEMP_HIMPUN_ROWS : IMPORT_TEMP_ROWS;
   var rowsSalur = isJurnal ? window.IMPORT_TEMP_SALUR_ROWS : [];
   
@@ -5978,7 +6016,7 @@ function simpanImportData() {
 
   /* Temuan yang belum diputuskan tidak menghalangi, tetapi tidak boleh
      terlewat tanpa sengaja: klik pertama hanya mengingatkan. */
-  if (isJurnal && window.IMPORT_TEMP_RES && !window.IMPORT_KONFIRM_SIMPAN) {
+  if (isJurnalAtauHeaderlessTransfer && window.IMPORT_TEMP_RES && !window.IMPORT_KONFIRM_SIMPAN) {
     var belum = imporBelum(window.IMPORT_TEMP_RES.temuan) + imporAnomTanggal();
     if (belum) {
       window.IMPORT_KONFIRM_SIMPAN = true;
@@ -5991,7 +6029,7 @@ function simpanImportData() {
   }
   
   if (rowsHimpun && rowsHimpun.length) {
-    if (isJurnal) {
+    if (isJurnalAtauHeaderlessTransfer) {
       rowsHimpun = rowsHimpun.filter(function(r, idx) {
         if (r._lewati) return false;
         if (r.isDuplicate) {
@@ -6072,7 +6110,7 @@ function simpanImportData() {
   btn.disabled = true;
   btn.textContent = 'Menyimpan...';
   
-  if (isJurnal) {
+  if (isJurnalAtauHeaderlessTransfer) {
     /* Penanda milik layar (berawalan _) tidak ikut dikirim. */
     var bersih = function(rows){ return (rows || []).filter(function(r){ return !r._lewati; }).map(function(r){
       var o = {}; Object.keys(r).forEach(function(k){ if (k.charAt(0) !== '_') o[k] = r[k]; }); return o; }); };

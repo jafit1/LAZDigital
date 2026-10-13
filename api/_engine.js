@@ -3332,12 +3332,22 @@ function parseUraianDetails(rawUraian, listLayanan) {
         'ekonomi', 'usaha', 'modal',
         'zakat', 'sedekah', 'shadaqah', 'fidyah', 'fidiah', 'wakaf'
       ];
+      /* Kata jenis dana harus berdiri sebagai kata/frasanya sendiri. Pencarian
+         potongan huruf membuat nama "Trismawati" terpotong menjadi "Tri"
+         karena mengandung "sma". Frasa panjang didahulukan agar "infak
+         terikat" tidak kalah oleh kata pendek di dalamnya. */
+      keywords.sort(function(a, b){ return b.length - a.length; });
       var foundIdx = -1;
+      var lower = s.toLowerCase();
       for (var k = 0; k < keywords.length; k++) {
-        var kw = keywords[k];
-        var idx = s.toLowerCase().indexOf(kw);
-        if (idx >= 0 && (foundIdx === -1 || idx < foundIdx)) {
-          foundIdx = idx;
+        var kw = keywords[k], mulai = 0, idx;
+        while ((idx = lower.indexOf(kw, mulai)) >= 0) {
+          var sebelum = idx === 0 ? '' : lower.charAt(idx - 1);
+          var sesudah = lower.charAt(idx + kw.length);
+          var batasKiri = !/[a-z0-9]/.test(sebelum);
+          var batasKanan = !/[a-z0-9]/.test(sesudah || '');
+          if (batasKiri && batasKanan && (foundIdx === -1 || idx < foundIdx)) { foundIdx = idx; break; }
+          mulai = idx + kw.length;
         }
       }
       if (foundIdx > 0) {
@@ -4625,7 +4635,7 @@ async function apiParseImportUrl(t, url, type, opsi) {
       if (isHeaderless) {
         var parsedHL = parseHeaderlessRows(rawRows.map(function(r) {
           return Array.isArray(r) ? r.map(function(c) { return String(c || '').trim(); }) : [];
-        }), type, listLayanan);
+        }), type, listLayanan, listRek);
         
         var validHL = [];
         var invalidHL = [];
@@ -4649,7 +4659,10 @@ async function apiParseImportUrl(t, url, type, opsi) {
           isJurnal: false,
           valid: validHL,
           invalid: invalidHL,
-          totalCount: parsedHL.length
+          transferValid: parsedHL.transferRows || [],
+          akunAsing: parsedHL.akunAsing || [],
+          akunTakDikenal: (parsedHL.transferRows || []).filter(function(x){ return x.akunDikenal === false; }).length,
+          totalCount: rawRows.length
         };
       }
       
@@ -4710,18 +4723,25 @@ function detectHeaderlessTSV(rawRows) {
   return true;
 }
 
-function parseHeaderlessRows(rawRows, type, listLayanan) {
+function parseHeaderlessRows(rawRows, type, listLayanan, listRek) {
+  /* Format tempel pemilik bisa membawa satu baris setor tunai sebagai:
+       Tanggal | Stor tunai BDW Zakat 1240201548 | kosong | kosong | kosong | nominal
+     Itu bukan donasi. Ia adalah Kas -> rekening bank, seperti transferRows
+     pada jurnal berpasangan. Pisahkan sebelum membangun himpunRows agar saldo
+     rekening tidak hilang dan uang tidak tercatat sebagai donasi. */
   // Format: Date \t Name \t (empty/col3) \t (empty/col4) \t Amount \t Fundraising
   // Rules:
   //  - If Name contains KLL or ULL, map to layanan
   //  - Last non-empty string column after amount = fundraising name
   //  - If after KL/name there's a pilar keyword, map to infak terikat pilar
   var results = [];
+  var transferRows = [];
+  var akunAsing = [];
   rawRows.forEach(function(cols) {
     if (!cols || cols.length === 0) return;
     var dateStr = cols[0] || '';
     var tanggal = parseImportDate(dateStr);
-    var rawName = cols[1] || '';
+    var rawName = String(cols[1] || '').trim();
     
     // Find the numeric amount - scan from col index 2 onwards
     var jumlah = 0;
@@ -4735,6 +4755,21 @@ function parseHeaderlessRows(rawRows, type, listLayanan) {
       }
     }
     
+    /* Setor tunai/Stor tunai: nominal berada di kolom setelah teks uraian,
+       bukan di kolom jumlah donasi. Jangan masukkan ke Penghimpunan. Nomor
+       rekening di ujung nama dipakai untuk akun tujuan; bila belum terdaftar,
+       tetap tampil sebagai akun asing agar pemilik bisa mendaftarkannya. */
+    var setor = /^stor\s+tunai\b|^setor\s+tunai\b/i.test(rawName);
+    if (setor && amountIdx >= 0) {
+      var labelRek = rawName.replace(/^stor\s+tunai\s+/i, '').replace(/^setor\s+tunai\s+/i, '').trim();
+      var tujuan = akunDariLabel(labelRek, listRek || []);
+      if (!tujuan.dikenal) akunAsing.push(labelRek);
+      transferRows.push({ tanggal: tanggal, jenis: 'setor', dariKas: /\bzakat\b/i.test(labelRek) ? 'Kas Zakat' : 'Kas Infak',
+        dariRekeningId: '', keAkun: tujuan.label || labelRek, keRekeningId: tujuan.rekeningId || '', keKas: tujuan.kasNama || '',
+        nominal: jumlah, keterangan: rawName, akunDikenal: !!tujuan.dikenal });
+      return;
+    }
+
     // Fundraising = first non-empty cell after the amount column
     var fundraising = '';
     if (amountIdx >= 0) {
@@ -4776,7 +4811,7 @@ function parseHeaderlessRows(rawRows, type, listLayanan) {
       // Check for pilar in suffix or extraText
       var pilarSource = (parsed.suffix + ' ' + extraText).toLowerCase();
       if (pilarSource.trim()) {
-        var detectedPilar = detectPilarFromText(pilarSource);
+        var detectedPilar = detectPilarTegas(pilarSource);
         if (detectedPilar) {
           jDana = 'Infak';
           sJenis = 'Infak Terikat';
@@ -4836,6 +4871,11 @@ function parseHeaderlessRows(rawRows, type, listLayanan) {
       });
     }
   });
+  /* Properti tambahan tetap ditempel pada array supaya pemanggil lama yang
+     melakukan parsed.forEach() tidak berubah, sementara UI mendapat pergerakan
+     kas dan daftar rekening yang belum dikenal. */
+  results.transferRows = transferRows;
+  results.akunAsing = akunAsing.filter(function(x, i, a){ return a.indexOf(x) === i; });
   return results;
 }
 
@@ -5783,7 +5823,7 @@ async function apiParseImportText(t, text, type, opsi) {
     // Check for headerless TSV (raw copy-paste from simple spreadsheet)
     var isHeaderless = detectHeaderlessTSV(rawRows);
     if (isHeaderless) {
-      var parsed = parseHeaderlessRows(rawRows, type, listLayanan);
+      var parsed = parseHeaderlessRows(rawRows, type, listLayanan, listRek);
       
       var valid = [];
       var invalid = [];
@@ -5802,12 +5842,33 @@ async function apiParseImportText(t, text, type, opsi) {
         markDuplicates([], valid);
       }
       
+      var headerlessTransfer = parsed.transferRows || [];
+      var headerlessAkunAsing = parsed.akunAsing || [];
+      var headerlessTemuan = _temuanJurnal({ himpunValid: type === 'himpun' ? valid : [], salurValid: [],
+        umpValid: [], transferValid: headerlessTransfer }, opsi || {}, listLayanan, null);
+      headerlessTransfer.forEach(function(x, i){
+        if (x.akunDikenal !== false) return;
+        headerlessTemuan.push({ id: 'hrek' + (i + 1), jenis: 'rekeningTakDikenal', tingkat: 'perlu',
+          judul: 'Rekening tujuan belum dikenali',
+          pesan: 'Setor tunai "' + x.keterangan + '" belum bisa ditempelkan ke rekening terdaftar. Cocokkan atau daftarkan nomor rekening ini di Pengaturan > No. Rekening sebelum menyimpan agar saldo masuk ke rekening yang benar.',
+          baris: [{ kumpulan: 'transfer', idx: i, tanggal: x.tanggal, jumlah: x.nominal, nama: x.keAkun, keterangan: x.keterangan }],
+          usulan: null });
+      });
       return {
         success: true,
         isJurnal: false,
+        isHeaderless: true,
+        himpunValid: type === 'himpun' ? valid : [],
+        salurValid: type === 'salur' ? valid : [],
+        himpunInvalid: type === 'himpun' ? invalid : [],
+        salurInvalid: type === 'salur' ? invalid : [],
         valid: valid,
         invalid: invalid,
-        totalCount: parsed.length
+        transferValid: headerlessTransfer,
+        akunAsing: headerlessAkunAsing,
+        akunTakDikenal: headerlessTransfer.filter(function(x){ return x.akunDikenal === false; }).length,
+        temuan: headerlessTemuan,
+        totalCount: rawRows.length
       };
     }
     
