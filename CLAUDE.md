@@ -870,6 +870,8 @@ kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, dan (30 September 2026) lima celah keamanan di
 bagian 3.10.
 
+**Ditambahkan 13 Oktober 2026:** daftar "Salinan cepat" di Pengaturan, Perawatan, Cadangan Otomatis hanya menampilkan sekitar 4 baris dan sisanya bisa di-scroll (`max-height` di `src/public/app.js`). Belum diuji di peramban.
+
 **Ditambahkan 3 Oktober 2026:** daftar Penghimpunan dan Pentasyarufan dikirim
 padat (bagian 5), Kompres PDF memakai pdf.js lokal dan jalur suksesnya teruji
 beserta perbaikan percobaan ulang, dan semua fungsi xlsx yang dipakai terbukti

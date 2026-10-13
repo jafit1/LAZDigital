@@ -9103,7 +9103,7 @@ function cadOtoRender(d){
   h += '<div style="font-size:12px;font-weight:600;margin-bottom:6px">Salinan cepat (' + esc(d.tempat) + ')</div>';
   if (!sal.length) h += '<div class="muted" style="font-size:12.5px">Belum ada salinan.</div>';
   else {
-    h += '<div class="cad-daftar">' + sal.map(function(x){
+    h += '<div class="cad-daftar" style="max-height:245px;overflow-y:auto;padding-right:4px">' + sal.map(function(x){
       var label = x.nama === 'sebelum-pulih' ? 'Keadaan sebelum pemulihan terakhir' : x.nama;
       return '<div class="cad-baris"><div class="cad-baris-n"><b>' + esc(label) + '</b><div class="muted" style="font-size:11px">' + esc(_waktuID(x.waktu)) + ' · ' + _kb(x.ukuran) + '</div></div>'
         + '<div style="display:flex;gap:6px">'
