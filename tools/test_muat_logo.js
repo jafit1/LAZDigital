@@ -175,32 +175,93 @@ const server = http.createServer(async (req, res) => {
   cek('Dashboard Publik: kepala memakai logo SVG baru bila halaman tampil', kp === null || (kp.bagian === 22 && !kp.gambarUnggahan), kp);
   await c5.close();
 
-  console.log('\n=== D. WEB UTAMA: SESUDAH LOGIN ===');
-  const c6 = await konteks();
-  p = await c6.newPage();
-  p.on('pageerror', (e) => galat.push('utama: ' + String(e && e.stack || e).slice(0, 200)));
-  await p.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
-  await p.addInitScript(() => { window.__ujiLogoSkala = 0.5; try { localStorage.setItem('laz_theme', 'light'); } catch (_) {} });
-  await p.goto(A + '/', { waitUntil: 'domcontentloaded' });
-  await p.waitForSelector('#loginView:not(.hidden) #lUser', { timeout: 20000 });
-  await p.waitForFunction(() => !document.documentElement.classList.contains('tunggu-huruf'), null, { timeout: 5000 });
-  cek('layar masuk: belum ada penutup loading', !(await penutup(p)).ada);
-  await p.fill('#lUser', 'uji'); await p.fill('#lPass', 'rahasia');
-  await p.click('#loginBtn');
-  await p.waitForSelector('.lz-muat', { timeout: 5000 });
-  t = await penutup(p);
-  cek('sesudah login: penutup tampil dengan logo 22 bagian, blur, terang', t.ada && t.bagian === 22 && t.blur && t.terang > 200, t);
-  const bilah = await p.evaluate(() => { const e = document.querySelector('#brandBox .lz-logo-svg'); return e ? e.classList.contains('lz-logo-gerak') : null; });
-  cek('logo bilah menu belum bergerak selama penutup menutupi (tidak habis di balik layar)', bilah === false, bilah);
-  if (FOTO) await p.screenshot({ path: FOTO + '/muat-utama-terang.png' });
-  await tungguLepas(p, 9000);
-  await p.waitForFunction(() => { const e = document.querySelector('#brandBox .lz-logo-svg'); return e && (e.classList.contains('lz-logo-gerak') || e.__lz); }, null, { timeout: 4000 })
-    .then(() => cek('penutup lepas, lalu logo bilah menu bergerak untuk menu pertama', true))
-    .catch(async () => cek('penutup lepas, lalu logo bilah menu bergerak untuk menu pertama', false, await p.evaluate(() => sessionStorage.getItem('lz_logo_dilihat'))));
-  await p.reload({ waitUntil: 'domcontentloaded' });
-  await p.waitForTimeout(1200);
-  cek('muat ulang (masuk otomatis dengan token): tanpa penutup', !(await penutup(p)).ada);
-  await c6.close();
+  console.log('\n=== D. WEB UTAMA: PENUTUP TIAP MUAT, LATAR IKUT TEMA ===');
+  /* Permintaan pemilik 13 Oktober 2026, dua bagian:
+   *
+   *   1. Latar penutup mengikuti tema yang sedang dipakai, bukan selalu gelap.
+   *      Versi lama menyatakannya "sesuai tema" di komentar tapi tidak pernah
+   *      diuji di tema terang untuk halaman utama.
+   *
+   *   2. Penutup muncul SETIAP muat ulang dan hard refresh, bukan hanya
+   *      sesudah menekan tombol masuk. Versi lama memicunya dari
+   *      window.__muatSetelahLogin yang hanya dipasang di jalur login
+   *      formulir, jadi membuka halaman dengan token yang sudah ada tidak
+   *      pernah memunculkannya. Uji lama justru MENEGAKAN itu ("muat ulang:
+   *      tanpa penutup"), jadi di sini dibalik.
+   */
+  const bukaUtama = async (tema, muatUlang) => {
+    const c = await konteks();
+    const q = await c.newPage();
+    q.on('pageerror', (e) => galat.push('utama: ' + String(e && e.stack || e).slice(0, 200)));
+    await q.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+    await q.addInitScript((t) => { window.__ujiLogoSkala = 0.5; try { localStorage.setItem('laz_theme', t); } catch (_) {} }, tema);
+    await q.goto(A + '/', { waitUntil: 'domcontentloaded' });
+    if (muatUlang) await q.reload({ waitUntil: 'domcontentloaded' });
+    return { c, q };
+  };
+
+  /* 1. Tema terang: latar penutup terang. */
+  {
+    const { c, q } = await bukaUtama('light', false);
+    await q.waitForSelector('.lz-muat', { timeout: 6000 }).catch(() => {});
+    const t = await penutup(q);
+    cek('muat pertama: penutup logo tampil (22 bagian, blur)', t.ada && t.bagian === 22 && t.blur, t);
+    cek('tema terang: latar penutup terang, bukan gelap', t.ada && t.terang > 200, t);
+    if (FOTO) await q.screenshot({ path: FOTO + '/muat-utama-terang.png' });
+    await tungguLepas(q, 9000).catch(() => {});
+    cek('penutup lepas sendiri setelah aplikasi siap', !(await penutup(q)).ada, await penutup(q));
+    await c.close();
+  }
+
+  /* 2. Tema gelap: latar penutup gelap. */
+  {
+    const { c, q } = await bukaUtama('dark', false);
+    await q.waitForSelector('.lz-muat', { timeout: 6000 }).catch(() => {});
+    const t = await penutup(q);
+    cek('tema gelap: penutup tampil dan latarnya gelap', t.ada && t.terang < 80, t);
+    cek('tema gelap: cahaya logo menyala', t.ada && t.cahaya !== 'none' && t.cahaya !== 'tidak ada', t);
+    if (FOTO) await q.screenshot({ path: FOTO + '/muat-utama-gelap.png' });
+    await c.close();
+  }
+
+  /* 3. Setelahtiap muat ulang, termasuk hard refresh dan yang ada tokennya. */
+  {
+    const c = await konteks();
+    p = await c.newPage();
+    p.on('pageerror', (e) => galat.push('utama: ' + String(e && e.stack || e).slice(0, 200)));
+    await p.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort());
+    await p.addInitScript(() => { window.__ujiLogoSkala = 0.5; try { localStorage.setItem('laz_theme', 'light'); } catch (_) {} });
+    await p.goto(A + '/', { waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('#loginView:not(.hidden) #lUser', { timeout: 20000 });
+    await tungguLepas(p, 9000).catch(() => {});
+    cek('layar masuk selesai: penutup sudah tidak ada', !(await penutup(p)).ada, await penutup(p));
+
+    await p.fill('#lUser', 'uji'); await p.fill('#lPass', 'rahasia');
+    await p.click('#loginBtn');
+    await p.waitForSelector('.lz-muat', { timeout: 5000 }).catch(() => {});
+    t = await penutup(p);
+    cek('sesudah login: penutup tampil dengan logo 22 bagian', t.ada && t.bagian === 22, t);
+    if (FOTO) await p.screenshot({ path: FOTO + '/muat-utama-login.png' });
+    const bilah = await p.evaluate(() => { const e = document.querySelector('#brandBox .lz-logo-svg'); return e ? e.classList.contains('lz-logo-gerak') : null; });
+    cek('logo bilah menu belum bergerak selama penutup menutupi (tidak habis di balik layar)', bilah === false, bilah);
+    await tungguLepas(p, 9000).catch(() => {});
+    await p.waitForFunction(() => { const e = document.querySelector('#brandBox .lz-logo-svg'); return e && (e.classList.contains('lz-logo-gerak') || e.__lz); }, null, { timeout: 4000 })
+      .then(() => cek('penutup lepas, lalu logo bilah menu bergerak untuk menu pertama', true))
+      .catch(async () => cek('penutup lepas, lalu logo bilah menu bergerak untuk menu pertama', false, await p.evaluate(() => sessionStorage.getItem('lz_logo_dilihat'))));
+
+    /* Yang ditolak versi lama: muat ulang dengan token yang sudah ada. */
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('.lz-muat', { timeout: 6000 }).catch(() => {});
+    t = await penutup(p);
+    cek('muat ulang dengan token: penutup tetap muncul', t.ada && t.bagian === 22, t);
+
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForSelector('.lz-muat', { timeout: 6000 }).catch(() => {});
+    cek('hard refresh berulang: penutup tetap muncul tiap kali', (await penutup(p)).ada, await penutup(p));
+    await tungguLepas(p, 9000).catch(() => {});
+    await c.close();
+  }
 
   console.log('\n=== E. GERAK DIKURANGI ===');
   const c7 = await konteks({ reducedMotion: 'reduce' });

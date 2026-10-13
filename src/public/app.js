@@ -229,6 +229,14 @@ function _mulaiBoot(){
   /* Layar pembuka tidak punya batas waktu sendiri — ia hilang saat datanya
      siap. Yang dipantau cuma: kalau kelamaan, beri keterangan. */
   try{ LZ.bootPantau(); }catch(e){}
+  /* Layar logo beranimasi muncul SETIAP muat halaman, termasuk muat ulang dan
+     hard refresh yang sudah punya token. Dulu pemicunya window.__muatSetelahLogin
+     yang hanya dipasang di jalur login formulir, jadi membuka halaman dengan
+     token yang sudah ada tidak pernah memunculkannya (permintaan pemilik
+     13 Oktober 2026). thwart:true membuat penutup MENUNGGU sampai aplikasi
+     benar-benar siap, lalu .selesai() dipanggil dari startApp() dan
+     showLogin(). Tanpa itu penutup akan hilang seketika setelah muncul. */
+  _tampilLayarLogo();
   /* Sandi warisan ditukar lebih dulu, walau sesinya masih hidup. Kalau
      menunggu sesi habis, sandi itu masih tinggal di peramban sampai 12 jam. */
   var tukar = (!getIngat() && _credsWarisan()) ? reloginSilently() : Promise.resolve();
@@ -236,6 +244,23 @@ function _mulaiBoot(){
     if(TOKEN){ gas('apiBootstrap')(TOKEN).then(function(b){ME=b.user;SETTINGS=b.settings;startApp();}).catch(function(){ tryAutoLogin(); }); }
     else { tryAutoLogin(); }
   });
+}
+/* Dipanggil sekali saja per muat halaman, bukan dari startApp() langsung,
+   karena startApp() juga dijalankan lagi setelah profil disimpan. Layar logo
+   tidak boleh muncul dua kali dalam satu muat halaman. */
+var _layarLogoSudah=false, _layarLogoTangan=null;
+function _tampilLayarLogo(paksa){
+  /* Tanpa paksa: sekali saja per muat halaman. Dengan paksa: dipakai setelah
+     tombol Masuk ditekan, supaya layar logo tetap muncul di jalur itu seperti
+     sebelumnya, walau di awal muat halaman sudah pernah tampil. */
+  if(_layarLogoSudah && !paksa) return;
+  _layarLogoSudah=true;
+  try{ if(window.LZLogo) _layarLogoTangan=LZLogo.muat({tahan:true}); }catch(e){}
+}
+/* Dipanggil begitu layar masuk atau aplikasi siap. Aman dipanggil beberapa
+   kali: penutup yang sudah menutup mengabaikan panggilan kedua. */
+function _layarLogoSelesai(){
+  try{ if(_layarLogoTangan&&_layarLogoTangan.selesai) _layarLogoTangan.selesai(); }catch(e){}
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){ setTimeout(_mulaiBoot,0); }); else setTimeout(_mulaiBoot,0);
 function tryAutoLogin(){
@@ -245,7 +270,7 @@ function tryAutoLogin(){
     else showLogin();
   });
 }
-function showLogin(){ try{ LZ.bootSelesai(); }catch(e){} el('boot').classList.add('hidden'); el('appView').classList.add('hidden'); el('loginView').classList.remove('hidden'); try{ var nu=localStorage.getItem('laz_user')||''; if(nu&&el('lUser')&&!el('lUser').value){ el('lUser').value=nu; if(el('lRemember'))el('lRemember').checked=true; } }catch(e){} }
+function showLogin(){ try{ LZ.bootSelesai(); }catch(e){} el('boot').classList.add('hidden'); el('appView').classList.add('hidden'); el('loginView').classList.remove('hidden'); _layarLogoSelesai(); try{ var nu=localStorage.getItem('laz_user')||''; if(nu&&el('lUser')&&!el('lUser').value){ el('lUser').value=nu; if(el('lRemember'))el('lRemember').checked=true; } }catch(e){} }
 function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.textContent='Memproses...';el('loginErr').textContent='';
   var u=el('lUser').value.trim(), p=el('lPass').value;
   var remember=el('lRemember')?el('lRemember').checked:true;
@@ -266,7 +291,7 @@ function doLogin(ev){ev.preventDefault();var b=el('loginBtn');b.disabled=true;b.
     TOKEN=r.token;localStorage.setItem('laz_token',TOKEN);ME=r.user;
     hapusCredsWarisan();
     if(remember&&r.ingat){ setIngat(r.ingat); try{localStorage.setItem('laz_user',u);}catch(e){} } else { setIngat(''); try{localStorage.removeItem('laz_user');}catch(e){} }
-    return gas('apiBootstrap')(TOKEN).then(function(bs){SETTINGS=bs.settings;window.__muatSetelahLogin=true;startApp();});
+    return gas('apiBootstrap')(TOKEN).then(function(bs){SETTINGS=bs.settings;_tampilLayarLogo(true);startApp();});
   }).catch(function(e){el('loginErr').textContent=(e.message||e);b.disabled=false;b.textContent='Masuk';});
   return false;}
 /* Token ingat dicabut di server, bukan cuma dihapus dari peramban: salinan
@@ -291,8 +316,9 @@ function muatFundraising(paksa){
 function startApp(){
   try{ LZ.bootSelesai(); }catch(e){}
   el('boot').classList.add('hidden');el('loginView').classList.add('hidden');el('appView').classList.remove('hidden');
-  /* Layar loading logo hanya sesudah masuk lewat formulir, bukan saat muat ulang atau masuk otomatis. */
-  if(window.__muatSetelahLogin){ window.__muatSetelahLogin=false; try{ if(window.LZLogo) LZLogo.muat(); }catch(e){} }
+  /* Layar logo sudah dimunculkan oleh _mulaiBoot() di awal muat halaman; di
+     sini hanya penutupnya yang boleh lepas. */
+  _layarLogoSelesai();
   muatFundraising();
   // Default sidebar ciut (ikon saja); klik logo untuk melebarkan.
   if (localStorage.getItem('sidebar_collapsed') !== 'false') {

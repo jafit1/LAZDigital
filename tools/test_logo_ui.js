@@ -75,6 +75,13 @@ const server = http.createServer(async (req, res) => {
     await p.waitForSelector('#appView:not(.hidden) .tn-item.active', { timeout: 20000 });
     /* Halaman utama tampil sesudah huruf termuat (atau 1,5 detik); logo baru bergerak sesudah itu. */
     if (!o.tahanHuruf) await p.waitForFunction(() => !document.documentElement.classList.contains('tunggu-huruf'), null, { timeout: 5000 });
+    /* Layar logo beranimasi (lz-muat) menutupi seluruh halaman di awal muat
+       (permintaan pemilik 13 Oktober 2026) dan baru lepas setelah aplikasi siap.
+       Logo BILAH baru bergerak setelah penutup itu benar-benar hilang, jadi
+       penantiannya ikut di sini. Tanpa baris ini, pengukuran diambil saat logo
+       bilah masih tertutup dan belum punya animasi apa pun. */
+    await p.waitForFunction(() => !document.querySelector('.lz-muat')
+      && !document.documentElement.classList.contains('lz-muat-aktif'), null, { timeout: 15000 });
     return p;
   };
   const baca = (p) => p.evaluate(() => {

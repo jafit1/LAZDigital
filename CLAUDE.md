@@ -426,12 +426,19 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
 - **Layar loading logo** (5 Oktober 2026, `LZLogo.muat()` di `js/lz-logo.js`, gaya di akhir `styles.css`): logo SVG besar
   berlatar blur (`backdrop-filter`, putih 62% di tema terang, biru malam 62% di gelap; tanpa dukungan blur latarnya
   hampir pekat). Tampil di link publik (`harian.html`, `lacak.html`, `public.html`) hanya saat pertama dibuka per sesi
-  (kunci sessionStorage `lz_muat_harian|lacak|publik`), dan di web utama hanya sesudah login lewat formulir
-  (`window.__muatSetelahLogin` di `doLogin`, dibaca `startApp`), bukan saat muat ulang atau masuk otomatis. Linimasa 55%
-  (sekitar 2,5 detik). Menutup menunggu animasi selesai DAN data siap (`MUAT.selesai()` di halaman publik), pengaman
-  9 detik; gerak dikurangi tidak menampilkannya. Selama aktif `html.lz-muat-aktif` menahan animasi logo bilah menu
-  (`siapDilihat`), yang baru bergerak sesudah penutup lepas. Kepala halaman publik memakai `LZLogo.statis()` (logo SVG
-  baru), bukan logo unggahan Pengaturan. Dijaga `test_muat_logo.js`.
+  (kunci sessionStorage `lz_muat_harian|lacak|publik`). **Di web utama tampil SETIAP muat halaman** — muat ulang, hard
+  refresh, dan yang sudah punya token — karena permintaan pemilik 13 Oktober 2026; sebelumnya hanya muncul sesudah
+  tombol Masuk ditekan (`window.__muatSetelahLogin` sudah dihapus). Dipicu dari `_mulaiBoot()` lewat
+  `_tampilLayarLogo()` dengan `{tahan:true}`, lalu dilepas `_layarLogoSelesai()` dari `startApp()` dan `showLogin()`.
+  Tombol Masuk tetap memunculkannya sekali lagi lewat `_tampilLayarLogo(true)`; pengaman `_layarLogoSudah` supaya tidak
+  muncul dua kali dalam satu muat halaman (karena `startApp()` juga jalan lagi setelah profil disimpan).
+  Latar penutup mengikuti tema (`html[data-theme="dark"] .lz-muat`, `styles.css` baris 6670 dan 6672), dan
+  `index.html:38` memasang `data-theme` inline di `<head>` supaya tema sudah benar sejak penutup dirakit. Linimasa 55%
+  (sekitar 2,5 detik). Menutup menunggu animasi selesai DAN data siap, pengaman 9 detik; gerak dikurangi tidak
+  menampilkannya. Selama aktif `html.lz-muat-aktif` menahan animasi logo bilah menu (`siapDilihat`), yang baru bergerak
+  sesudah penutup lepas — itu sebabnya `test_logo_ui.js` harus menunggu `.lz-muat` hilang dulu sebelum mengukur logo
+  bilah. Kepala halaman publik memakai `LZLogo.statis()` (logo SVG baru), bukan logo unggahan Pengaturan.
+  Dijaga `test_muat_logo.js`.
 - **Tombol tema di HP** (6 Oktober 2026): di bawah 520 px tombol di `.page-head-aksi` menempel di pojok kanan atas kepala,
   sebaris dengan judul (`position:absolute !important`, `top:-5px`), judul diberi ruang kanan 50 px; tombol lain (Tambah,
   Impor) tetap di baris bawah. Berlaku untuk semua modul. Di aplikasi utama tombolnya memang disembunyikan di HP (ada di
@@ -467,9 +474,27 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
 1. Ubah kode
 2. node tools/<uji yang relevan>.js     (cepat, sambil mengerjakan)
 3. uji-sebelum-deploy.bat               (semuanya, wajib, 1 sampai 2 menit)
-4. deploy.bat                           (git add + commit + push)
-5. Tunggu Vercel selesai, lalu Ctrl+Shift+R di peramban
+4. Update memori: CLAUDE.md             (WAJIB, sebelum commit)
+5. deploy.bat                           (git add + commit + push)
+6. Tunggu Vercel selesai, lalu Ctrl+Shift+R di peramban
 ```
+
+**Langkah 4 bukan pilihan.** Permintaan pemilik (13 Oktober 2026): memori selalu
+diperbarui sebelum commit. Kalau dilewati, commit berikutnya hanya memuat kode
+saja sementara pembaca berikutnya membaca versi lama.
+Yang harus disentuh:
+
+- **Bagian 5** (satu kesimpulan, satu paragraf) untuk setiap perilaku yang berubah,
+  beserta alasannya dan berkas penjaganya.
+- **Tabel uji bagian 7** kalau ada uji baru atau uraian suatu uji berubah.
+- **Bagian 10** kalau ada tugas pemilik yang selesai atau bertambah.
+
+Dua berkas memori lain sudah basi dan **tidak boleh dipakai sebagai rujukan**:
+`MEMORY.md` (terakhir diperbarui 2026-07-07; menyebut `_engine.js` sekitar 1.020
+baris padahal sekarang 8.157, `app.js` sekitar 115 KB padahal sekarang 641 KB,
+dan direktori lokal yang sudah tidak berlaku) serta `memori.md` (masih
+merujuk tabel akhiran baris yang sudah dihapus). `CLAUDE.md` satu-satunya memori
+yang benar, dan `test_panduan_ai.js` yang menjaganya.
 
 `deploy.bat` hanya mendorong ke GitHub. Vercel yang membangun. Kalau build
 gagal, **yang jalan di produksi masih versi lama**, dan gejalanya "perbaikannya
@@ -547,7 +572,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_kontras_gelap.js`, `_kontras.js` | teks terbaca di tema gelap: pemindai menghitung rasio kontras tiap teks terhadap latar efektifnya (gradien dinilai dari henti terbaik, latar gambar dilewati) di layar masuk, tiap menu, tab Pengaturan, modal, dan halaman publik; `test_skala_ui.js` memindai tiap menu empat modul, `test_surat_ui.js` memindai Surat dan lacak |
 | `test_tema_ui.js` | tombol tema terang/gelap (`js/lz-tema.js`): ikon tepat di tengah tombol (dulu menempel ke kanan, 21 px dari kiri pada tombol 38 px), bentuk bulan/matahari berganti lewat CSS, sapuan lingkaran membuka SELURUH halaman bertema baru lewat View Transitions (kartu yang belum tersentuh lingkaran masih berwarna lama; dulu terukur sudah gelap pada 370 ms), cara lama tetap jalan di peramban tanpa View Transitions, gerak dikurangi berganti langsung, lima halaman modul memuat skripnya |
 | `test_logo_ui.js` | logo SVG di bilah menu (`js/lz-logo.js`): 22 bagian, rasio 3840:2574, 48 px (38 px di HP), di tengah panel dan rel, bergerak hanya saat menu pertama kali dibuka di sesi itu, diam saat kembali atau muat ulang, cahaya hanya di tema gelap, gerak dikurangi tidak bergerak, lima modul memuat logonya |
-| `test_muat_logo.js` | layar loading logo: tampil sekali per sesi di link publik dan sesudah login di web utama, blur dan latar mengikuti tema, bertahan sampai data datang, tidak menahan layar bila data galat, logo bilah menunggu penutup, gerak dikurangi tanpa penutup, kepala halaman publik memakai logo SVG baru |
+| `test_muat_logo.js` | layar loading logo: link publik tampil sekali per sesi; **web utama tampil setiap muat halaman** (muat ulang, hard refresh, dan yang sudah punya token, bukan hanya sesudah tombol Masuk); latar penutup terang di tema terang dan gelap di tema gelap, cahaya menyala di gelap; bertahan sampai aplikasi siap, lepas sendiri, tidak menahan layar bila data galat; logo bilah menunggu penutup; gerak dikurangi tanpa penutup; kepala halaman publik memakai logo SVG baru |
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |
