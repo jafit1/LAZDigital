@@ -489,12 +489,20 @@ Yang harus disentuh:
 - **Tabel uji bagian 7** kalau ada uji baru atau uraian suatu uji berubah.
 - **Bagian 10** kalau ada tugas pemilik yang selesai atau bertambah.
 
-Dua berkas memori lain sudah basi dan **tidak boleh dipakai sebagai rujukan**:
-`MEMORY.md` (terakhir diperbarui 2026-07-07; menyebut `_engine.js` sekitar 1.020
-baris padahal sekarang 8.157, `app.js` sekitar 115 KB padahal sekarang 641 KB,
-dan direktori lokal yang sudah tidak berlaku) serta `memori.md` (masih
-merujuk tabel akhiran baris yang sudah dihapus). `CLAUDE.md` satu-satunya memori
-yang benar, dan `test_panduan_ai.js` yang menjaganya.
+**`CLAUDE.md` satu-satunya memori proyek ini.** Dua berkas lain pernah ada dan
+sudah dihapus pada 13 Oktober 2026 karena isinya bertentangan dengan kode, dan
+repo ini publik:
+
+- `MEMORY.md` terakhir diperbarui 2026-07-07. Menyebut `_engine.js` sekitar
+  1.020 baris padahal sekarang 8.157, `app.js` sekitar 115 KB padahal sekarang
+  641 KB, direktori lokal yang sudah tidak berlaku, penyimpanan Upstash Redis
+  padahal sudah PostgreSQL, **dan kata sandi masuk bawaan** di baris 17.
+- `memori.md` masih merujuk tabel akhiran baris yang justru dihapus pada
+  19a0ddc dan digantikan `.gitattributes`.
+
+Kalau muncul berkas dengan nama seperti itu lagi, jangan dipakai sebagai
+rujukan: isinya hanya bisa basi, sedangkan dokumen ini dijaga
+`test_panduan_ai.js`.
 
 `deploy.bat` hanya mendorong ke GitHub. Vercel yang membangun. Kalau build
 gagal, **yang jalan di produksi masih versi lama**, dan gejalanya "perbaikannya
