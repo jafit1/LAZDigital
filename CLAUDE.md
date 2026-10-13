@@ -489,7 +489,7 @@ Yang harus disentuh:
 - **Tabel uji bagian 7** kalau ada uji baru atau uraian suatu uji berubah.
 - **Bagian 10** kalau ada tugas pemilik yang selesai atau bertambah.
 
-**`CLAUDE.md` satu-satunya memori proyek ini.** Dua berkas lain pernah ada dan
+**`CLAUDE.md` satu-satunya memori proyek ini.** Tiga berkas lain pernah ada dan
 sudah dihapus pada 13 Oktober 2026 karena isinya bertentangan dengan kode, dan
 repo ini publik:
 
@@ -499,10 +499,19 @@ repo ini publik:
   padahal sudah PostgreSQL, **dan kata sandi masuk bawaan** di baris 17.
 - `memori.md` masih merujuk tabel akhiran baris yang justru dihapus pada
   19a0ddc dan digantikan `.gitattributes`.
+- `PROJECT_MEMORY.md` menyuruh menyalin `api/_engine.js` ke `src/api/_engine.js`
+  "setiap kali mengedit backend", padahal folder `src/api` tidak ada sama sekali.
+  Isinya juga menyebut database sebagai Google Sheets dan Upstash Redis, endpoint
+  utama `api/index.js` (yang sebenarnya `api/rpc.js`), dan deploy lewat
+  `npx vercel --prod` (yang sebenarnya `deploy.bat`). Yang paling berbahaya adalah
+  perintah sinkronisasi itu: pengikutnya akan menyalin mesin 8.157 baris ke
+  tempat yang tidak ada, dan kalau foldernya dibuat, akan ada dua salinan yang
+  harus dijaga tanpa ada yang mengingatkan bahwa keduanya harus sama.
 
 Kalau muncul berkas dengan nama seperti itu lagi, jangan dipakai sebagai
 rujukan: isinya hanya bisa basi, sedangkan dokumen ini dijaga
-`test_panduan_ai.js`.
+`test_panduan_ai.js`. Catatan: `wagateway/PROJECT_MEMORY.md` **berbeda** dan
+masih berlaku; itu milik gateway WhatsApp, bukan dokumen ini.
 
 `deploy.bat` hanya mendorong ke GitHub. Vercel yang membangun. Kalau build
 gagal, **yang jalan di produksi masih versi lama**, dan gejalanya "perbaikannya
