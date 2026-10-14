@@ -41,6 +41,8 @@ const DAFTAR = [
   { label: 'Layar Impor Jurnal per Berkas', berkas: 'test_impor_berkas_ui.js' },
   { label: 'Samakan jurnal dengan rekap', berkas: 'test_samakan_rekap.js' },
   { label: 'Impor tempel: setor tunai, pilar, rekening', berkas: 'test_impor_headerless_aman.js' },
+  { label: 'Impor: tab kembali ke Unggah File', berkas: 'test_impor_tab_reset.js' },
+  { label: 'Impor: lewati duplikat, pesan dalam modal', berkas: 'test_impor_lewati_duplikat.js' },
   { label: 'Tawaran rekap, Saldo KLL, urutan menu', berkas: 'test_tampilan_kll_menu.js' },
   { label: 'Link Penghimpunan Harian', berkas: 'test_link_harian.js' },
   { label: 'Pemecahan izin Dashboard', berkas: 'test_izin_modul.js' },

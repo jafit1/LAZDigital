@@ -4783,6 +4783,11 @@ function imporOpsiBerkas() {
 
 function openImportModal(type, mode) {
   IMPORT_MODE = mode || '';
+  /* Tab selalu mulai dari Unggah File. Tanpa reset ini, tab Tempel Teks atau
+     Link yang terakhir dipakai tetap terbawa, sementara layar menampilkan
+     Unggah File: tarik data malah meminta teks yang tidak diisi. */
+  IMPORT_TAB = 'file';
+  IMPORT_FILE_TSV = '';
   window.IMPORT_KONFIRM_SIMPAN = false;
   window.IMPORT_REKAP_SHEETS = null;
   IMPORT_TEMP_TYPE = type;
@@ -4973,6 +4978,30 @@ function onImportFile(e){ if(!siapXLSX()) return;
   reader.readAsArrayBuffer(f);
 }
 
+/* Pesan sumber kosong tampil di dalam modal. Toast berada di bawah lapisan
+   modal (z-index 200 vs 10000), jadi pesannya tidak terlihat. */
+function imporPesanKosong(msg) {
+  var btn = el('importTarikBtn');
+  btn.disabled = false; btn.textContent = 'Tarik & Analisis Data';
+  el('importPreview').innerHTML = '<div style="color:var(--red);font-weight:600;text-align:center;padding:10px">' + esc(msg) + '</div>';
+}
+
+/* Bar di atas pratinjau: jumlah baris yang sudah ada di database, dan satu
+   tombol untuk melewati semuanya. Centang "tetap simpan" per baris tetap ada. */
+function imporBarDuplikat(jumlah) {
+  if (!jumlah) return '';
+  return '<div class="imp-note imp-tawar" id="imporBarDup"><div><b>' + jumlah + ' baris sudah ada di database</b> (sama persis). Dilewati otomatis kecuali dicentang.</div>'
+    + '<button type="button" class="btn btn-sm" onclick="imporLewatiSemua()">Lewati semua yang sudah ada</button></div>';
+}
+
+function imporLewatiSemua() {
+  var peta = { himpun: window.IMPORT_TEMP_HIMPUN_ROWS || [], salur: window.IMPORT_TEMP_SALUR_ROWS || [], regular: window.IMPORT_TEMP_ROWS || [] };
+  Object.keys(peta).forEach(function(k) { peta[k].forEach(function(r) { if (r.isDuplicate) r._tetapSimpan = false; }); });
+  document.querySelectorAll('input.import-dup-chk').forEach(function(c) { c.checked = false; });
+  var bar = el('imporBarDup');
+  if (bar) bar.innerHTML = '<div><b>Semua baris yang sudah ada dilewati.</b></div>';
+}
+
 function tarikImportData() {
   var isFile = (IMPORT_TAB === 'file');
   var isText = (IMPORT_TAB === 'text');
@@ -4986,7 +5015,7 @@ function tarikImportData() {
     if (!IMPORT_FILE_TSV) {
       btn.disabled = false; btn.textContent = 'Tarik & Analisis Data';
       el('importPreview').innerHTML = '';
-      return toast('Pilih file terlebih dahulu', true);
+      return imporPesanKosong('Pilih file terlebih dahulu');
     }
     promise = gas('apiParseImportText')(TOKEN, IMPORT_FILE_TSV, IMPORT_TEMP_TYPE, imporOpsiBerkas());
   } else if (isText) {
@@ -4995,21 +5024,11 @@ function tarikImportData() {
        sehingga trim() memakan tab pembuka baris pertama, kolomnya bergeser satu,
        dan seluruh seksi pertama ikut hilang saat ditempel. */
     var text = el('import_text').value.replace(/^(?:[ \t]*\r?\n)+/, '').replace(/\s+$/, '');
-    if (!text) {
-      btn.disabled = false;
-      btn.textContent = 'Tarik & Analisis Data';
-      el('importPreview').innerHTML = '';
-      return toast('Masukkan teks data spreadsheet terlebih dahulu', true);
-    }
+    if (!text) return imporPesanKosong('Masukkan teks data spreadsheet terlebih dahulu');
     promise = gas('apiParseImportText')(TOKEN, text, IMPORT_TEMP_TYPE, imporOpsiBerkas());
   } else {
     var url = el('import_url').value.trim();
-    if (!url) {
-      btn.disabled = false;
-      btn.textContent = 'Tarik & Analisis Data';
-      el('importPreview').innerHTML = '';
-      return toast('Masukkan URL link spreadsheet/excel terlebih dahulu', true);
-    }
+    if (!url) return imporPesanKosong('Masukkan URL link spreadsheet/excel terlebih dahulu');
     promise = gas('apiParseImportUrl')(TOKEN, url, IMPORT_TEMP_TYPE, imporOpsiBerkas());
   }
   
@@ -5055,6 +5074,7 @@ function tarikImportData() {
           h += '<div class="muted" style="text-align:center;padding:12px;border:1px dashed var(--border);border-radius:10px">Tidak ada baris valid. Periksa nama kolom (Tanggal, Nama, Jumlah).</div>';
           el('importSimpanBtn').classList.add('hidden');
         } else {
+          h += imporBarDuplikat(res.valid.filter(function(r) { return r.isDuplicate; }).length);
           h += '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>' +
             '<th>Tgl</th>' +
             '<th>' + (IMPORT_TEMP_TYPE === 'himpun' ? 'Donatur' : 'Penerima') + '</th>' +
@@ -5244,6 +5264,7 @@ function imporGambarJurnal(res) {
      dianalisis tanpa rekap, tawarannya muncul di sini; begitu rekap terbaca,
      tawarannya hilang sendiri. */
   h += imporBlokTemuan(res);
+  h += imporBarDuplikat([].concat(res.himpunValid || [], res.salurValid || []).filter(function(r) { return r.isDuplicate; }).length);
   if (IMPORT_MODE === 'berkas' && !window.IMPORT_REKAP_SHEETS && el('impb_rekap')) {
     h += '<div class="imp-note imp-tawar" id="imporTawarRekap"><div><b>Punya rekap bulanan?</b> Cantumkan supaya angkanya disamakan dengan rekap. <span class="muted">Boleh dilewati.</span></div>'
       + '<button type="button" class="btn btn-sm" onclick="el(\'impb_rekap\').click()">Cantumkan rekap</button></div>';
