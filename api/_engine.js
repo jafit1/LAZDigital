@@ -1122,8 +1122,11 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     slotH.himpun.rinci[pKey] = (slotH.himpun.rinci[pKey] || 0) + n;
     
     // Grouping Fundraising
-    var frName = cleanFundraisingName(r.fundraising);
-    byFundraising[frName] = (byFundraising[frName] || 0) + n;
+    // Fundraising hanya berlaku untuk tingkat daerah; KLL/ULL tidak dihitung
+    if (finalKey === LAYANAN_DAERAH) {
+      var frName = cleanFundraisingName(r.fundraising);
+      byFundraising[frName] = (byFundraising[frName] || 0) + n;
+    }
     
     // Grouping Pilar
     var pLabel = r.pilar ? String(r.pilar).trim() : (r.jenisDana === 'Infak' ? 'Infak Umum' : r.jenisDana);
@@ -1151,11 +1154,12 @@ function buildDashboard(filterMonth, filterPekan, filterHari){
     byProgramSalur[progT] = (byProgramSalur[progT] || 0) + n;
     
     // Grouping Fundraising untuk Pentasyarufan
-    var frNameT = cleanFundraisingName(r.fundraising);
-    byFundraising[frNameT] = (byFundraising[frNameT] || 0) + n;
-
     // Rekap KLL/ULL untuk pentasyarufan — aturan pencocokan sama persis
     var finalKey = resolveLayananName(r, layList, layMap);
+    if (finalKey === LAYANAN_DAERAH) {
+      var frNameT = cleanFundraisingName(r.fundraising);
+      byFundraising[frNameT] = (byFundraising[frNameT] || 0) + n;
+    }
     byLayananSalur[finalKey] = (byLayananSalur[finalKey] || 0) + n;
 
     var slotT = _dlSlot(finalKey);
