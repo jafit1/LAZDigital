@@ -50,6 +50,8 @@ const DAFTAR = [
   { label: 'Tabel banding tampilkan rincian per kantor', berkas: 'test_tabel_banding_per_kantor.js' },
   { label: 'Tanggal tak terbaca ditandai, bukan dibulatkan', berkas: 'test_tanggal_tak_terbaca.js' },
   { label: 'Scrollbar panel impor terlihat', berkas: 'test_scrollbar_impor.js' },
+  { label: 'Anomali tanggal sertakan nomor baris Excel', berkas: 'test_anomali_tgl_baris.js' },
+  { label: 'tglIndo tidak tampilkan "Invalid Date"', berkas: 'test_tglindo_rusak.js' },
   { label: 'Tawaran rekap, Saldo KLL, urutan menu', berkas: 'test_tampilan_kll_menu.js' },
   { label: 'Link Penghimpunan Harian', berkas: 'test_link_harian.js' },
   { label: 'Pemecahan izin Dashboard', berkas: 'test_izin_modul.js' },

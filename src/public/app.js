@@ -5185,11 +5185,15 @@ function imporBlokTanggal(res) {
     + ' kemungkinan salah tanggal</b> &middot; tanggal debet dan kredit berbeda'
     + (beres ? ' &middot; ' + beres + ' sudah dibetulkan' : '') + '</summary>'
     + '<div class="imp-det-b"><div class="imp-tblwrap"><table class="imp-tbl"><thead><tr>'
-    + '<th>Jenis</th><th>Nama</th><th>Jumlah</th><th>Debet</th><th>Kredit</th><th>Pakai tanggal</th>'
+    + '<th>Baris</th><th>Jenis</th><th>Nama</th><th>Jumlah</th><th>Debet</th><th>Kredit</th><th>Pakai tanggal</th>'
     + '</tr></thead><tbody>';
   anom.forEach(function(a) {
     var kunci = a.kumpulan + ':' + a.idx;
     h += '<tr>'
+      /* Baris sumber di berkas Excel, bukan hanya nama/keterangan: dengan
+         ribuan baris jurnal, mencari manual lewat nama saja sering tidak
+         ketemu (pemilik, 15 Oktober 2026). */
+      + '<td>' + (a.baris ? esc(a.baris) : '-') + '</td>'
       + '<td>' + esc(a.jenis) + '</td>'
       + '<td>' + esc(a.nama) + (a.keterangan ? '<div class="muted" style="font-size:10.5px">' + esc(a.keterangan.slice(0, 60)) + '</div>' : '') + '</td>'
       + '<td>' + rp(a.jumlah) + '</td>'
@@ -9468,6 +9472,10 @@ var LH_DATA = null;
 function tglIndo(t){
   try{
     var d = new Date(String(t).slice(0,10) + 'T00:00:00');
+    /* new Date() pada nilai rusak TIDAK melempar error, jadi try/catch di
+       sini tidak pernah terpicu untuk itu; toLocaleDateString pada Invalid
+       Date mengembalikan string Inggris "Invalid Date" mentah-mentah. */
+    if (isNaN(d.getTime())) return String(t || '-');
     return d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   }catch(e){ return t; }
 }

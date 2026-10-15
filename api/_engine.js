@@ -4000,7 +4000,11 @@ function _kumpulAnomaliTgl(himpun, salur, ump, transfer){
           tglKredit: r.tglBeda.kredit,
           takTerbaca: !!r.tglBeda.takTerbaca,
           jumlah: r.jumlah || r.nominal || 0,
-          keterangan: r.keterangan || ''
+          keterangan: r.keterangan || '',
+          /* Baris sumber di berkas Excel (1-based), supaya admin tidak perlu
+             mencari manual di antara ribuan baris jurnal (pemilik, 15
+             Oktober 2026: tanggal salah tidak ketemu di berkas). */
+          baris: r._baris || null
         });
       }
     });
@@ -4105,19 +4109,19 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         var dUmp = /ZAKAT/i.test(currentSection) ? 'Zakat' : /AMIL/i.test(currentSection) ? 'Amil' : 'Infak';
         var layU = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian, _layMaster()) : null;
         var layNama = layU ? (layU.tipe + ' ' + layU.nama) : (extractLayananFromText(pUraian, listLayanan) ? _layLabel(extractLayananFromText(pUraian, listLayanan)) : '');
-        umpRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
+        umpRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
           akun:aK.label, rekeningId:aK.rekeningId, kasNama:aK.kasNama, nominal:pDebet,
           keterangan:pUraian, section:currentSection, akunDikenal:aK.dikenal });
       } else if (/^PENGEMBALIAN UMP$/i.test(currentSection)) {
         /* debet = rekening/kas yang menerima uang kembali, kredit = akun UMP */
         var dK = /zakat/i.test(akunKredit) ? 'Zakat' : /amil/i.test(akunKredit) ? 'Amil' : 'Infak';
         var layK = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian, _layMaster()) : null;
-        umpRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
+        umpRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
           akun:aD.label, rekeningId:aD.rekeningId, kasNama:aD.kasNama, nominal:pDebet,
           keterangan:pUraian, section:currentSection, akunDikenal:aD.dikenal });
       } else {
         var jT = /SETOR/i.test(currentSection) ? 'setor' : /TARIK/i.test(currentSection) ? 'tarik' : 'mutasi';
-        transferRows.push({ tanggal:pTgl, tglBeda:pBeda, jenis:jT,
+        transferRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:jT,
           dariAkun:aK.label, dariRekeningId:aK.rekeningId, dariKas:aK.kasNama,
           keAkun:aD.label, keRekeningId:aD.rekeningId, keKas:aD.kasNama,
           nominal:pDebet, keterangan:pUraian, section:currentSection,
@@ -4357,6 +4361,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           var metode = jpMetode(accName, uraian, currentSection);
                     
           himpunRows.push({
+            _baris: i + 1,
             tanggal: dateStr,
             jenisDana: jDana,
             subJenis: sJenis,
@@ -4464,6 +4469,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           var bentukBantuan = (metode === 'Transfer Bank') ? 'Transfer' : 'Uang Tunai';
 
           salurRows.push({
+            _baris: i + 1,
             tanggal: dateStr,
             ashnaf: ashnaf,
             sumberDana: sumberDana,
