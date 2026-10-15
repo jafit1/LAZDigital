@@ -48,6 +48,8 @@ const DAFTAR = [
   { label: 'Jurnal: FR bukan nama KLL/ULL', berkas: 'test_fr_bukan_kll.js' },
   { label: 'Angka rekap per kantor (bukan cuma total KLL/ULL)', berkas: 'test_rkangka_per_kantor.js' },
   { label: 'Tabel banding tampilkan rincian per kantor', berkas: 'test_tabel_banding_per_kantor.js' },
+  { label: 'Tanggal tak terbaca ditandai, bukan dibulatkan', berkas: 'test_tanggal_tak_terbaca.js' },
+  { label: 'Scrollbar panel impor terlihat', berkas: 'test_scrollbar_impor.js' },
   { label: 'Tawaran rekap, Saldo KLL, urutan menu', berkas: 'test_tampilan_kll_menu.js' },
   { label: 'Link Penghimpunan Harian', berkas: 'test_link_harian.js' },
   { label: 'Pemecahan izin Dashboard', berkas: 'test_izin_modul.js' },

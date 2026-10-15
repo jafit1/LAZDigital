@@ -5056,7 +5056,17 @@ function tarikImportData() {
         if (IMPORT_MODE === 'berkas' && window.IMPORT_REKAP_SHEETS) imporSamakanRekap();
       } else {
         IMPORT_TEMP_ROWS = res.valid;
-        var h = '<div class="imp-stat">'
+        /* Tanggal yang gagal dibaca ("206-10-11") ditandai server sebagai
+           _tanggalTakTerbaca, bukan dibulatkan jadi tanggal yang tampak sah.
+           Ditaruh paling atas dan jelas, supaya tidak baru ketahuan lewat
+           galat database saat Simpan (pemilik, 15 Oktober 2026). */
+        var tglRusak = (res.invalid || []).filter(function(r){ return r._tanggalTakTerbaca; });
+        var h = tglRusak.length ? '<div class="imp-note imp-warn" style="margin-bottom:12px">'
+          + '<b>' + tglRusak.length + ' baris tanggalnya tidak bisa dibaca</b> dan tidak ikut disimpan: '
+          + tglRusak.slice(0, 5).map(function(r){ return '"' + esc(r.tanggal) + '"'; }).join(', ')
+          + (tglRusak.length > 5 ? ', dst' : '') + '. Betulkan formatnya di berkas (contoh: 2026-10-11), lalu unggah ulang.'
+          + '</div>' : '';
+        h += '<div class="imp-stat">'
           + '<span class="imp-stat-i ok"><b>' + res.valid.length + '</b> baris valid</span>'
           + (res.invalid.length ? '<span class="imp-stat-i bad"><b>' + res.invalid.length + '</b> tidak valid, diabaikan</span>' : '')
           + '</div>';

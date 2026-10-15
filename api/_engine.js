@@ -3163,7 +3163,13 @@ function parseImportDate(val) {
   }
   try {
     var d = new Date(val);
-    if (!isNaN(d.getTime())) {
+    /* Tahun di luar rentang wajar (mis. "206-10-11" dibaca Date sebagai
+       tahun 206) BUKAN tanggal yang terbaca — ia hanya tampak sah. Kalau
+       diteruskan sebagai "0206-10-10", baris ini lolos ke tahap simpan dan
+       baru ditolak oleh validasi database dengan galat mentah yang
+       membocorkan id baris internal ke layar. String aslinya dikembalikan
+       supaya pemanggil bisa menandainya tidak terbaca, sebelum menyimpan. */
+    if (!isNaN(d.getTime()) && d.getUTCFullYear() >= 1900 && d.getUTCFullYear() <= 2200) {
       return d.toISOString().slice(0, 10);
     }
   } catch (e) {}
@@ -3992,6 +3998,7 @@ function _kumpulAnomaliTgl(himpun, salur, ump, transfer){
           nama: r.namaDonatur || r.namaPenerima || r.layanan || r.dariAkun || '-',
           tglDebet: r.tglBeda.debet,
           tglKredit: r.tglBeda.kredit,
+          takTerbaca: !!r.tglBeda.takTerbaca,
           jumlah: r.jumlah || r.nominal || 0,
           keterangan: r.keterangan || ''
         });
@@ -4146,8 +4153,16 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           }
         }
         
-        var _tglBeda = (_tglPasangan && _tglPasangan !== dateStr)
-          ? { debet: dateStr, kredit: _tglPasangan } : null;
+        /* Tanggal yang kelihatan sah bagi isValidDateStringOrObject tapi
+           tahunnya mustahil (mis. "206-10-11" dibaca Date sebagai tahun 206)
+           tidak boleh diteruskan diam-diam: baru ketahuan saat server menolak
+           menyimpan, dan galatnya membocorkan id baris internal ke layar.
+           Ditandai di sini supaya bisa diputuskan sebelum menyimpan. */
+        var _tglSah = function(s){ return /^\d{4}-\d{2}-\d{2}$/.test(s) && Number(s.slice(0,4)) >= 1900 && Number(s.slice(0,4)) <= 2200; };
+        var _takTerbaca = !_tglSah(dateStr) || (_tglPasangan && !_tglSah(_tglPasangan));
+        var _tglBeda = _takTerbaca
+          ? { debet: dateStr, kredit: _tglPasangan || dateStr, takTerbaca: true }
+          : ((_tglPasangan && _tglPasangan !== dateStr) ? { debet: dateStr, kredit: _tglPasangan } : null);
         dipakai[i] = 1;
         if (bankAccName || _tglPasangan) dipakai[i + 1] = 1;
 
@@ -4682,7 +4697,13 @@ async function apiParseImportUrl(t, url, type, opsi) {
       var invalid = [];
       parsed.forEach(function(row) {
         var name = type === 'himpun' ? row.namaDonatur : row.namaPenerima;
-        if (name && row.jumlah > 0) {
+        /* Tanggal yang gagal dibaca (parseImportDate mengembalikan string
+           aslinya) tidak boleh ikut tersimpan: baru ketahuan lewat galat
+           database yang membocorkan id baris ke layar. */
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.tanggal || ''))) {
+          row._tanggalTakTerbaca = true;
+          invalid.push(row);
+        } else if (name && row.jumlah > 0) {
           valid.push(row);
         } else {
           invalid.push(row);
@@ -5910,7 +5931,10 @@ async function apiParseImportText(t, text, type, opsi) {
     var invalid2 = [];
     parsed2.forEach(function(row) {
       var name = type === 'himpun' ? row.namaDonatur : row.namaPenerima;
-      if (name && row.jumlah > 0) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(row.tanggal || ''))) {
+        row._tanggalTakTerbaca = true;
+        invalid2.push(row);
+      } else if (name && row.jumlah > 0) {
         valid2.push(row);
       } else {
         invalid2.push(row);
