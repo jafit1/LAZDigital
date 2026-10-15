@@ -5648,6 +5648,16 @@ function imporTabelBanding(res, ringkas) {
   h += baris('Total penerimaan', R.totalHimpun.total, A.himpun.total, true);
   if (A.salur) h += baris('Penyaluran', R.totalSalur.total, A.salur.total, true);
   h += '</tbody></table></div>';
+  /* Rincian per kantor: satu baris "Penerimaan KLL" menyembunyikan kantor
+     mana yang sebenarnya beda dengan rekap (pemilik, 15 Oktober 2026). */
+  var kJ = {}; (R.kantor || []).forEach(function(k){ kJ[k.label] = k.total; });
+  var kR = (A.himpun && A.himpun.kantor) || {};
+  var namaKantor = Object.keys(kJ).concat(Object.keys(kR)).filter(function(n, i, arr){ return arr.indexOf(n) === i; }).sort();
+  if (namaKantor.length) {
+    h += '<div class="imp-tblwrap imp-banding" style="margin-top:8px"><table class="imp-tbl"><thead><tr><th>Per kantor</th><th>Jurnal (sekarang)</th><th>Rekap</th><th>Selisih</th></tr></thead><tbody>'
+      + namaKantor.map(function(n){ return baris(n, kJ[n] || 0, kR[n] || 0); }).join('')
+      + '</tbody></table></div>';
+  }
   var cat = [A.cocok + ' transaksi cocok'];
   if (!A.salur) cat.push('berkas ini tidak memuat penyaluran, jadi penyaluran rekap dibandingkan di berkas yang memuatnya');
   if (R.bagiHasil) cat.push('penerimaan jurnal termasuk bagi hasil bank ' + rp(R.bagiHasil));

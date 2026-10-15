@@ -4359,11 +4359,11 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             bank: bankLabel,
             statusBayar: 'Lunas',
             keterangan: uraian,
-            /* Transaksi KLL/ULL dicatat atas nama layanannya; nama petugas
-               fundraising hanya untuk transaksi tingkat daerah. */
-            fundraising: layananId || _pre
-              ? namaDonatur
-              : cleanFundraisingName(extractFundraisingFromText(uraian)),
+            /* Fundraising hanya berlaku tingkat daerah. Transaksi KLL/ULL
+               TIDAK dicatat atas nama layanannya di kolom FR (itu salah,
+               layanan bukan fundraising); tetap pakai nama fundraising
+               asli dari uraian bila disebut ("via Sherli"), atau default. */
+            fundraising: cleanFundraisingName(extractFundraisingFromText(uraian)),
             akunKredit: _akunKredit,
             bedaDana: _bedaDana,
             tglBeda: _tglBeda
@@ -5741,12 +5741,16 @@ function _samakanRekap(jurnal, rekap, opsi, listLayanan, listRek){
    dengan usulan kantor (_rkKantor), jadi selisih nol berarti usulannya
    sudah diterapkan semua. */
 function _rkAngka(RH, RS, lay, cocok){
-  var h = { Daerah: 0, KLL: 0, ULL: 0, total: 0, n: 0 };
+  var h = { Daerah: 0, KLL: 0, ULL: 0, total: 0, n: 0, kantor: {} };
   (RH || []).forEach(function(r){
     var rk = _rkKantor(r.nama, lay);
     var k = rk ? (rk.lay ? String(rk.lay.tipe || rk.tipe).toUpperCase() : rk.tipe) : 'Daerah';
     if (k !== 'KLL' && k !== 'ULL') k = 'Daerah';
     h[k] += Number(r.jumlah) || 0; h.total += Number(r.jumlah) || 0; h.n++;
+    if (k !== 'Daerah') {
+      var nm = k + ' ' + (rk.lay ? rk.lay.nama : rk.inti);
+      h.kantor[nm] = (h.kantor[nm] || 0) + (Number(r.jumlah) || 0);
+    }
   });
   var s = RS ? { total: RS.reduce(function(a, r){ return a + (Number(r.jumlah) || 0); }, 0), n: RS.length } : null;
   return { himpun: h, salur: s, cocok: cocok || 0 };
