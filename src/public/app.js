@@ -9576,11 +9576,12 @@ function renderHarianPreview(d){
       + '<th>No. Kwitansi</th><th>Donatur</th><th>Rekap</th><th>Jenis Dana</th><th>Metode</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
       + '</tr></thead><tbody>';
     d.himpun.forEach(function(x){
+      var bankSingkat = x.bank ? String(x.bank).split('-')[0].trim() : '';
       h += '<tr><td>'+esc(x.noKwitansi)+'</td><td><b>'+esc(x.namaDonatur)+'</b></td>'
-        + '<td class="muted">'+esc(x.layanan)+'</td>'
+        + '<td class="muted">'+(x.layanan && x.layanan !== x.namaDonatur ? esc(x.layanan) : '')+'</td>'
         + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')
           +(x.pilar||x.program?' <span class="muted">'+esc(x.pilar||x.program)+'</span>':'')+'</td>'
-        + '<td>'+esc(x.metode)+(x.bank?'<div class="muted" style="font-size:11px">'+esc(x.bank)+'</div>':'')+'</td>'
+        + '<td>'+esc(x.metode)+(bankSingkat?'<div class="muted" style="font-size:11px">'+esc(bankSingkat)+'</div>':'')+'</td>'
         + '<td class="muted">'+esc(x.petugas)+'</td>'
         + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--green)">'+rp(x.jumlah)+'</td></tr>';
     });
@@ -9955,12 +9956,20 @@ function buildHarianHTML(d){
   var kontak = [s.alamat, s.telepon, s.email, s.website].filter(Boolean).map(esc).join(' &middot; ');
 
   var barisHimpun = d.himpun.map(function(x){
+    /* Nama KLL/ULL memang sudah mengandung nama layanannya ("KLL Sanden"),
+       jadi sub-layanan hanya ditampilkan bila beda dari nama donaturnya,
+       supaya nama tidak muncul dua kali (seperti di PDF sebelumnya). Info
+       bank hanya nomor/nama singkatnya; "Transfer Bank"/"Tunai" diambil dari
+       metode, jadi tidak perlu diulang sebagai sub. */
+    var subLay = (x.layanan && x.layanan !== 'Penghimpunan Daerah' && x.layanan !== x.namaDonatur)
+      ? '<div class="sub">'+esc(x.layanan)+'</div>' : '';
+    var bankSingkat = x.bank ? String(x.bank).split('-')[0].trim() : '';
     return [
       esc(x.noKwitansi),
-      '<b>'+esc(x.namaDonatur)+'</b>' + (x.layanan && x.layanan !== 'Penghimpunan Daerah' ? '<div class="sub">'+esc(x.layanan)+'</div>' : ''),
+      '<b>'+esc(x.namaDonatur)+'</b>' + subLay,
       esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : '')
         + (x.pilar||x.program ? '<div class="sub">'+esc(x.pilar||x.program)+'</div>' : ''),
-      esc(x.metode) + (x.bank ? '<div class="sub">'+esc(x.bank)+'</div>' : ''),
+      esc(x.metode) + (bankSingkat ? '<div class="sub">'+esc(bankSingkat)+'</div>' : ''),
       esc(x.fundraising||'-'),
       rpCetak(x.jumlah)
     ];
@@ -10069,16 +10078,14 @@ function buildHarianHTML(d){
     + '.kosong{border:1pt solid #d7dbe0;border-top:none;padding:14px;text-align:center;color:#7a828c;font-size:9pt;border-radius:0 0 4px 4px}'
 
     + 'table.tbl{width:100%;border-collapse:collapse;font-size:9.2pt;border:0.6pt solid #c9ced5;border-top:none}'
-    + 'table.tbl th{background:#eef0f3;border-bottom:1pt solid #9aa3ad;padding:6px 7px;text-align:left;'
+    + 'table.tbl th{border-bottom:1pt solid #1b1f24;padding:6px 7px;text-align:left;'
       + 'font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.3px}'
     + 'table.tbl td{border-bottom:0.5pt solid #e1e4e8;padding:4px 7px;vertical-align:top;word-break:break-word}'
-    + 'table.tbl td:nth-child(2){white-space:nowrap;font-size:8.2pt}'
     + 'table.tbl td.no,table.tbl th.no{width:22px;text-align:center;color:#7a828c}'
     + 'table.tbl .kanan{text-align:right}'
     + 'table.tbl .nom{font-variant-numeric:tabular-nums;white-space:nowrap}'
     + 'table.tbl .sub{font-size:7.8pt;color:#6b7480;margin-top:1px}'
-    + 'table.tbl tbody tr:nth-child(even){background:#f4f6f8}'
-    + 'table.tbl tfoot td{background:#e3e7ec;border-top:1.2pt solid #1b1f24;padding:7px;font-weight:800;font-size:10pt}'
+    + 'table.tbl tfoot td{border-top:1.2pt solid #1b1f24;padding:7px;font-weight:800;font-size:10pt}'
     + 'table.tbl thead{display:table-header-group;break-after:avoid}'
     /* tfoot bawaannya diulang di tiap halaman; dijadikan baris biasa agar
        "JUMLAH" hanya muncul sekali di akhir tabel */
