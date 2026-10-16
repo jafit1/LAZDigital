@@ -542,6 +542,11 @@ async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.i
 /* Badan penyimpanan dipisah dari pemeriksaan izin supaya jalur Fundraising (apiFundHimpunkan) memakai satu-satunya
    aturan tulis yang sama (nomor kwitansi, audit, donatur terdaftar, sinkron bulanan) dengan izin modul fundraising. */
 async function _simpanPenghimpunan(u,d){
+  /* Akun yang terikat nama fundraising mengisi atas namanya sendiri — tidak
+     bisa memilih nama lain di formulir (kecuali superadmin/koordinator yang
+     memang boleh mengisi untuk siapa pun). */
+  var milik = _frNamaMilik(u.nama);
+  if (milik && u.role !== 'superadmin' && !can(u, 'fundraising', 'delete')) d.fundraising = milik;
   d.fundraising = cleanFundraisingName(d.fundraising);
   var oldMonth = '';
   if(d.id){
@@ -744,6 +749,115 @@ function _bacaFundraising(){
 }
 function _tulisFundraising(list){ setSetting('fundraisingList', JSON.stringify(list)); }
 
+/* ===== FUNDRAISING MELEKAT KE AKUN (pemilik) =====
+   Nama fundraising dilekatkan ke akun pengguna supaya jelas siapa yang
+   mengisi atas nama siapa. Penyimpanannya TERPISAH dari daftar nama
+   (settings kunci 'fundraisingAkun': {nama: userId}), jadi daftar nama
+   tetap string seperti sebelumnya dan semua dropdown lama tidak pecah.
+   Nama bukan orang tidak boleh punya akun: ia sumber transaksi, bukan pengisi. */
+var FR_BUKAN_ORANG = ['lazismu daerah bantul', 'kantor', 'qris'];
+/* Izin paket fundraiser: cukup mengisi lapangan dan melihat datanya sendiri.
+   Sengaja tanpa hapus, tanpa settings, tanpa users, tanpa rekening. */
+var FR_IZIN_PAKET = {
+  dashboard: { view: true },
+  penghimpunan: { view: true, create: true },
+  donatur: { view: true, create: true },
+  fundraising: { view: true, create: true },
+};
+function _frBukanOrang(nama){
+  return FR_BUKAN_ORANG.indexOf(String(nama == null ? '' : nama).trim().toLowerCase()) >= 0;
+}
+function _bacaFrAkun(){
+  var raw = getSetting('fundraisingAkun');
+  if (!raw) return {};
+  try { var o = JSON.parse(raw); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+}
+function _tulisFrAkun(peta){ setSetting('fundraisingAkun', JSON.stringify(peta || {})); }
+/* Nama fundraising milik akun siapa (pencocokan nama persis, tak peduli huruf
+   besar/kecil). Dipakai mengunci input formulir ke namanya sendiri. */
+function _frNamaMilik(namaAkun){
+  var peta = _bacaFrAkun(), nama = String(namaAkun == null ? '' : namaAkun).trim().toLowerCase();
+  if (!nama) return '';
+  var kunci = Object.keys(peta);
+  for (var i = 0; i < kunci.length; i++) {
+    if (kunci[i].toLowerCase() === nama) return kunci[i];
+  }
+  return '';
+}
+/* Id akun yang terikat pada satu nama fundraising (atau ''). */
+function _frAkunUntuk(nama){
+  var peta = _bacaFrAkun();
+  var kunci = Object.keys(peta);
+  for (var i = 0; i < kunci.length; i++) {
+    if (kunci[i].toLowerCase() === String(nama).toLowerCase()) return peta[kunci[i]];
+  }
+  return '';
+}
+/* Username disarankan dari nama ("Nur Yulianto" -> "nuryulianto"),
+   ditambah angka bila sudah dipakai. */
+function _frUsername(nama){
+  var dasar = String(nama || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'fundraiser';
+  var pakai = {};
+  readAll(SHEETS.USERS).forEach(function(x){ pakai[String(x.username || '').toLowerCase()] = 1; });
+  if (!pakai[dasar]) return dasar;
+  for (var i = 2; i < 1000; i++) { if (!pakai[dasar + i]) return dasar + i; }
+  return dasar + Date.now();
+}
+
+/* Tautkan nama fundraising ke akun yang sudah ada, atau buatkan akun baru
+   sekaligus dengan izin paket fundraiser. Hanya superadmin. Kalau nama sudah
+   terikat akun lain, tautan lama diganti (satu nama = satu akun). */
+function apiTautkanFundraising(t, d){
+  var a = _requirePerm(t, 'users', 'create');
+  if (a.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh menautkan fundraising ke akun.');
+  d = d || {};
+  var nama = String(d.nama == null ? '' : d.nama).trim();
+  if (!nama) throw new Error('Nama fundraising wajib diisi.');
+  var list = _bacaFundraising();
+  var resmi = list.some(function(n){ return String(n).toLowerCase() === nama.toLowerCase(); });
+  if (!resmi) throw new Error('Nama "' + nama + '" tidak ada di daftar fundraising.');
+  if (_frBukanOrang(nama)) throw new Error('"' + nama + '" bukan orang, tidak bisa punya akun.');
+  var peta = _bacaFrAkun();
+  if (d.username && !d.password) {
+    var cari = String(d.username).trim().toLowerCase();
+    var akun = readAll(SHEETS.USERS).find(function(x){ return String(x.username || '').toLowerCase() === cari; });
+    if (!akun) throw new Error('Akun "' + d.username + '" tidak ditemukan. Isi sandi untuk membuatkan akun baru.');
+    if (akun.role === 'superadmin') throw new Error('Akun superadmin tidak bisa diikat ke nama fundraising.');
+    peta[nama] = akun.id;
+  } else {
+    var username = String(d.username == null ? '' : d.username).trim() || _frUsername(nama);
+    if (readAll(SHEETS.USERS).some(function(x){ return String(x.username || '').toLowerCase() === username.toLowerCase(); }))
+      throw new Error('Username "' + username + '" sudah dipakai. Pilih username lain.');
+    if (!d.password) throw new Error('Sandi wajib diisi untuk akun baru.');
+    _periksaSandi(d.password);
+    var s2 = makeId();
+    var idBaru = makeId();
+    insertRow(SHEETS.USERS, { id: idBaru, username: username, passwordHash: hashPassword(d.password, s2), salt: s2,
+      nama: nama, role: 'staff', permissions: JSON.stringify(FR_IZIN_PAKET), aktif: 'true',
+      dibuat: new Date().toISOString(), layanan: '' });
+    peta[nama] = idBaru;
+    audit(a.id, a.username, 'create_user', username, { modul: 'users', ringkas: nama + ' · peran staff (akun fundraising)' });
+  }
+  _tulisFrAkun(peta);
+  audit(a.id, a.username, 'taut_fr_akun', nama, { modul: 'settings', ringkas: nama });
+  return { ok: true, nama: nama, userId: peta[nama], daftar: list };
+}
+/* Lepas tautan nama fundraising dari akunnya. Akunnya TIDAK dihapus (tetap
+   bisa login), hanya tidak lagi mengisi atas nama itu. */
+function apiLepasFrAkun(t, d){
+  var a = _requirePerm(t, 'users', 'edit');
+  if (a.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh melepas tautan fundraising.');
+  d = d || {};
+  var nama = String(d.nama == null ? '' : d.nama).trim();
+  var peta = _bacaFrAkun();
+  var kunci = Object.keys(peta).find(function(k){ return k.toLowerCase() === nama.toLowerCase(); });
+  if (!kunci) throw new Error('Nama "' + nama + '" tidak terikat akun mana pun.');
+  delete peta[kunci];
+  _tulisFrAkun(peta);
+  audit(a.id, a.username, 'lepas_fr_akun', nama, { modul: 'settings', ringkas: nama });
+  return { ok: true, nama: kunci };
+}
+
 /* Dipakai formulir penghimpunan, jadi cukup butuh login — bukan izin settings. */
 function apiListFundraising(t){ authUser(t); return _bacaFundraising(); }
 
@@ -791,14 +905,24 @@ function apiDeleteFundraising(t,nama){
   return {ok:true,daftar:sisa,masihDipakai:dipakai};
 }
 
-/* Berapa transaksi memakai tiap nama — untuk peringatan sebelum hapus. */
+/* Berapa transaksi memakai tiap nama — untuk peringatan sebelum hapus.
+   Ditambah peta akun {nama: {userId, username, aktif}} supaya layar tahu
+   nama mana yang sudah punya akun aktif. */
 function apiPemakaianFundraising(t){
   _requirePerm(t,'settings','view');
   var pakai={};
   readAll(SHEETS.PENGHIMPUNAN).forEach(function(r){
     var n=String(r.fundraising||'').trim(); if(!n) return;
     pakai[n]=(pakai[n]||0)+1; });
-  return {daftar:_bacaFundraising(),pemakaian:pakai};
+  var peta = _bacaFrAkun();
+  var akun = {};
+  var semua = {}; readAll(SHEETS.USERS).forEach(function(x){ semua[x.id] = x; });
+  Object.keys(peta).forEach(function(nama){
+    var u = semua[peta[nama]];
+    if (!u) return;
+    akun[nama] = { userId: u.id, username: u.username, aktif: String(u.aktif) !== 'false' };
+  });
+  return {daftar:_bacaFundraising(),pemakaian:pakai,akun:akun};
 }
 
 /* ===== LAYANAN (KLL/ULL) ===== */
@@ -8203,6 +8327,8 @@ REGISTRY['apiListFundraising']=apiListFundraising;
 REGISTRY['apiSaveFundraising']=apiSaveFundraising;
 REGISTRY['apiDeleteFundraising']=apiDeleteFundraising;
 REGISTRY['apiPemakaianFundraising']=apiPemakaianFundraising;
+REGISTRY['apiTautkanFundraising']=apiTautkanFundraising;
+REGISTRY['apiLepasFrAkun']=apiLepasFrAkun;
 REGISTRY['apiChangeMyPassword']=apiChangeMyPassword;
 REGISTRY['apiMe']=apiMe;
 REGISTRY['apiGetPermissionMeta']=apiGetPermissionMeta;

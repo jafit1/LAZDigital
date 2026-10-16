@@ -200,9 +200,28 @@ function frDaftar(){
 }
 
 /* Dropdown fundraiser — wajib dipilih. Nilai lama yang sudah tidak ada di
-   daftar tetap ditampilkan supaya mengedit transaksi lama tidak menghapusnya. */
+   daftar tetap ditampilkan supaya mengedit transaksi lama tidak menghapusnya.
+   Nama fundraising yang melekat ke akun (kunci 'fundraisingAkun' di settings,
+   dibaca apiPemakaianFundraising sebagai `akun`) mengunci pilihan ke namanya
+   sendiri: akun Sherli hanya bisa mengisi sebagai Sherli. */
+function frNamaTerkunci(){
+  if (!ME || ME.role === 'superadmin') return '';
+  var ak = (window.FR_AKUN) || {};
+  var namaSaya = String((ME && ME.nama) || '').trim().toLowerCase();
+  if (!namaSaya) return '';
+  var kunci = Object.keys(ak);
+  for (var i = 0; i < kunci.length; i++) {
+    if (kunci[i].toLowerCase() === namaSaya) return kunci[i];
+  }
+  return '';
+}
 function frInput(id, val){
   val = String(val==null?'':val).trim();
+  var kunci = frNamaTerkunci();
+  if (kunci) {
+    return '<select id="'+id+'" disabled><option selected>'+esc(kunci)+'</option></select>'
+      + '<input type="hidden" id="'+id+'_kunci" value="'+esc(kunci)+'">';
+  }
   var opts = frDaftar().slice();
   if(val && !opts.some(function(n){ return String(n).toLowerCase()===val.toLowerCase(); })) opts.unshift(val);
   return '<select id="'+id+'">'
@@ -313,6 +332,16 @@ function muatFundraising(paksa){
     CACHE.fundraising = rows || []; return CACHE.fundraising;
   }).catch(function(){ return CACHE.fundraising || []; });
 }
+/* Peta nama fundraising -> akun. Dibutuhkan formulir supaya akun yang punya
+   nama terikat mengunci pilihannya. Gagal memuat tidak menghentikan app —
+   formulir tetap bisa diisi manual, server tetap memaksa namanya sendiri. */
+function muatFrAkun(){
+  return gas('apiPemakaianFundraising')(TOKEN).then(function(d){
+    window.FR_AKUN = (d && d.akun) || {};
+    if (d && d.daftar) CACHE.fundraising = d.daftar;
+    return window.FR_AKUN;
+  }).catch(function(){ window.FR_AKUN = window.FR_AKUN || {}; return window.FR_AKUN; });
+}
 function startApp(){
   try{ LZ.bootSelesai(); }catch(e){}
   el('boot').classList.add('hidden');el('loginView').classList.add('hidden');el('appView').classList.remove('hidden');
@@ -320,6 +349,7 @@ function startApp(){
      sini hanya penutupnya yang boleh lepas. */
   _layarLogoSelesai();
   muatFundraising();
+  muatFrAkun();
   // Default sidebar ciut (ikon saja); klik logo untuk melebarkan.
   if (localStorage.getItem('sidebar_collapsed') !== 'false') {
     el('appView').classList.add('collapsed');
@@ -1043,7 +1073,8 @@ function saveHimpun(id){
     telepon:el('f_telepon').value,email:el('f_email').value,alamat:el('f_alamat').value,jumlah:parseRupiah(el('f_jumlah').value),
     metode:el('f_metode').value,statusBayar:el('f_statusBayar').value,
     rekeningId:(el('rekWrap').style.display!=='none'&&el('f_rekeningId'))?el('f_rekeningId').value:'',keterangan:el('f_keterangan').value,
-    fundraising:el('f_fundraising')?el('f_fundraising').value:''};
+    /* Dropdown terkunci (akun punya nama terikat) menyimpan nilainya di input tersembunyi. */
+    fundraising:(el('f_fundraising_kunci')?el('f_fundraising_kunci').value:(el('f_fundraising')?el('f_fundraising').value:''))};
   if(d.rekeningId){var rk=(CACHE.rekening||[]).find(function(x){return x.id===d.rekeningId;});if(rk){d.bank=rk.namaBank;d.atasNama=rk.atasNama;}}
   clearFieldErrors('.fform');
   var bad=false;
@@ -1367,17 +1398,28 @@ function viewFundraising(){
   }).catch(handleErr);
 }
 function renderFundraising(d){
-  var rows = d.daftar || [], pakai = d.pemakaian || {};
+  var rows = d.daftar || [], pakai = d.pemakaian || {}, akun = d.akun || {};
   var add = canDo('settings','edit')
     ? '<button class="btn btn-primary" onclick="formFr()">+ Tambah Fundraising</button>' : '';
-  var h='<div class="page-head"><div><h1>Fundraising</h1><div class="desc">Nama sumber di formulir Penghimpunan</div></div>'+add+'</div>';
-  h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Dipakai</th><th></th></tr></thead><tbody>';
-  if(!rows.length) h+='<tr><td colspan="3"><div class="empty"><div class="big">▢</div>Belum ada nama fundraising.</div></td></tr>';
+  var h='<div class="page-head"><div><h1>Fundraising</h1><div class="desc">Nama sumber di formulir Penghimpunan. Setiap nama orang sebaiknya punya akun aktif supaya jelas siapa mengisi atas nama siapa.</div></div>'+add+'</div>';
+  h+='<div class="table-wrap"><div style="overflow:auto"><table><thead><tr><th>Nama</th><th>Dipakai</th><th>Akun</th><th></th></tr></thead><tbody>';
+  if(!rows.length) h+='<tr><td colspan="4"><div class="empty"><div class="big">▢</div>Belum ada nama fundraising.</div></td></tr>';
   rows.forEach(function(n){
     var c = pakai[n]||0;
+    var ak = akun[n];
+    var selAkun = ak
+      ? '<span class="badge '+(ak.aktif?'green':'amber')+'">'+esc(ak.username)+(ak.aktif?'':' · nonaktif')+'</span>'
+      : '<span class="muted">belum punya akun</span>';
+    var tombolAkun = '';
+    if (canDo('settings','edit')) {
+      tombolAkun = ak
+        ? '<button class="icon-btn" title="Lepas akun" onclick="lepasFrAkun(\''+esc(n).replace(/'/g,"\\'")+'\')">⛓‍💥</button>'
+        : '<button class="icon-btn" title="Tautkan / buatkan akun" onclick="formFrAkun(\''+esc(n).replace(/'/g,"\\'")+'\')">👤</button>';
+    }
     h+='<tr><td><b>'+esc(n)+'</b></td>'
       + '<td>'+(c?('<span class="badge green">'+c+' transaksi</span>'):'<span class="muted">belum dipakai</span>')+'</td>'
-      + '<td><div class="actions-cell">'
+      + '<td>'+selAkun+'</td>'
+      + '<td><div class="actions-cell">'+tombolAkun
       + (canDo('settings','edit')?'<button class="icon-btn" title="Ubah nama" onclick="formFr(\''+esc(n).replace(/'/g,"\\'")+'\')">'+SVG_ICONS.pensil+'</button>':'')
       + (canDo('settings','delete')?'<button class="icon-btn" title="Hapus" onclick="delFr(\''+esc(n).replace(/'/g,"\\'")+'\')">'+SVG_ICONS.sampah+'</button>':'')
       + '</div></td></tr>';
@@ -1412,6 +1454,36 @@ function delFr(nama){
       CACHE.fundraising = r.daftar || [];
       toast(r.masihDipakai ? ('Terhapus dari pilihan ('+r.masihDipakai+' transaksi lama tetap utuh)') : 'Terhapus');
       viewFundraising();
+    }).catch(handleErr);
+  });
+}
+/* Tautkan nama fundraising ke akun yang sudah ada, atau buatkan akun baru
+   sekaligus. Sandi hanya wajib bila membuat akun baru. */
+function formFrAkun(nama){
+  var b='<div class="field"><label>Nama Fundraising</label><input value="'+esc(nama)+'" disabled></div>'
+    + '<div class="field"><label>Username akun (kosongkan = disarankan dari nama)</label>'
+    + '<input id="fra_username" placeholder="cth: sherli" autocomplete="off"></div>'
+    + '<div class="field"><label>Sandi (wajib bila membuat akun baru)</label>'
+    + '<input type="password" id="fra_password" placeholder="min 8 karakter, huruf + angka" autocomplete="new-password"></div>'
+    + '<div class="muted" style="font-size:12px">Bila username cocok dengan akun yang sudah ada, nama ini dilekatkan ke akun itu. Bila tidak cocok, dibuatkan akun baru dengan izin paket fundraiser (mencatat penghimpunan, melihat donatur, modul fundraising; tanpa hapus, tanpa pengaturan, tanpa kelola user).</div>';
+  openModal('Tautkan "'+nama+'" ke Akun', b,
+    '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+    + '<button class="btn btn-primary" onclick="saveFrAkun(\''+esc(nama).replace(/'/g,"\\'")+'\')">Simpan</button>');
+}
+function saveFrAkun(nama){
+  var u = (el('fra_username').value||'').trim(), p = el('fra_password').value||'';
+  gas('apiTautkanFundraising')(TOKEN, { nama: nama, username: u, password: p }).then(function(r){
+    closeModal();
+    var ak = (r && r.userId) ? '' : '';
+    toast(u ? 'Nama "'+nama+'" dilekatkan ke akun.' : 'Akun baru dibuat untuk "'+nama+'". Catat sandinya, tidak bisa dilihat lagi.'+ak);
+    CACHE.dash=null; viewFundraising();
+  }).catch(handleErr);
+}
+function lepasFrAkun(nama){
+  uiConfirm('Lepas "'+nama+'" dari akunnya? Akunnya tidak dihapus, hanya tidak lagi mengisi atas nama ini.').then(function(__ok){
+    if(!__ok) return;
+    gas('apiLepasFrAkun')(TOKEN, { nama: nama }).then(function(){
+      toast('Tautan dilepas'); viewFundraising();
     }).catch(handleErr);
   });
 }
