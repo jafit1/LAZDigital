@@ -9539,18 +9539,30 @@ function lhRekapMini(judul, obj, warna){
     + '</div>';
 }
 
+/* Satu garis angka, bukan tiga kartu terpisah: laporan ini dokumen kerja,
+   bukan dasbor. Kartu stat-card di atasnya membuat bagian yang penting
+   (daftar transaksinya) turun ke bawah. */
+function lhRingkas(d){
+  var r = d.ringkas;
+  var b = function(l, v, n, warna){
+    return '<div class="lh-angka"><div class="lh-angka-l">'+l+'</div>'
+      + '<div class="lh-angka-v" style="color:'+warna+'">'+v+'</div>'
+      + '<div class="lh-angka-s">'+n+'</div></div>';
+  };
+  return '<div class="lh-strip">'
+    + b('Penghimpunan', rp(r.himpunTotal), r.himpunCount+' transaksi', 'var(--green)')
+    + b('Pentasyarufan', rp(r.salurTotal), r.salurCount+' transaksi', 'var(--red)')
+    + b('Selisih Hari Ini', rp(r.selisih), 'masuk dikurangi keluar', r.selisih>=0?'var(--green)':'var(--red)')
+    + '</div>';
+}
+
 function renderHarianPreview(d){
   var r = d.ringkas;
-  var h = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
+  var h = '<div class="card"><div class="lh-atas">'
     + '<div><h3>Laporan Harian</h3><div class="muted" style="font-size:13px">'+esc(tglIndo(d.tanggal))+'</div></div>'
     + '<button class="btn btn-primary btn-sm" onclick="cetakHarian()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button>'
-    + '</div>';
-
-  h += '<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:16px">'
-    + '<div class="stat"><div class="lbl">Penghimpunan</div><div class="val" style="color:var(--green)">'+rp(r.himpunTotal)+'</div><div class="muted" style="font-size:12px;margin-top:4px">'+r.himpunCount+' transaksi</div></div>'
-    + '<div class="stat"><div class="lbl">Pentasyarufan</div><div class="val" style="color:var(--red)">'+rp(r.salurTotal)+'</div><div class="muted" style="font-size:12px;margin-top:4px">'+r.salurCount+' transaksi</div></div>'
-    + '<div class="stat"><div class="lbl">Selisih Hari Ini</div><div class="val" style="color:'+(r.selisih>=0?'var(--green)':'var(--red)')+'">'+rp(r.selisih)+'</div><div class="muted" style="font-size:12px;margin-top:4px">masuk dikurangi keluar</div></div>'
-    + '</div>';
+    + '</div>'
+    + lhRingkas(d);
 
   if (!d.himpun.length && !d.salur.length) {
     h += '<div class="empty" style="padding:30px"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada transaksi pada tanggal ini.</div></div>';
@@ -9566,7 +9578,8 @@ function renderHarianPreview(d){
     d.himpun.forEach(function(x){
       h += '<tr><td>'+esc(x.noKwitansi)+'</td><td><b>'+esc(x.namaDonatur)+'</b></td>'
         + '<td class="muted">'+esc(x.layanan)+'</td>'
-        + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')+'</td>'
+        + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')
+          +(x.pilar||x.program?' <span class="muted">'+esc(x.pilar||x.program)+'</span>':'')+'</td>'
         + '<td>'+esc(x.metode)+(x.bank?'<div class="muted" style="font-size:11px">'+esc(x.bank)+'</div>':'')+'</td>'
         + '<td class="muted">'+esc(x.petugas)+'</td>'
         + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--green)">'+rp(x.jumlah)+'</td></tr>';
@@ -9945,7 +9958,8 @@ function buildHarianHTML(d){
     return [
       esc(x.noKwitansi),
       '<b>'+esc(x.namaDonatur)+'</b>' + (x.layanan && x.layanan !== 'Penghimpunan Daerah' ? '<div class="sub">'+esc(x.layanan)+'</div>' : ''),
-      esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : ''),
+      esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : '')
+        + (x.pilar||x.program ? '<div class="sub">'+esc(x.pilar||x.program)+'</div>' : ''),
       esc(x.metode) + (x.bank ? '<div class="sub">'+esc(x.bank)+'</div>' : ''),
       esc(x.fundraising||'-'),
       rpCetak(x.jumlah)
@@ -10024,30 +10038,31 @@ function buildHarianHTML(d){
     + '.lembar{max-width:210mm;margin:14px auto;background:#fff;padding:8mm 8mm;box-shadow:0 2px 18px rgba(0,0,0,.12)}'
 
     + '.kop{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;'
-      + 'border-bottom:2.5pt solid #1b1f24;padding-bottom:10px;margin-bottom:14px}'
+      + 'border-bottom:1.5pt solid #1b1f24;padding-bottom:12px;margin-bottom:16px}'
     + '.kop-kiri{display:flex;gap:11px;align-items:flex-start}'
-    + '.logo{height:46px;width:auto;object-fit:contain}'
-    + '.lembaga{font-size:15pt;font-weight:800;letter-spacing:-.2px;line-height:1.15}'
+    + '.logo{height:44px;width:auto;object-fit:contain}'
+    + '.lembaga{font-size:14pt;font-weight:800;letter-spacing:-.2px;line-height:1.15}'
     + '.kontak{font-size:8pt;color:#5b6470;margin-top:3px;max-width:78mm;line-height:1.4}'
     + '.kop-kanan{text-align:right;white-space:nowrap}'
     + '.judul{font-size:12.5pt;font-weight:800;letter-spacing:1.1px}'
     + '.judul2{font-size:8.5pt;color:#5b6470;margin-top:1px}'
     + '.tgl{font-size:9.5pt;font-weight:600;margin-top:5px}'
 
-    + '.ring{display:flex;gap:9px;margin-bottom:11px}'
-    + '.ring-k{flex:1;border:1pt solid #d7dbe0;border-radius:6px;padding:8px 11px;background:#fbfcfd}'
+    + '.ring{display:flex;gap:0;margin-bottom:12px;border-bottom:1pt solid #e6e8ec;padding-bottom:10px}'
+    + '.ring-k{flex:1;border:none;padding:0 12px;background:transparent}'
+    + '.ring-k + .ring-k{border-left:0.6pt solid #e6e8ec}'
     + '.ring-l{font-size:8pt;color:#5b6470;font-weight:600;text-transform:uppercase;letter-spacing:.4px}'
     + '.ring-v{font-size:13.5pt;font-weight:800;margin-top:2px}'
     + '.ring-s{font-size:7.8pt;color:#7a828c;margin-top:1px}'
     + '.hijau{color:#127a4b}.merah{color:#b3282d}'
 
-    + '.terbilang{font-size:9pt;color:#3d444d;margin-bottom:14px;padding:6px 11px;'
-      + 'background:#f6f7f9;border-left:2.5pt solid #1b1f24;border-radius:0 5px 5px 0}'
+    + '.terbilang{font-size:9pt;color:#3d444d;margin-bottom:14px;padding:6px 0;'
+      + 'border-top:0.6pt solid #e6e8ec;border-bottom:0.6pt solid #e6e8ec}'
     + '.terbilang span{color:#7a828c}'
 
     + '.sec{margin-bottom:6px;break-inside:auto}'
-    + '.sec-h{font-size:10pt;font-weight:800;letter-spacing:.5px;padding:6px 10px;'
-      + 'background:#1b1f24;color:#fff;border-radius:4px 4px 0 0;display:flex;justify-content:space-between;align-items:center}'
+    + '.sec-h{font-size:10pt;font-weight:800;letter-spacing:.5px;padding:6px 0;'
+      + 'border-bottom:1pt solid #1b1f24;color:#1b1f24;display:flex;justify-content:space-between;align-items:baseline}'
     + '.sec-n{font-weight:500;font-size:8.5pt;opacity:.8}'
     /* jangan memutus halaman tepat setelah judul bagian */
     + '.sec-h{break-after:avoid}'
@@ -10070,10 +10085,10 @@ function buildHarianHTML(d){
     + 'table.tbl tfoot{display:table-row-group}'
     + 'table.tbl tr{break-inside:avoid}'
 
-    + '.rk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0 12px;break-inside:avoid}'
-    + '.rk{border:0.6pt solid #d7dbe0;border-radius:5px;padding:8px 10px;break-inside:avoid;background:#fbfcfd}'
+    + '.rk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 18px;margin:8px 0 12px;break-inside:avoid}'
+    + '.rk{border-top:0.6pt solid #e6e8ec;padding:6px 0;break-inside:avoid}'
     + '.rk-h{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.35px;color:#5b6470;'
-      + 'border-bottom:0.6pt solid #e6e8ec;padding-bottom:4px;margin-bottom:5px}'
+      + 'margin-bottom:5px}'
     + '.rk-r{display:flex;justify-content:space-between;gap:10px;font-size:8.6pt;padding:2px 0}'
     + '.rk-r span{color:#3d444d}'
     + '.rk-r b{font-variant-numeric:tabular-nums;white-space:nowrap}'

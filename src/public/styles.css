@@ -3426,6 +3426,19 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 /* ================================================================
    39. PRATINJAU LAPORAN HARIAN
    ================================================================ */
+.lh-atas{
+  display:flex; justify-content:space-between; align-items:flex-start;
+  gap:12px; flex-wrap:wrap; margin-bottom:14px;
+}
+.lh-strip{
+  display:flex; gap:0; border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border); padding:10px 0; margin-bottom:16px;
+}
+.lh-angka{ flex:1; min-width:0; padding:0 14px; }
+.lh-angka + .lh-angka{ border-left:1px solid var(--border2); }
+.lh-angka-l{ font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.lh-angka-v{ font-size:17px; font-weight:800; margin-top:3px; font-variant-numeric:tabular-nums; }
+.lh-angka-s{ font-size:11px; color:var(--muted); margin-top:1px; }
 .lh-judul{
   font-family:var(--head); font-size:14px; font-weight:700;
   margin:20px 0 9px; color:var(--text);

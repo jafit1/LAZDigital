@@ -52,6 +52,7 @@ const DAFTAR = [
   { label: 'Scrollbar panel impor terlihat', berkas: 'test_scrollbar_impor.js' },
   { label: 'Anomali tanggal sertakan nomor baris Excel', berkas: 'test_anomali_tgl_baris.js' },
   { label: 'tglIndo tidak tampilkan "Invalid Date"', berkas: 'test_tglindo_rusak.js' },
+  { label: 'Laporan harian: detail pilar infak terikat', berkas: 'test_harian_pilar.js' },
   { label: 'Tawaran rekap, Saldo KLL, urutan menu', berkas: 'test_tampilan_kll_menu.js' },
   { label: 'Link Penghimpunan Harian', berkas: 'test_link_harian.js' },
   { label: 'Pemecahan izin Dashboard', berkas: 'test_izin_modul.js' },
