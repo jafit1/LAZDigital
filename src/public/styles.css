@@ -3511,6 +3511,9 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 }
 @media(max-width:1000px){ .a2-grid{ grid-template-columns:1fr; } }
 .a2-kolom{ min-width:0; }
+.a2-ttd-status{ font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.4; }
+.a2-ttd-status.ok{ color:var(--green); }
+.a2-ttd-status.gagal{ color:var(--red); font-weight:600; }
 .a2-sub{
   font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
   color:var(--muted); margin-bottom:8px;

@@ -1069,6 +1069,27 @@ function apiSaveSettings(t,d){
     {modul:'settings',ringkas:ringkasPerubahan(lama,d)});
   return _settingsAman(getAllSettings(), true);
 }
+/* TANDA TANGAN FORMULIR A2 (pemilik, 21 Oktober 2026)
+   Tempat, nama kasir, dan nama bagian keuangan cukup diisi SEKALI, tersimpan di
+   sistem, dan bisa diganti kapan saja. Dulu tersimpan hanya sebagai efek samping
+   tombol Cetak lewat apiSaveSettings, yang menuntut izin Pengaturan: petugas
+   Laporan tanpa izin itu gagal menyimpan secara diam-diam dan mengetik ulang tiap
+   cetak. Fungsi ini cukup izin Laporan (ubah), dan hanya menyentuh tiga kunci
+   miliknya sendiri, jadi tidak membuka pintu ke pengaturan lain. */
+function _teksTtd(v){
+  return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+function apiSimpanTandaTanganA2(t, d){
+  var u = _requirePerm(t, 'laporan', 'edit');
+  d = d || {};
+  var peta = { kota: 'formA2Kota', kasir: 'formA2Kasir', keuangan: 'formA2Keuangan' };
+  var ada = Object.keys(peta).filter(function(k){ return Object.prototype.hasOwnProperty.call(d, k); });
+  if (!ada.length) throw new Error('Tidak ada isian untuk disimpan.');
+  var hasil = { ok: true };
+  ada.forEach(function(k){ hasil[k] = _teksTtd(d[k]); setSetting(peta[k], hasil[k]); });
+  audit(u.id, u.username, 'edit_ttd_a2', ada.join(', '), { modul: 'laporan', ringkas: ada.map(function(k){ return k + ': ' + hasil[k]; }).join(' | ') });
+  return hasil;
+}
 /* Menyalakan, membuat ulang, dan mematikan tautan publik mengubah apa yang
    bisa dilihat orang luar, jadi butuh izin ubah Pengaturan. Dulu izin lihat
    Dashboard saja sudah cukup (tools/test_keamanan_lanjutan.js bagian A).
@@ -8439,6 +8460,7 @@ REGISTRY['apiPulihkanDB']=apiPulihkanDB;
 REGISTRY['apiHapusRentang']=apiHapusRentang;
 REGISTRY['apiListAudit']=apiListAudit;
 REGISTRY['apiLaporanHarian']=apiLaporanHarian;
+REGISTRY['apiSimpanTandaTanganA2']=apiSimpanTandaTanganA2;
 REGISTRY['apiClosingBulanan']=apiClosingBulanan;
 REGISTRY['apiClosingRincianFundraiser']=apiClosingRincianFundraiser;
 REGISTRY['apiHapusAudit']=apiHapusAudit;

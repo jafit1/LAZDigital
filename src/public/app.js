@@ -10316,33 +10316,28 @@ function a2Label(jenis){
   return jenis || 'Lainnya';
 }
 var A2_URUT = ['Zakat', 'Infak Sedekah', 'Wakaf', 'Kurban', 'Fidyah', 'Amil'];
+var A2_PETUGAS = 'Lazismu Daerah Bantul';
 
 /* Pisahkan penerimaan menjadi tunai dan bank, lalu gabungkan per jenis dana. */
 function a2Kelompok(rows){
-  var tunai = {}, bank = {}, petugasT = {}, petugasB = {};
+  var tunai = {}, bank = {};
   (rows || []).forEach(function(x){
-    var keBank = isTransferMethod(x.metode);
     var label = a2Label(x.jenisDana);
-    var kotak = keBank ? bank : tunai;
-    var pet = keBank ? petugasB : petugasT;
+    var kotak = isTransferMethod(x.metode) ? bank : tunai;
     kotak[label] = (kotak[label] || 0) + (Number(x.jumlah) || 0);
-    var nama = String(x.fundraising || x.petugas || '').trim();
-    if (nama) {
-      pet[label] = pet[label] || {};
-      pet[label][nama] = true;
-    }
   });
-  function jadikan(kotak, pet){
+  /* Kolom Petugas diisi nama lembaga, bukan nama fundraising atau akun pencatat
+     (pemilik, 21 Oktober 2026). Lembar serah terima kasir ini milik lembaga, dan
+     nama penggalang yang panjang membuat baris membungkus sampai A5 pecah. */
+  function jadikan(kotak){
     return Object.keys(kotak).sort(function(a,b){
       var ia = A2_URUT.indexOf(a), ib = A2_URUT.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
     }).map(function(k){
-      var nama = Object.keys(pet[k] || {});
-      return { label: k, jumlah: kotak[k],
-               petugas: nama.length > 2 ? (nama.slice(0,2).join(', ') + ' +' + (nama.length-2)) : nama.join(', ') };
+      return { label: k, jumlah: kotak[k], petugas: A2_PETUGAS };
     });
   }
-  var barisT = jadikan(tunai, petugasT), barisB = jadikan(bank, petugasB);
+  var barisT = jadikan(tunai), barisB = jadikan(bank);
   var totalT = barisT.reduce(function(a,b){ return a + b.jumlah; }, 0);
   var totalB = barisB.reduce(function(a,b){ return a + b.jumlah; }, 0);
   return { tunai: barisT, bank: barisB, totalTunai: totalT, totalBank: totalB, total: totalT + totalB };
@@ -10458,12 +10453,17 @@ function a2Panel(){
   h += '<div class="a2-kolom">'
     + '<div class="a2-sub">Tanda tangan &amp; tempat</div>'
     + '<div class="fgrid">'
-      + fld(12,'Tempat','<input id="a2_kota" value="'+esc(s.formA2Kota||'')+'" placeholder="cth: Kabupaten Bantul">')
-      + fld(12,'Nama Kasir','<input id="a2_kasir" value="'+esc(s.formA2Kasir||'')+'" placeholder="nama kasir">')
-      + fld(12,'Nama Bagian Keuangan','<input id="a2_keuangan" value="'+esc(s.formA2Keuangan||'')+'" placeholder="nama bagian keuangan">')
+      + fld(12,'Tempat','<input id="a2_kota" value="'+esc(s.formA2Kota||'')+'" placeholder="cth: Kabupaten Bantul" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Nama Kasir','<input id="a2_kasir" value="'+esc(s.formA2Kasir||'')+'" placeholder="nama kasir" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Nama Bagian Keuangan','<input id="a2_keuangan" value="'+esc(s.formA2Keuangan||'')+'" placeholder="nama bagian keuangan" onchange="a2SimpanTtd()" maxlength="80">')
       + fld(12,'Jumlah lembar kuitansi','<input type="number" min="0" id="a2_lembar" value="'+((A2_DATA&&A2_DATA.ringkas.himpunCount)||0)+'">')
     + '</div>'
-    + '<div class="muted" style="font-size:11.5px;margin-top:8px">Tempat dan nama tersimpan sebagai bawaan cetak.</div>'
+    /* Tiga isian pertama cukup diisi sekali: tersimpan otomatis begitu diubah,
+       dipakai di setiap cetak, dan bisa diganti kapan saja (pemilik, 21 Oktober
+       2026). Jumlah lembar sengaja tidak disimpan: angkanya berubah tiap hari. */
+    + '<div id="a2_ttd_status" class="a2-ttd-status" role="status" aria-live="polite">'
+      + (s.formA2Kota||s.formA2Kasir||s.formA2Keuangan ? 'Tersimpan. Dipakai di setiap cetak sampai Anda menggantinya.' : 'Cukup diisi sekali. Tersimpan otomatis dan dipakai di setiap cetak.')
+    + '</div>'
     + '</div>';
 
   h += '</div></div>';
@@ -10542,12 +10542,28 @@ function cetakA2(){
   var keuangan = (el('a2_keuangan')||{}).value || '';
   var lembar = (el('a2_lembar')||{}).value || '';
   printDoc(buildA2HTML(A2_DATA, {kota:kota, kasir:kasir, keuangan:keuangan, lembar:lembar}));
-  /* simpan sebagai bawaan supaya tidak perlu diketik ulang */
-  var s = (typeof SETTINGS === 'object' && SETTINGS) ? SETTINGS : {};
-  if (kota !== (s.formA2Kota||'') || kasir !== (s.formA2Kasir||'') || keuangan !== (s.formA2Keuangan||'')) {
-    gas('apiSaveSettings')(TOKEN, {formA2Kota:kota, formA2Kasir:kasir, formA2Keuangan:keuangan})
-      .then(function(baru){ SETTINGS = baru; }).catch(function(){});
-  }
+  /* Penyimpanan bawaan sudah terjadi saat isian diubah (a2SimpanTtd), jadi
+     mencetak tidak lagi menyimpan apa pun. */
+}
+
+/* Simpan tempat, kasir, dan keuangan begitu salah satunya diubah. Memakai api
+   khusus (izin Laporan > ubah), bukan apiSaveSettings (izin Pengaturan), dan
+   statusnya ditampilkan: dulu gagal menyimpan itu diam-diam. */
+function a2SimpanTtd(){
+  var st = el('a2_ttd_status');
+  var isi = {
+    kota: (el('a2_kota')||{}).value || '',
+    kasir: (el('a2_kasir')||{}).value || '',
+    keuangan: (el('a2_keuangan')||{}).value || ''
+  };
+  if (st) { st.className = 'a2-ttd-status'; st.textContent = 'Menyimpan...'; }
+  gas('apiSimpanTandaTanganA2')(TOKEN, isi).then(function(r){
+    var s = (typeof SETTINGS === 'object' && SETTINGS) ? SETTINGS : (SETTINGS = {});
+    s.formA2Kota = r.kota; s.formA2Kasir = r.kasir; s.formA2Keuangan = r.keuangan;
+    if (st) { st.className = 'a2-ttd-status ok'; st.textContent = 'Tersimpan. Dipakai di setiap cetak sampai Anda menggantinya.'; }
+  }).catch(function(e){
+    if (st) { st.className = 'a2-ttd-status gagal'; st.textContent = 'Belum tersimpan: ' + String((e && e.message) || e).replace(/^(IZIN:|Error:)\s*/, ''); }
+  });
 }
 
 function a2Angka(n){ return (Number(n)||0).toLocaleString('id-ID'); }
@@ -10591,9 +10607,14 @@ function buildA2HTML(d, opt){
     + '<tr class="spasi"><td colspan="3"></td></tr>'
     + blok('DONASI BANK', g.bank, g.totalBank, 4)
     + '<tr class="jml"><td></td><td>JUMLAH</td><td class="num">' + a2Angka(g.total) + '</td></tr>'
-    + '</table>'
-    + '<table class="ttd">'
-      + '<tr><td colspan="2" class="tempat">' + esc(opt.kota || '') + (opt.kota ? ', ' : '') + esc(tglRingkas) + '</td></tr>'
+    + '</table>';
+
+  /* Tanda tangan di bawah kolom denominasi (kanan), bukan ditumpuk di bawah
+     tabel penerimaan (kiri). Tabel penerimaan tumbuh mengikuti jumlah jenis
+     dana (sampai 6 x tunai dan bank), sedangkan kolom kanan tingginya tetap,
+     jadi kedua kolom kini seimbang dan lembar tetap satu A5 (21 Oktober 2026). */
+  var ttd = '<table class="ttd">'
+      + '<tr class="tempat"><td colspan="2">' + esc(opt.kota || '') + (opt.kota ? ', ' : '') + esc(tglRingkas) + '</td></tr>'
       + '<tr class="kol"><td>Kasir</td><td>Keuangan</td></tr>'
       + '<tr class="ruang"><td></td><td></td></tr>'
       + '<tr class="nama"><td>' + esc(opt.kasir || '') + '</td><td>' + esc(opt.keuangan || '') + '</td></tr>'
@@ -10622,7 +10643,7 @@ function buildA2HTML(d, opt){
 
     + '.isi{display:flex;gap:0;margin-top:0}'
     + '.isi>.sisi{flex:1;min-width:0}'
-    + '.isi>.sisi.kn{width:64mm;flex:0 0 64mm;padding-left:4mm}'
+    + '.isi>.sisi.kn{width:70mm;flex:0 0 70mm;padding-left:4mm}'
 
     + 'table{width:100%;border-collapse:collapse;table-layout:fixed}'
     + 'td{border:0.6pt solid #000;padding:1.6pt 3pt;vertical-align:middle;height:4.6mm;overflow:hidden}'
@@ -10641,30 +10662,51 @@ function buildA2HTML(d, opt){
     + 'table.kiri tr.jml td{font-weight:700;background:#e6e6e6}'
     + 'table.kiri tr.jml td:first-child{border:none;background:#fff}'
 
-    + 'table.kanan td{text-align:center;height:6.4mm}'
+    + 'table.kanan td{text-align:center;height:5.4mm}'
     + 'table.kanan tr.grup td{font-weight:700;font-size:8.4pt}'
     + 'table.kanan tr.kol td{font-weight:400}'
     + 'table.kanan td:nth-child(1){width:52%;text-align:right;padding-right:9pt}'
     + 'table.kanan td:nth-child(2){width:48%}'
 
-    + 'table.ttd{margin-top:6mm}'
+    + 'table.ttd{margin-top:5mm}'
     + 'table.ttd td{text-align:center}'
-    + 'table.ttd tr.tempat td{border:none;text-align:center;padding-bottom:3pt}'
-    + 'table.ttd tr.ruang td{height:17mm}'
-    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline}'
+    /* kelas "tempat" kini di baris, jadi aturan ini benar-benar berlaku (dulu di sel, tidak pernah cocok) */
+    + 'table.ttd tr.tempat td{border:none;text-align:center;padding:0 0 2pt;height:auto}'
+    + 'table.ttd tr.ruang td{height:15mm}'
+    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline;word-break:break-word}'
 
     + '.bar{text-align:center;margin:10px 0 22px}'
     + '.bar button{font:inherit;font-size:9pt;font-weight:700;background:#16161d;color:#fff;border:none;padding:8px 20px;border-radius:999px;cursor:pointer}'
-    + '@media print{body{background:#fff}.lembar{width:auto;min-height:0;margin:0;padding:0;box-shadow:none}.bar{display:none}}'
+    /* Cetak: lembar dikunci setinggi area cetak A5 (134 mm) dikurangi sedikit
+       ruang aman, dan apa pun yang melewatinya dipotong, bukan dilanjutkan ke
+       halaman kedua. Skrip di bawah mengecilkan isinya lebih dulu supaya tidak ada
+       yang terpotong. */
+    + '@media print{html,body{height:auto;background:#fff}.lembar{width:auto;height:132mm;min-height:0;margin:0;padding:0;box-shadow:none;overflow:hidden;break-after:avoid;page-break-after:avoid}.konten{transform:scale(var(--skala,1));transform-origin:top left;width:calc(100% / var(--skala,1))}.bar{display:none}}'
     + '</style></head><body>'
 
-    + '<div class="lembar">'
+    + '<div class="lembar"><div class="konten">'
       + '<div class="kop"><div class="j">LAPORAN PENERIMAAN HARIAN</div><div class="f">Formulir A 2</div></div>'
       + '<div class="basmalah">Bissmillahirrohmanirrohim Pada Hari Ini <b>' + esc(hari) + ', ' + esc(tglRingkas) + '</b> , '
         + 'Alhamdulillah telah diterima dana Zakat, Infaq dan Shodaqoh dengan rincian:</div>'
-      + '<div class="isi"><div class="sisi">' + kiri + '</div><div class="sisi kn">' + kanan + '</div></div>'
-    + '</div>'
+      + '<div class="isi"><div class="sisi">' + kiri + '</div><div class="sisi kn">' + kanan + ttd + '</div></div>'
+    + '</div></div>'
     + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (A5 melintang)</button></div>'
+    /* Pengaman satu lembar. Tata letaknya sudah dibuat muat untuk isi terburuk
+       yang wajar (enam jenis dana, tunai dan bank), tetapi nama petugas panjang
+       atau jenis dana tak terduga bisa menambah tinggi. Bila isinya masih lebih
+       tinggi dari area cetak, seluruhnya dikecilkan secukupnya, bukan jatuh ke
+       lembar kedua. Hanya berlaku saat mencetak; di layar tidak mengubah apa pun. */
+    + '<script>(function(){'
+      + 'var mm=96/25.4,MAKS=132*mm,k=document.querySelector(".konten");if(!k)return;'
+      /* Diukur pada lebar cetak (196 mm) saat dimuat, bukan menunggu peristiwa
+         cetak: peristiwa itu tidak andal (tidak terpicu saat disimpan jadi PDF
+         lewat peramban tanpa kepala, dan versi sebelumnya diam-diam tidak
+         mengecilkan apa pun sementara overflow memotong tanda tangan). Hasilnya
+         hanya variabel --skala; yang memakainya aturan @media print. */
+      + 'var w=k.style.width;k.style.width=(196*mm)+"px";'
+      + 'var h=k.offsetHeight;k.style.width=w;'
+      + 'k.style.setProperty("--skala",h>MAKS?(MAKS/h).toFixed(4):"1");'
+      + '})();<\/script>'
     + '</body></html>';
 }
 
