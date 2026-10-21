@@ -2900,6 +2900,45 @@ function _getJurnalData(year, month, rentang) {
     secMap[secKey].subtotal+=amt;
   });
   
+  /* PERGERAKAN KAS (setor tunai, tarik tunai, mutasi antar rekening).
+     Sumbernya tabel Transfer, BUKAN tabel Penghimpunan: setor tunai adalah
+     perpindahan kas ke rekening, bukan penerimaan donatur, jadi tidak pernah
+     ada di Penghimpunan. Tanpa baris ini, jurnal tidak memuat setor tunai
+     padahal uangnya sudah tercatat — owners menyimpulkan "setor tunainya
+     tidak tercatat" (21 Oktober 2026). */
+  var transferRows = (readAll(SHEETS.TRANSFER) || []).filter(dalamPeriode);
+  function akunTransfer(r, idRek, namaAkun, namaKas){
+    if (idRek) {
+      var m = listRek.find(function(x){ return x.id === idRek; });
+      if (m) return m.namaBank + ' - ' + m.nomor;
+    }
+    return namaAkun || namaKas || 'Kas';
+  }
+  transferRows.forEach(function(r){
+    var amt = Number(r.nominal) || 0;
+    if (!(amt > 0)) return;
+    var secKey = r.jenis === 'setor' ? 'SETOR TUNAI' : (r.jenis === 'tarik' ? 'TARIK TUNAI' : 'MUTASI DANA');
+    /* Arahnya mengikuti jenisnya: setor = kas ke rekening, tarik = rekening
+       ke kas, mutasi = dari akun ke akun. */
+    var debitAcc, kreditAcc;
+    if (r.jenis === 'setor') {
+      debitAcc = akunTransfer(r, r.keRekeningId, r.keAkun, r.keKas);
+      kreditAcc = akunTransfer(r, r.dariRekeningId, r.dariAkun, r.dariKas);
+    } else if (r.jenis === 'tarik') {
+      debitAcc = akunTransfer(r, r.keRekeningId, r.keAkun, r.keKas);
+      kreditAcc = akunTransfer(r, r.dariRekeningId, r.dariAkun, r.dariKas);
+    } else {
+      debitAcc = akunTransfer(r, r.keRekeningId, r.keAkun, r.keKas);
+      kreditAcc = akunTransfer(r, r.dariRekeningId, r.dariAkun, r.dariKas);
+    }
+    var ket = r.keterangan || secKey;
+    var tgl = Utilities.formatDate(new Date(r.tanggal), TZ, 'dd/MM/yyyy');
+    secMap[secKey] = secMap[secKey] || { title: secKey, lines: [], subtotal: 0 };
+    secMap[secKey].lines.push({ tanggal: tgl, ref: '-', kode: '', akun: debitAcc, debit: amt, kredit: '', ket: ket });
+    secMap[secKey].lines.push({ tanggal: tgl, ref: '-', kode: '', akun: kreditAcc, debit: '', kredit: amt, ket: ket });
+    secMap[secKey].subtotal += amt;
+  });
+  
   /* Urutan kelompok mengikuti berkas jurnal acuan:
      Zakat -> Infak Umum -> Infak Terikat -> Amil -> Wakaf. */
   var order=[
@@ -2953,6 +2992,47 @@ function _labelRentang(dari, sampai){
 }
 
 /* `rentang` opsional: {dari, sampai}. Bila diisi, bulan & tahun diabaikan. */
+/* JURNAL DARI SISTEM (permintaan pemilik 21 Oktober 2026)
+   "Impor Jurnal per Berkas" biasanya butuh berkas Excel Owners. Tapi kalau
+   transaksinya sudah masuk sistem, jurnal yang sama bisa dibangun dari
+   data yang tercatat, jadi berkasnya tidak wajib diunggah: pilih bulan saja.
+
+   Jurnal dibangun dengan _getJurnalData (mesin yang sama dengan Laporan >
+   Jurnal Penerimaan), lalu diubah jadi teks TAB: tanggal, akun, debet,
+   kredit, keterangan. Bentuknya sama persis dengan berkas Owners, jadi
+   importer yang sama menanganinya: temuan, cocokkan rekap, dan
+   penyimpanannya jalan tanpa perubahan lain. */
+function _jurnalSistemTSV(d){
+  var baris = [];
+  (d.sections || []).forEach(function(sec){
+    baris.push(['', sec.title, '', '', ''].join('\t'));
+    (sec.lines || []).forEach(function(l){
+      baris.push([
+        String(l.tanggal || ''), String(l.akun || ''),
+        l.debit === '' || l.debit === undefined ? '' : String(l.debit),
+        l.kredit === '' || l.kredit === undefined ? '' : String(l.kredit),
+        String(l.ket || '')
+      ].join('\t'));
+    });
+  });
+  return baris.join('\n');
+}
+function apiJurnalSistem(t, year, month, rentang){
+  _requirePerm(t, 'laporan', 'view');
+  year = Number(year) || 0; month = Number(month) || 0;
+  if (!year || !month) throw new Error('Pilih bulan dan tahun jurnal.');
+  var d = _getJurnalData(year, month, rentang);
+  if (!d) throw new Error('Jurnal tidak bisa dibuat.');
+  return {
+    ok: true,
+    periode: d.periode,
+    bulan: d.bulan,
+    tahun: d.tahun,
+    jumlah: d.count,
+    tsv: _jurnalSistemTSV(d)
+  };
+}
+
 function apiJurnalData(t,year,month,rentang){
   _requirePerm(t,'laporan','view');
   if (rentang && rentang.dari && rentang.sampai){
@@ -8317,6 +8397,7 @@ REGISTRY['apiListLayanan']=apiListLayanan;
 REGISTRY['apiSaveLayanan']=apiSaveLayanan;
 REGISTRY['apiDeleteLayanan']=apiDeleteLayanan;
 REGISTRY['apiJurnalData']=apiJurnalData;
+REGISTRY['apiJurnalSistem']=apiJurnalSistem;
 REGISTRY['apiBroadcastReport']=apiBroadcastReport;
 REGISTRY['apiListUsers']=apiListUsers;
 REGISTRY['apiSaveUser']=apiSaveUser;

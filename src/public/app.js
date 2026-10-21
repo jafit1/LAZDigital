@@ -2000,7 +2000,7 @@ function jn(n){ var v = Number(n); return isFinite(v) ? String(Math.round(v)) : 
 function renderJurnalPreview(d){
   if(!d.count){el('jurnalPreview').innerHTML='<div class="card empty"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada penerimaan pada '+esc(d.periode)+'.</div>';return;}
   var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" style="border:1px solid var(--border)" onclick="copyAllJurnal()">'+SVG_ICONS.salin+' Salin Semua</button><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">'+SVG_ICONS.unduh+' Unduh .xlsx</button></div></div>';
-  h+='<div style="overflow:auto"><table><thead><tr><th>Tanggal</th><th>Akun</th><th>Debit</th><th>Kredit</th><th>Keterangan</th></tr></thead><tbody>';
+  h+='<div class="jurnal-scroll"><table><thead><tr><th>Tanggal</th><th>Akun</th><th>Debit</th><th>Kredit</th><th>Keterangan</th></tr></thead><tbody>';
   d.sections.forEach(function(sec, idx){
     h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">'+SVG_ICONS.salin+' Salin Kategori</button></div></td></tr>';
     sec.lines.forEach(function(l){
@@ -4812,6 +4812,20 @@ var IMPORT_TEMP_TYPE = '';
    impor yang sama dengan "Impor Data". */
 var IMPORT_MODE = '';
 function openImportJurnalBerkas() { openImportModal('himpun', 'berkas'); }
+/* Pemilih sumber jurnal: berkas milik Owner, atau jurnal yang sudah masuk
+   sistem (cukup pilih bulan, tanpa berkas). Permintaan pemilik 21 Oktober
+   2026. Diletakkan di baris tab, bukan di baris pilihan, supaya tinggi
+   bagian atas jendela tidak bertambah dan kotak "Telusuri" tetap sejajar
+   dengan pilihan jenis/bulan/tahun/rekap. */
+function imporSumberJurnalHTML() {
+  return '<div class="imp-sumber">'
+    + '<span class="imp-sumber-l">Sumber jurnal</span>'
+    + '<button type="button" class="imp-sumber-btn on" id="impb_sumber_berkas" onclick="imporPilihSumber(\'berkas\')">Unggah berkas</button>'
+    + '<button type="button" class="imp-sumber-btn" id="impb_sumber_sistem" onclick="imporPilihSumber(\'sistem\')">Jurnal dalam sistem</button>'
+    + '<span class="imp-hint imp-sumber-ket" id="impb_sumber_ket">Berkas Excel milik Anda diunggah dan dibaca sebagai jurnal.</span>'
+    + '</div>';
+}
+
 function imporOpsiBerkasHTML() {
   var kini = new Date(), lalu = new Date(kini.getFullYear(), kini.getMonth() - 1, 1);
   var nb = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -4826,6 +4840,25 @@ function imporOpsiBerkasHTML() {
     + '<button type="button" class="imp-rekap-btn" id="impb_rekap_btn" onclick="el(\'impb_rekap\').click()">Pilih berkas rekap</button>'
     + '<input type="file" id="impb_rekap" accept=".xlsx,.xls" style="display:none" onchange="onImporRekap(event)">'
     + '<div id="impb_rekap_info" class="imp-hint"></div></div>';
+}
+/* Sumber jurnal: berkas milik Owner, atau jurnal yang sudah tercatat di
+   sistem (cukup pilih bulan, tanpa berkas). Permintaan pemilik 21 Oktober
+   2026: kalau transaksinya sudah masuk sistem, berkasnya tidak wajib diunggah. */
+var IMPOR_SUMBER = 'berkas';
+function imporPilihSumber(s){
+  IMPOR_SUMBER = s;
+  ['berkas','sistem'].forEach(function(k){
+    var b = el('impb_sumber_' + k);
+    if (b) b.classList.toggle('on', k === s);
+  });
+  var ket = el('impb_sumber_ket');
+  if (ket) ket.textContent = s === 'sistem'
+    ? 'Jurnal bulan yang dipilih disusun dari data yang sudah masuk sistem. Berkas tidak perlu diunggah.'
+    : 'Berkas Excel milik Anda diunggah dan dibaca sebagai jurnal.';
+  var berkas = el('group_import_file');
+  if (berkas) berkas.classList.toggle('hidden', s === 'sistem');
+  var info = el('importFileInfo');
+  if (info && s === 'sistem') info.innerHTML = '';
 }
 /* Jurnal kas dan bank pemilik dibedakan dari judul seksi penerimaannya
    ("PENERIMAAN ZAKAT VIA BANK" / "... VIA KAS"). Seksi pengeluaran tidak
@@ -4860,6 +4893,8 @@ function openImportModal(type, mode) {
      Unggah File: tarik data malah meminta teks yang tidak diisi. */
   IMPORT_TAB = 'file';
   IMPORT_FILE_TSV = '';
+  /* Sumber jurnal kembali ke berkas Owner tiap modal dibuka. */
+  IMPOR_SUMBER = 'berkas';
   window.IMPORT_KONFIRM_SIMPAN = false;
   window.IMPORT_REKAP_SHEETS = null;
   IMPORT_TEMP_TYPE = type;
@@ -4885,10 +4920,13 @@ function openImportModal(type, mode) {
      dibuat sekecil mungkin — semuanya hanya pengantar. Ruang sisanya milik
      pratinjau, karena di situlah pengguna benar-benar memeriksa datanya. */
   var b = '<div class="imp-atas' + (IMPORT_MODE === 'berkas' ? ' imp-atas-berkas' : '') + '">' +
+    '<div class="imp-atas-baris' + (IMPORT_MODE === 'berkas' ? ' imp-atas-baris-berkas' : '') + '">' +
     '<div class="lap-tabs imp-tabs">' +
     '<button class="lap-tab on" id="tab_import_file" onclick="setImportTab(\'file\')">Unggah File</button>' +
     '<button class="lap-tab" id="tab_import_text" onclick="setImportTab(\'text\')">Tempel Teks</button>' +
     '<button class="lap-tab" id="tab_import_link" onclick="setImportTab(\'link\')">Link Spreadsheet</button>' +
+    '</div>' +
+    (IMPORT_MODE === 'berkas' ? imporSumberJurnalHTML() : '') +
     '</div>' +
     '<div class="imp-baris">' +
     '<div id="group_import_file" class="imp-src">' +
@@ -5083,7 +5121,18 @@ function tarikImportData() {
   el('importPreview').innerHTML = '<div style="text-align:center;padding:20px 0">' + BOXES_SPINNER + '<div class="muted" style="margin-top:10px;font-size:12.5px">Menganalisis data...</div></div>';
   
   var promise;
-  if (isFile) {
+  /* Sumber "jurnal yang sudah masuk sistem": jurnalnya disusun server dari
+     data yang tercatat, jadi tidak perlu berkas. Permintaan pemilik
+     21 Oktober 2026. */
+  if (IMPORT_MODE === 'berkas' && IMPOR_SUMBER === 'sistem') {
+    var bl = el('impb_bulan') ? el('impb_bulan').value : '';
+    var th = el('impb_tahun') ? el('impb_tahun').value : '';
+    promise = gas('apiJurnalSistem')(TOKEN, Number(th), Number(bl)).then(function(j){
+      if (!j || !j.tsv) throw new Error('Jurnal ' + (j && j.periode ? j.periode : 'bulan ini') + ' kosong: belum ada transaksi yang tercatat.');
+      IMPORT_FILE_TSV = j.tsv;
+      return gas('apiParseImportText')(TOKEN, j.tsv, IMPORT_TEMP_TYPE, imporOpsiBerkas());
+    });
+  } else if (isFile) {
     if (!IMPORT_FILE_TSV) {
       btn.disabled = false; btn.textContent = 'Tarik & Analisis Data';
       el('importPreview').innerHTML = '';
@@ -5369,16 +5418,27 @@ function imporGambarJurnal(res) {
     var umpKeluar = (res.umpValid || []).filter(function(x){ return x.jenis === 'keluar'; }).reduce(function(a,x){ return a + (Number(x.nominal)||0); }, 0);
     var umpKembali = (res.umpValid || []).filter(function(x){ return x.jenis === 'kembali'; }).reduce(function(a,x){ return a + (Number(x.nominal)||0); }, 0);
     var trfTotal = (res.transferValid || []).reduce(function(a,x){ return a + (Number(x.nominal)||0); }, 0);
+    /* Setor, tarik, dan mutasi disebut satu per satu. Sebelumnya ringkasannya
+       hanya menulis "transfer antar akun", sehingga pemilik tidak bisa melihat
+       bahwa setor tunainya ikut terbaca dan ikut dicatat (21 Oktober 2026). */
+    var trfJenis = function(jenis, label){
+      var a = (res.transferValid || []).filter(function(x){ return x.jenis === jenis; });
+      if (!a.length) return '';
+      var n = a.reduce(function(s,x){ return s + (Number(x.nominal)||0); }, 0);
+      return '<b>' + a.length + ' ' + label + '</b> (' + rp(n) + ')';
+    };
+    var rinciTrf = [trfJenis('setor','setor tunai'), trfJenis('tarik','tarik tunai'), trfJenis('mutasi','mutasi dana')]
+      .filter(function(x){ return x; }).join(', ');
     h += '<div class="imp-note" style="margin-bottom:12px"><b>Pergerakan kas ikut dicatat</b> (tidak dihitung sebagai penghimpunan maupun penyaluran, hanya menggerakkan saldo rekening/kas): '
       + (nUmp ? '<b>' + nUmp + '</b> uang muka program (keluar ' + rp(umpKeluar) + (umpKembali ? ', kembali ' + rp(umpKembali) : '') + ')' : '')
       + (nUmp && nTrf ? ' dan ' : '')
-      + (nTrf ? '<b>' + nTrf + '</b> transfer antar akun — setor/tarik tunai, mutasi dana (' + rp(trfTotal) + ')' : '')
+      + (nTrf ? '<b>' + nTrf + '</b> perpindahan uang antar akun: ' + rinciTrf : '')
       + '.'
       + '</div>';
     /* Rinciannya, bukan cuma jumlahnya: saldo akhir hanya bisa dicocokkan kalau
        orang tahu Bara ke rekening mana setiap rupiah itu dipindahkan. */
     if (nTrf) {
-      h += '<details class="imp-note imp-det" style="margin:-6px 0 12px"><summary>Rincian pergerakan kas <span class="imp-chip-s">' + nTrf + ' baris</span></summary>'
+      h += '<details class="imp-note imp-det" open style="margin:-6px 0 12px"><summary>Rincian pergerakan kas <span class="imp-chip-s">' + nTrf + ' baris</span></summary>'
         + '<div class="imp-tblwrap"><table class="imp-tbl"><thead><tr><th>Tgl</th><th>Jenis</th><th>Dari</th><th>Ke</th><th>Jumlah</th><th>Keterangan</th></tr></thead><tbody>'
         + res.transferValid.map(function(x){
             var dari = (x.dariKas || '') + (x.dariAkun ? ' &rarr; ' + x.dariAkun : '');
@@ -9551,6 +9611,23 @@ function tglIndo(t){
     return d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   }catch(e){ return t; }
 }
+/* Pisahkan "Bank BPD DIY Syariah - 803211000510" menjadi nama bank dan
+   nomor rekening. Pemisah diambil pada tanda hubung TERAKHIR, karena nama
+   bank sendiri bisa mengandung tanda hubung ("BPD Infak Keman-daysia - 803...").
+   Laporan harian menampilkan keduanya supaya rekening tujuan bisa dibaca
+   lengkap, bukan cuma nama banknya (pemilik, 21 Oktober 2026). */
+function lhPisahRekening(bank){
+  var s = String(bank == null ? '' : bank).trim();
+  if (!s) return { nama: '', nomor: '' };
+  var i = s.lastIndexOf('-');
+  if (i < 0) return { nama: s, nomor: '' };
+  var nama = s.slice(0, i).trim();
+  var nomor = s.slice(i + 1).trim();
+  /* Nomor rekening tidak pernah mengandung tanda hubung. Kalau bagian kanannya
+     bukan angka, tanda hubung itu bukan pemisah: nama banknya dipakai utuh. */
+  if (!nama || !/^\d[\d .-]*$/.test(nomor)) return { nama: s, nomor: '' };
+  return { nama: nama, nomor: nomor };
+}
 function jamIndo(){
   try{ return new Date().toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
   catch(e){ return ''; }
@@ -9648,12 +9725,13 @@ function renderHarianPreview(d){
       + '<th>No. Kwitansi</th><th>Donatur</th><th>Rekap</th><th>Jenis Dana</th><th>Metode</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
       + '</tr></thead><tbody>';
     d.himpun.forEach(function(x){
-      var bankSingkat = x.bank ? String(x.bank).split('-')[0].trim() : '';
+      var rek = lhPisahRekening(x.bank);
       h += '<tr><td>'+esc(x.noKwitansi)+'</td><td><b>'+esc(x.namaDonatur)+'</b></td>'
         + '<td class="muted">'+(x.layanan && x.layanan !== x.namaDonatur ? esc(x.layanan) : '')+'</td>'
         + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')
           +(x.pilar||x.program?' <span class="muted">'+esc(x.pilar||x.program)+'</span>':'')+'</td>'
-        + '<td>'+esc(x.metode)+(bankSingkat?'<div class="muted" style="font-size:11px">'+esc(bankSingkat)+'</div>':'')+'</td>'
+        + '<td>'+esc(x.metode)+(rek.nama?'<div class="muted" style="font-size:11px">'+esc(rek.nama)+'</div>':'')
+          +(rek.nomor?'<div class="muted" style="font-size:11px">Rek. '+esc(rek.nomor)+'</div>':'')+'</td>'
         + '<td class="muted">'+esc(x.petugas)+'</td>'
         + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--green)">'+rp(x.jumlah)+'</td></tr>';
     });
@@ -9672,9 +9750,12 @@ function renderHarianPreview(d){
       + '<th>No. Bukti</th><th>Penerima</th><th>Ashnaf</th><th>Program</th><th>Sumber</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
       + '</tr></thead><tbody>';
     d.salur.forEach(function(x){
+      var rekS = lhPisahRekening(x.bank);
       h += '<tr><td>'+esc(x.noBukti)+'</td><td><b>'+esc(x.namaPenerima)+'</b></td>'
         + '<td>'+esc(x.ashnaf)+'</td><td class="muted">'+esc(x.program)+'</td>'
-        + '<td>'+esc(x.sumberDana)+'</td><td class="muted">'+esc(x.petugas)+'</td>'
+        + '<td>'+esc(x.sumberDana)+(rekS.nama?'<div class="muted" style="font-size:11px">'+esc(rekS.nama)+'</div>':'')
+          +(rekS.nomor?'<div class="muted" style="font-size:11px">Rek. '+esc(rekS.nomor)+'</div>':'')+'</td>'
+        + '<td class="muted">'+esc(x.petugas)+'</td>'
         + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--red)">'+rp(x.jumlah)+'</td></tr>';
     });
     h += '</tbody></table></div></div>'
@@ -10030,30 +10111,35 @@ function buildHarianHTML(d){
   var barisHimpun = d.himpun.map(function(x){
     /* Nama KLL/ULL memang sudah mengandung nama layanannya ("KLL Sanden"),
        jadi sub-layanan hanya ditampilkan bila beda dari nama donaturnya,
-       supaya nama tidak muncul dua kali (seperti di PDF sebelumnya). Info
-       bank hanya nomor/nama singkatnya; "Transfer Bank"/"Tunai" diambil dari
-       metode, jadi tidak perlu diulang sebagai sub. */
+       supaya nama tidak muncul dua kali (seperti di PDF sebelumnya).
+       "Transfer Bank"/"Tunai" diambil dari metode, jadi tidak perlu diulang
+       sebagai sub; yang ditambahkan justru nomor rekening tujuan supaya
+       datanya lengkap (pemilik, 21 Oktober 2026). */
     var subLay = (x.layanan && x.layanan !== 'Penghimpunan Daerah' && x.layanan !== x.namaDonatur)
       ? '<div class="sub">'+esc(x.layanan)+'</div>' : '';
-    var bankSingkat = x.bank ? String(x.bank).split('-')[0].trim() : '';
+    var rek = lhPisahRekening(x.bank);
     return [
       esc(x.noKwitansi),
       '<b>'+esc(x.namaDonatur)+'</b>' + subLay,
       esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : '')
         + (x.pilar||x.program ? '<div class="sub">'+esc(x.pilar||x.program)+'</div>' : ''),
-      esc(x.metode) + (bankSingkat ? '<div class="sub">'+esc(bankSingkat)+'</div>' : ''),
+      esc(x.metode) + (rek.nama ? '<div class="sub">'+esc(rek.nama)+'</div>' : '')
+        + (rek.nomor ? '<div class="sub">Rek. '+esc(rek.nomor)+'</div>' : ''),
       esc(x.fundraising||'-'),
       rpCetak(x.jumlah)
     ];
   });
 
   var barisSalur = d.salur.map(function(x){
+    var rekS = lhPisahRekening(x.bank);
     return [
       esc(x.noBukti),
       '<b>'+esc(x.namaPenerima)+'</b>' + (x.bentukBantuan ? '<div class="sub">'+esc(x.bentukBantuan)+'</div>' : ''),
       esc(x.ashnaf),
       esc(x.program),
-      esc(x.sumberDana) + (x.metode ? '<div class="sub">'+esc(x.metode)+'</div>' : ''),
+      esc(x.sumberDana) + (x.metode ? '<div class="sub">'+esc(x.metode)+'</div>' : '')
+        + (rekS.nama ? '<div class="sub">'+esc(rekS.nama)+'</div>' : '')
+        + (rekS.nomor ? '<div class="sub">Rek. '+esc(rekS.nomor)+'</div>' : ''),
       rpCetak(x.jumlah)
     ];
   });

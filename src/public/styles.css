@@ -2809,6 +2809,23 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .imp-rekap-btn:hover{border-color:var(--accent);color:var(--accent-d)}
 .imp-rekap-btn.ada{border-style:solid;border-color:color-mix(in srgb,var(--green) 55%,var(--border));color:var(--text)}
 
+/* Pilihan sumber jurnal pada Impor Jurnal per Berkas: berkas milik Owner
+   atau jurnal yang sudah masuk sistem (21 Oktober 2026). Diletakkan satu baris
+   di atas tab supaya tinggi bagian atas jendela tidak bertambah. */
+.imp-sumber-baris{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.imp-atas-baris{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.imp-atas-baris .imp-tabs{margin-bottom:0}
+.imp-atas-baris-berkas{justify-content:space-between}
+.imp-sumber-l{font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.imp-sumber{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.imp-sumber-btn{
+  font:inherit;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;white-space:nowrap;
+  border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text2);
+}
+.imp-sumber-btn:hover{border-color:var(--accent);color:var(--accent-d)}
+.imp-sumber-btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-d)}
+.imp-sumber-ket{margin-top:0;flex:1 1 200px;min-width:0}
+
 /* Pilihan massal untuk temuan rekap: cocokkan ke rekap, sesuai jurnal,
    dan pertahankan pilihan sendiri. */
 .imp-massal{
@@ -2846,6 +2863,16 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 #importPreview::-webkit-scrollbar-track{background:transparent}
 #importPreview::-webkit-scrollbar-thumb{background:rgba(150,141,135,.4);border-radius:99px}
 #importPreview::-webkit-scrollbar-thumb:hover{background:rgba(150,141,135,.65)}
+
+/* Jurnal Penerimaan (Laporan): tabelnya bisa panjang, scrollbar kanan
+   dibuat terlihat supaya mudah dipindah tanpa menebak-nebak (pemilik,
+   21 Oktober 2026), sama seperti #importPreview di atas. */
+.jurnal-scroll{max-height:70vh;overflow:auto}
+.jurnal-scroll::-webkit-scrollbar{width:8px !important}
+.jurnal-scroll::-webkit-scrollbar-track{background:transparent}
+.jurnal-scroll::-webkit-scrollbar-thumb{background:rgba(150,141,135,.4);border-radius:99px}
+.jurnal-scroll::-webkit-scrollbar-thumb:hover{background:rgba(150,141,135,.65)}
+.jurnal-scroll{scrollbar-width:thin}
 #importPreview{scrollbar-width:thin !important}
 .imp-kosong{
   height:100%;min-height:120px;display:grid;place-items:center;text-align:center;
