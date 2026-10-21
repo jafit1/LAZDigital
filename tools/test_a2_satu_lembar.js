@@ -115,6 +115,16 @@ const SKENARIO = {
       cek('tabel penerimaan masuk dalam 134 mm tinggi kertas', u.kiriMm !== null && u.kiriMm <= 134, u);
       cek('lembar tidak lebih tinggi dari kertas', u.lembarMm <= 134, u);
       cek('Kasir dan Keuangan tercetak', u.teksKasir && u.teksKeuangan, u);
+      /* Posisi susunan semula (pemilik, 21 Oktober 2026): tanda tangan di bawah
+         tabel penerimaan (kolom kiri), kolom denominasi di kanan berdiri sendiri. */
+      const pos = await p2.evaluate(() => {
+        const r = (s) => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
+        const ttd = r('table.ttd'), kiri = r('table.kiri'), kanan = r('table.kanan'), kn = r('.sisi.kn');
+        return { ttdKiri: Math.round(ttd.left), kananKiri: Math.round(kanan.left), ttdAtas: Math.round(ttd.top), kiriBawah: Math.round(kiri.bottom),
+          lebarKn: Math.round(kn.width), ttdDiKolomKanan: !!document.querySelector('.sisi.kn table.ttd') };
+      });
+      cek('tanda tangan di kolom kiri, bukan di bawah denominasi', pos.ttdDiKolomKanan === false && pos.ttdKiri < pos.kananKiri, pos);
+      cek('tanda tangan tepat di bawah tabel penerimaan', pos.ttdAtas >= pos.kiriBawah - 1, pos);
       if (k === 'terburuk') {
         /* Pengaman: isi dipaksa 40 mm lebih tinggi dari yang muat. Tata letaknya
            sendiri sudah muat untuk isi terburuk yang wajar, jadi pengecil otomatis

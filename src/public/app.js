@@ -10609,12 +10609,12 @@ function buildA2HTML(d, opt){
     + '<tr class="jml"><td></td><td>JUMLAH</td><td class="num">' + a2Angka(g.total) + '</td></tr>'
     + '</table>';
 
-  /* Tanda tangan di bawah kolom denominasi (kanan), bukan ditumpuk di bawah
-     tabel penerimaan (kiri). Tabel penerimaan tumbuh mengikuti jumlah jenis
-     dana (sampai 6 x tunai dan bank), sedangkan kolom kanan tingginya tetap,
-     jadi kedua kolom kini seimbang dan lembar tetap satu A5 (21 Oktober 2026). */
+  /* Tanda tangan di bawah tabel penerimaan (kolom kiri), susunan semula yang
+     sudah dipakai dan dinilai pas oleh pemilik (21 Oktober 2026). Muat satu
+     lembar dijaga oleh pengecil otomatis di skrip cetak, bukan dengan memindah
+     posisi. */
   var ttd = '<table class="ttd">'
-      + '<tr class="tempat"><td colspan="2">' + esc(opt.kota || '') + (opt.kota ? ', ' : '') + esc(tglRingkas) + '</td></tr>'
+      + '<tr><td colspan="2" class="tempat">' + esc(opt.kota || '') + (opt.kota ? ', ' : '') + esc(tglRingkas) + '</td></tr>'
       + '<tr class="kol"><td>Kasir</td><td>Keuangan</td></tr>'
       + '<tr class="ruang"><td></td><td></td></tr>'
       + '<tr class="nama"><td>' + esc(opt.kasir || '') + '</td><td>' + esc(opt.keuangan || '') + '</td></tr>'
@@ -10643,7 +10643,7 @@ function buildA2HTML(d, opt){
 
     + '.isi{display:flex;gap:0;margin-top:0}'
     + '.isi>.sisi{flex:1;min-width:0}'
-    + '.isi>.sisi.kn{width:70mm;flex:0 0 70mm;padding-left:4mm}'
+    + '.isi>.sisi.kn{width:64mm;flex:0 0 64mm;padding-left:4mm}'
 
     + 'table{width:100%;border-collapse:collapse;table-layout:fixed}'
     + 'td{border:0.6pt solid #000;padding:1.6pt 3pt;vertical-align:middle;height:4.6mm;overflow:hidden}'
@@ -10662,18 +10662,17 @@ function buildA2HTML(d, opt){
     + 'table.kiri tr.jml td{font-weight:700;background:#e6e6e6}'
     + 'table.kiri tr.jml td:first-child{border:none;background:#fff}'
 
-    + 'table.kanan td{text-align:center;height:5.4mm}'
+    + 'table.kanan td{text-align:center;height:6.4mm}'
     + 'table.kanan tr.grup td{font-weight:700;font-size:8.4pt}'
     + 'table.kanan tr.kol td{font-weight:400}'
     + 'table.kanan td:nth-child(1){width:52%;text-align:right;padding-right:9pt}'
     + 'table.kanan td:nth-child(2){width:48%}'
 
-    + 'table.ttd{margin-top:5mm}'
+    + 'table.ttd{margin-top:6mm}'
     + 'table.ttd td{text-align:center}'
-    /* kelas "tempat" kini di baris, jadi aturan ini benar-benar berlaku (dulu di sel, tidak pernah cocok) */
-    + 'table.ttd tr.tempat td{border:none;text-align:center;padding:0 0 2pt;height:auto}'
-    + 'table.ttd tr.ruang td{height:15mm}'
-    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline;word-break:break-word}'
+    + 'table.ttd tr.tempat td{border:none;text-align:center;padding-bottom:3pt}'
+    + 'table.ttd tr.ruang td{height:17mm}'
+    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline}'
 
     + '.bar{text-align:center;margin:10px 0 22px}'
     + '.bar button{font:inherit;font-size:9pt;font-weight:700;background:#16161d;color:#fff;border:none;padding:8px 20px;border-radius:999px;cursor:pointer}'
@@ -10688,7 +10687,7 @@ function buildA2HTML(d, opt){
       + '<div class="kop"><div class="j">LAPORAN PENERIMAAN HARIAN</div><div class="f">Formulir A 2</div></div>'
       + '<div class="basmalah">Bissmillahirrohmanirrohim Pada Hari Ini <b>' + esc(hari) + ', ' + esc(tglRingkas) + '</b> , '
         + 'Alhamdulillah telah diterima dana Zakat, Infaq dan Shodaqoh dengan rincian:</div>'
-      + '<div class="isi"><div class="sisi">' + kiri + '</div><div class="sisi kn">' + kanan + ttd + '</div></div>'
+      + '<div class="isi"><div class="sisi">' + kiri + ttd + '</div><div class="sisi kn">' + kanan + '</div></div>'
     + '</div></div>'
     + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (A5 melintang)</button></div>'
     /* Pengaman satu lembar. Tata letaknya sudah dibuat muat untuk isi terburuk
