@@ -569,7 +569,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_anomali_tgl_baris.js` | temuan "kemungkinan salah tanggal" menyertakan nomor baris sumber di berkas Excel |
 | `test_harian_nomor_rekening.js` | laporan harian (layar & PDF) menampilkan nama bank DAN nomor rekening, pemisah aman untuk nama bank bertanda hubung |
 | `test_setor_dan_jurnal_sistem.js` | setor tunai jadi baris transfer (Kas -> rekening) dan ikut muncul di jurnal; `apiJurnalSistem` menyusun jurnal dari data yang sudah tercatat (tanpa berkas) dan bisa diimpor balik |
-| `test_scroll_jurnal.js` | panel Jurnal Penerimaan (Laporan) punya scrollbar terlihat, tidak ikut aturan global yang menyembunyikan semua scrollbar |
+| `test_scroll_jurnal.js` | panel Jurnal Penerimaan (Laporan) punya scrollbar yang terukur ada di peramban (offsetWidth - clientWidth > 0), bukan sekadar teks CSS; aturan global `scrollbar-width:none !important` harus dikalahkan dengan `!important` juga. Headless Playwright dilepas dari `--hide-scrollbars` supaya terukur |
 | `test_fr_akun.js` | nama fundraising terikat akun (tautkan/buatkan, izin paket fundraiser), input terkunci ke namanya sendiri, nama bukan orang ditolak |
 | `test_harian_pdf.js` | PDF harian tanpa teks dobel (nama KLL, info bank), tanpa baris belang dan header abu |
 | `test_harian_pilar.js` | kolom jenis dana laporan harian (layar dan PDF) memuat pilar/program infak terikat, bukan cuma "Infak — Infak Terikat" |

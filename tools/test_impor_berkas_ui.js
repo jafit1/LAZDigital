@@ -222,6 +222,32 @@ const srv = http.createServer(async (req, res) => {
       set('impb_jenis', 'bank'); set('impb_bulan', '09'); set('impb_tahun', '2026');
     });
 
+    console.log('\n=== A2. SUMBER "JURNAL DALAM SISTEM": PILIHAN LEGA DAN SEJAJAR ===');
+    await page.click('#impb_sumber_sistem');
+    await page.waitForTimeout(250);
+    const sis = await page.evaluate(() => {
+      const k = (e) => e.getBoundingClientRect();
+      const badan = k(document.getElementById('modalBody'));
+      const opsi = k(document.querySelector('.imp-atas-berkas .imp-opsi'));
+      const kotak = [document.getElementById('impb_jenis').previousElementSibling, document.getElementById('impb_bulan').previousElementSibling,
+        document.getElementById('impb_tahun').previousElementSibling, document.getElementById('impb_rekap_btn')].map(k);
+      const terpotong = [document.getElementById('impb_jenis').previousElementSibling, document.getElementById('impb_bulan').previousElementSibling]
+        .map((e) => { const t = e.querySelector('span') || e; return t.scrollWidth > t.clientWidth + 1; });
+      return { opsiW: Math.round(opsi.width), badanW: Math.round(badan.width), atas: kotak.map((r) => Math.round(r.top)), bawah: kotak.map((r) => Math.round(r.bottom)),
+        lebar: kotak.map((r) => Math.round(r.width)), terpotong, dropTampil: !!document.getElementById('importDrop').offsetParent };
+    });
+    cek('berkas tidak dipakai: kotak Telusuri tersembunyi', sis.dropTampil === false, sis);
+    cek('pilihan memenuhi lebar jendela (bukan terjepit di kolom kiri)', sis.opsiW > sis.badanW * 0.85, sis);
+    cek('empat pilihan sejajar atas-bawah', sis.atas.every((t) => Math.abs(t - sis.atas[0]) <= 1) && sis.bawah.every((t) => Math.abs(t - sis.bawah[0]) <= 1), sis);
+    cek('isi pilihan jenis dan bulan terbaca penuh (tidak terpotong)', sis.terpotong.every((x) => x === false), sis);
+    cek('tiap pilihan cukup lebar (minimal 140 px)', sis.lebar.every((w) => w >= 140), sis);
+    cek('tab Unggah/Tempel/Link disembunyikan (tidak berfungsi di mode sistem)',
+      await page.evaluate(() => !document.getElementById('tab_import_file').offsetParent));
+    await page.click('#impb_sumber_berkas');
+    await page.waitForTimeout(250);
+    cek('kembali ke berkas: tab dan kotak Telusuri tampil lagi',
+      await page.evaluate(() => !!document.getElementById('tab_import_file').offsetParent && !!document.getElementById('importDrop').offsetParent));
+
     console.log('\n=== B. UNGGAH, TANGGAL TIDAK MUNDUR, TEMUAN TAMPIL ===');
     await page.setInputFiles('#import_file', berkas);
     await page.waitForFunction(() => window.IMPORT_FILE_TSV || (typeof IMPORT_FILE_TSV !== 'undefined' && IMPORT_FILE_TSV), null, { timeout: 15000 });

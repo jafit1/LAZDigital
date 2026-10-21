@@ -4857,6 +4857,10 @@ function imporPilihSumber(s){
     : 'Berkas Excel milik Anda diunggah dan dibaca sebagai jurnal.';
   var berkas = el('group_import_file');
   if (berkas) berkas.classList.toggle('hidden', s === 'sistem');
+  /* Mode sistem: kotak unggah dan tab sumber data tidak dipakai, jadi kelas ini
+     membuat pilihan jenis/bulan/tahun/rekap memenuhi seluruh lebar. */
+  var atas = el('impb_sumber_berkas') && el('impb_sumber_berkas').closest('.imp-atas');
+  if (atas) atas.classList.toggle('imp-sistem', s === 'sistem');
   var info = el('importFileInfo');
   if (info && s === 'sistem') info.innerHTML = '';
 }

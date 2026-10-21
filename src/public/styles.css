@@ -2826,6 +2826,17 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .imp-sumber-btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-d)}
 .imp-sumber-ket{margin-top:0;flex:1 1 200px;min-width:0}
 
+/* Sumber "Jurnal dalam sistem": tanpa kotak unggah dan tanpa tab, pilihan
+   jenis/bulan/tahun/rekap memenuhi seluruh lebar dan sejajar. Sebelumnya grid
+   dua kolom tetap menaruhnya di kolom kiri 32% (lebar 55-95 px, terpotong). */
+.imp-atas-berkas.imp-sistem .imp-tabs{display:none}
+.imp-atas-berkas.imp-sistem .imp-baris{grid-template-columns:minmax(0,1fr)}
+.imp-atas-berkas.imp-sistem .imp-opsi{
+  grid-template-columns:minmax(0,1.3fr) minmax(0,1.2fr) minmax(0,.8fr) minmax(0,1.7fr);
+  gap:12px;align-items:start;
+}
+.imp-atas-berkas.imp-sistem .imp-opsi .field label{white-space:nowrap}
+
 /* Pilihan massal untuk temuan rekap: cocokkan ke rekap, sesuai jurnal,
    dan pertahankan pilihan sendiri. */
 .imp-massal{
@@ -2872,7 +2883,7 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .jurnal-scroll::-webkit-scrollbar-track{background:transparent}
 .jurnal-scroll::-webkit-scrollbar-thumb{background:rgba(150,141,135,.4);border-radius:99px}
 .jurnal-scroll::-webkit-scrollbar-thumb:hover{background:rgba(150,141,135,.65)}
-.jurnal-scroll{scrollbar-width:thin}
+.jurnal-scroll{scrollbar-width:thin !important;scrollbar-color:rgba(150,141,135,.55) transparent}
 #importPreview{scrollbar-width:thin !important}
 .imp-kosong{
   height:100%;min-height:120px;display:grid;place-items:center;text-align:center;
