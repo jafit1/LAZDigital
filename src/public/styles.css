@@ -2809,6 +2809,49 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .imp-rekap-btn:hover{border-color:var(--accent);color:var(--accent-d)}
 .imp-rekap-btn.ada{border-style:solid;border-color:color-mix(in srgb,var(--green) 55%,var(--border));color:var(--text)}
 
+/* Panel "Perlu diperiksa" di paling atas pratinjau impor (22 Oktober 2026):
+   semua baris yang dicurigai dalam satu daftar, dengan nomor baris Excel,
+   alasan, dan tombol ubah di tempat. Garis kiri merah membawa arti (ada yang
+   belum diperiksa), bukan hiasan; hijau saat semuanya beres. */
+.imp-periksa{
+  border:1px solid color-mix(in srgb,var(--red) 40%,var(--border));
+  border-left:4px solid var(--red);border-radius:12px;background:var(--surface);
+  padding:12px 14px;margin-bottom:14px;
+}
+.imp-periksa.beres{
+  border-color:color-mix(in srgb,var(--green) 45%,var(--border));border-left:4px solid var(--green);
+  font-size:12.5px;color:var(--text2);padding:10px 14px;
+}
+.imp-periksa-h{margin-bottom:8px}
+.imp-periksa-j{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}
+.imp-periksa-n{
+  display:inline-block;min-width:22px;padding:1px 8px;border-radius:999px;text-align:center;
+  background:var(--red);color:#fff;font-size:12px;font-weight:700;
+}
+.imp-periksa-k{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.45}
+.imp-periksa-umum{
+  font-size:12.5px;line-height:1.45;padding:8px 10px;margin-bottom:8px;border-radius:8px;
+  background:var(--red-bg);color:var(--text);
+}
+.imp-periksa-tbl td{vertical-align:top}
+.imp-periksa-tbl tr.edit>td{background:var(--accent-soft)}
+.imp-periksa-no{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.imp-periksa-tgl{font-variant-numeric:tabular-nums;white-space:nowrap}
+.imp-periksa-a{font-size:12px;line-height:1.4;color:var(--text2);min-width:170px}
+.imp-periksa-a.berat{color:var(--red);font-weight:600}
+.imp-periksa-t{white-space:nowrap}
+.imp-periksa-t .btn{margin-right:5px}
+.imp-periksa-lagi{font-size:12px;color:var(--muted);margin-top:8px}
+.imp-periksa-form td{background:var(--surface2);border-top:0}
+.imp-pk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+.imp-pk-f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.imp-pk-f>span{font-size:11.5px;font-weight:600;color:var(--text2)}
+.imp-pk-f.lebar{grid-column:span 2}
+.imp-pk-f.sembunyi{display:none}
+.imp-pk-f input,.imp-pk-f select{width:100%;box-sizing:border-box}
+.imp-pk-hint{font-size:12px;color:var(--red);margin-top:8px;font-weight:600}
+.imp-pk-aksi{display:flex;gap:8px;margin-top:10px}
+
 /* Pilihan sumber jurnal pada Impor Jurnal per Berkas: berkas milik Owner
    atau jurnal yang sudah masuk sistem (21 Oktober 2026). Diletakkan satu baris
    di atas tab supaya tinggi bagian atas jendela tidak bertambah. */

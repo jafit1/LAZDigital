@@ -5177,6 +5177,7 @@ function tarikImportData() {
         window.IMPORT_TEMP_AKUN_ASING = res.akunAsing || [];
         
         window.IMPORT_KONFIRM_SIMPAN = false;
+        IMPOR_PERIKSA_EDIT = '';
         imporGambarJurnal(res);
         if (IMPORT_MODE === 'berkas' && window.IMPORT_REKAP_SHEETS) imporSamakanRekap();
       } else {
@@ -5382,7 +5383,10 @@ function imporGambarJurnal(res) {
   
   /* Penjelasan cara baca jurnal cukup satu baris; rinciannya dilipat
      supaya tidak memakan ruang pratinjau setiap kali impor dibuka. */
-  var h = '<details class="imp-note imp-det"><summary>Terbaca sebagai <b>jurnal penerimaan</b>'
+  /* Yang dicurigai belum sesuai ditaruh PALING ATAS, sebelum penjelasan apa pun
+     (pemilik, 22 Oktober 2026), lengkap dengan nomor baris Excel dan tombol Ubah. */
+  var h = imporPanelPeriksa(res)
+    + '<details class="imp-note imp-det"><summary>Terbaca sebagai <b>jurnal penerimaan</b>'
     + ((res.bedaDana || 0) ? ' &middot; <b style="color:var(--red)">' + res.bedaDana + ' baris</b> beda jenis dana' : '')
     + '</summary>'
     + '<div class="imp-det-b">Jenis dana diambil dari <b>akun kredit</b> di baris pasangannya '
@@ -5541,6 +5545,7 @@ function imporGambarJurnal(res) {
   el('importPreview').innerHTML = h;
   imporPasangPerbaikanTanggal();
   imporPasangTemuan();
+  imporPasangPeriksa();
   var lipat = el('imporLainBlok');
   if (lipat) lipat.addEventListener('toggle', function(){ IMPOR_LAIN_BUKA = lipat.open; });
   imporPerbaruiKaki();
@@ -5771,6 +5776,297 @@ function imporBagian(kunci, daftar, ket, tambahan, kosong) {
     + (ket ? '<span class="imp-kel-k">' + esc(ket) + '</span>' : '') + '</div>'
     + (ada ? daftar.map(imporKartuTemuan).join('') + (tambahan || '') : (kosong ? '<div class="imp-kel-kosong">' + esc(kosong) + '</div>' : ''))
     + '</section>';
+}
+/* ---- Panel "Perlu diperiksa" di paling atas (pemilik, 22 Oktober 2026) ------
+   "Kalau ada yang dicurigai belum sesuai tampilkan di bagian paling atas agar
+   saya mudah mendeteksi dan juga bisa langsung mengubahnya manual."
+
+   Dulu yang dicurigai tersebar: kartu temuan di fokus, "Pemeriksaan lain" yang
+   terlipat, penanda kuning kecil di tabel, tabel tanggal. Kaki jendela hanya
+   berkata "3 temuan belum diputuskan" tanpa menunjukkan letaknya. Sekarang semua
+   baris yang disebut temuan (kecuali perbandingan rekap, yang punya bagian
+   sendiri) dikumpulkan satu daftar di atas pratinjau, lengkap dengan nomor baris
+   di Excel dan alasannya, dan tiap baris bisa diubah di tempat.
+
+   Dua fungsi di bawah sengaja berdiri sendiri (tanpa menyentuh layar), supaya
+   bisa diuji langsung. */
+var IMPOR_PERIKSA_EDIT = '';
+function imporKumpulCurigai(res, peta) {
+  var peta2 = peta || {};
+  var peta3 = {}, urut = [], umum = [];
+  var layak = function(r) { return r && !r._lewati && !r._batal && !r._diperiksa && !r.isDuplicate; };
+  var tambah = function(k, i, alasan, id, berat, anomali) {
+    var r = (peta2[k] || [])[i];
+    if (!layak(r)) return;
+    var kunci = k + ':' + i;
+    var it = peta3[kunci];
+    if (!it) { it = peta3[kunci] = { kumpulan: k, idx: i, baris: r, alasan: [], temuan: [], berat: false, anomali: null }; urut.push(it); }
+    if (alasan && it.alasan.indexOf(alasan) < 0) it.alasan.push(alasan);
+    if (id && it.temuan.indexOf(id) < 0) it.temuan.push(id);
+    if (berat) it.berat = true;
+    if (anomali) it.anomali = anomali;
+  };
+  ((res && res.temuan) || []).forEach(function(t) {
+    if (t.status || /^rekap/.test(String(t.jenis)) || String(t.id).charAt(0) === 'r') return;
+    if (t.tingkat !== 'perlu' && t.tingkat !== 'info') return;
+    if (!(t.baris || []).length) { if (t.tingkat === 'perlu') umum.push(t); return; }
+    t.baris.forEach(function(b) { tambah(b.kumpulan, b.idx, t.judul, t.id, t.tingkat === 'perlu', null); });
+  });
+  ((res && res.anomaliTanggal) || []).forEach(function(a) {
+    if (a.beres) return;
+    tambah(a.kumpulan, a.idx, a.takTerbaca ? 'Tanggal tidak terbaca' : 'Tanggal debet dan kredit berbeda', null, true, a);
+  });
+  (peta2.himpun || []).forEach(function(r, i) {
+    if (r && r.bedaDana) tambah('himpun', i, 'Uraian menyebut jenis dana lain, mengikuti akun kredit', null, false, null);
+  });
+  urut.sort(function(a, b) { return (b.berat ? 1 : 0) - (a.berat ? 1 : 0) || a.idx - b.idx; });
+  return { baris: urut, umum: umum };
+}
+/* Menerapkan ubahan manual ke satu baris. SEMUA ATAU TIDAK SAMA SEKALI: bila satu
+   isian tidak sah, tidak ada yang diubah dan alasannya ada di item.galat. Isian
+   yang tidak dikirim tidak disentuh. Mengembalikan true bila diterapkan. */
+function imporTerapkanManual(item, nilai, peta, res) {
+  nilai = nilai || {};
+  var k = item.kumpulan;
+  var r = ((peta || {})[k] || [])[item.idx];
+  item.galat = [];
+  if (!r) { item.galat.push('Baris tidak ditemukan.'); return false; }
+  var ada = function(n) { return Object.prototype.hasOwnProperty.call(nilai, n); };
+  var salah = function(t) { item.galat.push(t); };
+  var ubah = {};
+
+  if (ada('tanggal')) {
+    var tg = String(nilai.tanggal == null ? '' : nilai.tanggal).trim();
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tg);
+    var sahTg = false;
+    if (m) {
+      var y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+      var dt = new Date(Date.UTC(y, mo - 1, d));
+      sahTg = y >= 1900 && y <= 2200 && dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+    }
+    if (sahTg) ubah.tanggal = tg; else salah('Tanggal tidak sah. Pakai bentuk tahun-bulan-tanggal, misalnya 2026-10-12.');
+  }
+  var kolomNama = k === 'himpun' ? 'namaDonatur' : k === 'salur' ? 'namaPenerima' : k === 'ump' ? 'layanan' : '';
+  if (ada('nama') && kolomNama) {
+    var nm = String(nilai.nama == null ? '' : nilai.nama).replace(/\s+/g, ' ').trim();
+    if (!nm) salah('Nama tidak boleh kosong.');
+    else if (nm.length > 120) salah('Nama terlalu panjang (maksimal 120 huruf).');
+    else ubah[kolomNama] = nm;
+  }
+  var kolomJml = (k === 'ump' || k === 'transfer') ? 'nominal' : 'jumlah';
+  if (ada('jumlah')) {
+    var jm = typeof nilai.jumlah === 'number' ? nilai.jumlah : Number(String(nilai.jumlah == null ? '' : nilai.jumlah).replace(/[^\d]/g, ''));
+    if (!isFinite(jm) || jm <= 0 || jm > 100000000000) salah('Jumlah harus lebih dari nol.');
+    else ubah[kolomJml] = Math.round(jm);
+  }
+  if (k === 'himpun' && (ada('jenisDana') || ada('subJenis') || ada('pilar'))) {
+    var jd = ada('jenisDana') ? String(nilai.jenisDana) : String(r.jenisDana || '');
+    if (JENIS_TOP.indexOf(jd) < 0) {
+      salah('Jenis dana tidak dikenal.');
+    } else {
+      var daftarSub = SUBJENIS[jd] || [];
+      var sj = ada('subJenis') ? String(nilai.subJenis) : String(r.subJenis || '');
+      if (daftarSub.indexOf(sj) < 0) {
+        if (ada('subJenis')) salah('Sub jenis tidak cocok dengan jenis dana ' + jd + '.');
+        else sj = daftarSub[0] || '';
+      }
+      var terikat = /terikat/i.test(sj);
+      var pl = ada('pilar') ? String(nilai.pilar == null ? '' : nilai.pilar) : String(r.pilar || '');
+      if (!terikat) pl = '';
+      else if (ada('pilar') && pl && KATEGORI_TERIKAT.indexOf(pl) < 0 && PILAR.indexOf(pl) < 0 && pl !== r.pilar) salah('Pilar tidak dikenal.');
+      ubah.jenisDana = jd; ubah.subJenis = sj; ubah.pilar = pl;
+    }
+  }
+  /* Kantor: dipindah dengan fungsi yang sama dengan kartu temuan, jadi
+     layananId, tipe donatur, dan nama ikut benar. Mengetik "KLL ..." di kolom
+     nama saja tidak cukup: tipe donaturnya tetap Perorangan dan transaksinya
+     tetap terhitung Daerah. */
+  var kantorPilih = null;
+  if (ada('kantor') && String(nilai.kantor == null ? '' : nilai.kantor) !== '' && k !== 'transfer') {
+    if (nilai.kantor === '__DAERAH__') kantorPilih = { daerah: true };
+    else {
+      var kk = ((res && res.daftarKantor) || []).filter(function(x) { return x.id === nilai.kantor; })[0];
+      if (!kk) salah('Kantor tidak ditemukan di daftar Layanan.');
+      else kantorPilih = { layananId: kk.id, tipe: kk.tipe, nama: kk.nama };
+    }
+  }
+  if (item.galat.length) return false;
+
+  var diubah = Object.keys(ubah).length > 0 || !!kantorPilih;
+  if (kantorPilih) {
+    if (kantorPilih.daerah) imporJadikanDaerah(r, k); else imporPasangKantor(r, k, kantorPilih);
+  }
+  Object.keys(ubah).forEach(function(n) { r[n] = ubah[n]; });
+  if (ubah.tanggal) {
+    r.tglBeda = null;
+    if (item.anomali) { item.anomali.beres = true; item.anomali.tglBaru = ubah.tanggal; }
+  }
+  if (r.bedaDana) r.bedaDana = false;
+  /* Baris beranomali tanggal baru dianggap diperiksa setelah tanggalnya dipilih. */
+  if (!item.anomali || item.anomali.beres) r._diperiksa = true;
+
+  (item.temuan || []).forEach(function(id) {
+    var t = ((res && res.temuan) || []).filter(function(x) { return x.id === id; })[0];
+    if (!t || t.status) return;
+    if (diubah) t._manual = true;
+    var semua = (t.baris || []).length > 0 && t.baris.every(function(b) {
+      var rr = ((peta || {})[b.kumpulan] || [])[b.idx];
+      return !rr || rr._diperiksa || rr._lewati || rr._batal;
+    });
+    if (semua) {
+      t.oleh = 'sendiri';
+      t.status = t._manual ? 'diterapkan' : 'dibiarkan';
+      t.statusTeks = t._manual ? 'Diperiksa dan diubah manual' : 'Diperiksa, dibiarkan apa adanya';
+    }
+  });
+  return true;
+}
+function imporPeriksaNama(it) {
+  var r = it.baris;
+  return it.kumpulan === 'himpun' ? r.namaDonatur : it.kumpulan === 'salur' ? r.namaPenerima : it.kumpulan === 'ump' ? r.layanan
+    : (r.jenis === 'setor' ? 'Setor tunai' : r.jenis === 'tarik' ? 'Tarik tunai' : 'Mutasi dana');
+}
+function imporPeriksaJenis(it) {
+  var r = it.baris;
+  if (it.kumpulan === 'himpun') return String(r.subJenis || r.jenisDana || '') + (r.pilar ? ' / ' + r.pilar : '');
+  if (it.kumpulan === 'salur') return String(r.program || r.ashnaf || '');
+  if (it.kumpulan === 'ump') return r.jenis === 'kembali' ? 'Uang muka kembali' : 'Uang muka keluar';
+  return String(r.keterangan || '').slice(0, 40);
+}
+function imporPeriksaJumlah(it) {
+  var r = it.baris;
+  return r.jumlah != null ? r.jumlah : r.nominal;
+}
+function imporPilihanPk(daftar, val, kosong) {
+  var h = kosong ? '<option value="">' + esc(kosong) + '</option>' : '';
+  daftar.forEach(function(o) { h += '<option value="' + esc(o) + '"' + (String(o) === String(val) ? ' selected' : '') + '>' + esc(o) + '</option>'; });
+  return h;
+}
+function imporPilarPk(val) {
+  var u = [];
+  KATEGORI_TERIKAT.concat(PILAR, val ? [val] : []).forEach(function(x) { if (x && u.indexOf(x) < 0) u.push(x); });
+  return u;
+}
+function imporFormPeriksa(it) {
+  var r = it.baris, k = it.kumpulan;
+  var f = function(id, label, isi, kelas) {
+    return '<label class="imp-pk-f' + (kelas ? ' ' + kelas : '') + '"' + (id ? ' id="' + id + '"' : '') + '><span>' + label + '</span>' + isi + '</label>';
+  };
+  var h = '<tr class="imp-periksa-form"><td colspan="7"><div class="imp-pk-grid">';
+  h += f('', 'Tanggal', '<input type="date" id="pk_tgl" value="' + esc(String(r.tanggal || '').slice(0, 10)) + '">');
+  if (k !== 'transfer') h += f('', 'Nama', '<input id="pk_nama" maxlength="120" data-awal="' + esc(imporPeriksaNama(it)) + '" value="' + esc(imporPeriksaNama(it)) + '">', 'lebar');
+  var daftarKantor = (window.IMPORT_TEMP_RES && window.IMPORT_TEMP_RES.daftarKantor) || [];
+  if (k !== 'transfer' && daftarKantor.length) {
+    h += f('', 'Pindah ke kantor', '<select id="pk_kantor"><option value="">(tidak diubah)</option>'
+      + '<option value="__DAERAH__">Daerah (bukan kantor)</option>'
+      + daftarKantor.map(function(x) { return '<option value="' + esc(x.id) + '">' + esc(x.label) + '</option>'; }).join('') + '</select>', 'lebar');
+  }
+  h += f('', 'Jumlah (Rp)', '<input id="pk_jml" inputmode="numeric" value="' + esc(String(Math.round(Number(imporPeriksaJumlah(it)) || 0))) + '">');
+  if (k === 'himpun') {
+    var jd = JENIS_TOP.indexOf(r.jenisDana) >= 0 ? r.jenisDana : 'Infak';
+    var sub = SUBJENIS[jd] || [];
+    var sj = sub.indexOf(r.subJenis) >= 0 ? r.subJenis : sub[0];
+    h += f('', 'Jenis dana', '<select id="pk_jenis" onchange="imporPeriksaJenisBerubah()">' + imporPilihanPk(JENIS_TOP, jd) + '</select>');
+    h += f('pk_sub_w', 'Sub jenis', '<select id="pk_sub" onchange="imporPeriksaSubBerubah()">' + imporPilihanPk(sub, sj) + '</select>');
+    h += f('pk_pilar_w', 'Pilar', '<select id="pk_pilar">' + imporPilihanPk(imporPilarPk(r.pilar), r.pilar, '(tanpa pilar)') + '</select>',
+      /terikat/i.test(sj) ? '' : 'sembunyi');
+  }
+  h += '</div>';
+  if (it.anomali) h += '<div class="imp-pk-hint">Tanggal debet ' + esc(it.anomali.tglDebet) + ', kredit ' + esc(it.anomali.tglKredit) + '. Pilih tanggal yang benar lalu simpan.</div>';
+  h += '<div class="imp-pk-aksi"><button type="button" class="btn btn-mini btn-primary imp-periksa-simpan" data-k="' + esc(it.kumpulan + ':' + it.idx) + '">Simpan perubahan</button>'
+    + '<button type="button" class="btn btn-mini imp-aksi-2 imp-periksa-batal">Batal</button></div></td></tr>';
+  return h;
+}
+function imporPanelPeriksa(res) {
+  if (!res) return '';
+  var peta = imporPetaBaris();
+  var kum = imporKumpulCurigai(res, peta);
+  var n = kum.baris.length + kum.umum.length;
+  var sudah = 0;
+  ['himpun', 'salur', 'ump', 'transfer'].forEach(function(kk) { (peta[kk] || []).forEach(function(r) { if (r && r._diperiksa) sudah++; }); });
+  if (!n) return sudah ? '<div class="imp-periksa beres" id="imporPeriksa"><b>Semua baris yang dicurigai sudah diperiksa.</b> ' + sudah + ' baris dicek atau diubah manual.</div>' : '';
+  var BATAS = 40;
+  var h = '<section class="imp-periksa" id="imporPeriksa" aria-label="Perlu diperiksa">'
+    + '<div class="imp-periksa-h"><div class="imp-periksa-j">Perlu diperiksa <span class="imp-periksa-n">' + n + '</span></div>'
+    + '<div class="imp-periksa-k">Baris di bawah ini mungkin belum sesuai. Ubah langsung di sini, atau tekan Sudah benar bila memang begitu. Yang sudah diperiksa hilang dari daftar.</div></div>';
+  kum.umum.forEach(function(t) {
+    h += '<div class="imp-periksa-umum"><b>' + esc(t.judul) + '</b> ' + esc(t.pesan || '') + '</div>';
+  });
+  if (kum.baris.length) {
+    h += '<div class="imp-tblwrap"><table class="imp-tbl imp-periksa-tbl"><thead><tr>'
+      + '<th>Baris Excel</th><th>Tanggal</th><th>Nama</th><th>Jenis</th><th>Jumlah</th><th>Kenapa dicurigai</th><th></th></tr></thead><tbody>';
+    kum.baris.slice(0, BATAS).forEach(function(it) {
+      var r = it.baris, key = it.kumpulan + ':' + it.idx, edit = IMPOR_PERIKSA_EDIT === key;
+      var tombol = '<button type="button" class="btn btn-mini imp-aksi-2 imp-periksa-ubah" data-k="' + esc(key) + '">Ubah</button>'
+        + (it.anomali ? '' : '<button type="button" class="btn btn-mini imp-aksi-2 imp-periksa-benar" data-k="' + esc(key) + '">Sudah benar</button>');
+      h += '<tr' + (edit ? ' class="edit"' : '') + '>'
+        + '<td class="imp-periksa-no">' + (r._baris ? esc(r._baris) : '-') + '</td>'
+        + '<td class="imp-periksa-tgl">' + esc(r.tanggal) + '</td>'
+        + '<td><b>' + esc(imporPeriksaNama(it)) + '</b></td>'
+        + '<td>' + esc(imporPeriksaJenis(it)) + '</td>'
+        + '<td class="jnum">' + rp(imporPeriksaJumlah(it)) + '</td>'
+        + '<td class="imp-periksa-a' + (it.berat ? ' berat' : '') + '">' + it.alasan.map(function(a) { return esc(a); }).join('<br>') + '</td>'
+        + '<td class="imp-periksa-t">' + tombol + '</td></tr>';
+      if (edit) h += imporFormPeriksa(it);
+    });
+    h += '</tbody></table></div>';
+    if (kum.baris.length > BATAS) h += '<div class="imp-periksa-lagi">dan ' + (kum.baris.length - BATAS) + ' baris lagi. Selesaikan yang di atas, daftarnya terisi otomatis.</div>';
+  }
+  return h + '</section>';
+}
+function imporBacaFormPeriksa(kumpulan) {
+  var v = function(id) { var e = el(id); return e ? e.value : ''; };
+  var n = {};
+  if (el('pk_tgl')) n.tanggal = v('pk_tgl');
+  /* Nama hanya dikirim bila benar-benar diketik ulang; kalau tidak, memilih kantor
+     akan ditimpa lagi oleh nama lama yang tertera di kotak. */
+  if (el('pk_nama') && v('pk_nama') !== el('pk_nama').getAttribute('data-awal')) n.nama = v('pk_nama');
+  if (el('pk_kantor')) n.kantor = v('pk_kantor');
+  if (el('pk_jml')) n.jumlah = Number(String(v('pk_jml')).replace(/[^\d]/g, ''));
+  if (kumpulan === 'himpun' && el('pk_jenis')) { n.jenisDana = v('pk_jenis'); n.subJenis = v('pk_sub'); n.pilar = v('pk_pilar'); }
+  return n;
+}
+function imporPeriksaJenisBerubah() {
+  var j = el('pk_jenis') ? el('pk_jenis').value : '';
+  var w = el('pk_sub_w');
+  if (!w) return;
+  /* Seluruh isi label diganti (bukan hanya opsinya), supaya pilihan yang sudah
+     dirapikan menjadi dropdown kustom ikut terbuang dan dibuat ulang. */
+  w.innerHTML = '<span>Sub jenis</span><select id="pk_sub" onchange="imporPeriksaSubBerubah()">' + imporPilihanPk(SUBJENIS[j] || [], '') + '</select>';
+  imporPeriksaSubBerubah();
+  if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
+}
+function imporPeriksaSubBerubah() {
+  var terikat = /terikat/i.test(el('pk_sub') ? el('pk_sub').value : '');
+  var w = el('pk_pilar_w');
+  if (w) w.classList.toggle('sembunyi', !terikat);
+}
+function imporPeriksaTerapkan(key, dariForm) {
+  var res = window.IMPORT_TEMP_RES;
+  if (!res) return;
+  var p = String(key).split(':'), peta = imporPetaBaris();
+  var item = imporKumpulCurigai(res, peta).baris.filter(function(x) { return x.kumpulan === p[0] && String(x.idx) === p[1]; })[0];
+  if (!item) { IMPOR_PERIKSA_EDIT = ''; return imporGambarUlang(); }
+  var ok = imporTerapkanManual(item, dariForm ? imporBacaFormPeriksa(item.kumpulan) : {}, peta, res);
+  if (!ok) return toast((item.galat || []).join(' '), true);
+  IMPOR_PERIKSA_EDIT = '';
+  window.IMPORT_KONFIRM_SIMPAN = false;
+  imporGambarUlang();
+}
+function imporPasangPeriksa() {
+  document.querySelectorAll('.imp-periksa-ubah').forEach(function(b) {
+    b.onclick = function() { IMPOR_PERIKSA_EDIT = b.getAttribute('data-k'); imporGambarUlang(); };
+  });
+  document.querySelectorAll('.imp-periksa-benar').forEach(function(b) {
+    b.onclick = function() { imporPeriksaTerapkan(b.getAttribute('data-k'), false); };
+  });
+  document.querySelectorAll('.imp-periksa-simpan').forEach(function(b) {
+    b.onclick = function() { imporPeriksaTerapkan(b.getAttribute('data-k'), true); };
+  });
+  document.querySelectorAll('.imp-periksa-batal').forEach(function(b) {
+    b.onclick = function() { IMPOR_PERIKSA_EDIT = ''; imporGambarUlang(); };
+  });
+  if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
 }
 function imporAnomTanggal() {
   var res = window.IMPORT_TEMP_RES;
@@ -6203,7 +6499,7 @@ function simpanImportData() {
       window.IMPORT_KONFIRM_SIMPAN = true;
       el('importSimpanBtn').textContent = 'Tetap simpan';
       imporPerbaruiKaki();
-      var blok = el('imporTemuanBlok');
+      var blok = el('imporPeriksa') || el('imporTemuanBlok');
       if (blok && blok.scrollIntoView) blok.scrollIntoView({ block: 'start', behavior: 'smooth' });
       return toast(belum + ' temuan belum diputuskan. Klik sekali lagi kalau memang ingin menyimpan apa adanya.', true);
     }

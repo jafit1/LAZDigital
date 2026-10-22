@@ -5533,6 +5533,11 @@ function _lengkapiTemuan(hasil, opsi, listLayanan, hasilJurnal){
   }
   hasil.seksiDitemukan = (hasilJurnal && hasilJurnal.seksiDitemukan) || [];
   hasil.opsiBerkas = opsi || null;
+  /* Daftar kantor terdaftar untuk panel "Perlu diperiksa" di layar impor: baris
+     yang dicurigai bisa langsung dipindah ke kantor yang benar (22 Oktober 2026). */
+  hasil.daftarKantor = (listLayanan || []).filter(function(l){ return l && l.id && l.nama; }).map(function(l){
+    return { id: l.id, tipe: String(l.tipe || '').toUpperCase() || 'KLL', nama: l.nama, label: _layLabel(l) };
+  }).sort(function(a, b){ return String(a.nama).localeCompare(String(b.nama)); });
   return hasil;
 }
 

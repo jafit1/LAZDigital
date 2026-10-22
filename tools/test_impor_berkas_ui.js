@@ -224,7 +224,14 @@ const srv = http.createServer(async (req, res) => {
 
     console.log('\n=== A2. SUMBER "JURNAL DALAM SISTEM": PILIHAN LEGA DAN SEJAJAR ===');
     await page.click('#impb_sumber_sistem');
-    await page.waitForTimeout(250);
+    /* Pilihan jenis/bulan/tahun diganti dropdown kustom secara tidak serentak
+       (lz-ui.js). Diukur sebelum itu selesai, yang terbaca label 17 px, bukan
+       kotaknya, dan uji ini gagal acak sekali dalam beberapa kali jalan. */
+    await page.waitForFunction(() => ['impb_jenis', 'impb_bulan', 'impb_tahun'].every((id) => {
+      const s = document.getElementById(id), p = s && s.previousElementSibling;
+      return p && p.classList.contains('select-enhanced');
+    }), null, { timeout: 8000 });
+    await page.waitForTimeout(150);
     const sis = await page.evaluate(() => {
       const k = (e) => e.getBoundingClientRect();
       const badan = k(document.getElementById('modalBody'));
@@ -337,6 +344,86 @@ const srv = http.createServer(async (req, res) => {
     cek('tidak ada em dash di layar impor', !/—/.test(teks + (await page.textContent('#modalTitle'))));
     const daerahAwal = await page.evaluate(() => ringkasImporJurnal(window.IMPORT_TEMP_HIMPUN_ROWS, window.IMPORT_TEMP_SALUR_ROWS, [], []).totalHimpun.Daerah);
     cek('sebelum dibetulkan, setoran "Bantul Kota" masih terhitung Daerah', daerahAwal === 2500000 + 75000 + 10 + 120000, daerahAwal);
+
+    console.log('\n=== B2. PANEL "PERLU DIPERIKSA" DI PALING ATAS ===');
+    const pk = await page.evaluate(() => {
+      const p = document.getElementById('imporPeriksa'), pv = document.getElementById('importPreview');
+      const fokus = document.getElementById('imporTemuanBlok');
+      const ringkas = [...pv.querySelectorAll('summary')].find((x) => /Ringkasan/.test(x.textContent));
+      const baris = p ? [...p.querySelectorAll('tbody tr')].filter((r) => r.cells.length >= 7).map((r) => [...r.cells].map((c) => c.textContent.trim())) : [];
+      return { ada: !!p, pertama: !!p && pv.firstElementChild === p, n: p ? Number((p.querySelector('.imp-periksa-n') || {}).textContent) : null,
+        atasPanel: p ? p.getBoundingClientRect().top : null, atasFokus: fokus ? fokus.getBoundingClientRect().top : null,
+        atasRingkas: ringkas ? ringkas.getBoundingClientRect().top : null, baris, teks: p ? p.innerText : '' };
+    });
+    cek('panel "Perlu diperiksa" ada', pk.ada, pk);
+    cek('panel adalah isi PERTAMA pratinjau (paling atas)', pk.pertama, pk);
+    cek('panel di atas fokus tanggal/kantor dan di atas ringkasan', pk.atasPanel < pk.atasFokus && pk.atasPanel < pk.atasRingkas, pk);
+    cek('tiap baris menyebut nomor baris di Excel', pk.baris.length > 0 && pk.baris.every((b) => /^\d+$/.test(b[0])), pk.baris);
+    cek('tiap baris menyebut alasan dicurigai', pk.baris.every((b) => b[5].length > 3), pk.baris);
+    cek('jumlah di lencana sama dengan isi daftar', pk.n >= pk.baris.length && pk.baris.length > 0, [pk.n, pk.baris.length]);
+    cek('temuan nominal kecil (Rp 10) ikut terdaftar', pk.baris.some((b) => /Nominal sangat kecil/.test(b[5])), pk.baris);
+    cek('temuan kantor tidak terdaftar ikut terdaftar', pk.baris.some((b) => /tidak terdaftar/.test(b[5])), pk.baris);
+    cek('tidak ada em dash di panel', !/—/.test(pk.teks));
+    /* Tanggal yang patah jadi "2026-09-" lalu "30" sulit dibaca dan dibandingkan
+       dengan Excel. Diukur dari jumlah kotak teks yang dibentuk isi selnya. */
+    const patah = await page.evaluate(() => [...document.querySelectorAll('#imporPeriksa tbody tr')].filter((r) => r.cells.length >= 7).map((r) => {
+      const rg = document.createRange(); rg.selectNodeContents(r.cells[1]);
+      const g = document.createRange(); g.selectNodeContents(r.cells[0]);
+      return { tanggal: rg.getClientRects().length, baris: g.getClientRects().length };
+    }));
+    cek('tanggal dan nomor baris tidak patah jadi dua baris', patah.length > 0 && patah.every((x) => x.tanggal === 1 && x.baris === 1), patah);
+    /* Potret untuk dilihat mata (LAZ_POTRET=folder), bukan bagian pemeriksaan. */
+    if (process.env.LAZ_POTRET) {
+      fs.mkdirSync(process.env.LAZ_POTRET, { recursive: true });
+      await page.locator('#modalCard').screenshot({ path: path.join(process.env.LAZ_POTRET, 'periksa-daftar.png') });
+    }
+    await page.click('#imporPeriksa .imp-periksa-ubah');
+    await page.waitForSelector('#imporPeriksa .imp-periksa-form', { timeout: 5000 });
+    if (process.env.LAZ_POTRET) {
+      await page.waitForTimeout(300);
+      await page.locator('#modalCard').screenshot({ path: path.join(process.env.LAZ_POTRET, 'periksa-form.png') });
+    }
+    const form = await page.evaluate(() => ({ tgl: !!document.getElementById('pk_tgl'), nama: !!document.getElementById('pk_nama'), jml: !!document.getElementById('pk_jml'),
+      jenis: !!document.getElementById('pk_jenis'), kantor: !!document.getElementById('pk_kantor'), banyakForm: document.querySelectorAll('.imp-periksa-form').length }));
+    cek('Ubah membuka form: tanggal, nama, jumlah, jenis dana, dan kantor', form.tgl && form.nama && form.jml && form.jenis && form.kantor, form);
+    cek('hanya satu form terbuka', form.banyakForm === 1, form);
+    await page.click('#imporPeriksa .imp-periksa-batal');
+    cek('Batal menutup form', await page.evaluate(() => !document.querySelector('.imp-periksa-form')));
+
+    /* Mengubah nominal Rp 10 (temuan "nominal sangat kecil"). Dikembalikan lagi
+       sesudahnya supaya bagian uji berikutnya tetap memakai data yang sama. */
+    const bukaRp10 = () => page.evaluate(() => {
+      const tr = [...document.querySelectorAll('#imporPeriksa tbody tr')].find((r) => r.cells.length >= 7 && /Nominal sangat kecil/.test(r.cells[5].textContent));
+      if (!tr) return false; tr.querySelector('.imp-periksa-ubah').click(); return true;
+    });
+    cek('baris Rp 10 ditemukan lalu dibuka', await bukaRp10());
+    await page.waitForSelector('#pk_jml', { timeout: 5000 });
+    await page.fill('#pk_jml', '0');
+    await page.click('#imporPeriksa .imp-periksa-simpan');
+    await page.waitForTimeout(150);
+    const tolak = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, tampil: document.getElementById('toast').classList.contains('show'),
+      nilai: (window.IMPORT_TEMP_HIMPUN_ROWS.find((r) => Math.round(r.jumlah) === 10) || {}).jumlah, formMasihAda: !!document.querySelector('.imp-periksa-form') }));
+    cek('jumlah 0 ditolak dengan pesan yang terlihat', tolak.tampil && /Jumlah/.test(tolak.toast), tolak);
+    cek('yang ditolak tidak mengubah baris, form tetap terbuka', tolak.nilai === 10 && tolak.formMasihAda, tolak);
+    await page.fill('#pk_jml', '11');
+    await page.click('#imporPeriksa .imp-periksa-simpan');
+    await page.waitForTimeout(200);
+    const ubahOk = await page.evaluate(() => ({
+      baris11: !!window.IMPORT_TEMP_HIMPUN_ROWS.find((r) => Math.round(r.jumlah) === 11),
+      tabel: /Rp\s*11\b/.test(document.getElementById('importPreview').innerText),
+      masihDiPanel: [...document.querySelectorAll('#imporPeriksa tbody tr')].some((r) => r.cells.length >= 7 && /Nominal sangat kecil/.test(r.cells[5].textContent)),
+      formTertutup: !document.querySelector('.imp-periksa-form') }));
+    cek('nominal tersimpan di baris', ubahOk.baris11, ubahOk);
+    cek('tabel pratinjau ikut menampilkan nilai baru', ubahOk.tabel, ubahOk);
+    cek('baris yang sudah diperiksa hilang dari daftar curiga', !ubahOk.masihDiPanel && ubahOk.formTertutup, ubahOk);
+    await page.evaluate(() => {
+      const r = window.IMPORT_TEMP_HIMPUN_ROWS.find((x) => Math.round(x.jumlah) === 11);
+      r.jumlah = 10; delete r._diperiksa;
+      const t = window.IMPORT_TEMP_RES.temuan.find((x) => /Nominal sangat kecil/.test(x.judul));
+      t.status = ''; t.statusTeks = ''; t.oleh = ''; delete t._manual;
+      imporGambarUlang();
+    });
+    cek('data dikembalikan untuk bagian uji berikutnya', await page.evaluate(() => !!window.IMPORT_TEMP_HIMPUN_ROWS.find((r) => Math.round(r.jumlah) === 10)));
 
     console.log('\n=== C. MEMBETULKAN LANGSUNG DI LAYAR ===');
     cek('klik "Jadikan KLL Bantul Kota"', await klikAksi('Nama kantor tanpa KLL/ULL', 'terap'));

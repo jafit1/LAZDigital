@@ -61,6 +61,7 @@ const DAFTAR = [
   { label: 'Formulir A2: tanda tangan tersimpan sekali', berkas: 'test_a2_tanda_tangan.js' },
   { label: 'Formulir A2: selalu satu lembar A5', berkas: 'test_a2_satu_lembar.js' },
   { label: 'Formulir A2: kolom petugas Lazismu Daerah Bantul', berkas: 'test_a2_petugas.js' },
+  { label: 'Impor: panel Perlu diperiksa di paling atas', berkas: 'test_impor_periksa_atas.js' },
   { label: 'Tawaran rekap, Saldo KLL, urutan menu', berkas: 'test_tampilan_kll_menu.js' },
   { label: 'Link Penghimpunan Harian', berkas: 'test_link_harian.js' },
   { label: 'Pemecahan izin Dashboard', berkas: 'test_izin_modul.js' },
