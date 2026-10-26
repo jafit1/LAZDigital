@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F2704F">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/ikon/lazismu.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/ikon/ikon-180.png">
+  <title>Pengajuan UMP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/lz-tema.js"></script>
+  <script src="/js/lz-perangkat.js"></script>
+  <script src="/js/lz-logo.js"></script>
+  <style>
+    /* ================================================================
+       PENGAJUAN UMP KANTOR LAYANAN (pemilik, 26 Oktober 2026)
+       Dua langkah: pilih kantor dan formulir (F-08-C, F-08-D, atau
+       keduanya), lalu isi rincian. Kepala, kartu, dan tombol meniru
+       harian.html supaya terasa bagian dari web yang sama. Isian hanya
+       di localStorage browser ini.
+       ================================================================ */
+    body{ padding:0; margin:0; background:var(--bg); }
+    .up-wrap{ max-width:760px; margin:0 auto; padding:16px 16px 56px; }
+
+    .up-head{ background:var(--glass-card); border:1px solid var(--glass-bd); border-radius:var(--radius);
+      padding:16px 20px; box-shadow:var(--shadow-lg); }
+    .up-atas{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .up-id{ display:flex; align-items:center; gap:10px; min-width:0; }
+    .up-logo{ width:36px; height:36px; flex:none; border-radius:11px; background:var(--accent-soft);
+      border:1px solid var(--accent-soft2); display:grid; place-items:center; overflow:hidden; }
+    .up-nama{ font-family:var(--head); font-size:14.5px; font-weight:700; line-height:1.2; }
+    .up-sub{ font-size:12px; color:var(--muted); margin-top:1px; }
+    .up-tema{ width:34px; height:34px; padding:0; border-radius:10px; border:1px solid var(--border); background:var(--surface2);
+      color:var(--text2); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+    .up-tema .lz-tema-ikon{ width:19px; height:19px; display:block; }
+
+    .up-langkah{ display:flex; gap:6px; margin:16px 0 0; padding-top:14px; border-top:1px solid var(--border); }
+    .up-lk{ flex:1; display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--muted); min-width:0; }
+    .up-lk i{ font-style:normal; width:22px; height:22px; flex:none; border-radius:50%; display:grid; place-items:center;
+      font-size:11px; font-weight:800; background:var(--surface2); border:1px solid var(--border); transition:background .25s, color .25s, border-color .25s; }
+    .up-lk.on{ color:var(--text); }
+    .up-lk.on i{ background:var(--grad-accent); color:#fff; border-color:transparent; }
+    .up-lk.lewat i{ background:var(--accent-soft); color:var(--accent-d); border-color:var(--accent-soft2); }
+
+    .up-kartu{ background:var(--glass-card); border:1px solid var(--glass-bd); border-radius:var(--radius); padding:18px 20px;
+      box-shadow:var(--shadow); margin-top:14px; animation:cardIn .42s cubic-bezier(.2,.7,.2,1) both; }
+    .up-kartu:nth-child(2){ animation-delay:.05s } .up-kartu:nth-child(3){ animation-delay:.1s } .up-kartu:nth-child(4){ animation-delay:.15s }
+    .up-kartu h2{ font-family:var(--head); font-size:15px; font-weight:800; margin:0 0 4px; }
+    .up-ket{ font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.5; }
+    .up-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+    .up-grid .lebar{ grid-column:1 / -1; }
+
+    /* Pilihan formulir dan rekening: kartu yang bisa diklik, bukan kotak centang kecil. */
+    .up-pilih{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .up-opsi{ position:relative; display:flex; gap:12px; align-items:flex-start; text-align:left; padding:14px; border-radius:14px; cursor:pointer;
+      background:var(--surface); border:1px solid var(--border); font:inherit; color:inherit; transition:border-color .16s, background .16s, box-shadow .16s, transform .12s; }
+    .up-opsi:hover{ border-color:rgba(var(--accent-rgb),.45); }
+    .up-opsi:active{ transform:scale(.99); }
+    .up-opsi input{ position:absolute; opacity:0; pointer-events:none; width:1px; height:1px; }
+    .up-opsi:has(input:focus-visible){ outline:2px solid var(--accent); outline-offset:2px; }
+    .up-opsi:has(input:checked){ border-color:var(--accent); background:var(--accent-soft); box-shadow:0 8px 20px -14px rgba(var(--accent-rgb),.9); }
+    .up-tanda{ width:20px; height:20px; flex:none; margin-top:1px; border-radius:6px; border:1.5px solid var(--border); background:var(--surface);
+      display:grid; place-items:center; transition:background .16s, border-color .16s; }
+    .up-tanda.bulat{ border-radius:50%; }
+    .up-tanda svg{ width:12px; height:12px; opacity:0; transform:scale(.5); transition:opacity .16s, transform .2s cubic-bezier(.2,.8,.3,1.4); }
+    .up-opsi:has(input:checked) .up-tanda{ background:var(--accent); border-color:var(--accent); }
+    .up-opsi:has(input:checked) .up-tanda svg{ opacity:1; transform:none; }
+    .up-opsi b{ display:block; font-size:13.5px; font-weight:700; }
+    .up-opsi span.k{ display:block; font-size:12px; color:var(--muted); margin-top:2px; line-height:1.45; }
+    .up-kode{ display:inline-block; font-size:10.5px; font-weight:800; color:var(--accent-d); background:var(--accent-soft);
+      border:1px solid var(--accent-soft2); border-radius:6px; padding:1px 6px; margin-right:6px; vertical-align:1px; }
+    .up-saran{ font-size:10.5px; font-weight:700; color:var(--green); background:var(--green-bg); border-radius:999px; padding:1px 7px; margin-left:6px; vertical-align:1px; }
+    .up-manual{ margin-top:14px; animation:fadeUp .3s ease both; }
+
+    /* Baris rincian: grid, jadi di HP menumpuk rapi tanpa tabel yang digulir. */
+    .up-baris{ display:grid; grid-template-columns:28px minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:center;
+      padding:10px 0; border-top:1px solid var(--border); }
+    .up-baris:first-of-type{ border-top:0; }
+    .up-baris.d{ grid-template-columns:28px minmax(0,1.3fr) minmax(0,1fr); }
+    .up-no{ width:24px; height:24px; border-radius:8px; display:grid; place-items:center; font-size:11px; font-weight:800;
+      color:var(--text2); background:var(--surface2); }
+    .up-nm{ font-size:13.5px; font-weight:600; min-width:0; }
+    .up-rc{ grid-column:2 / -1; }
+    .up-rc input{ font-size:12.5px; padding:6px 10px; background:transparent; border-style:dashed; }
+    .up-rp{ position:relative; }
+    .up-rp::before{ content:"Rp"; position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:12px; font-weight:600; color:var(--muted); pointer-events:none; }
+    .up-rp input{ padding-left:34px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+    .up-baris.isi .up-no{ background:var(--accent-soft); color:var(--accent-d); }
+    .up-total{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-top:6px; padding:14px 16px; border-radius:14px;
+      background:var(--grad-accent); color:#fff; box-shadow:var(--glow); }
+    .up-total span{ font-size:12.5px; font-weight:600; opacity:.92; }
+    .up-total b{ font-family:var(--head); font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; }
+    .up-total b.naik{ animation:countUp .3s ease both; }
+    .up-cek{ display:flex; gap:10px; align-items:center; margin-top:12px; font-size:13px; cursor:pointer; }
+    .up-cek input{ width:18px; height:18px; flex:none; }
+
+    .up-aksi{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end; margin-top:16px; }
+    .up-aksi .kiri{ margin-right:auto; }
+    .up-aksi .btn{ height:42px; padding:0 18px; }
+    .up-err{ margin-top:14px; padding:12px 14px; border-radius:12px; background:var(--red-bg); color:var(--red); font-size:13px; animation:fadeUp .25s ease both; }
+    .up-err:empty{ display:none; }
+    .up-err ul{ margin:4px 0 0; padding-left:18px; }
+    .up-err a{ color:inherit; font-weight:600; }
+    .up-status{ font-size:12px; color:var(--muted); }
+    .up-ringkas{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .up-ringkas b{ font-family:var(--head); font-size:15px; }
+    .up-chip{ display:inline-flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+    .up-galat{ max-width:420px; margin:80px auto; text-align:center; background:var(--surface); border:1px solid var(--border);
+      border-radius:18px; padding:28px 22px; color:var(--text2); font-size:14px; line-height:1.6; }
+    .up-galat b{ display:block; font-family:var(--head); font-size:17px; color:var(--text); margin-bottom:6px; }
+    .up-kaki{ text-align:center; font-size:12px; line-height:1.6; color:var(--muted); margin-top:24px; }
+
+    html[data-sentuh="ya"] .up-wrap input{ font-size:16px; }
+    html[data-sentuh="ya"] .up-aksi .btn{ height:46px; }
+    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .up-wrap{ max-width:880px; padding-top:28px; }
+    @media(max-width:620px){
+      .up-wrap{ padding:12px 12px 48px; }
+      .up-head,.up-kartu{ padding:14px; border-radius:14px; }
+      .up-grid,.up-pilih{ grid-template-columns:1fr; }
+      .up-baris,.up-baris.d{ grid-template-columns:28px minmax(0,1fr) minmax(0,1fr); }
+      .up-baris .up-nm{ grid-column:2 / -1; }
+      .up-baris > .up-rp{ grid-column:2 / span 1; }
+      .up-baris.d > .up-rp{ grid-column:2 / -1; }
+      .up-lk span{ display:none; }
+      .up-lk.on span{ display:inline; }
+      .up-aksi .btn{ flex:1; }
+      .up-aksi .kiri{ flex-basis:100%; }
+    }
+    @media (prefers-reduced-motion: reduce){ .up-kartu,.up-manual,.up-err,.up-total b.naik{ animation:none; } }
+  </style>
+</head>
+<body>
+  <script>
+    (function(){
+      var t = null;
+      try { t = localStorage.getItem('laz_theme'); } catch(e) {}
+      if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+
+  <div id="boot" class="lz lz--full"><div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div></div>
+  <div id="root" class="up-wrap hidden"></div>
+  <script>var MUAT = LZLogo.muat({ kunci: 'lz_muat_ump', tahan: true });</script>
+
+  <script src="/js/lz-ui.js"></script>
+  <script src="/js/lz-ump.js"></script>
+  <script src="/js/ump-ui.js"></script>
+</body>
+</html>

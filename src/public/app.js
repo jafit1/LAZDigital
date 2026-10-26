@@ -826,7 +826,12 @@ function openLinkHarian(){
         + (x.aktif ? '<a class="btn btn-sm" href="' + esc(url) + '" target="_blank" rel="noopener">Buka</a>' : '')
         + (bolehUbah ? '<button class="btn btn-sm" onclick="buatLinkHarian(\'' + j + '\')">' + (x.aktif ? 'Buat ulang' : 'Aktifkan') + '</button>' : '')
         + (bolehUbah && x.aktif ? '<button class="btn btn-sm lh-admin-mati" onclick="matikanLinkHarian(\'' + j + '\')">Matikan</button>' : '')
-        + '</div></div>';
+        + '</div>'
+        /* Pengajuan UMP (26 Oktober 2026) memakai token link KLL/ULL yang sama. */
+        + (j === 'kantor' && x.aktif ? '<div class="muted lh-admin-k" style="margin-top:10px">Pengajuan UMP untuk KL/ULL (formulir F-08-C dan F-08-D, isian tersimpan di browser masing-masing):</div>'
+          + '<div class="link-box"><input id="lhUrl_ump" readonly value="' + esc(location.origin + '/ump.html?t=' + x.token) + '">'
+          + '<button class="btn btn-sm btn-primary" onclick="salinLinkHarian(\'ump\')">Salin</button></div>' : '')
+        + '</div>';
     };
     var b = '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Halaman memperbarui sendiri tiap 30 detik dan bisa memilih tanggal lain. '
       + 'Telepon, alamat, email, keterangan, dan nomor kwitansi tidak pernah ditampilkan. "Buat ulang" mematikan alamat lama.</p>'

@@ -44,6 +44,7 @@ const DAFTAR = [
   { label: 'Impor: tab kembali ke Unggah File', berkas: 'test_impor_tab_reset.js' },
   { label: 'Impor: lewati duplikat, pesan dalam modal', berkas: 'test_impor_lewati_duplikat.js' },
   { label: 'Dasbor: fundraising hanya daerah', berkas: 'test_dash_fundraising_daerah.js' },
+  { label: 'Pengajuan UMP Kantor Layanan (tanpa server)', berkas: 'test_ump.js' },
   { label: 'Toast tampil di atas modal', berkas: 'test_toast_di_atas_modal.js' },
   { label: 'Jurnal: FR bukan nama KLL/ULL', berkas: 'test_fr_bukan_kll.js' },
   { label: 'Angka rekap per kantor (bukan cuma total KLL/ULL)', berkas: 'test_rkangka_per_kantor.js' },

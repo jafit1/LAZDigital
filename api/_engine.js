@@ -1575,6 +1575,23 @@ function apiMatikanLinkHarian(t, jenis){
   audit(u.id, u.username, 'link_harian_matikan', jenis, { modul: 'settings', ringkas: 'link penghimpunan harian ' + jenis + ' dimatikan' });
   return _lhInfo(jenis);
 }
+/* Daftar kantor untuk halaman Pengajuan UMP (public/ump.html, 26 Oktober 2026).
+   Kunci aksesnya sama dengan link KLL/ULL Penghimpunan Harian, jadi tidak ada
+   token baru untuk diurus. Yang keluar hanya jenis dan nama kantor aktif:
+   penanggung jawab, telepon, wilayah, dan kode tidak ikut. Isian pengajuan
+   sendiri tidak pernah dikirim ke server. */
+function apiDaftarKantorUmp(token){
+  token = String(token == null ? '' : token);
+  var kunci = getSetting('lhTokenKantor') || '';
+  if (token.length < 24 || !kunci || token !== kunci) throw new Error('Link tidak valid atau sudah dimatikan.');
+  var s = getAllSettings();
+  return {
+    kantor: (readAll(SHEETS.LAYANAN) || []).filter(function(l){ return l && l.nama && String(l.aktif) !== 'false'; })
+      .map(function(l){ return { tipe: String(l.tipe || '').toUpperCase() === 'ULL' ? 'ULL' : 'KLL', nama: String(l.nama).trim() }; })
+      .sort(function(a, b){ return a.tipe === b.tipe ? a.nama.localeCompare(b.nama) : (a.tipe === 'KLL' ? -1 : 1); }),
+    lembaga: { namaLembaga: s.namaLembaga || '', singkatan: s.singkatan || '' }
+  };
+}
 /* "Hamba Allah", "NN", "anonim", kosong: donatur yang memang tidak mau
    namanya tampil. Semua bentuk itu ditampilkan seragam. */
 function _lhNama(n){
@@ -8444,6 +8461,7 @@ REGISTRY['apiInfoLinkHarian']=apiInfoLinkHarian;
 REGISTRY['apiBuatLinkHarian']=apiBuatLinkHarian;
 REGISTRY['apiMatikanLinkHarian']=apiMatikanLinkHarian;
 REGISTRY['apiPenghimpunanHarian']=apiPenghimpunanHarian;
+REGISTRY['apiDaftarKantorUmp']=apiDaftarKantorUmp;
 REGISTRY['apiParseImportUrl']=apiParseImportUrl;
 REGISTRY['apiParseImportText']=apiParseImportText;
 REGISTRY['apiSimpanAliasKantor']=apiSimpanAliasKantor;
