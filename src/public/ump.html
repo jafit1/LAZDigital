@@ -109,6 +109,38 @@
     .up-ringkas{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
     .up-ringkas b{ font-family:var(--head); font-size:15px; }
     .up-chip{ display:inline-flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+    /* Langkah 3: tanda tangan dan kirim. */
+    .up-seg{ display:inline-flex; gap:4px; padding:4px; border-radius:999px; background:var(--surface2); border:1px solid var(--border); margin-bottom:14px; max-width:100%; }
+    .up-seg label{ position:relative; cursor:pointer; }
+    .up-seg input{ position:absolute; opacity:0; width:1px; height:1px; }
+    .up-seg span{ display:block; padding:8px 16px; border-radius:999px; font-size:12.5px; font-weight:600; color:var(--text2); white-space:nowrap; transition:background .16s, color .16s, box-shadow .16s; }
+    .up-seg input:checked + span{ background:var(--grad-accent); color:#fff; box-shadow:0 8px 18px -12px rgba(var(--accent-rgb),.9); }
+    .up-seg input:focus-visible + span{ outline:2px solid var(--accent); outline-offset:2px; }
+    .up-pad{ position:relative; height:190px; border-radius:14px; border:1.5px dashed var(--border); background:#fff; overflow:hidden; touch-action:none; }
+    .up-pad canvas{ position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; touch-action:none; z-index:1; }
+    .up-pad-garis{ position:absolute; left:8%; right:8%; bottom:28%; border-bottom:1px solid #d6d3d1; }
+    .up-pad-teks{ position:absolute; left:0; right:0; bottom:calc(28% - 22px); text-align:center; font-size:11.5px; color:#a8a29e; transition:opacity .2s; }
+    .up-pad.terisi .up-pad-teks{ opacity:0; }
+    .up-pad-aksi{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
+    .up-zona{ display:flex; flex-direction:column; gap:4px; align-items:center; text-align:center; padding:22px 16px; border-radius:14px; cursor:pointer;
+      border:1.5px dashed var(--border); background:var(--surface); transition:border-color .16s, background .16s; }
+    .up-zona:hover,.up-zona.di-atas{ border-color:var(--accent); background:var(--accent-soft); }
+    .up-zona:has(input:focus-visible){ outline:2px solid var(--accent); outline-offset:2px; }
+    .up-zona input{ position:absolute; opacity:0; width:1px; height:1px; }
+    .up-zona b{ font-size:13.5px; color:var(--accent-d); }
+    .up-zona span{ font-size:12px; color:var(--muted); max-width:420px; }
+    .up-tips{ margin-top:12px; padding:12px 14px; border-radius:12px; background:var(--surface2); font-size:12.5px; color:var(--text2); line-height:1.55; }
+    .up-tips b{ color:var(--text); }
+    .up-tips ol{ margin:4px 0 0; padding-left:18px; }
+    #ttd_info{ margin:10px 0 0; }
+    .up-hasil{ margin-top:8px; padding:14px; border-radius:12px; border:1px solid var(--border); text-align:center; animation:fadeUp .3s ease both;
+      background:#fff repeating-conic-gradient(#f1f0ef 0% 25%, #fff 0% 50%) 0 0 / 16px 16px; }
+    .up-hasil img{ max-width:100%; max-height:120px; }
+    .up-kirim{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .up-besar{ height:50px !important; font-size:14px !important; }
+    .up-besar.memuat{ opacity:.7; cursor:progress; }
+    .up-besar.memuat svg{ animation:spin 1s linear infinite; }
+
     .up-galat{ max-width:420px; margin:80px auto; text-align:center; background:var(--surface); border:1px solid var(--border);
       border-radius:18px; padding:28px 22px; color:var(--text2); font-size:14px; line-height:1.6; }
     .up-galat b{ display:block; font-family:var(--head); font-size:17px; color:var(--text); margin-bottom:6px; }
@@ -128,9 +160,11 @@
       .up-lk span{ display:none; }
       .up-lk.on span{ display:inline; }
       .up-aksi .btn{ flex:1; }
+      .up-kirim{ grid-template-columns:1fr; }
+      .up-seg{ display:flex; } .up-seg label{ flex:1; } .up-seg span{ text-align:center; padding:8px 10px; }
       .up-aksi .kiri{ flex-basis:100%; }
     }
-    @media (prefers-reduced-motion: reduce){ .up-kartu,.up-manual,.up-err,.up-total b.naik{ animation:none; } }
+    @media (prefers-reduced-motion: reduce){ .up-kartu,.up-manual,.up-err,.up-total b.naik,.up-hasil,.up-besar.memuat svg{ animation:none; } }
   </style>
 </head>
 <body>
@@ -148,6 +182,7 @@
   <script>var MUAT = LZLogo.muat({ kunci: 'lz_muat_ump', tahan: true });</script>
 
   <script src="/js/lz-ui.js"></script>
+  <script src="/js/lz-pdf.js"></script>
   <script src="/js/lz-ump.js"></script>
   <script src="/js/ump-ui.js"></script>
 </body>

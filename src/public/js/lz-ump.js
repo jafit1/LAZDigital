@@ -10,11 +10,13 @@
  *   F-08-D  pengajuan operasional KLL, sembilan baris biaya.
  * Rekening tujuan: VA BPD DIY Syariah (pilihan teratas, nomornya dikonfirmasi
  * keuangan lewat WhatsApp, jadi tidak diisi) atau rekening lain yang ditulis.
+ * Tanda tangan pemohon: basah (ditandatangani di kertas) atau digital
+ * (digambar di layar atau foto yang latar putihnya dihapus otomatis).
  *
- * Berkas ini murni logika: tanpa DOM, tanpa jaringan. Satu-satunya panggilan
- * server halaman ini (daftar nama kantor) ada di ump-ui.js dan tidak membawa
- * isian pengajuan. Bagian Admin (nomor, rekomendasi, catatan, tanda tangan
- * admin) dibiarkan kosong: diisi Admin Daerah di kertas. */
+ * Kertasnya digambar di kanvas lalu dirakit LZPdf, jadi PDF langsung menjadi
+ * berkas yang bisa disimpan atau dibagikan ke WhatsApp, sama di semua perangkat,
+ * tanpa dialog cetak. Berkas ini tanpa DOM dan tanpa jaringan: kanvas diberikan
+ * pemanggil, sehingga semua bisa diuji di Node dengan kanvas tiruan. */
 (function (akar) {
   'use strict';
   if (akar.LZUmp) return;
@@ -24,6 +26,9 @@
      lebih panjang membuat kolom jumlah di kertas membungkus. */
   var MAKS_RP = 9999999999;
   var PANJANG = { kll: 60, bank: 60, rekening: 30, atasNama: 60, pemohon: 60, asnaf: 30, rincian: 48 };
+  /* Gambar tanda tangan sudah dipangkas dan diperkecil (paling besar 600 x 240),
+     PNG-nya biasanya di bawah 60 KB. Yang lebih besar dari ini bukan buatan halaman. */
+  var MAKS_TTD = 400000;
   var PILAR = ['Ekonomi', 'Pendidikan', 'Kesehatan', 'Kelembagaan', 'Kemanusiaan', 'Keagamaan', 'Sosial Dakwah', 'Lingkungan'];
   var BIAYA = ['Biaya Pegawai', 'Biaya Sosialisasi, Kajian Rapat Kerja', 'Biaya Tali (Tlp, Air, Listrik)', 'Biaya Perjalanan Dinas',
     'Biaya Administrasi Umum', 'ATK dan Perlengkapan Kantor', 'Biaya Rapat & Konsumsi', 'BBM Amil', 'Operasional Kendaraan Amil'];
@@ -61,33 +66,42 @@
     var s = sahTanggal(iso);
     return s ? Number(s.slice(8, 10)) + ' ' + BULAN[Number(s.slice(5, 7))] + ' ' + s.slice(0, 4) : '';
   }
+  /* Hanya PNG buatan halaman ini (data URL base64) yang diterima sebagai tanda tangan. */
+  function sahTtd(g) {
+    g = String(g == null ? '' : g);
+    return g.length <= MAKS_TTD && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(g) ? g : '';
+  }
 
   function baru(hari) {
     return {
       profil: { kll: '', tipe: 'KLL', rek: 'va', bank: '', rekening: '', atasNama: '', pemohon: '' },
       form: { c: false, d: false },
+      ttd: { jenis: 'basah', cara: 'gambar', gambar: '' },
       tanggal: sahTanggal(hari),
       c: PILAR.map(function () { return { jumlah: 0, asnaf: '', rincian: '' }; }),
       d: BIAYA.map(function () { return { jumlah: 0, rincian: '' }; }),
       gaji: false
     };
   }
+  function obj(v) { return (v && typeof v === 'object') ? v : {}; }
   /* Apa pun yang masuk (isian layar, isi penyimpanan yang mungkin rusak atau
      diubah tangan) dijadikan bentuk yang sah sebelum dipakai. */
   function bersihkan(s) {
-    var b = baru(''), x = (s && typeof s === 'object') ? s : {}, p = (x.profil && typeof x.profil === 'object') ? x.profil : {};
+    var b = baru(''), x = obj(s), p = obj(x.profil), f = obj(x.form), t = obj(x.ttd);
     ['kll', 'bank', 'rekening', 'atasNama', 'pemohon'].forEach(function (k) { b.profil[k] = potong(p[k], PANJANG[k]); });
     b.profil.tipe = p.tipe === 'ULL' ? 'ULL' : 'KLL';
     b.profil.rek = p.rek === 'manual' ? 'manual' : 'va';
-    var f = (x.form && typeof x.form === 'object') ? x.form : {};
     b.form.c = f.c === true; b.form.d = f.d === true;
+    b.ttd.jenis = t.jenis === 'digital' ? 'digital' : 'basah';
+    b.ttd.cara = t.cara === 'unggah' ? 'unggah' : 'gambar';
+    b.ttd.gambar = sahTtd(t.gambar);
     b.tanggal = sahTanggal(x.tanggal);
     b.c.forEach(function (r, i) {
-      var y = (Array.isArray(x.c) && x.c[i] && typeof x.c[i] === 'object') ? x.c[i] : {};
+      var y = obj(Array.isArray(x.c) ? x.c[i] : null);
       r.jumlah = angka(y.jumlah); r.asnaf = potong(y.asnaf, PANJANG.asnaf); r.rincian = potong(y.rincian, PANJANG.rincian);
     });
     b.d.forEach(function (r, i) {
-      var y = (Array.isArray(x.d) && x.d[i] && typeof x.d[i] === 'object') ? x.d[i] : {};
+      var y = obj(Array.isArray(x.d) ? x.d[i] : null);
       r.jumlah = angka(y.jumlah); r.rincian = potong(y.rincian, PANJANG.rincian);
     });
     b.gaji = x.gaji === true;
@@ -98,12 +112,13 @@
     (baris || []).forEach(function (r) { t += angka(r && r.jumlah); });
     return t;
   }
-  /* "KLL Pajangan" untuk kop, "Kantor Layanan Lazismu Pajangan" untuk kalimat. */
+  /* "KLL Pajangan" untuk kop, "Kantor Layanan Lazismu" untuk kalimat. */
   function labelKantor(p) { return (p.tipe === 'ULL' ? 'ULL ' : 'KLL ') + p.kll; }
   function sebutKantor(p) { return (p.tipe === 'ULL' ? 'Unit Layanan' : 'Kantor Layanan') + ' Lazismu'; }
+  function dipilih(s) { return ['c', 'd'].filter(function (j) { return s.form[j]; }); }
 
-  /* Pemeriksaan sebelum dicetak. Galat per isian (id elemen di layar) dan
-     formulir yang ikut tercetak: hanya yang dipilih di langkah pertama. */
+  /* Pemeriksaan sebelum PDF dibuat. Galat per isian (id elemen di layar);
+     layar memilah mana yang milik langkah yang sedang dibuka. */
   function periksa(state) {
     var s = bersihkan(state), g = [];
     function salah(id, pesan) { g.push({ id: id, pesan: pesan }); }
@@ -120,127 +135,252 @@
     var tc = total(s.c), td = total(s.d);
     if (s.form.c && !tc) salah('c_0', 'F-08-C: isi jumlah pada minimal satu pilar.');
     if (s.form.d && !td) salah('d_0', 'F-08-D: isi jumlah pada minimal satu biaya.');
+    if (s.ttd.jenis === 'digital' && !s.ttd.gambar) salah('ttd', 'Tanda tangan digital belum dibuat. Gambar atau unggah dulu, atau pilih tanda tangan basah.');
     return { galat: g, ada: { c: s.form.c, d: s.form.d }, totalC: tc, totalD: td };
   }
 
-  /* ---------------------------------------------------------------- dokumen cetak */
+  /* Hapus latar foto tanda tangan. data: RGBA (ImageData.data), diubah di tempat.
+     foto=true: kecerahan kertas ditaksir dari median piksel (tinta selalu sedikit),
+     yang seterang kertas menjadi bening, yang jauh lebih gelap tetap utuh, di
+     antaranya memudar supaya tepi goresan halus. foto=false (goresan di layar):
+     latar sudah bening, hanya dipangkas. Mengembalikan kotak goresan atau null. */
+  function bersihkanLatar(data, w, h, foto) {
+    var n = w * h, i, L;
+    if (foto) {
+      var hist = new Array(256).fill(0), jml = 0;
+      for (i = 0; i < n; i++) if (data[i * 4 + 3] > 200) { hist[Math.round(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2])]++; jml++; }
+      var kertas = 255, kum = 0;
+      for (L = 0; L < 256; L++) { kum += hist[L]; if (kum >= jml / 2) { kertas = L; break; } }
+      var atas = kertas * 0.85, bawah = kertas * 0.45;
+      for (i = 0; i < n; i++) {
+        var o = i * 4, lum = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
+        var a = Math.max(0, Math.min(1, (atas - lum) / Math.max(1, atas - bawah)));
+        if (a < 0.25) a = 0;
+        data[o + 3] = Math.round(data[o + 3] * a);
+      }
+    }
+    var x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      if (data[(y * w + x) * 4 + 3] > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+  /* ---------------------------------------------------------------- kertas A4 di kanvas
+     Satuan tata letak milimeter; pena() mengubahnya ke piksel (sekitar 150 dpi).
+     Huruf tidak diperkecil lewat transform kanvas supaya tidak kena batas ukuran
+     huruf minimum peramban. */
+  var A4 = { w: 210, h: 297, mx: 18, my: 13 };
+  var PX_MM = 1240 / 210;
+  var PT = 0.3528;
+  var HURUF = 'Calibri, Carlito, "Segoe UI", Arial, sans-serif';
+  var HURUF_AR = '"Traditional Arabic", "Segoe UI", Tahoma, "Noto Naskh Arabic", Arial, sans-serif';
   var SALAM = '\u0627\u0644\u0633\u0644\u0627\u0645 \u0639\u0644\u064a\u0643\u0645 \u0648\u0631\u062d\u0645\u0629 \u0627\u0644\u0644\u0647 \u0648\u0628\u0631\u0643\u0627\u062a\u0647';
   var SALAM_PENUTUP = '\u0648' + SALAM;
-  var CENTANG = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.6 5.4 4 7.8 8.6 2.2" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var JUDUL = { c: 'FORMULIR USULAN PENDISTRIBUSIAN INFAK TIDAK TERIKAT (NON AMIL) KLL SEKEMA UMP', d: 'FORMULIR PENGAJUAN OPERASIONAL KLL' };
 
-  function kop(kode, judul, p) {
-    return '<table class="kop"><tr>'
-      + '<td class="kode" rowspan="3">' + kode + '</td>'
-      + '<td class="nama" rowspan="3">FORMULIR<br>PENGAJUAN KLL</td>'
-      + '<td class="k">Judul</td><td class="t">:</td><td class="v">' + judul + '</td></tr>'
-      + '<tr><td class="k">Nomor</td><td class="t">:</td><td class="v"><small>*diisi Admin Daerah</small></td></tr>'
-      + '<tr><td class="k">KLL</td><td class="t">:</td><td class="v"><b>' + esc(labelKantor(p)) + '</b></td></tr></table>';
-  }
-  function pembuka(s, jumlah) {
-    return '<div class="kepada">Kepada:<br>Yth. Ketua Badan Pengurus LAZISMU Bantul<br>Di - <u>Bantul</u></div>'
-      + '<p class="ar" lang="ar" dir="rtl">' + SALAM + '</p>'
-      + '<p>Yang bertanda tangan dibawah ini pelaksana ' + sebutKantor(s.profil) + ' <b>' + esc(s.profil.kll) + '</b> dengan ini mengusulkan uang muka program '
-      + 'untuk pendistribusian dana ZISKA sebesar <b>Rp. ' + fmt(jumlah) + '</b> dengan rincian sebagai berikut :</p>';
-  }
-  function rekening(s) {
-    var p = s.profil, awal = '<p class="rek">Untuk memudahkan pelaksanaan pendistribusian dana dapat di transfer melalui ';
-    if (p.rek !== 'manual') return awal + '<b>Virtual Account (VA) ' + VA_BANK + '</b> ' + esc(labelKantor(p)) + '</p>';
-    return awal + 'rekening <b>' + esc(labelKantor(p)) + '</b> <b>' + esc(p.bank) + '</b> dengan no rekening <b>' + esc(p.rekening)
-      + '</b> atas nama <b>' + esc(p.atasNama) + '</b></p>';
-  }
-  function penutup() {
-    return '<p>Demikian permohonan ini kami sampaikan, atas perkenannya kami sampaikan terimakasih</p>'
-      + '<p class="ar" lang="ar" dir="rtl">' + SALAM_PENUTUP + '</p>';
-  }
-  function tandaTangan(s) {
-    return '<table class="ttd">'
-      + '<tr><td class="rekom" rowspan="3"><b>Rekomendasi (diisi oleh Admin):</b><br>Berdasarkan ketentuan persyaratan dasar, maka permohonan:<br>'
-      + '<b>Diterima/ Tidak diterima</b> *) lanjut untuk proses pencairan dana<br>* coret yang tidak sesuai</td>'
-      + '<td class="jd" colspan="2"><b>Pemohon :</b></td></tr>'
-      + '<tr><td class="lb">Nama</td><td class="isi">' + esc(s.profil.pemohon) + '</td></tr>'
-      + '<tr class="tt"><td class="lb">Tanda tangan/ Tanggal</td><td class="isi tgl">' + esc(tanggalPanjang(s.tanggal)) + '</td></tr>'
-      + '<tr><td class="cat" rowspan="3"><b>Catatan :</b></td><td class="jd" colspan="2"><b>Admin :</b></td></tr>'
-      + '<tr><td class="lb">Nama :</td><td class="isi"></td></tr>'
-      + '<tr class="tt"><td class="lb">Tanda tangan/ Tanggal</td><td class="isi"></td></tr></table>';
-  }
-  function sel(r) { return r.jumlah ? 'Rp. ' + fmt(r.jumlah) + ',00' : ''; }
-  function nama(label, rincian) {
-    return '<span class="lb">' + esc(label) + '</span>' + (rincian ? '<span class="rc">' + esc(rincian) + '</span>' : '');
+  function pena(c) {
+    var K = PX_MM;
+    function font(pt, b, ar) { c.font = (b ? '700 ' : '400 ') + (Math.round(pt * PT * K * 10) / 10) + 'px ' + (ar ? HURUF_AR : HURUF); }
+    function lebar(t) { return c.measureText(t).width / K; }
+    function lh(pt) { return pt * PT * 1.32; }
+    function garis(x1, y1, x2, y2, t) { c.lineWidth = (t || 0.25) * K; c.beginPath(); c.moveTo(x1 * K, y1 * K); c.lineTo(x2 * K, y2 * K); c.stroke(); }
+    /* runs: [{ t, b }] atau { br: true }. Kata yang lebih lebar dari kolom dipotong per huruf. */
+    function bungkus(runs, w, pt) {
+      var baris = [[]], lb = 0;
+      function akhir() { return baris[baris.length - 1]; }
+      function baru() { var l = akhir(); while (l.length && l[l.length - 1].t === ' ') lb -= l.pop().w; baris.push([]); lb = 0; }
+      runs.forEach(function (r) {
+        if (r.br) { baru(); return; }
+        String(r.t).split(/(\s+)/).forEach(function (k) {
+          if (!k) return;
+          font(pt, r.b);
+          if (/^\s+$/.test(k)) { if (akhir().length) { var sw = lebar(' '); akhir().push({ t: ' ', b: r.b, w: sw }); lb += sw; } return; }
+          var kw = lebar(k);
+          if (lb + kw > w && akhir().length) baru();
+          var sisa = k;
+          while (sisa) {
+            var n = sisa.length;
+            while (n > 1 && lebar(sisa.slice(0, n)) > w - lb) n--;
+            var pot = sisa.slice(0, n), pw = lebar(pot);
+            akhir().push({ t: pot, b: r.b, w: pw }); lb += pw; sisa = sisa.slice(n);
+            if (sisa) baru();
+          }
+        });
+      });
+      while (baris.length > 1 && !akhir().length) baris.pop();
+      return baris;
+    }
+    /* Menulis baris hasil bungkus mulai dari tepi atas y. Mengembalikan tinggi. */
+    function tulis(baris, x, y, w, pt, rata) {
+      var h = lh(pt);
+      baris.forEach(function (l, i) {
+        var lw = l.reduce(function (a, k) { return a + k.w; }, 0);
+        var cx = rata === 'tengah' ? x + (w - lw) / 2 : x;
+        l.forEach(function (k) { font(pt, k.b); c.fillText(k.t, cx * K, (y + i * h + h * 0.78) * K); cx += k.w; });
+      });
+      return baris.length * h;
+    }
+    function paragraf(runs, x, y, w, pt) { return tulis(bungkus(runs, w, pt), x, y, w, pt); }
+    function arab(t, x, y, pt) {
+      font(pt, false, true); c.direction = 'rtl'; c.textAlign = 'left';
+      c.fillText(t, x * K, (y + lh(pt) * 0.8) * K);
+      c.direction = 'ltr';
+      return lh(pt) * 1.15;
+    }
+    return { K: K, c: c, font: font, lebar: lebar, lh: lh, garis: garis, bungkus: bungkus, tulis: tulis, paragraf: paragraf, arab: arab };
   }
 
-  function halamanC(s, jumlah) {
-    var h = '<section class="hal">' + kop('F-08-C', 'FORMULIR USULAN PENDISTRIBUSIAN INFAK TIDAK TERIKAT (NON AMIL) KLL SEKEMA UMP', s.profil)
-      + pembuka(s, jumlah)
-      + '<table class="rinci c"><thead><tr><th class="no">NO</th><th>PILAR / PROGRAM</th><th>JUMLAH</th><th>ASNAF</th></tr></thead><tbody>';
-    PILAR.forEach(function (n, i) {
-      var r = s.c[i];
-      h += '<tr><td class="no">' + (i + 1) + '</td><td>' + nama(n, r.rincian) + '</td><td class="jml">' + sel(r) + '</td><td class="asn">' + esc(r.asnaf) + '</td></tr>';
+  function gambarHalaman(c, state, j, ttd) {
+    var s = bersihkan(state), p = periksa(s), P = pena(c), K = P.K;
+    var x0 = A4.mx, W = A4.w - 2 * A4.mx, y = A4.my, PAD = 0.9, B = 10.5;
+    c.fillStyle = '#000'; c.strokeStyle = '#000'; c.textBaseline = 'alphabetic'; c.textAlign = 'left';
+    var t = function (x) { return [{ t: x }]; }, tb = function (x) { return [{ t: x, b: true }]; };
+    function tinggi(runs, w, pt, min) { return Math.max(min || 0, P.bungkus(runs, w - 4, pt).length * P.lh(pt) + PAD * 2); }
+    function isi(runs, x, yy, w, h, pt, rata, atas) {
+      var bs = P.bungkus(runs, w - 4, pt), th = bs.length * P.lh(pt);
+      P.tulis(bs, x + 2, atas ? yy + PAD + 0.6 : yy + (h - th) / 2, w - 4, pt, rata);
+    }
+
+    /* Kop: kode, nama formulir, lalu Judul dan KLL. */
+    var kc = [22, 30, 16, 5, W - 73], kx = [x0]; kc.forEach(function (w, i) { kx.push(kx[i] + w); });
+    var jd = tb(JUDUL[j]), kl = tb(labelKantor(s.profil));
+    var r1 = tinggi(jd, kc[4], 10, 7), r2 = tinggi(kl, kc[4], 10, 7), kh = r1 + r2;
+    isi(tb(j === 'c' ? 'F-08-C' : 'F-08-D'), kx[0], y, kc[0], kh, B, 'tengah');
+    isi([{ t: 'FORMULIR', b: true }, { br: true }, { t: 'PENGAJUAN KLL', b: true }], kx[1], y, kc[1], kh, B);
+    isi(t('Judul'), kx[2], y, kc[2], r1, B); isi(tb(':'), kx[3], y, kc[3], r1, B, 'tengah'); isi(jd, kx[4], y, kc[4], r1, 10);
+    isi(t('KLL'), kx[2], y + r1, kc[2], r2, B); isi(tb(':'), kx[3], y + r1, kc[3], r2, B, 'tengah'); isi(kl, kx[4], y + r1, kc[4], r2, 10);
+    for (var i = 1; i < 5; i++) P.garis(kx[i], y, kx[i], y + kh);
+    P.garis(kx[2], y + r1, kx[5], y + r1);
+    c.lineWidth = 0.5 * K; c.strokeRect(x0 * K, y * K, W * K, kh * K);
+    y += kh + 4;
+
+    P.font(B);
+    var lh = P.lh(B);
+    P.tulis([[{ t: 'Kepada:', w: 0 }]], x0, y, W, B); y += lh;
+    P.tulis([[{ t: 'Yth. Ketua Badan Pengurus LAZISMU Bantul', w: 0 }]], x0, y, W, B); y += lh;
+    P.font(B); var dw = P.lebar('Di - ');
+    P.tulis([[{ t: 'Di - ', w: dw }, { t: 'Bantul', w: P.lebar('Bantul') }]], x0, y, W, B);
+    P.garis(x0 + dw, y + lh * 0.9, x0 + dw + P.lebar('Bantul'), y + lh * 0.9, 0.2); y += lh + 2.5;
+    y += P.arab(SALAM, x0, y, 11) + 1;
+
+    var jumlah = j === 'c' ? p.totalC : p.totalD;
+    y += P.paragraf([{ t: 'Yang bertanda tangan dibawah ini pelaksana ' + sebutKantor(s.profil) + ' ' }, { t: s.profil.kll, b: true },
+      { t: ' dengan ini mengusulkan uang muka program untuk pendistribusian dana ZISKA sebesar ' }, { t: 'Rp. ' + fmt(jumlah), b: true },
+      { t: ' dengan rincian sebagai berikut :' }], x0, y, W, B) + 2;
+
+    /* Tabel rincian. */
+    var cols = j === 'c' ? [9, W - 106, 50, 47] : [9, W - 59, 50], cx = [x0]; cols.forEach(function (w, k) { cx.push(cx[k] + w); });
+    var kepala = j === 'c' ? ['NO', 'PILAR / PROGRAM', 'JUMLAH', 'ASNAF'] : ['NO', 'KETERANGAN', 'JUMLAH'];
+    var baris = [{ sel: kepala.map(t), tengah: true, min: 8 }];
+    (j === 'c' ? PILAR : BIAYA).forEach(function (n, k) {
+      var r = s[j][k], lab = [{ t: n.toUpperCase() }];
+      if (r.rincian) lab = lab.concat([{ br: true }, { t: r.rincian, kecil: true }]);
+      var sel = [t(String(k + 1)), lab, t(r.jumlah ? 'Rp. ' + fmt(r.jumlah) + ',00' : '')];
+      if (j === 'c') sel.push(t(r.asnaf));
+      baris.push({ sel: sel, min: 7 });
     });
-    return h + '</tbody></table>' + rekening(s) + penutup() + tandaTangan(s) + '</section>';
-  }
-  function halamanD(s, jumlah) {
-    var h = '<section class="hal">' + kop('F-08-D', 'FORMULIR PENGAJUAN OPERASIONAL KLL', s.profil)
-      + pembuka(s, jumlah)
-      + '<table class="rinci d"><thead><tr><th class="no">NO</th><th>KETERANGAN</th><th>JUMLAH</th></tr></thead><tbody>';
-    BIAYA.forEach(function (n, i) {
-      var r = s.d[i];
-      h += '<tr><td class="no">' + (i + 1) + '</td><td>' + nama(n, r.rincian) + '</td><td class="jml">' + sel(r) + '</td></tr>';
+    var yt = y;
+    baris.forEach(function (b) {
+      var h = b.min;
+      b.sel.forEach(function (runs, k) {
+        var kecil = runs.some(function (r) { return r.kecil; });
+        var hh = kecil ? (P.lh(B) + P.bungkus(runs.slice(2), cols[k] - 4, 8).length * P.lh(8) + PAD * 2) : tinggi(runs, cols[k], B);
+        h = Math.max(h, hh);
+      });
+      b.sel.forEach(function (runs, k) {
+        var tengah = b.tengah || k === 0 || k === 2;
+        if (runs.some(function (r) { return r.kecil; })) {
+          var bs = P.bungkus(runs.slice(2), cols[k] - 4, 8), th = P.lh(B) + bs.length * P.lh(8), ya = y + (h - th) / 2;
+          P.tulis(P.bungkus(runs.slice(0, 1), cols[k] - 4, B), cx[k] + 2, ya, cols[k] - 4, B);
+          P.tulis(bs, cx[k] + 2, ya + P.lh(B), cols[k] - 4, 8);
+        } else isi(runs, cx[k], y, cols[k], h, B, tengah ? 'tengah' : '');
+      });
+      P.garis(x0, y + h, x0 + W, y + h);
+      y += h;
     });
-    return h + '</tbody></table>'
-      + '<div class="lamp">Bersama ini kami lampirkan :<div class="cb"><span class="kotak">' + (s.gaji ? CENTANG : '') + '</span>Daftar Gaji</div></div>'
-      + rekening(s) + penutup() + tandaTangan(s) + '</section>';
+    cx.forEach(function (x) { P.garis(x, yt, x, y); });
+    P.garis(x0, yt, x0 + W, yt);
+    y += 3;
+
+    if (j === 'd') {
+      y += P.paragraf(t('Bersama ini kami lampirkan :'), x0, y, W, B) + 0.8;
+      c.lineWidth = 0.25 * K; c.strokeRect((x0 + 1) * K, y * K, 4 * K, 4 * K);
+      if (s.gaji) { c.lineWidth = 0.45 * K; c.beginPath(); c.moveTo((x0 + 1.7) * K, (y + 2.2) * K); c.lineTo((x0 + 2.7) * K, (y + 3.2) * K); c.lineTo((x0 + 4.4) * K, (y + 0.9) * K); c.stroke(); }
+      P.tulis(P.bungkus(t('Daftar Gaji'), W, B), x0 + 7, y + 2 - P.lh(B) / 2, W, B);
+      y += 6;
+    }
+
+    var rek = s.profil.rek === 'manual'
+      ? [{ t: 'rekening ' }, { t: labelKantor(s.profil), b: true }, { t: ' ' }, { t: s.profil.bank, b: true }, { t: ' dengan no rekening ' },
+        { t: s.profil.rekening, b: true }, { t: ' atas nama ' }, { t: s.profil.atasNama, b: true }]
+      : [{ t: 'Virtual Account (VA) ' + VA_BANK, b: true }, { t: ' ' + labelKantor(s.profil) }];
+    y += P.paragraf([{ t: 'Untuk memudahkan pelaksanaan pendistribusian dana dapat di transfer melalui ' }].concat(rek), x0, y, W, B) + 2;
+    y += P.paragraf(t('Demikian permohonan ini kami sampaikan, atas perkenannya kami sampaikan terimakasih'), x0, y, W, B) + 1.5;
+    y += P.arab(SALAM_PENUTUP, x0, y, 11) + 2;
+
+    /* Kotak tanda tangan: kiri rekomendasi/catatan admin, kanan pemohon/admin. */
+    var kiri = W / 2, lbW = W * 0.17, isiW = W - kiri - lbW, xk = x0 + kiri, xi = xk + lbW, yt2 = y;
+    var rekom = [{ t: 'Rekomendasi (diisi oleh Admin):', b: true }, { br: true }, { t: 'Berdasarkan ketentuan persyaratan dasar, maka permohonan:' }, { br: true },
+      { t: 'Diterima/ Tidak diterima', b: true }, { t: ' *) lanjut untuk proses pencairan dana' }, { br: true }, { t: '* coret yang tidak sesuai' }];
+    function blok(jdl, nama, kiriRuns, gambarTtd, tgl) {
+      var hNama = tinggi(t(nama), isiW, B, 7), hTt = 17, hJd = 6;
+      var hKiri = P.bungkus(kiriRuns, kiri - 4, B).length * P.lh(B) + 3;
+      hTt = Math.max(hTt, hKiri - hJd - hNama);
+      var ya = y;
+      isi(kiriRuns, x0, ya, kiri, hJd + hNama + hTt, B, '', true);
+      isi(tb(jdl), xk, ya, W - kiri, hJd, B);
+      isi(t(jdl === 'Pemohon :' ? 'Nama' : 'Nama :'), xk, ya + hJd, lbW, hNama, B);
+      isi(t(nama), xi, ya + hJd, isiW, hNama, B);
+      isi(t('Tanda tangan/ Tanggal'), xk, ya + hJd + hNama, lbW, hTt, B);
+      var yTt = ya + hJd + hNama;
+      if (gambarTtd && gambarTtd.width && gambarTtd.height) {
+        var mw = isiW - 4, mh = hTt - 5, sk = Math.min(mw / gambarTtd.width, mh / gambarTtd.height);
+        var gw = gambarTtd.width * sk, gh = gambarTtd.height * sk;
+        c.drawImage(gambarTtd, (xi + (isiW - gw) / 2) * K, (yTt + 0.8) * K, gw * K, gh * K);
+      }
+      if (tgl) P.tulis(P.bungkus(t(tgl), isiW - 4, 8.5), xi + 2, yTt + hTt - P.lh(8.5) - 0.8, isiW - 4, 8.5);
+      P.garis(xk, ya + hJd, x0 + W, ya + hJd); P.garis(xk, yTt, x0 + W, yTt);
+      P.garis(xi, ya + hJd, xi, ya + hJd + hNama + hTt);
+      y = ya + hJd + hNama + hTt;
+      P.garis(x0, y, x0 + W, y);
+    }
+    blok('Pemohon :', s.profil.pemohon, rekom, s.ttd.jenis === 'digital' ? ttd : null, tanggalPanjang(s.tanggal));
+    blok('Admin :', '', tb('Catatan :'), null, '');
+    P.garis(xk, yt2, xk, y);
+    c.lineWidth = 0.25 * K; c.strokeRect(x0 * K, yt2 * K, W * K, (y - yt2) * K);
+    return y;
   }
 
-  var GAYA = '@page{size:A4 portrait;margin:13mm 18mm}'
-    + '*{box-sizing:border-box;margin:0;padding:0}'
-    + 'body{font-family:Calibri,Carlito,"Segoe UI",Arial,sans-serif;font-size:10.5pt;line-height:1.3;color:#000;background:#e9eaec}'
-    + '.hal{width:210mm;min-height:297mm;margin:12px auto;padding:13mm 18mm;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.16)}'
-    + 'p{margin:2.2mm 0}'
-    + 'table{border-collapse:collapse;width:100%;table-layout:fixed}'
-    + 'td,th{border:0.7pt solid #000;padding:0.9mm 2mm;vertical-align:middle;overflow-wrap:anywhere}'
-    + '.kop{border:1.4pt solid #000}'
-    + '.kop td.kode{width:22mm;text-align:center;font-weight:700}'
-    + '.kop td.nama{width:30mm;font-weight:700;text-align:left}'
-    + '.kop td.k{width:16mm}.kop td.t{width:5mm;text-align:center;font-weight:700}'
-    + '.kop td.v{font-size:10pt}.kop small{font-size:6.5pt}'
-    + '.kepada{margin-top:4mm}'
-    + '.ar{text-align:left;font-size:11pt;margin:3mm 0 1.5mm}'
-    + 'table.rinci{margin:2mm 0 3mm}'
-    + 'table.rinci th{font-weight:400;padding:1.6mm 2mm}'
-    + 'table.rinci td{height:7mm}'
-    + 'table.rinci td.no,table.rinci th.no{width:9mm;text-align:center}'
-    + 'table.rinci.c th:nth-child(3),table.rinci.c td.jml{width:50mm}table.rinci.c th:nth-child(4),table.rinci.c td.asn{width:47mm}'
-    + 'table.rinci.d th:nth-child(3),table.rinci.d td.jml{width:50mm}'
-    + 'table.rinci td.jml{text-align:center;white-space:nowrap}'
-    + '.lb{text-transform:uppercase}'
-    + '.rc{display:block;font-size:8pt;line-height:1.15}'
-    + '.lamp{margin:1mm 0 2mm}.cb{display:flex;align-items:center;gap:2mm;margin:1mm 0 0 1mm}'
-    + '.kotak{display:inline-flex;width:4mm;height:4mm;border:0.8pt solid #000;align-items:center;justify-content:center}'
-    + '.kotak svg{width:3.4mm;height:3.4mm}'
-    + 'table.ttd{margin-top:3mm}'
-    + 'table.ttd td.rekom{width:50%;vertical-align:top;padding:1.5mm 2mm}'
-    + 'table.ttd td.cat{vertical-align:top;padding:1.5mm 2mm}'
-    + 'table.ttd td.jd{padding:0.8mm 2mm}'
-    + 'table.ttd td.lb{width:17%;text-transform:none}'
-    + 'table.ttd tr.tt td{height:17mm}'
-    + 'table.ttd td.tgl{vertical-align:bottom;font-size:9pt}'
-    + '.bar{text-align:center;margin:10px 0 24px}'
-    + '.bar button{font:inherit;font-size:10pt;font-weight:700;background:#16161d;color:#fff;border:none;padding:9px 22px;border-radius:999px;cursor:pointer}'
-    + '@media print{body{background:#fff}.hal{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;zoom:var(--z,1)}.hal+.hal{break-before:page;page-break-before:always}.bar{display:none}}';
-
-  /* Dokumen lengkap, siap dibuka di tab baru lalu dicetak atau disimpan sebagai PDF. */
-  function bangunHTML(state) {
-    var s = bersihkan(state), p = periksa(s), hal = '';
-    if (p.ada.c) hal += halamanC(s, p.totalC);
-    if (p.ada.d) hal += halamanD(s, p.totalD);
-    var judul = 'Pengajuan UMP ' + labelKantor(s.profil) + (s.tanggal ? ' ' + s.tanggal : '');
-    return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>' + esc(judul) + '</title><style>' + GAYA + '</style></head><body>'
-      + hal
-      /* Pengecil otomatis: di layar .hal selebar dan setinggi A4 lengkap dengan
-         margin cetak, jadi kalau isinya lebih tinggi dari 297mm, perbandingannya
-         dipakai sebagai zoom saat cetak. Data biasa tetap skala 1. */
-      + '<script>document.querySelectorAll(".hal").forEach(function(h){var a=h.getBoundingClientRect().width*297/210,r=(a-2)/h.scrollHeight;if(r<1)h.style.setProperty("--z",r.toFixed(3));});<\/script>'
-      + '<div class="bar"><button type="button" onclick="window.print()">Cetak / Simpan PDF (A4)</button></div></body></html>';
+  /* Satu kanvas per formulir yang dipilih. Isi yang lebih tinggi dari A4
+     (teks sangat panjang) diperkecil seperlunya supaya tetap satu lembar. */
+  function halamanKanvas(state, buatKanvas, ttd) {
+    var s = bersihkan(state), batas = A4.h - A4.my;
+    return dipilih(s).map(function (j) {
+      var kv = buatKanvas(Math.round(A4.w * PX_MM), Math.round(A4.h * PX_MM)), c = kv.getContext('2d');
+      function gambar(z) {
+        c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#fff'; c.fillRect(0, 0, kv.width, kv.height);
+        var o = A4.my * PX_MM * (1 - z);
+        c.setTransform(z, 0, 0, z, A4.mx * PX_MM * (1 - z), o);
+        return gambarHalaman(c, s, j, ttd);
+      }
+      var bawah = gambar(1);
+      if (bawah > batas) gambar((batas - A4.my) / (bawah - A4.my));
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      return kv;
+    });
+  }
+  function namaBerkas(state) {
+    var s = bersihkan(state);
+    return ('Pengajuan UMP ' + labelKantor(s.profil) + ' ' + s.tanggal).replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim() + '.pdf';
+  }
+  function pesanWa(state) {
+    var s = bersihkan(state), p = periksa(s), b = ['Assalamu\'alaikum. Pengajuan UMP ' + labelKantor(s.profil) + ', ' + tanggalPanjang(s.tanggal) + ':'];
+    if (p.ada.c) b.push('- F-08-C Usulan UMP Program: Rp ' + fmt(p.totalC));
+    if (p.ada.d) b.push('- F-08-D Operasional KLL: Rp ' + fmt(p.totalD));
+    b.push('Transfer: ' + (s.profil.rek === 'manual' ? s.profil.bank + ' ' + s.profil.rekening + ' a.n. ' + s.profil.atasNama : 'VA ' + VA_BANK));
+    b.push('Pemohon: ' + s.profil.pemohon);
+    b.push('Berkas PDF terlampir.');
+    return b.join('\n');
   }
 
   /* ---------------------------------------------------------------- penyimpanan (browser saja) */
@@ -269,8 +409,9 @@
   }
 
   akar.LZUmp = {
-    KUNCI: KUNCI, MAKS_RP: MAKS_RP, PANJANG: PANJANG, PILAR: PILAR, BIAYA: BIAYA, ASNAF: ASNAF, VA_BANK: VA_BANK,
-    esc: esc, angka: angka, fmt: fmt, sahTanggal: sahTanggal, tanggalPanjang: tanggalPanjang, labelKantor: labelKantor,
-    baru: baru, bersihkan: bersihkan, total: total, periksa: periksa, bangunHTML: bangunHTML, simpan: simpan, muat: muat
+    KUNCI: KUNCI, MAKS_RP: MAKS_RP, PANJANG: PANJANG, PILAR: PILAR, BIAYA: BIAYA, ASNAF: ASNAF, VA_BANK: VA_BANK, A4: A4, PX_MM: PX_MM,
+    esc: esc, angka: angka, fmt: fmt, sahTanggal: sahTanggal, tanggalPanjang: tanggalPanjang, sahTtd: sahTtd, labelKantor: labelKantor,
+    baru: baru, bersihkan: bersihkan, total: total, periksa: periksa, bersihkanLatar: bersihkanLatar,
+    gambarHalaman: gambarHalaman, halamanKanvas: halamanKanvas, namaBerkas: namaBerkas, pesanWa: pesanWa, simpan: simpan, muat: muat
   };
 })(typeof window !== 'undefined' ? window : this);
