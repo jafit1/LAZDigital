@@ -1626,15 +1626,40 @@ function apiPenghimpunanHarian(token, tanggal){
     var nm = _layLabel(l);
     perKantor[_norm(nm)] = { kantor: nm, tipe: tipeDari(nm), hariIni: 0, bulanIni: 0, n: 0 };
   });
+  /* Rekap bulanan link KLL/ULL (pemilik, 27 Oktober 2026): enam bulan sampai
+     bulan tanggal yang dilihat, per kantor, supaya kantor yang belum setor ke
+     daerah mudah ditemukan dan di-follow up. Link donatur tidak memakainya. */
+  var BLN_REKAP = [];
+  for (var bi = 5; bi >= 0; bi--) {
+    var dB = new Date(Date.UTC(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)) - 1 - bi, 1));
+    BLN_REKAP.push(dB.toISOString().slice(0, 7));
+  }
+  var awal = jenis === 'kantor' ? BLN_REKAP[0] + '-01' : bulan + '-01';
+  var rekap = {};
+  /* terdaftar: kantor aktif di menu Kantor Layanan. Hanya mereka yang dihitung
+     "belum setor"; nama lain yang muncul dari data lama ikut tabel saja. */
+  var rekapBaru = function(nm, tp, daftar){ return { kantor: nm, tipe: tp, terdaftar: !!daftar, per: BLN_REKAP.map(function(){ return { t: 0, n: 0 }; }), terakhir: '' }; };
+  if (jenis === 'kantor') layList.forEach(function(l){
+    if (String(l.aktif) === 'false') return;
+    var nm = _layLabel(l);
+    rekap[_norm(nm)] = rekapBaru(nm, tipeDari(nm), true);
+  });
   var baris = [];
   (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
     var tg = String(r.tanggal == null ? '' : r.tanggal).slice(0, 10);
-    if (tg.slice(0, 7) !== bulan || tg > tgl) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tg) || tg > tgl || tg < awal) return;
     if (/batal|belum/i.test(String(r.statusBayar || ''))) return;
     var n = Number(r.jumlah) || 0;
     var kantor = resolveLayananName(r, layList, layMap);
     var tipe = tipeDari(kantor);
     if (jenis === 'kantor' && tipe === 'Daerah') return;
+    if (jenis === 'kantor') {
+      var rk = rekap[_norm(kantor)] || (rekap[_norm(kantor)] = rekapBaru(kantor, tipe, false));
+      var ib = BLN_REKAP.indexOf(tg.slice(0, 7));
+      if (ib >= 0) { rk.per[ib].t += n; rk.per[ib].n++; }
+      if (tg > rk.terakhir) rk.terakhir = tg;
+    }
+    if (tg.slice(0, 7) !== bulan) return;
     bulanIni.total += n; bulanIni.n++;
     var kk = _norm(kantor);
     if (jenis === 'kantor') {
@@ -1671,8 +1696,13 @@ function apiPenghimpunanHarian(token, tanggal){
     lembaga: { namaLembaga: s.namaLembaga || '', singkatan: s.singkatan || '', telepon: s.telepon || '', website: s.website || '', logoData: s.logoData || s.logoUrl || '' },
     diperbarui: new Date().toISOString()
   };
-  if (jenis === 'kantor') out.perKantor = Object.keys(perKantor).map(function(k){ return perKantor[k]; })
-    .sort(function(a, b){ return b.hariIni - a.hariIni || b.bulanIni - a.bulanIni || (a.kantor < b.kantor ? -1 : 1); });
+  if (jenis === 'kantor') {
+    out.perKantor = Object.keys(perKantor).map(function(k){ return perKantor[k]; })
+      .sort(function(a, b){ return b.hariIni - a.hariIni || b.bulanIni - a.bulanIni || (a.kantor < b.kantor ? -1 : 1); });
+    /* terakhir: tanggal setoran terakhir dalam enam bulan itu, kosong kalau tidak ada sama sekali. */
+    out.rekap = { bulan: BLN_REKAP, kantor: Object.keys(rekap).map(function(k){ return rekap[k]; })
+      .sort(function(a, b){ return a.kantor.localeCompare(b.kantor); }) };
+  }
   return out;
 }
 

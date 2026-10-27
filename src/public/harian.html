@@ -114,6 +114,43 @@
     .lh-kantor-kartu.nol .lh-kk-v{ color:var(--muted); }
     .lh-semua{ grid-column:1 / -1; justify-self:center; border:0; background:none; color:var(--accent-d); font-weight:700; font-size:12.5px; cursor:pointer; padding:4px 8px; }
 
+    /* Tampilan Bulanan link KLL/ULL (pemilik, 27 Oktober 2026): rekap enam bulan
+       per kantor, yang belum setor di depan supaya mudah di-follow up. Di layar
+       lebar tabelnya melebar; di HP tiap kantor menjadi kartu berlabel bulan. */
+    .lh-mode{ display:inline-flex; gap:3px; padding:3px; border-radius:12px; background:var(--surface2); border:1px solid var(--border); flex:none; }
+    .lh-mode button{ height:32px; padding:0 14px; border:0; border-radius:9px; background:transparent; font:inherit; font-size:12.5px; font-weight:700;
+      color:var(--text2); cursor:pointer; transition:background .16s, color .16s, box-shadow .16s; }
+    .lh-mode button.on{ background:var(--grad-accent); color:#fff; box-shadow:0 8px 18px -12px rgba(var(--accent-rgb),.9); }
+    .lh-mode button:focus-visible,.lh-bln-btn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+    .lh-bln{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:6px; margin-bottom:18px; }
+    .lh-bln-btn{ border:1px solid var(--border); background:var(--surface); border-radius:12px; padding:8px 4px; cursor:pointer; font:inherit; color:var(--text);
+      text-align:center; min-width:0; transition:border-color .15s, background .15s, transform .12s; }
+    .lh-bln-btn:hover{ border-color:var(--accent); }
+    .lh-bln-btn:active{ transform:scale(.97); }
+    .lh-bln-btn span{ display:block; font-weight:800; font-size:13px; }
+    .lh-bln-btn small{ display:block; font-size:11px; color:var(--muted); margin-top:1px; font-variant-numeric:tabular-nums; }
+    .lh-bln-btn.on{ border-color:var(--accent); background:var(--accent-soft); }
+    .lh-bln-btn.on small{ color:var(--accent-d); font-weight:700; }
+    .lh-rk-belum{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; margin-bottom:22px; }
+    .lh-rk-kartu{ display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:14px; background:var(--surface); min-width:0;
+      border:1px solid color-mix(in srgb,var(--red) 28%,var(--border)); animation:cardIn .35s cubic-bezier(.2,.7,.2,1) both; }
+    .lh-rk-kartu .lh-av{ color:var(--red); background:var(--red-bg); border-color:transparent; }
+    .lh-rk-ok{ text-align:center; color:var(--green); font-weight:700; font-size:13px; padding:18px 12px; margin-bottom:22px; background:var(--green-bg); border-radius:14px; }
+    .lh-rk-tabel{ background:var(--glass-card); border:1px solid var(--glass-bd); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); animation:fadeUp .35s ease both; }
+    .lh-rk-baris{ display:grid; grid-template-columns:minmax(150px,1.7fr) repeat(6,minmax(0,1fr)) minmax(0,1.15fr); align-items:center; gap:0 6px;
+      padding:9px 16px; border-top:1px solid var(--border); }
+    .lh-rk-baris:first-child{ border-top:0; }
+    .lh-rk-baris.kepala{ font-size:11.5px; font-weight:700; color:var(--muted); background:var(--surface2); }
+    .lh-rk-n{ min-width:0; }
+    .lh-rk-n .lh-nama-d{ display:block; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .lh-rk-c{ text-align:right; font-size:13px; font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap; padding:5px 6px; border-radius:8px; min-width:0; }
+    .lh-rk-c.nol{ color:var(--muted); font-weight:500; }
+    .lh-rk-c.on{ background:var(--accent-soft); }
+    .lh-rk-baris.kepala .lh-rk-c.on{ color:var(--accent-d); }
+    .lh-rk-c.on.nol{ background:var(--red-bg); color:var(--red); font-weight:700; }
+    .lh-rk-t{ font-weight:800; }
+    @media(min-width:1280px){ html .lh-wrap.lh-lebar, html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-wrap.lh-lebar{ max-width:1200px; } }
+
     .lh-kosong{ text-align:center; color:var(--muted); font-size:13px; padding:34px 12px; background:var(--surface);
       border:1px dashed var(--border); border-radius:18px; }
     .lh-kosong b{ display:block; font-size:22px; margin-bottom:4px; }
@@ -149,6 +186,16 @@
       .lh-baris{ padding:11px 12px; gap:10px; }
       .lh-av{ width:32px; height:32px; font-size:12px; }
       .lh-langsung .lh-jam{ display:none; }
+      .lh-mode{ flex:1 1 100%; } .lh-mode button{ flex:1; }
+      .lh-bln{ gap:4px; } .lh-bln-btn{ padding:7px 2px; } .lh-bln-btn span{ font-size:12px; }
+      .lh-rk-belum{ grid-template-columns:1fr; }
+      .lh-rk-baris.kepala{ display:none; }
+      .lh-rk-baris{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; padding:12px; }
+      .lh-rk-n{ grid-column:1 / -1; }
+      .lh-rk-c{ text-align:left; background:var(--surface2); padding:6px 8px; font-size:12.5px; }
+      .lh-rk-c::before{ content:attr(data-l); display:block; font-size:10.5px; font-weight:600; color:var(--muted); }
+      .lh-rk-c.on.nol::before{ color:var(--red); }
+      .lh-rk-t{ grid-column:1 / -1; display:flex; justify-content:space-between; align-items:baseline; }
     }
   </style>
 </head>
@@ -233,7 +280,10 @@
         + '<button class="lh-tema kepala-tema" type="button" id="lhTema" title="' + LZTema.judul(LZTema.gelap()) + '" aria-label="' + LZTema.judul(LZTema.gelap()) + '">' + LZTema.svg() + '</button></div></div>'
         + '<div class="lh-utama"><div class="lh-label" id="lhLabel"></div><div class="lh-total" id="lhTotal"></div>'
         + '<div class="lh-info" id="lhInfo"></div></div><div class="lh-metode-baris" id="lhMetode"></div></div>';
-      h += '<div class="lh-bilah"><div class="lh-tgl-baris">'
+      h += '<div class="lh-bilah">'
+        + (kantor ? '<div class="lh-mode" role="group" aria-label="Tampilan"><button type="button" id="lhModeH" onclick="pilihMode(\'harian\')">Harian</button>'
+          + '<button type="button" id="lhModeB" onclick="pilihMode(\'bulanan\')">Bulanan</button></div>' : '')
+        + '<div class="lh-tgl-baris" id="lhTglBaris">'
         + '<button class="lh-tgl-btn" type="button" onclick="pindahHari(-1)" aria-label="Hari sebelumnya" title="Hari sebelumnya">&#8249;</button>'
         + '<input type="date" id="lhTanggal" value="' + esc(d.tanggal) + '" onchange="muat(this.value)" aria-label="Tanggal">'
         + '<button class="lh-tgl-btn" type="button" id="lhBerikut" onclick="pindahHari(1)" aria-label="Hari berikutnya" title="Hari berikutnya">&#8250;</button>'
@@ -263,7 +313,14 @@
       $('lhBerikut').disabled = langsung;
       $('lhHariIni').classList.toggle('hidden', langsung);
 
-      /* Angka utama di kepala: satu angka besar, satu baris keterangan. */
+      gambarIsi();
+      segarkanKendali();
+    }
+
+    /* Angka utama di kepala: satu angka besar, satu baris keterangan.
+       Tampilan Bulanan menimpanya dengan angka bulan yang dipilih. */
+    function kepalaHarian(){
+      var d = DATA, kantor = d.jenis === 'kantor', langsung = d.tanggal === d.hariIni;
       var nBulan = BULAN[Number(d.tanggal.slice(5, 7))];
       $('lhLabel').textContent = (kantor ? 'Setoran KLL & ULL ' : 'Terhimpun ') + (langsung ? 'hari ini' : tglPanjang(d.tanggal));
       $('lhTotal').textContent = rp(d.ringkas.total);
@@ -273,13 +330,85 @@
       var metode = Object.keys(d.ringkas.perMetode || {}).sort(function(a, b){ return d.ringkas.perMetode[b] - d.ringkas.perMetode[a]; });
       $('lhMetode').innerHTML = metode.map(function(m){ return '<span class="lh-pil">' + esc(m) + ' <b>' + rp(d.ringkas.perMetode[m]) + '</b></span>'; }).join('');
       $('lhMetode').classList.toggle('hidden', !metode.length);
+    }
+
+    var SEMUA_KANTOR = false, MODE = 'harian', BLN_PILIH = 5;
+    var BLN_PENDEK = ['','Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    function namaBulan(b, pendek){ return (pendek ? BLN_PENDEK : BULAN)[Number(b.slice(5, 7))] + ' ' + (pendek ? b.slice(2, 4) : b.slice(0, 4)); }
+    function rpPendek(n){
+      n = Math.round(Number(n) || 0);
+      if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '').replace('.', ',') + ' M';
+      if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '').replace('.', ',') + ' jt';
+      if (n >= 1e3) return Math.round(n / 1e3) + ' rb';
+      return String(n);
+    }
+    function pilihMode(m){
+      MODE = m === 'bulanan' ? 'bulanan' : 'harian';
       gambarIsi();
       segarkanKendali();
     }
+    function pilihBulan(i){ BLN_PILIH = i; gambarIsi(); }
 
-    var SEMUA_KANTOR = false;
+    /* Tampilan Bulanan: kepala ikut bulan yang dipilih, lalu yang belum setor
+       di bulan itu, lalu tabel enam bulan semua kantor. */
+    function gambarBulanan(){
+      var R = DATA.rekap || { bulan: [], kantor: [] }, B = R.bulan, i = Math.min(BLN_PILIH, B.length - 1), b = B[i];
+      var semua = R.kantor.filter(function(k){ return cocok(k.kantor); });
+      var totalB = R.kantor.reduce(function(a, k){ return a + k.per[i].t; }, 0);
+      var daftar = R.kantor.filter(function(k){ return k.terdaftar; });
+      var sudah = daftar.filter(function(k){ return k.per[i].t > 0; }).length;
+      $('lhLabel').textContent = 'Setoran KLL & ULL ' + namaBulan(b);
+      $('lhTotal').textContent = rp(totalB);
+      $('lhInfo').innerHTML = '<b>' + sudah + '</b> dari ' + daftar.length + ' kantor sudah setor &middot; <b>' + (daftar.length - sudah) + '</b> belum';
+      /* Sisi kanan kepala: total per jenis kantor dan jumlah yang belum setor. */
+      var perTipe = { KLL: 0, ULL: 0 };
+      R.kantor.forEach(function(k){ perTipe[k.tipe] = (perTipe[k.tipe] || 0) + k.per[i].t; });
+      $('lhMetode').innerHTML = '<span class="lh-pil">Setoran KLL <b>' + rp(perTipe.KLL) + '</b></span><span class="lh-pil">Setoran ULL <b>' + rp(perTipe.ULL) + '</b></span>'
+        + '<span class="lh-pil">Belum setor <b>' + (daftar.length - sudah) + ' kantor</b></span>';
+      $('lhMetode').classList.remove('hidden');
+
+      var h = '<div class="lh-bln" role="group" aria-label="Pilih bulan">' + B.map(function(x, k){
+        var t = R.kantor.reduce(function(a, r){ return a + r.per[k].t; }, 0);
+        return '<button type="button" class="lh-bln-btn' + (k === i ? ' on' : '') + '" data-b="' + k + '" aria-pressed="' + (k === i) + '" onclick="pilihBulan(' + k + ')">'
+          + '<span>' + esc(namaBulan(x, true)) + '</span><small>' + (t ? rpPendek(t) : '-') + '</small></button>';
+      }).join('') + '</div>';
+
+      var belum = semua.filter(function(k){ return k.terdaftar && !k.per[i].t; });
+      h += '<div class="lh-judul"><span>Belum setor ' + esc(namaBulan(b)) + '</span><span class="lh-hasil">' + belum.length + ' kantor</span></div>';
+      if (!belum.length) h += '<div class="lh-rk-ok">' + (CARI ? 'Tidak ada yang cocok.' : 'Semua kantor sudah setor di bulan ini.') + '</div>';
+      else h += '<div class="lh-rk-belum">' + belum.map(function(k, n){
+        var ket = k.terakhir ? 'Terakhir setor ' + tglPanjang(k.terakhir).replace(/^\w+, /, '') : 'Tidak ada setoran 6 bulan terakhir';
+        return '<div class="lh-rk-kartu" style="animation-delay:' + Math.min(n, 12) * 0.03 + 's"><div class="lh-av">' + esc(inisial(k.kantor)) + '</div>'
+          + '<div class="lh-isi"><div class="lh-nama-d">' + esc(k.kantor) + '</div><div class="lh-ket">' + esc(ket) + '</div></div></div>';
+      }).join('') + '</div>';
+
+      h += '<div class="lh-judul"><span>Rekap 6 bulan</span><span class="lh-hasil">' + semua.length + ' kantor</span></div>';
+      if (!semua.length) { $('lhIsi').innerHTML = h + '<div class="lh-kosong">Tidak ada kantor bernama "' + esc(CARI) + '".</div>'; return; }
+      /* Urut: belum setor bulan terpilih di atas, lalu yang setorannya paling kecil. */
+      semua.sort(function(a, c){ return (!!a.per[i].t - !!c.per[i].t) || (a.per[i].t - c.per[i].t) || a.kantor.localeCompare(c.kantor); });
+      h += '<div class="lh-rk-tabel"><div class="lh-rk-baris kepala"><span>Kantor</span>'
+        + B.map(function(x, k){ return '<span class="lh-rk-c' + (k === i ? ' on' : '') + '">' + esc(namaBulan(x, true)) + '</span>'; }).join('')
+        + '<span class="lh-rk-c lh-rk-t">Total</span></div>'
+        + semua.map(function(k){
+          var tot = k.per.reduce(function(a, p){ return a + p.t; }, 0);
+          return '<div class="lh-rk-baris"><div class="lh-rk-n"><span class="lh-nama-d" title="' + esc(k.kantor) + '">' + esc(k.kantor) + '</span></div>'
+            + k.per.map(function(p, n){ return '<span class="lh-rk-c' + (p.t ? '' : ' nol') + (n === i ? ' on' : '') + '" data-l="' + esc(namaBulan(B[n], true)) + '">' + (p.t ? rpPendek(p.t) : '-') + '</span>'; }).join('')
+            + '<span class="lh-rk-c lh-rk-t" data-l="Total 6 bulan">' + (tot ? rpPendek(tot) : '-') + '</span></div>';
+        }).join('') + '</div>';
+      $('lhIsi').innerHTML = h;
+    }
+
     function gambarIsi(){
       var d = DATA, kantor = d.jenis === 'kantor';
+      if (kantor) {
+        var bln = MODE === 'bulanan';
+        $('lhModeH').classList.toggle('on', !bln); $('lhModeB').classList.toggle('on', bln);
+        $('lhModeH').setAttribute('aria-pressed', String(!bln)); $('lhModeB').setAttribute('aria-pressed', String(bln));
+        $('lhTglBaris').classList.toggle('hidden', bln);
+        $('root').classList.toggle('lh-lebar', bln);
+        if (bln) return gambarBulanan();
+      }
+      kepalaHarian();
       var langsung = d.tanggal === d.hariIni;
       var hitungLama = {};
       if (KUNCI_LAMA) KUNCI_LAMA.forEach(function(k){ hitungLama[k] = (hitungLama[k] || 0) + 1; });

@@ -156,6 +156,24 @@ const srv = http.createServer(async (req, res) => {
   cek('ringkasan per kantor: hari ini dan bulan ini', pk.hariIni === 2000000 && pk.bulanIni >= 2000000 && pk.bulanIni < 11000000 && pk.tipe === 'KLL', k.perKantor);
   cek('daftar kantor memuat semua KLL/ULL terdaftar, termasuk yang belum setor', (k.perKantor || []).length === 2, k.perKantor);
   cek('total hari ini hanya setoran kantor', k.ringkas.total === 2500000, k.ringkas);
+  /* Rekap bulanan (pemilik, 27 Oktober 2026): enam bulan per kantor, untuk
+     menemukan kantor yang belum setor ke daerah. */
+  const R = k.rekap || {}, BLN = HARI_INI.slice(0, 7), BLN_LALU = BULAN_LALU.slice(0, 7);
+  cek('rekap: enam bulan berurutan, berakhir di bulan ini', Array.isArray(R.bulan) && R.bulan.length === 6 && R.bulan[5] === BLN && R.bulan[4] === BLN_LALU
+    && R.bulan.every((b, i) => i === 0 || b > R.bulan[i - 1]), R.bulan);
+  const rKota = (R.kantor || []).find((x) => /Kota Contoh/.test(x.kantor)) || {}, rMasjid = (R.kantor || []).find((x) => /Masjid Contoh/.test(x.kantor)) || {};
+  cek('rekap: setoran per bulan per kantor', rKota.per && rKota.per[5].t === 2000000 && rKota.per[4].t === 9000000 && rKota.per[4].n === 1, rKota);
+  cek('rekap: bulan tanpa setoran bernilai nol', rMasjid.per && rMasjid.per[4].t === 0 && rMasjid.per[5].t === 500000, rMasjid);
+  cek('rekap: tanggal setoran terakhir', rKota.terakhir === HARI_INI && rKota.tipe === 'KLL', rKota);
+  cek('rekap: tanpa penghimpunan daerah dan donatur', !JSON.stringify(R).includes('Budi') && (R.kantor || []).every((x) => x.tipe === 'KLL' || x.tipe === 'ULL'));
+  const kLalu = await rpc('apiPenghimpunanHarian', [lK.token, BULAN_LALU]);
+  cek('rekap mengikuti bulan tanggal yang dilihat', kLalu.rekap.bulan[5] === BLN_LALU && kLalu.rekap.kantor.find((x) => /Kota/.test(x.kantor)).per[5].t === 9000000, kLalu.rekap.bulan);
+  await rpc('apiSaveLayanan', [TOKEN, { tipe: 'KLL', nama: 'Sepi Contoh', aktif: 'true', telepon: '081277770000', penanggungJawab: 'PJ Rahasia' }]);
+  const k2 = await rpc('apiPenghimpunanHarian', [lK.token, '']);
+  const rSepi = k2.rekap.kantor.find((x) => /Sepi Contoh/.test(x.kantor)) || {};
+  cek('rekap: kantor yang belum pernah setor tetap terdaftar, semua nol, tanpa tanggal terakhir', rSepi.per && rSepi.per.every((p) => p.t === 0) && rSepi.terakhir === '', rSepi);
+  cek('rekap: tanpa telepon dan penanggung jawab kantor', !/081277770000|PJ Rahasia/.test(JSON.stringify(k2)));
+  cek('link donatur tanpa rekap kantor', d.rekap === undefined);
 
   console.log('\n=== D. MEMATIKAN ===');
   await rpc('apiMatikanLinkHarian', [TOKEN, 'donatur']);
@@ -252,6 +270,46 @@ const srv = http.createServer(async (req, res) => {
       await page.click('.lh-hapus-saring');
       await page.waitForTimeout(150);
       cek('"Semua kantor" mengembalikan semua setoran', (await page.$$('.lh-baris')).length === 2);
+
+      /* Tampilan bulanan: Sepi Contoh (didaftarkan di bagian C) belum setor bulan ini. */
+      cek('ada pilihan Harian dan Bulanan', (await page.$('#lhModeH')) !== null && (await page.$('#lhModeB')) !== null);
+      await page.click('#lhModeB');
+      await page.waitForSelector('.lh-rk-tabel', { timeout: 5000 });
+      const bln = await page.evaluate(() => ({
+        belum: [...document.querySelectorAll('.lh-rk-belum .lh-nama-d')].map((x) => x.textContent),
+        baris: document.querySelectorAll('.lh-rk-tabel .lh-rk-baris:not(.kepala)').length,
+        kolom: document.querySelectorAll('.lh-rk-baris.kepala .lh-rk-c').length,
+        tombolBulan: document.querySelectorAll('.lh-bln-btn').length,
+        tanggalTersembunyi: document.getElementById('lhTglBaris').classList.contains('hidden'),
+        teks: document.body.innerText
+      }));
+      cek('bulanan: kantor yang belum setor bulan ini terdaftar untuk di-follow up', bln.belum.length === 1 && /Sepi Contoh/.test(bln.belum[0]), bln.belum);
+      cek('bulanan: tabel enam bulan plus total, satu baris per kantor', bln.kolom === 7 && bln.baris === 3 && bln.tombolBulan === 6, bln);
+      cek('bulanan: kantor tanpa setoran sama sekali diberi keterangan', /Tidak ada setoran 6 bulan terakhir/.test(bln.teks));
+      cek('bulanan: pemilih tanggal harian disembunyikan', bln.tanggalTersembunyi);
+      await page.click('.lh-bln-btn[data-b="4"]');
+      await page.waitForTimeout(150);
+      const blnLalu = await page.evaluate(() => [...document.querySelectorAll('.lh-rk-belum .lh-nama-d')].map((x) => x.textContent).sort());
+      cek('bulanan: pilih bulan lalu, yang belum setor ikut berubah', blnLalu.length === 2 && /Masjid/.test(blnLalu.join()) && /Sepi/.test(blnLalu.join()) && !/Kota/.test(blnLalu.join()), blnLalu);
+      await page.fill('#lhCari', 'sepi');
+      await page.waitForTimeout(150);
+      cek('bulanan: cari kantor menyaring tabel', (await page.$$('.lh-rk-tabel .lh-rk-baris:not(.kepala)')).length === 1);
+      await page.fill('#lhCari', '');
+      await page.waitForTimeout(1000);
+      cek('bulanan: tetap di tampilan bulanan setelah halaman memperbarui sendiri', (await page.$('.lh-rk-tabel')) !== null && (await page.getAttribute('.lh-bln-btn.on', 'data-b')) === '4');
+      for (const [w, h] of [[1600, 900], [390, 844]]) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.waitForTimeout(250);
+        const uk = await page.evaluate(() => ({ geser: document.documentElement.scrollWidth - innerWidth, kepala: getComputedStyle(document.querySelector('.lh-rk-baris.kepala')).display,
+          label: getComputedStyle(document.querySelector('.lh-rk-baris:not(.kepala) .lh-rk-c'), '::before').content }));
+        cek('bulanan ' + w + 'px: tidak ada geser ke samping', uk.geser <= 0, uk);
+        if (w < 600) cek('bulanan HP: kepala tabel diganti label di tiap sel', uk.kepala === 'none' && /\d/.test(uk.label), uk);
+        else cek('bulanan desktop: kepala tabel tampil', uk.kepala !== 'none', uk);
+      }
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.click('#lhModeH');
+      await page.waitForSelector('.lh-kantor-kartu', { timeout: 5000 });
+      cek('kembali ke Harian menampilkan kartu kantor dan pemilih tanggal', !(await page.evaluate(() => document.getElementById('lhTglBaris').classList.contains('hidden'))));
 
       console.log('\n=== G. LINK MATI DAN ADMIN ===');
       await page.goto(A + '/harian.html?t=' + lD.token);
