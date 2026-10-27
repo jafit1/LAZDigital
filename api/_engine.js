@@ -1626,23 +1626,23 @@ function apiPenghimpunanHarian(token, tanggal){
     var nm = _layLabel(l);
     perKantor[_norm(nm)] = { kantor: nm, tipe: tipeDari(nm), hariIni: 0, bulanIni: 0, n: 0 };
   });
-  /* Rekap bulanan link KLL/ULL (pemilik, 27 Oktober 2026): enam bulan sampai
-     bulan tanggal yang dilihat, per kantor, supaya kantor yang belum setor ke
-     daerah mudah ditemukan dan di-follow up. Link donatur tidak memakainya. */
-  var BLN_REKAP = [];
-  for (var bi = 5; bi >= 0; bi--) {
-    var dB = new Date(Date.UTC(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)) - 1 - bi, 1));
-    BLN_REKAP.push(dB.toISOString().slice(0, 7));
-  }
-  var awal = jenis === 'kantor' ? BLN_REKAP[0] + '-01' : bulan + '-01';
+  /* Rekap bulanan link KLL/ULL (pemilik, 27 Oktober 2026): per kantor di bulan
+     yang dipilih, dirinci zakat/infak terikat/infak umum dan total, supaya kantor
+     yang belum setor ke daerah mudah ditemukan dan di-follow up. Lazismu Daerah
+     Bantul ikut (bukan "belum setor"), ditaruh paling atas di layar. Link donatur
+     tidak memakainya. "terakhir" tetap dari enam bulan supaya kantor yang belum
+     setor bulan ini bisa diberi keterangan kapan terakhir setor. */
+  var awal6 = new Date(Date.UTC(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)) - 6, 1)).toISOString().slice(0, 7) + '-01';
+  var awal = jenis === 'kantor' ? awal6 : bulan + '-01';
   var rekap = {};
   /* terdaftar: kantor aktif di menu Kantor Layanan. Hanya mereka yang dihitung
-     "belum setor"; nama lain yang muncul dari data lama ikut tabel saja. */
-  var rekapBaru = function(nm, tp, daftar){ return { kantor: nm, tipe: tp, terdaftar: !!daftar, per: BLN_REKAP.map(function(){ return { t: 0, n: 0 }; }), terakhir: '' }; };
+     "belum setor"; nama lain yang muncul dari data lama ikut tabel saja. Daerah
+     tidak pernah "belum setor". */
+  var rekapBaru = function(nm, tp, daftar){ return { kantor: nm, tipe: tp, terdaftar: !!daftar, zakat: 0, infakTerikat: 0, infakUmum: 0, lain: 0, total: 0, n: 0, terakhir: '' }; };
   if (jenis === 'kantor') layList.forEach(function(l){
     if (String(l.aktif) === 'false') return;
     var nm = _layLabel(l);
-    rekap[_norm(nm)] = rekapBaru(nm, tipeDari(nm), true);
+    rekap[_norm(nm)] = rekapBaru(nm, tipeDari(nm), tipeDari(nm) !== 'Daerah');
   });
   var baris = [];
   (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
@@ -1652,13 +1652,19 @@ function apiPenghimpunanHarian(token, tanggal){
     var n = Number(r.jumlah) || 0;
     var kantor = resolveLayananName(r, layList, layMap);
     var tipe = tipeDari(kantor);
-    if (jenis === 'kantor' && tipe === 'Daerah') return;
     if (jenis === 'kantor') {
       var rk = rekap[_norm(kantor)] || (rekap[_norm(kantor)] = rekapBaru(kantor, tipe, false));
-      var ib = BLN_REKAP.indexOf(tg.slice(0, 7));
-      if (ib >= 0) { rk.per[ib].t += n; rk.per[ib].n++; }
       if (tg > rk.terakhir) rk.terakhir = tg;
+      if (tg.slice(0, 7) === bulan) {
+        var jd = String(r.jenisDana || '').toLowerCase(), sub = String(r.subJenis || '').toLowerCase();
+        if (jd === 'zakat') rk.zakat += n;
+        else if (jd === 'infak' && /terikat/.test(sub)) rk.infakTerikat += n;
+        else if (jd === 'infak') rk.infakUmum += n;
+        else rk.lain += n;
+        rk.total += n; rk.n++;
+      }
     }
+    if (jenis === 'kantor' && tipe === 'Daerah') return;
     if (tg.slice(0, 7) !== bulan) return;
     bulanIni.total += n; bulanIni.n++;
     var kk = _norm(kantor);
@@ -1699,9 +1705,11 @@ function apiPenghimpunanHarian(token, tanggal){
   if (jenis === 'kantor') {
     out.perKantor = Object.keys(perKantor).map(function(k){ return perKantor[k]; })
       .sort(function(a, b){ return b.hariIni - a.hariIni || b.bulanIni - a.bulanIni || (a.kantor < b.kantor ? -1 : 1); });
-    /* terakhir: tanggal setoran terakhir dalam enam bulan itu, kosong kalau tidak ada sama sekali. */
-    out.rekap = { bulan: BLN_REKAP, kantor: Object.keys(rekap).map(function(k){ return rekap[k]; })
-      .sort(function(a, b){ return a.kantor.localeCompare(b.kantor); }) };
+    /* Urutan: Daerah paling atas, lalu total terbesar, lalu nama. "terakhir":
+       setoran terakhir dalam enam bulan, kosong kalau tidak pernah. Layar yang
+       memisahkan yang belum setor ke bawah. */
+    out.rekap = { bulan: bulan, kantor: Object.keys(rekap).map(function(k){ return rekap[k]; })
+      .sort(function(a, b){ return (b.tipe === 'Daerah') - (a.tipe === 'Daerah') || b.total - a.total || a.kantor.localeCompare(b.kantor); }) };
   }
   return out;
 }
