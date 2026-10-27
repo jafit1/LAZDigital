@@ -282,11 +282,12 @@ const srv = http.createServer(async (req, res) => {
       /* Tampilan bulanan: kartu rinci per kantor, Daerah teratas, belum setor di bawah. */
       cek('ada pilihan Harian dan Bulanan', (await page.$('#lhModeH')) !== null && (await page.$('#lhModeB')) !== null);
       await page.click('#lhModeB');
-      await page.waitForSelector('.lh-rk-kartu-grid', { timeout: 5000 });
+      await page.waitForSelector('.lh-rk-daftar', { timeout: 5000 });
+      cek('bulanan: bawaannya daftar ke bawah, bukan grid', (await page.$('.lh-rk-kartu-grid')) === null);
       const bln = await page.evaluate(() => ({
-        kartu: [...document.querySelectorAll('.lh-rk-kartu-grid .lh-rk-k')].map((x) => x.querySelector('.lh-nama-d').textContent),
-        daerahAtas: document.querySelector('.lh-rk-kartu-grid .lh-rk-k').classList.contains('daerah'),
-        rinciKota: (() => { const k = [...document.querySelectorAll('.lh-rk-k')].find((e) => /Kota Contoh/.test(e.textContent)); return k ? [...k.querySelectorAll('.lh-rk-d')].map((d) => d.querySelector('span').textContent) : []; })(),
+        kartu: [...document.querySelectorAll('.lh-rk-db .lh-nama-d')].map((x) => x.textContent),
+        daerahAtas: document.querySelector('.lh-rk-db').classList.contains('daerah'),
+        rinciKota: (() => { const k = [...document.querySelectorAll('.lh-rk-db')].find((e) => /Kota Contoh/.test(e.textContent)); return k ? [...k.querySelectorAll('.lh-rk-dc')].map((d) => d.getAttribute('data-l')) : []; })(),
         belum: [...document.querySelectorAll('.lh-rk-belum .lh-nama-d')].map((x) => x.textContent),
         lompat: !!document.querySelector('.lh-lompat'),
         pemilihBulan: !!document.querySelector('#lhBulan') && !document.getElementById('lhBlnBaris').classList.contains('hidden'),
@@ -294,27 +295,36 @@ const srv = http.createServer(async (req, res) => {
         teks: document.body.innerText
       }));
       cek('bulanan: Daerah di kartu teratas', bln.daerahAtas, bln.kartu);
-      cek('bulanan: rincian zakat, infak terikat, infak umum per kantor', bln.rinciKota.join(',') === 'Zakat,Infak Terikat,Infak Umum', bln.rinciKota);
+      cek('bulanan: rincian zakat, infak terikat, infak umum, total per kantor', bln.rinciKota.join(',') === 'Zakat,Infak Terikat,Infak Umum,Total', bln.rinciKota);
       cek('bulanan: kantor belum setor bulan ini di bawah', bln.belum.length === 1 && /Sepi Contoh/.test(bln.belum[0]), bln.belum);
       cek('bulanan: ada shortcut ke yang belum setor', bln.lompat);
       cek('bulanan: pemilih bulan tampil, pemilih tanggal harian disembunyikan', bln.pemilihBulan && bln.tanggalTersembunyi);
       cek('bulanan: kantor tanpa setoran sama sekali diberi keterangan', /Belum pernah setor 6 bulan terakhir/.test(bln.teks) || /Terakhir setor/.test(bln.teks));
       /* Ganti bulan lewat pemilih bulan: yang belum setor ikut berubah. */
-      const blnLaluVal = BULAN_LALU.slice(0, 7);
-      await page.fill('#lhBulan', blnLaluVal);
-      await page.dispatchEvent('#lhBulan', 'change');
-      await page.waitForTimeout(400);
+      /* Pemilih bulan memakai dropdown bertema (bukan bawaan browser). */
+      await page.waitForSelector('#lhBlnBaris .select-enhanced-btn', { timeout: 5000 });
+      cek('bulanan: pemilih bulan dropdown bertema, select asli tersembunyi', await page.evaluate(() => getComputedStyle(document.getElementById('lhBulan')).display === 'none'));
+      await page.click('#lhBlnBaris .select-enhanced-btn');
+      await page.click('.select-enhanced-popover:not(.hidden) .dropdown-item[data-value="' + BULAN_LALU.slice(0, 7) + '"]');
+      await page.waitForTimeout(500);
       const blnLalu = await page.evaluate(() => [...document.querySelectorAll('.lh-rk-belum .lh-nama-d')].map((x) => x.textContent).sort());
       cek('bulanan: pilih bulan lalu, yang belum setor ikut berubah', blnLalu.length === 2 && /Masjid/.test(blnLalu.join()) && /Sepi/.test(blnLalu.join()) && !/Kota/.test(blnLalu.join()), blnLalu);
-      await page.fill('#lhBulan', HARI_INI.slice(0, 7));
-      await page.dispatchEvent('#lhBulan', 'change');
-      await page.waitForSelector('.lh-rk-kartu-grid', { timeout: 5000 });
+      await page.click('#lhBlnBaris .select-enhanced-btn');
+      await page.click('.select-enhanced-popover:not(.hidden) .dropdown-item[data-value="' + HARI_INI.slice(0, 7) + '"]');
+      await page.waitForSelector('.lh-rk-daftar', { timeout: 5000 });
+      /* Opsi Grid. */
+      await page.click('.lh-tampil button:has-text("Grid")');
+      cek('bulanan: opsi Grid menampilkan kartu, Daftar mengembalikannya', (await page.$('.lh-rk-kartu-grid')) !== null && (await page.$('.lh-rk-daftar')) === null);
+      await page.waitForTimeout(1000);
+      cek('bulanan: pilihan Grid bertahan saat halaman memperbarui sendiri', (await page.$('.lh-rk-kartu-grid')) !== null);
+      await page.click('.lh-tampil button:has-text("Daftar")');
+      await page.waitForSelector('.lh-rk-daftar', { timeout: 5000 });
       await page.fill('#lhCari', 'sepi');
       await page.waitForTimeout(150);
-      cek('bulanan: cari kantor menyaring daftar', (await page.$$('.lh-rk-k')).length === 0 && (await page.$$('.lh-rk-nol')).length === 1, 'cari sepi');
+      cek('bulanan: cari kantor menyaring daftar', (await page.$$('.lh-rk-db')).length === 0 && (await page.$$('.lh-rk-nol')).length === 1, 'cari sepi');
       await page.fill('#lhCari', '');
       await page.waitForTimeout(1000);
-      cek('bulanan: tetap di tampilan bulanan setelah halaman memperbarui sendiri', (await page.$('.lh-rk-kartu-grid')) !== null);
+      cek('bulanan: tetap di tampilan bulanan setelah halaman memperbarui sendiri', (await page.$('.lh-rk-daftar')) !== null);
       for (const [w, h] of [[1600, 900], [390, 844]]) {
         await page.setViewportSize({ width: w, height: h });
         await page.waitForTimeout(250);
