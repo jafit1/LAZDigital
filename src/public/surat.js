@@ -121,10 +121,11 @@ const MENU = [
   { kode: 'keluar', label: 'Surat Keluar' },
   { kode: 'pengajuan', label: 'Pengajuan' },
   { kode: 'disposisi', label: 'Disposisi Saya' },
+  { kode: 'asesmen-mustahik', label: 'Asesmen Mustahik' },
 ];
 function gambarMenu() {
   const nav = $('#nav');
-  nav.innerHTML = MENU.map((m) => `<button class="tn-item" id="nav_${m.kode}" type="button" title="${H(m.label)}" aria-label="${H(m.label)}">`
+  nav.innerHTML = MENU.filter((m) => m.kode !== 'asesmen-mustahik' || N.izin.ubah).map((m) => `<button class="tn-item" id="nav_${m.kode}" type="button" title="${H(m.label)}" aria-label="${H(m.label)}">`
     + `<span class="ic">${IKON[m.kode]}</span><span class="tn-tip">${H(m.label)}</span>`
     + (m.kode === 'disposisi' ? '<span class="sr-nav-angka" id="angkaDisposisi" hidden></span>' : '') + '</button>').join('');
   MENU.forEach((m) => { $('#nav_' + m.kode).onclick = () => { location.hash = '#' + m.kode; }; });
@@ -188,6 +189,14 @@ function pasangBaris(el) { $$('.sr-baris', el).forEach((b) => { b.onclick = () =
 const kosong = (ikon, teks, aksi) => `<div class="sr-kosong"><div class="sr-kosong-ikon">${ikon}</div><div>${H(teks)}</div>${aksi || ''}</div>`;
 
 const halaman = {};
+halaman['asesmen-mustahik'] = {
+  judul: 'Asesmen Mustahik',
+  async gambar(el) {
+    if (!N.izin.ubah) { el.innerHTML = '<div class="card"><b>Perlu izin pengelola Surat</b><p class="muted">Minta admin memberi izin ubah pada modul Surat di Manajemen User.</p></div>'; return; }
+    if (!window.LZAsesmenMustahik) throw new Error('Modul asesmen belum termuat. Muat ulang halaman.');
+    await window.LZAsesmenMustahik.gambar(el, { pengguna: N.pengguna, izin: N.izin, hariIni: N.hariIni }, rpc);
+  },
+};
 halaman.dasbor = {
   judul: 'Surat & Pengajuan',
   aksi: () => tombolCatat(''),

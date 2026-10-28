@@ -602,7 +602,8 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_fund_fitur.js`, `test_fundraiser.js`, `test_fund_ui.js` | fundraising |
 | `test_fund_buku.js` | donasi "Diambil" Fundraising langsung masuk buku Penghimpunan (`apiFundHimpunkan`): jenis dana, detail, pilar wajib untuk terikat, idempotensi lewat penanda `(h_xxx)`, izin modul `fundraising`, nama fundraising hanya dipercaya dari server, kwitansi (`apiFundKwitansi`) dan kirim WA |
 | `test_media_fitur.js`, `test_media_ui.js` | modul media |
-| `test_surat_fitur.js`, `test_surat_ui.js` | modul Surat & Pengajuan: izin per centang, nomor agenda, langkah tidak bisa dilompati (juga di papan), data wajib tiap langkah, disposisi (penerima izin lihat bisa menyelesaikan miliknya), lampiran (2 MB, jenis dari isi berkas, 6 per surat, kuota, Drive, tautan), foto dikompres di peramban, PDF besar ditawari kompres atau tautan, kompres PDF berhasil (pdf.js lokal, 3 halaman) dan percobaan ulang setelah gagal unduh, surat rahasia, lacak publik tanpa catatan internal dan dibatasi 30 kali per 10 menit |
+| `test_asesmen_mustahik.js` | tindakan baru `surat.asesmenMustahik.*` lewat `/api/media`: izin ubah wajib, form tunggal `F.Survei`, tepat 31 butir, opsi hanya dari katalog, jawaban lengkap, tanggal sah, identitas petugas dari sesi, sanitasi teks, validasi hasil dan skor minimum 32/maksimum 155 (sesuai skala tiap butir; 31 butir tidak berarti minimum 31 karena ada butir dengan skor minimum 2 dan 4), hasil 32–63 Belum Layak, 64–88 Layak, 89–155 Sangat Layak (sesuai keputusan pemilik), simpan/list/hapus di `surat:asesmen-mustahik:*`, asesmen hanya terlihat pencatat atau superadmin |
+| `test_surat_fitur.js`, `test_surat_ui.js` | modul Surat & Pengajuan: izin per centang, nomor agenda, langkah tidak bisa dilompati (juga di papan), data wajib tiap langkah, disposisi (penerima izin lihat bisa menyelesaikan miliknya), lampiran (2 MB, jenis dari isi berkas, 6 per surat, kuota, Drive, tautan), foto dikompres di peramban, PDF besar ditawari kompres atau tautan, kompres PDF berhasil (pdf.js lokal, 3 halaman) dan percobaan ulang setelah gagal unduh, surat rahasia, lacak publik tanpa catatan internal dan dibatasi 30 kali per 10 menit; UI juga menjaga menu/rute asesmen dan tidak mengganggu alur lama |
 | `test_kwitansi_massal.js` | data kwitansi per rentang (izin ganda, batas 400 hari dan 300 kwitansi), tab Cetak Kwitansi, PDF hasil unduhan 5 halaman A5 mendatar dan bisa dirender |
 | `test_denominasi.js` | denominasi A2 acak: jumlah selalu pas, tidak negatif, ratusan berkoin 200/100, kelipatan 1.000 berkoin 500/1.000, variasi dan nominal kosong, hasil diingat di layar |
 | `test_ingatan_hasil.js` | hasil bacaan buku besar yang diingat (`lib/laz-pg.js`): bacaan kedua tidak memuat tabel transaksi, sama persis dengan hitung ulang, gugur saat ada penulisan (juga dari penulis tanpa penanda), token kedaluwarsa dan izin dicabut tidak dilayani dari ingatan, catatan akses tetap tertulis tanpa menggugurkan ingatan, penanda isi acak, jawaban mentah lewat `api/rpc.js` |
@@ -852,6 +853,7 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   halaman dan `test_skala_ui.js` memeriksa atributnya. `lacak.html` menyembunyikan isian bila tautan sudah membawa
   nomor dan kode (`?n=&k=`), dan kepala halamannya memuat logo dan nama lembaga dari `surat.lacak` (`lembaga`:
   nama, singkatan, logo saja; alamat dan telepon tidak dikirim).
+- **Asesmen Mustahik** (pemilik, 28 Oktober 2026; `lib/surat/asesmen-mustahik.js`, `src/public/js/asesmen-mustahik.js`, lewat pintu `surat.*` di `/api/media`, tidak menambah fungsi Vercel): satu formulir F.Survei dari XLSX, langkah awal pilih Survei Calon Mustahik dan isi tujuan/kebutuhan bebas; identitas, 31 butir, barang elektronik, maks. 3 sumber bantuan lain, catatan; skor dan klasifikasi dihitung/ditegakkan server, bukan dari nilai kiriman browser; batas sesuai keputusan pemilik: min total 32, max 155, 32–63 Belum Layak dibantu, 64–88 Layak dibantu, 89–155 Sangat Layak dibantu. Asesmen tersimpan ke `surat:asesmen-mustahik:<id>` dan indeks `surat:asesmen-mustahik:daftar`; daftar dibatasi ke pencatat dan superadmin. Di browser disimpan per akun (`laz_asesmen_mustahik_v1_<userId>`), ditulis lokal sebelum RPC supaya jaringan gagal tidak menghapus hasil; salinan lokal yang belum ke server dapat disinkronkan; Ubah/Hapus dibatasi pencatat (superadmin boleh semua). Penilaian butir 4 mengikuti keputusan pemilik: pengeluaran lebih kecil skor lebih tinggi. Dijaga `test_asesmen_mustahik.js` (server) dan `test_surat_ui.js` (klik UI, simpan, ringkasan, mobile). Rentang yang dicetak di XLSX bertentangan dengan skor maksimum 155, dan pemilik mengarahkan rentang Sangat Layak ke 89–155. |
 - **Surat & Pengajuan** (pemilik, 2 Oktober 2026; `lib/surat/`, `src/public/surat.js`):
   surat masuk (Diterima > Didisposisi > Ditindaklanjuti > Selesai), surat
   keluar (Draf > Dikirim > Selesai), dan pengajuan bantuan/sponsorship/
@@ -890,8 +892,8 @@ Per 29 September 2026, dengan tambahan 3 Oktober 2026 di bawah.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
-(Fonnte), peringatan cadangan, dan (30 September 2026) lima celah keamanan di
-bagian 3.10.
+(Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, dan asesmen
+mustahik F.Survei (28 Oktober 2026).
 
 **Ditambahkan 13 Oktober 2026:** daftar "Salinan cepat" di Pengaturan, Perawatan, Cadangan Otomatis hanya menampilkan sekitar 4 baris dan sisanya bisa di-scroll (`max-height` di `src/public/app.js`). Belum diuji di peramban.
 

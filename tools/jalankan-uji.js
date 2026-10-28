@@ -90,6 +90,7 @@ const DAFTAR = [
   { label: 'Tampilan halaman Fundraising', berkas: 'test_fund_ui.js' },
   { label: 'Fitur Media dan Desain', berkas: 'test_media_fitur.js' },
   { label: 'Tampilan halaman Media', berkas: 'test_media_ui.js' },
+  { label: 'Fitur Asesmen Mustahik', berkas: 'test_asesmen_mustahik.js' },
   { label: 'Fitur Surat dan Pengajuan', berkas: 'test_surat_fitur.js' },
   { label: 'Folder Drive khusus lampiran Surat', berkas: 'test_drive_surat_folder.js' },
   { label: 'Diagnosis kesiapan Google Drive', berkas: 'test_cek_drive.js' },
