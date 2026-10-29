@@ -883,7 +883,7 @@ function renderPenghimpunan(rows){
     +'<div class="form-actions"><button class="btn btn-ghost" onclick="formHimpun(\'\',\'himpunFormHost\')">'+SVG_ICONS.putar+' Reset</button>'
     +'<button class="btn btn-primary" onclick="saveHimpun(\'\')">Simpan Penerimaan</button></div></div>';
   var delBtn = canDo('penghimpunan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'himpun\')">'+SVG_ICONS.sampah+' Hapus Rentang Tanggal</button>' : '';
-  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'himpun\')">'+SVG_ICONS.unggah+' Impor Data</button><button class="btn btn-sm btn-ghost" onclick="openImportJurnalBerkas()">'+SVG_ICONS.unggah+' Impor Jurnal per Berkas</button>'+(kwBisaSinkron()?'<button class="btn btn-sm btn-ghost" title="Simpan nomor WhatsApp donatur ke kontak Broadcast. Yang sudah ada tidak digandakan." onclick="kwSinkronSemua()">'+SVG_ICONS.kirim+' Sinkron Kontak ke Broadcast</button>':'')+delBtn+'</div>';
+  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'himpun\')">'+SVG_ICONS.unggah+' Impor Data</button><button class="btn btn-sm btn-ghost" onclick="openImportJurnalBerkas()">'+SVG_ICONS.unggah+' Impor Jurnal per Berkas</button><button class="btn btn-sm btn-ghost" onclick="LZJurnalBank.bukaModal()">'+SVG_ICONS.unggah+' Jurnal Rekening Koran</button>'+(kwBisaSinkron()?'<button class="btn btn-sm btn-ghost" title="Simpan nomor WhatsApp donatur ke kontak Broadcast. Yang sudah ada tidak digandakan." onclick="kwSinkronSemua()">'+SVG_ICONS.kirim+' Sinkron Kontak ke Broadcast</button>':'')+delBtn+'</div>';
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Donatur / Kwitansi</label><input type="text" id="himpunTable_search" placeholder="Cari... (mis. belum dikirim)" oninput="applyFilters(\'himpunTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
@@ -1268,7 +1268,7 @@ function renderPentasyarufan(rows){
     +'<div class="form-actions"><button class="btn btn-ghost" onclick="formTasyaruf(\'\',\'tasyarufFormHost\')">'+SVG_ICONS.putar+' Reset</button>'
     +'<button class="btn btn-primary" onclick="saveTasyaruf(\'\')">Simpan Penyaluran</button></div></div>';
   var delBtn = canDo('pentasyarufan','delete') ? '<button class="btn btn-sm btn-ghost" style="color:var(--red);border-color:rgba(229,72,77,0.3);margin-left:8px" onclick="openDeleteByDateModal(\'tasyaruf\')">'+SVG_ICONS.sampah+' Hapus Rentang Tanggal</button>' : '';
-  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'tasyaruf\')">'+SVG_ICONS.unggah+' Impor Data</button><button class="btn btn-sm btn-ghost" onclick="openImportJurnalBerkas()">'+SVG_ICONS.unggah+' Impor Jurnal per Berkas</button>'+delBtn+'</div>';
+  h+='<div class="table-wrap"><div class="toolbar"><button class="btn btn-sm btn-ghost" onclick="openImportModal(\'tasyaruf\')">'+SVG_ICONS.unggah+' Impor Data</button><button class="btn btn-sm btn-ghost" onclick="openImportJurnalBerkas()">'+SVG_ICONS.unggah+' Impor Jurnal per Berkas</button><button class="btn btn-sm btn-ghost" onclick="LZJurnalBank.bukaModal()">'+SVG_ICONS.unggah+' Jurnal Rekening Koran</button>'+delBtn+'</div>';
   
   var filterHtml = '<div class="filter-panel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border)">' +
     '<div class="field" style="margin:0"><label style="font-size:11px;margin-bottom:4px;font-weight:600">Cari Penerima / Bukti</label><input type="text" id="tasyTable_search" placeholder="Cari..." oninput="applyFilters(\'tasyTable\')" style="padding:6px 10px;font-size:12.5px"></div>' +
@@ -1943,7 +1943,8 @@ function renderJurnalForm(){
     + '</div>';
 
   var acts='<button class="btn" onclick="loadJurnal()">Lihat Laporan</button>'
-    + '<button class="btn btn-primary" onclick="loadJurnalAndDownload()">Unduh Excel</button>';
+    + '<button class="btn btn-primary" onclick="loadJurnalAndDownload()">Unduh Excel</button>'
+    + '<button class="btn btn-ghost" onclick="LZJurnalBank.bukaModal()">'+SVG_ICONS.unggah+' Dari Rekening Koran</button>';
   el('lapBody').innerHTML = lapPanel('Jurnal Penerimaan',
       J_MODE==='bulan'
         ? 'Pilih periode, lalu tampilkan rinciannya atau unduh sebagai Excel (.xlsx) sesuai format standar Pusat.'

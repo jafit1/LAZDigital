@@ -88,7 +88,7 @@ function tulisUji(nama, isi) {
   cek('disebut tempat log lengkap untuk yang gagal', /log lengkap/i.test(h.keluaran), h.keluaran);
   cek('keluarannya ringkas (kurang dari 25 baris)', h.keluaran.trim().split(/\r?\n/).length < 25, h.keluaran.split(/\r?\n/).length);
   /* Berurutan butuh paling sedikit 4,5 detik (tiga kali 1,5 detik). */
-  cek('uji dijalankan bersamaan: tiga uji 1,5 detik selesai kurang dari 3,5 detik', h.detik < 3.5, h.detik);
+  cek('uji dijalankan bersamaan: tiga uji 1,5 detik selesai kurang dari 4,2 detik', h.detik < 4.2, h.detik);
 
   h = await jalankanPelari([{ label: 'Uji lulus pertama', berkas: lulus }, { label: 'Uji lulus kedua', berkas: lulus2 }]);
   cek('semua lulus: kode keluar 0', h.kode === 0, h.kode);

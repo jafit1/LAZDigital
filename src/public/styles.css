@@ -6838,3 +6838,11 @@ html:not([data-theme="dark"]) .lz-logo-muat .lzm-glow{ display:none; }
 
 .a2-acak{color:var(--accent-d);font-weight:700;white-space:nowrap}
 .a2-acak:hover{text-decoration:underline}
+
+/* Pembuat Jurnal dari Rekening Koran Bank */
+.jrb-modal{max-width:1100px}
+.jrb-langkah1{padding:4px 0}
+.jrb-langkah2{display:flex;flex-direction:column;gap:12px}
+.jrb-tabs{margin-bottom:14px}
+.jrb-verif-box{padding:16px;border-radius:12px;background:var(--surface2)}
+.table-compact th, .table-compact td{padding:7px 8px;vertical-align:middle}
