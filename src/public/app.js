@@ -7068,9 +7068,6 @@ function enhanceSelects(containerId) {
 
   var selects = parent.querySelectorAll('select');
   selects.forEach(function(sel) {
-    if (sel.dataset.noEnhance === '1' || (sel.closest && sel.closest('.jrb-table, .no-enhance'))) {
-      return;
-    }
     if (sel.id === 'f_rekeningId' && sel.options.length <= 1 && sel.options[0] && sel.options[0].value === '') {
       return;
     }

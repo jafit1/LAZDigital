@@ -6855,6 +6855,11 @@ body.jrb-modal-open, html.jrb-modal-open{overflow:hidden !important}
 .jrb-table thead th{position:sticky;top:0;background:var(--surface2);z-index:5;padding:4px 6px;font-size:10.5px;font-weight:700;border-bottom:1px solid var(--border);white-space:nowrap}
 .jrb-table td{padding:2px 4px;border-bottom:1px solid var(--border);vertical-align:middle}
 .jrb-table input[type="text"],.jrb-table input[type="date"],.jrb-table select{height:24px !important;padding:1px 4px !important;font-size:11px !important;border-radius:4px !important;background:var(--surface);color:var(--text);border:1px solid var(--border);box-sizing:border-box !important}
+.jrb-table .custom-dropdown.select-enhanced{width:100% !important;max-width:100% !important}
+.jrb-table .btn-dropdown.select-enhanced-btn{height:24px !important;min-height:24px !important;padding:1px 6px !important;font-size:11px !important;border-radius:4px !important;background:var(--surface) !important;color:var(--text) !important;border:1px solid var(--border) !important;box-sizing:border-box !important;font-weight:500 !important}
+.jrb-table .select-enhanced-btn .sel-teks{font-size:11px !important;line-height:20px !important}
+.jrb-table .select-enhanced-btn .sel-chev{display:flex;align-items:center}
+.jrb-table .select-enhanced-btn .sel-chev svg{width:10px !important;height:10px !important}
 .jrb-uraian-box{font-size:10.5px;line-height:1.3;color:var(--text);max-width:220px;white-space:normal;word-break:break-word}
 .modal.import-modal.jrb-modal .modal-foot{flex:0 0 auto !important;padding:6px 12px !important}
 

@@ -999,6 +999,10 @@
 
     pasangEventLangkah();
 
+    if (typeof window !== 'undefined' && typeof window.enhanceSelects === 'function') {
+      window.enhanceSelects(bodyHost);
+    }
+
     var newWrap = document.querySelector('.jrb-tabel-wrap');
     if (newWrap && lastScrollTop > 0) {
       newWrap.scrollTop = lastScrollTop;
@@ -1157,13 +1161,13 @@
           }).join('');
 
         h += '<tr id="jrbRow_' + realIdx + '" class="jrb-row" data-idx="' + realIdx + '" style="' + (t.terpilih ? '' : 'opacity:0.45') + '">'
-          + '  <td style="text-align:center"><input type="checkbox" class="jrb-cb-row" data-no-enhance="1" ' + (t.terpilih ? 'checked' : '') + ' onchange="LZJurnalBank.ubahPilihan(this, ' + realIdx + ')"></td>'
+          + '  <td style="text-align:center"><input type="checkbox" class="jrb-cb-row" ' + (t.terpilih ? 'checked' : '') + ' onchange="LZJurnalBank.ubahPilihan(this, ' + realIdx + ')"></td>'
           + '  <td><input type="date" value="' + esc(t.tanggal) + '" onchange="LZJurnalBank.ubahTanggal(this, ' + realIdx + ')"></td>'
           + '  <td><div class="jrb-uraian-box" title="' + esc(t.uraianAsli) + '">' + esc(t.uraianBersih || t.uraianAsli) + '</div></td>'
-          + '  <td><select id="jrbSelKat_' + realIdx + '" class="jrb-sel-kat" data-no-enhance="1" onchange="LZJurnalBank.ubahKategori(this, ' + realIdx + ')">' + katOpts + '</select></td>'
+          + '  <td><select id="jrbSelKat_' + realIdx + '" class="jrb-sel-kat" onchange="LZJurnalBank.ubahKategori(this, ' + realIdx + ')">' + katOpts + '</select></td>'
           + '  <td>'
           + '    <div style="display:flex;gap:3px;flex-direction:column">'
-          + '      <select id="jrbSelLay_' + realIdx + '" class="jrb-sel-lay" data-no-enhance="1" onchange="LZJurnalBank.setKantorCepat(this, ' + realIdx + ')">' + layOpts + '</select>'
+          + '      <select id="jrbSelLay_' + realIdx + '" class="jrb-sel-lay" onchange="LZJurnalBank.setKantorCepat(this, ' + realIdx + ')">' + layOpts + '</select>'
           + '      <input type="text" id="jrbInpNama_' + realIdx + '" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(this, ' + realIdx + ')" placeholder="Nama donatur/person">'
           + '    </div>'
           + '  </td>'
@@ -1172,7 +1176,7 @@
           + '  </td>'
           + '  <td id="jrbPilarCell_' + realIdx + '">'
           + (isPilarActive
-            ? '<select id="jrbSelPilar_' + realIdx + '" class="jrb-sel-pilar" data-no-enhance="1" onchange="LZJurnalBank.ubahPilar(this, ' + realIdx + ')">' + pilarOpts + '</select>'
+            ? '<select id="jrbSelPilar_' + realIdx + '" class="jrb-sel-pilar" onchange="LZJurnalBank.ubahPilar(this, ' + realIdx + ')">' + pilarOpts + '</select>'
             : '<span class="muted" style="font-size:10px;padding-left:4px">(Tanpa pilar)</span>')
           + '  </td>'
           + '  <td class="jrb-cell-nom" id="jrbNomCell_' + realIdx + '" style="text-align:right;font-weight:700;' + nomColor + '">' + rp(t.nominal) + '</td>'
@@ -1487,8 +1491,15 @@
             + PILAR.map(function(p) {
               return '<option value="' + esc(p) + '"' + (t.pilar === p ? ' selected' : '') + '>' + esc(p) + '</option>';
             }).join('');
-          pilarCell.innerHTML = '<select id="jrbSelPilar_' + idx + '" class="jrb-sel-pilar" data-no-enhance="1" onchange="LZJurnalBank.ubahPilar(this, ' + idx + ')">' + pOpts + '</select>';
+          pilarCell.innerHTML = '<select id="jrbSelPilar_' + idx + '" class="jrb-sel-pilar" onchange="LZJurnalBank.ubahPilar(this, ' + idx + ')">' + pOpts + '</select>';
+          if (typeof window !== 'undefined' && typeof window.enhanceSelects === 'function') {
+            window.enhanceSelects(pilarCell);
+          }
         } else {
+          var wrapLama = pilarCell.querySelector('.select-enhanced');
+          if (wrapLama && wrapLama.__pop && wrapLama.__pop.parentNode) {
+            wrapLama.__pop.parentNode.removeChild(wrapLama.__pop);
+          }
           pilarCell.innerHTML = '<span class="muted" style="font-size:10px;padding-left:4px">(Tanpa pilar)</span>';
         }
       }
@@ -1513,6 +1524,25 @@
       var nomCell = document.getElementById('jrbNomCell_' + idx);
       if (nomCell) {
         nomCell.style.color = t.isMasuk ? 'var(--green)' : 'var(--red)';
+      }
+
+      // 5. Sinkronisasi tampilan dropdown kategori (jika terpanggil secara terprogram)
+      var selKat = document.getElementById('jrbSelKat_' + idx);
+      if (selKat && selKat !== el) {
+        selKat.value = kat;
+        var prevKat = selKat.previousSibling;
+        if (prevKat && prevKat.classList && prevKat.classList.contains('select-enhanced')) {
+          var btnKatText = prevKat.querySelector('.select-enhanced-btn span');
+          if (btnKatText && selKat.options[selKat.selectedIndex]) {
+            btnKatText.textContent = selKat.options[selKat.selectedIndex].textContent;
+          }
+          var popKat = prevKat.__pop;
+          if (popKat) {
+            popKat.querySelectorAll('.dropdown-item').forEach(function(item, i) {
+              item.classList.toggle('active', selKat.selectedIndex === i);
+            });
+          }
+        }
       }
     }
 
@@ -1547,7 +1577,22 @@
     if (STATE.transaksi[idx]) {
       STATE.transaksi[idx] = sesuaikanBaris(STATE.transaksi[idx], { pilar: pilar });
       var selP = document.getElementById('jrbSelPilar_' + idx);
-      if (selP && selP !== el) selP.value = pilar;
+      if (selP && selP !== el) {
+        selP.value = pilar;
+        var prevP = selP.previousSibling;
+        if (prevP && prevP.classList && prevP.classList.contains('select-enhanced')) {
+          var btnPText = prevP.querySelector('.select-enhanced-btn span');
+          if (btnPText && selP.options[selP.selectedIndex]) {
+            btnPText.textContent = selP.options[selP.selectedIndex].textContent;
+          }
+          var popP = prevP.__pop;
+          if (popP) {
+            popP.querySelectorAll('.dropdown-item').forEach(function(item, i) {
+              item.classList.toggle('active', selP.selectedIndex === i);
+            });
+          }
+        }
+      }
     }
   }
 
@@ -1567,7 +1612,22 @@
     if (inpNama) inpNama.value = t.namaDonatur;
 
     var selLay = document.getElementById('jrbSelLay_' + idx);
-    if (selLay && selLay !== el) selLay.value = fullNama;
+    if (selLay && selLay !== el) {
+      selLay.value = fullNama;
+      var prevLay = selLay.previousSibling;
+      if (prevLay && prevLay.classList && prevLay.classList.contains('select-enhanced')) {
+        var btnLayText = prevLay.querySelector('.select-enhanced-btn span');
+        if (btnLayText && selLay.options[selLay.selectedIndex]) {
+          btnLayText.textContent = selLay.options[selLay.selectedIndex].textContent;
+        }
+        var popLay = prevLay.__pop;
+        if (popLay) {
+          popLay.querySelectorAll('.dropdown-item').forEach(function(item, i) {
+            item.classList.toggle('active', selLay.selectedIndex === i);
+          });
+        }
+      }
+    }
   }
 
   function setSetorTunaiCepat(idx) {
