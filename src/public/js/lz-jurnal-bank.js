@@ -361,6 +361,34 @@
   /* -------------------------------------------------------------
      E. ANALISIS DAN PENYESUAIAN BARIS JURNAL
      ------------------------------------------------------------- */
+  function bersihkanUraianBank(teks) {
+    if (!teks) return '';
+    var s = String(teks).trim();
+    // 1. Bersihkan kode CMS ID, REF, RRN, TRM
+    s = s.replace(/\bCMS\s*ID:\s*[\w\d]+/gi, '');
+    s = s.replace(/\bREF:\s*[\w\d\-\.\/]+/gi, '');
+    s = s.replace(/\bRRN\.?\s*[\w\d\-]+/gi, '');
+    s = s.replace(/\bTRM\s+[A-Z0-9]+\b/gi, '');
+    // 2. Bersihkan kode transfer SKN & BRINID
+    s = s.replace(/\bSKN\s+\d+[\s\-]+[A-Z0-9]+\b/gi, '');
+    // 3. Bersihkan kode agregator/invoice panjang (misal PY26092520033140873D- 1270-25036199)
+    s = s.replace(/\b[A-Z0-9]{14,35}\b/gi, '');
+    s = s.replace(/\b\d{4,}-\d{4,}\b/g, '');
+    // 4. Bersihkan nomor rekening panjang (8 digit ke atas)
+    s = s.replace(/\b\d{8,24}\b/g, '');
+    // 5. Bersihkan kata transfer ganda
+    s = s.replace(/\bBIFAST\s*-\s*TRF\s*Dari\s*-\s*/gi, 'TRF DARI ');
+    s = s.replace(/\bTRF\s*Dari\s*-\s*/gi, 'TRF DARI ');
+    s = s.replace(/\bTRF\.\s*DARI\b/gi, 'TRF DARI ');
+    s = s.replace(/\bTRF\.\s*KE\b/gi, 'TRF KE ');
+    // 6. Rapikan tanda baca dan spasi
+    s = s.replace(/[\/\\]+/g, ' ');
+    s = s.replace(/\s*-\s*-\s*/g, ' - ');
+    s = s.replace(/\s+/g, ' ').trim();
+    s = s.replace(/^[-—\s]+|[-—\s]+$/g, '');
+    return s;
+  }
+
   function cariKantorDariTeks(teks, daftarLayanan) {
     if (!teks || !Array.isArray(daftarLayanan)) return null;
     var tLow = teks.toLowerCase();
@@ -390,6 +418,7 @@
       var nominal = kredit > 0 ? kredit : debet;
       var isMasuk = kredit > 0;
       var uraianAsli = r.uraianAsli || r.uraian || r.keterangan || r.deskripsi || '';
+      var uraianBersih = bersihkanUraianBank(uraianAsli);
 
       var tipe = isMasuk ? 'himpun' : 'salur';
       var uLow = uraianAsli.toLowerCase();
@@ -411,51 +440,77 @@
       var kantor = cariKantorDariTeks(uraianAsli, listLayanan);
 
       // Bersihkan nama donatur awal
-      var namaDonatur = uraianAsli;
+      var namaDonatur = '';
+      var detailJurnal = r.detailJurnal || '';
+
       if (r.pengirim) {
-        namaDonatur = r.pengirim;
+        var pClean = r.pengirim.replace(/Bank\s+[A-Za-z\s]+$/i, '').replace(/BPD\s+DI\s+Yogyakarta/i, '').trim();
+        namaDonatur = pClean || r.pengirim;
       } else if (tipe === 'setor') {
-        namaDonatur = 'Setor Tunai ' + (kantor ? kantor : (defaultFund === 'Zakat' ? 'Kas Zakat' : 'Kas Infak'));
+        var mStr = uraianAsli.match(/STR\s*TUNAI[\/:\s]+([A-Za-z\s]+?)(?=\s*TRF|\s*$)/i);
+        var penyetor = mStr ? mStr[1].replace(/\b(BTL|IMG)\b/g, '').trim() : '';
+        namaDonatur = 'Setor Tunai ' + (kantor ? kantor : (penyetor ? penyetor : (defaultFund === 'Zakat' ? 'Kas Zakat' : 'Kas Infak')));
+        if (!detailJurnal) detailJurnal = 'Setor Tunai';
       } else if (kantor) {
         namaDonatur = kantor;
+      } else if (uLow.indexOf('qris') >= 0 || uLow.indexOf('qr ') >= 0) {
+        var mQris = uraianAsli.match(/QRIS\s+([A-Z\s]+?)(?=\s+\d|\s+TRM|\s*$)/i);
+        namaDonatur = mQris ? ('Donatur QRIS ' + mQris[1].trim()) : 'Donatur QRIS';
+        if (!detailJurnal) detailJurnal = 'QRIS';
+      } else if (uLow.indexOf('trf. dari') >= 0 || uLow.indexOf('trf dari') >= 0) {
+        var mTrf = uraianBersih.match(/TRF\s*DARI\s*([A-Za-z\s]+)/i);
+        namaDonatur = mTrf ? mTrf[1].trim() : uraianBersih;
       } else {
-        // Pangkas teks teknis perbankan
-        namaDonatur = namaDonatur
-          .replace(/^TRF\.\s*(KE|DARI)\s*\d+\s*/i, '')
-          .replace(/^QRIS\s+[A-Z\s]+\d+\s*TRM\s+A01\s+RRN\.\s*\w+\s*/i, 'Donatur QRIS')
-          .replace(/^BIFAST\s*-\s*TRF Dari\s*-\s*[A-Za-z\s]+-\s*/i, '')
-          .replace(/CMS\s*ID:\s*\d+\s*REF:\s*\w+/i, '')
-          .replace(/SKN\s*\d+-\s*[A-Z0-9]+/i, '')
-          .trim();
+        namaDonatur = uraianBersih;
       }
+
       if (!namaDonatur) namaDonatur = isMasuk ? 'Donatur' : 'Penerima Manfaat';
 
+      // Cari detail kata kunci dalam teks jika belum ada
+      if (!detailJurnal) {
+        if (uLow.indexOf('donasi ntt') >= 0) detailJurnal = 'Donasi NTT';
+        else if (uLow.indexOf('infaq jumat') >= 0 || uLow.indexOf('infak jumat') >= 0) detailJurnal = 'Infak Jumat';
+        else if (uLow.indexOf('zakat') >= 0) detailJurnal = 'Zakat Mal';
+        else if (uLow.indexOf('gaji driver') >= 0) detailJurnal = 'Gaji Driver';
+        else if (uLow.indexOf('kursus') >= 0) detailJurnal = 'Kursus Bahasa';
+        else if (uLow.indexOf('cicilan masjid') >= 0) detailJurnal = 'Cicilan Masjid';
+        else if (uLow.indexOf('tarjih') >= 0) detailJurnal = 'Fee Ustadz Tarjih';
+        else if (uLow.indexOf('relawan media') >= 0) detailJurnal = 'Fee Relawan Media';
+        else if (tipe === 'ump') detailJurnal = 'UMP Program';
+      }
+
       // Deteksi pilar otomatis dari teks
-      var pilar = '';
-      if (uLow.indexOf('sekolah') >= 0 || uLow.indexOf('pendidikan') >= 0 || uLow.indexOf('beasiswa') >= 0 || uLow.indexOf('kursus') >= 0) {
-        pilar = 'Pendidikan';
-      } else if (uLow.indexOf('kesehatan') >= 0 || uLow.indexOf('obat') >= 0 || uLow.indexOf('sakit') >= 0 || uLow.indexOf('medis') >= 0) {
-        pilar = 'Kesehatan';
-      } else if (uLow.indexOf('ekonomi') >= 0 || uLow.indexOf('usaha') >= 0 || uLow.indexOf('umkm') >= 0) {
-        pilar = 'Ekonomi & Pemberdayaan';
-      } else if (uLow.indexOf('bencana') >= 0 || uLow.indexOf('ntt') >= 0 || uLow.indexOf('peduli') >= 0 || uLow.indexOf('kemanusiaan') >= 0) {
-        pilar = 'Sosial Kemanusiaan';
-      } else if (uLow.indexOf('tarjih') >= 0 || uLow.indexOf('dakwah') >= 0 || uLow.indexOf('masjid') >= 0) {
-        pilar = 'Dakwah & Advokasi';
-      } else if (uLow.indexOf('lingkungan') >= 0 || uLow.indexOf('sampah') >= 0) {
-        pilar = 'Lingkungan';
+      var pilar = r.pilar || '';
+      if (!pilar) {
+        if (uLow.indexOf('sekolah') >= 0 || uLow.indexOf('pendidikan') >= 0 || uLow.indexOf('beasiswa') >= 0 || uLow.indexOf('kursus') >= 0) {
+          pilar = 'Pendidikan';
+        } else if (uLow.indexOf('kesehatan') >= 0 || uLow.indexOf('obat') >= 0 || uLow.indexOf('sakit') >= 0 || uLow.indexOf('medis') >= 0) {
+          pilar = 'Kesehatan';
+        } else if (uLow.indexOf('ekonomi') >= 0 || uLow.indexOf('usaha') >= 0 || uLow.indexOf('umkm') >= 0) {
+          pilar = 'Ekonomi & Pemberdayaan';
+        } else if (uLow.indexOf('bencana') >= 0 || uLow.indexOf('ntt') >= 0 || uLow.indexOf('peduli') >= 0 || uLow.indexOf('kemanusiaan') >= 0) {
+          pilar = 'Sosial Kemanusiaan';
+        } else if (uLow.indexOf('tarjih') >= 0 || uLow.indexOf('dakwah') >= 0 || uLow.indexOf('masjid') >= 0) {
+          pilar = 'Dakwah & Advokasi';
+        } else if (uLow.indexOf('lingkungan') >= 0 || uLow.indexOf('sampah') >= 0) {
+          pilar = 'Lingkungan';
+        }
       }
 
       // Deteksi jenis dana
-      var jenisDana = defaultFund;
-      if (uLow.indexOf('zakat') >= 0) jenisDana = 'Zakat';
-      else if (uLow.indexOf('infaq') >= 0 || uLow.indexOf('infak') >= 0) jenisDana = 'Infak';
+      var jenisDana = r.jenisDana || defaultFund;
+      if (!r.jenisDana) {
+        if (uLow.indexOf('zakat') >= 0) jenisDana = 'Zakat';
+        else if (uLow.indexOf('infaq') >= 0 || uLow.indexOf('infak') >= 0) jenisDana = 'Infak';
+      }
 
       return {
         id: r.id || ('tx_' + idx),
         tanggal: r.tanggal,
         uraianAsli: uraianAsli,
+        uraianBersih: uraianBersih || uraianAsli,
         namaDonatur: namaDonatur,
+        detailJurnal: detailJurnal,
         debet: debet,
         kredit: kredit,
         nominal: nominal,
@@ -465,8 +520,8 @@
         jenisDana: jenisDana,
         pilar: pilar,
         subJenis: pilar ? 'Infak Terikat' : 'Infak Umum',
-        rincianUmp: null,
-        terpilih: true
+        rincianUmp: r.rincianUmp || null,
+        terpilih: r.terpilih !== undefined ? r.terpilih : true
       };
     });
   }
@@ -499,6 +554,9 @@
     }
     if (perubahan.namaDonatur !== undefined) {
       res.namaDonatur = perubahan.namaDonatur;
+    }
+    if (perubahan.detailJurnal !== undefined) {
+      res.detailJurnal = perubahan.detailJurnal;
     }
     if (perubahan.nominal !== undefined) {
       res.nominal = Number(perubahan.nominal) || 0;
@@ -585,13 +643,22 @@
 
     var lines = [];
 
+    function susunKet(nama, detail, fallback) {
+      nama = String(nama || '').trim();
+      var d = String(detail || '').trim();
+      if (d) return nama ? (nama + ' - ' + d) : d;
+      if (fallback) return nama ? (nama + ' - ' + fallback) : fallback;
+      return nama || 'Transaksi Mutasi';
+    }
+
     // 1. PENERIMAAN ZAKAT VIA BANK
     if (groups.himpunZakat.length) {
       lines.push('\tPENERIMAAN ZAKAT VIA BANK\t\t\t');
       groups.himpunZakat.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var ket = tx.namaDonatur + ' - Zakat Mal' + (tx.pilar ? ' (' + tx.pilar + ')' : '');
+        var def = 'Zakat Mal' + (tx.pilar ? ' (' + tx.pilar + ')' : '');
+        var ket = susunKet(tx.namaDonatur, tx.detailJurnal, def);
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\tPenerimaan Zakat Mal\t\t' + nom + '\t' + ket);
       });
@@ -604,7 +671,8 @@
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
         var akunPos = (tx.pilar || tx.subJenis === 'Infak Terikat') ? 'Penerimaan Infak Terikat' : 'Penerimaan Infak Umum';
-        var ket = tx.namaDonatur + (tx.pilar ? ' - ' + tx.pilar : ' - Infak Umum');
+        var def = tx.pilar ? tx.pilar : 'Infak Umum';
+        var ket = susunKet(tx.namaDonatur, tx.detailJurnal, def);
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + akunPos + '\t\t' + nom + '\t' + ket);
       });
@@ -617,7 +685,7 @@
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
         var akunKas = tx.jenisDana === 'Zakat' ? 'Kas Zakat' : 'Kas Infak';
-        var ket = tx.namaDonatur || ('Setor Tunai ' + akunKas);
+        var ket = susunKet(tx.namaDonatur || ('Setor Tunai ' + akunKas), tx.detailJurnal, '');
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + akunKas + '\t\t' + nom + '\t' + ket);
       });
@@ -629,9 +697,11 @@
       groups.umpInfak.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var ket = (tx.keteranganDetail || tx.uraianAsli || ('UMP ' + (tx.kantor || 'KLL')));
-        if (tx.pilar) ket += ' (' + tx.pilar + ')';
-        var akunUmp = 'UMP ' + (tx.kantor || 'KLL');
+        var kantor = tx.kantor || tx.namaDonatur || 'KLL';
+        var def = tx.keteranganDetail || tx.uraianBersih || 'UMP Infak';
+        if (tx.pilar && def.indexOf(tx.pilar) < 0) def += ' (' + tx.pilar + ')';
+        var ket = susunKet(kantor, tx.detailJurnal, def);
+        var akunUmp = 'UMP ' + kantor;
         lines.push(tgl + '\t' + akunUmp + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
       });
@@ -642,9 +712,11 @@
       groups.umpZakat.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var ket = (tx.keteranganDetail || tx.uraianAsli || ('UMP ' + (tx.kantor || 'KLL')));
-        if (tx.pilar) ket += ' (' + tx.pilar + ')';
-        var akunUmp = 'UMP ' + (tx.kantor || 'KLL');
+        var kantor = tx.kantor || tx.namaDonatur || 'KLL';
+        var def = tx.keteranganDetail || tx.uraianBersih || 'UMP Zakat';
+        if (tx.pilar && def.indexOf(tx.pilar) < 0) def += ' (' + tx.pilar + ')';
+        var ket = susunKet(kantor, tx.detailJurnal, def);
+        var akunUmp = 'UMP ' + kantor;
         lines.push(tgl + '\t' + akunUmp + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
       });
@@ -656,7 +728,7 @@
       groups.biayaBank.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var ket = tx.uraianAsli || 'Biaya Administrasi Bank';
+        var ket = tx.detailJurnal || tx.uraianBersih || tx.uraianAsli || 'Biaya Administrasi Bank';
         lines.push(tgl + '\tBiaya Administrasi Bank\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
       });
@@ -668,7 +740,8 @@
       groups.salur.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var ket = tx.namaDonatur + (tx.pilar ? ' (' + tx.pilar + ')' : '');
+        var def = tx.pilar ? ('Penyaluran (' + tx.pilar + ')') : 'Penyaluran Program';
+        var ket = susunKet(tx.namaDonatur, tx.detailJurnal, def);
         lines.push(tgl + '\tPenyaluran Program\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
       });
@@ -847,24 +920,24 @@
     });
 
     var h = '<div class="jrb-langkah2">'
-      + '<div class="card" style="padding:12px 16px;margin-bottom:14px;background:var(--surface2);border-radius:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+      + '<div class="jrb-ringkasan-bar">'
       + '  <div>'
-      + '    <div style="font-size:11px;font-weight:700;color:var(--accent-d);text-transform:uppercase">Rekening Terkonfirmasi</div>'
-      + '    <div style="font-size:14.5px;font-weight:800">' + esc((rek.namaBank || 'Bank') + ' ' + (rek.nomor || '') + ' (' + (rek.fundGroup || 'Umum') + ')') + '</div>'
-      + (STATE.deteksi && STATE.deteksi.periode ? '<div style="font-size:11.5px;color:var(--muted)">Periode: ' + esc(STATE.deteksi.periode) + '</div>' : '')
+      + '    <span style="font-weight:700;color:var(--accent-d);margin-right:4px">REKENING:</span>'
+      + '    <b>' + esc((rek.namaBank || 'Bank') + ' ' + (rek.nomor || '') + ' (' + (rek.fundGroup || 'Umum') + ')') + '</b>'
+      + (STATE.deteksi && STATE.deteksi.periode ? '<span style="color:var(--muted);margin-left:8px">Periode: ' + esc(STATE.deteksi.periode) + '</span>' : '')
       + '  </div>'
-      + '  <div style="display:flex;gap:14px;font-size:12.5px;align-items:center">'
-      + '    <div>Kredit (Masuk): <b style="color:var(--green)">' + rp(totalK) + '</b> (' + nMasuk + ')</div>'
-      + '    <div>Debet (Keluar): <b style="color:var(--red)">' + rp(totalD) + '</b> (' + nKeluar + ')</div>'
-      + '    <div>Setor Tunai: <b>' + nSetor + '</b></div>'
-      + '    <div>UMP: <b>' + nUmp + '</b></div>'
+      + '  <div style="display:flex;gap:12px;align-items:center">'
+      + '    <span>Kredit (Masuk): <b style="color:var(--green)">' + rp(totalK) + '</b> (' + nMasuk + ')</span>'
+      + '    <span>Debet (Keluar): <b style="color:var(--red)">' + rp(totalD) + '</b> (' + nKeluar + ')</span>'
+      + '    <span>Setor Tunai: <b>' + nSetor + '</b></span>'
+      + '    <span>UMP: <b>' + nUmp + '</b></span>'
       + '  </div>'
       + '</div>';
 
     // Filter toolbar
-    h += '<div class="toolbar" style="margin-bottom:12px;gap:8px;flex-wrap:wrap">'
-      + '  <div class="field" style="margin:0;flex:1;min-width:200px">'
-      + '    <input type="text" id="jrbCari" placeholder="Saring uraian, nama donatur, KLL/ULL..." value="' + esc(STATE.cari) + '" oninput="LZJurnalBank.cariTeks(this.value)" style="padding:6px 10px;font-size:12.5px;width:100%">'
+    h += '<div class="toolbar" style="margin-bottom:8px;gap:6px;flex-wrap:wrap">'
+      + '  <div class="field" style="margin:0;flex:1;min-width:180px">'
+      + '    <input type="text" id="jrbCari" placeholder="Cari uraian, donatur, KLL/ULL, detail..." value="' + esc(STATE.cari) + '" oninput="LZJurnalBank.cariTeks(this.value)" style="height:28px;padding:3px 8px;font-size:12px;width:100%">'
       + '  </div>'
       + '  <div class="lap-tabs" style="margin:0">'
       + '    <button class="lap-tab ' + (STATE.filterTipe === 'semua' ? 'on' : '') + '" onclick="LZJurnalBank.filterTipe(\'semua\')">Semua (' + txs.length + ')</button>'
@@ -876,18 +949,19 @@
       + '</div>';
 
     // Tabel Transaksi
-    h += '<div style="overflow:auto;max-height:480px;border:1px solid var(--border);border-radius:10px">'
-      + '<table style="width:100%;font-size:12px;border-collapse:collapse" class="table-compact">'
-      + '<thead style="position:sticky;top:0;background:var(--surface2);z-index:2">'
+    h += '<div class="jrb-tabel-wrap">'
+      + '<table class="jrb-table">'
+      + '<thead>'
       + '<tr>'
-      + '  <th style="width:36px;text-align:center"><input type="checkbox" checked onchange="LZJurnalBank.togglePilihSemua(this.checked)"></th>'
-      + '  <th style="width:95px">Tanggal</th>'
-      + '  <th style="min-width:180px">Uraian Mutasi</th>'
-      + '  <th style="width:120px">Jenis Transaksi</th>'
-      + '  <th style="min-width:180px">Nama Donatur / Sumber</th>'
-      + '  <th style="width:150px">Pilar</th>'
-      + '  <th style="width:110px;text-align:right">Nominal</th>'
-      + '  <th style="width:90px;text-align:center">Aksi</th>'
+      + '  <th style="width:28px;text-align:center"><input type="checkbox" checked onchange="LZJurnalBank.togglePilihSemua(this.checked)"></th>'
+      + '  <th style="width:85px">Tanggal</th>'
+      + '  <th style="min-width:210px">Uraian Bersih (Bank)</th>'
+      + '  <th style="width:115px">Jenis</th>'
+      + '  <th style="min-width:170px">Nama Donatur / KLL / ULL</th>'
+      + '  <th style="min-width:150px">Detail Keterangan Jurnal</th>'
+      + '  <th style="width:130px">Pilar</th>'
+      + '  <th style="width:100px;text-align:right">Nominal</th>'
+      + '  <th style="width:75px;text-align:center">Aksi</th>'
       + '</tr>'
       + '</thead><tbody>';
 
@@ -895,14 +969,14 @@
       if (STATE.filterTipe !== 'semua' && t.tipe !== STATE.filterTipe) return false;
       if (STATE.cari) {
         var q = STATE.cari.toLowerCase();
-        var txt = (t.uraianAsli + ' ' + t.namaDonatur + ' ' + (t.kantor || '') + ' ' + (t.pilar || '')).toLowerCase();
+        var txt = (t.uraianAsli + ' ' + (t.uraianBersih || '') + ' ' + t.namaDonatur + ' ' + (t.detailJurnal || '') + ' ' + (t.kantor || '') + ' ' + (t.pilar || '')).toLowerCase();
         if (txt.indexOf(q) < 0) return false;
       }
       return true;
     });
 
     if (!filtered.length) {
-      h += '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Tidak ada baris transaksi yang cocok dengan saringan.</td></tr>';
+      h += '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Tidak ada baris transaksi yang cocok dengan saringan.</td></tr>';
     } else {
       filtered.forEach(function(t, idx) {
         var realIdx = txs.indexOf(t);
@@ -930,27 +1004,33 @@
             return '<option value="' + esc(fullNama) + '">' + esc(fullNama) + '</option>';
           }).join('');
 
-        h += '<tr style="border-bottom:1px solid var(--border);' + (t.terpilih ? '' : 'opacity:0.45') + '">'
+        h += '<tr style="' + (t.terpilih ? '' : 'opacity:0.45') + '">'
           + '  <td style="text-align:center"><input type="checkbox" ' + (t.terpilih ? 'checked' : '') + ' onchange="LZJurnalBank.ubahPilihan(' + realIdx + ', this.checked)"></td>'
-          + '  <td><input type="date" value="' + esc(t.tanggal) + '" onchange="LZJurnalBank.ubahTanggal(' + realIdx + ', this.value)" style="font-size:11.5px;padding:3px 5px;width:100%"></td>'
-          + '  <td><div style="max-height:48px;overflow:hidden;text-overflow:ellipsis;line-height:1.3" title="' + esc(t.uraianAsli) + '">' + esc(t.uraianAsli) + '</div></td>'
-          + '  <td><select style="font-size:11.5px;padding:3px 4px;width:100%" onchange="LZJurnalBank.ubahTipe(' + realIdx + ', this.value)">' + tipeOpts + '</select></td>'
+          + '  <td><input type="date" value="' + esc(t.tanggal) + '" onchange="LZJurnalBank.ubahTanggal(' + realIdx + ', this.value)"></td>'
+          + '  <td><div class="jrb-uraian-box" title="' + esc(t.uraianAsli) + '">' + esc(t.uraianBersih || t.uraianAsli) + '</div></td>'
+          + '  <td><select onchange="LZJurnalBank.ubahTipe(' + realIdx + ', this.value)">' + tipeOpts + '</select></td>'
           + '  <td>'
-          + '    <div style="display:flex;gap:4px;flex-direction:column">'
-          + '      <input type="text" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(' + realIdx + ', this.value)" style="font-size:11.5px;padding:3px 6px">'
-          + '      <div style="display:flex;gap:4px;align-items:center">'
-          + '        <select style="font-size:10.5px;padding:2px 4px;flex:1" onchange="LZJurnalBank.setKantorCepat(' + realIdx + ', this.value)">' + layOpts + '</select>'
-          + (t.tipe !== 'setor' ? '        <button type="button" class="btn btn-xs btn-ghost" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.setSetorTunaiCepat(' + realIdx + ')">Setor Tunai</button>' : '')
+          + '    <div style="display:flex;gap:3px;flex-direction:column">'
+          + '      <input type="text" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(' + realIdx + ', this.value)">'
+          + '      <div style="display:flex;gap:3px;align-items:center">'
+          + '        <select style="font-size:10px;padding:1px 3px;flex:1" onchange="LZJurnalBank.setKantorCepat(' + realIdx + ', this.value)">' + layOpts + '</select>'
+          + (t.tipe !== 'setor' ? '        <button type="button" class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 4px;height:20px;line-height:1" onclick="LZJurnalBank.setSetorTunaiCepat(' + realIdx + ')">Setor Tunai</button>' : '')
           + '      </div>'
           + '    </div>'
           + '  </td>'
-          + '  <td><select style="font-size:11.5px;padding:3px 4px;width:100%" onchange="LZJurnalBank.ubahPilar(' + realIdx + ', this.value)">' + pilarOpts + '</select></td>'
+          + '  <td>'
+          + '    <input type="text" placeholder="Detail setelah nama..." value="' + esc(t.detailJurnal || '') + '" oninput="LZJurnalBank.ubahDetailJurnal(' + realIdx + ', this.value)" style="width:100%" title="Keterangan tambahan jurnal yang diletakkan setelah nama">'
+          + '  </td>'
+          + '  <td><select onchange="LZJurnalBank.ubahPilar(' + realIdx + ', this.value)">' + pilarOpts + '</select></td>'
           + '  <td style="text-align:right;font-weight:700;' + nomColor + '">' + rp(t.nominal) + '</td>'
           + '  <td style="text-align:center">'
-          + (t.tipe === 'ump' ? '    <button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10.5px;padding:3px 6px" onclick="LZJurnalBank.bukaModalPecahUmp(' + realIdx + ')">Pecah Detail</button>' : '')
+          + (t.tipe === 'ump' ? '    <button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.bukaModalPecahUmp(' + realIdx + ')">Pecah Detail</button>' : '')
           + '  </td>'
           + '</tr>';
       });
+
+      // Spacer row di paling bawah agar baris terakhir tidak mepet/terpotong
+      h += '<tr><td colspan="9" style="height:48px;border:none!important;background:transparent!important"></td></tr>';
     }
 
     h += '</tbody></table></div>';
@@ -1169,6 +1249,12 @@
     }
   }
 
+  function ubahDetailJurnal(idx, val) {
+    if (STATE.transaksi[idx]) {
+      STATE.transaksi[idx].detailJurnal = val;
+    }
+  }
+
   function ubahPilar(idx, pilar) {
     if (STATE.transaksi[idx]) {
       STATE.transaksi[idx] = sesuaikanBaris(STATE.transaksi[idx], { pilar: pilar });
@@ -1345,6 +1431,8 @@
     salinTSV: salinTSV,
     unduhExcel: unduhExcel,
     imporKeSistem: imporKeSistem,
+    bersihkanUraianBank: bersihkanUraianBank,
+    ubahDetailJurnal: ubahDetailJurnal,
     _state: STATE
   };
 });

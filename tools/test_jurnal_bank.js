@@ -95,8 +95,14 @@ function cek(n, syarat, info) {
   cek('UMP Pundong terdeteksi sebagai UMP', hasilAnalisis[3].tipe === 'ump', hasilAnalisis[3]);
 
   // Penyesuaian pilar pada baris penghimpunan
-  const t1Adjusted = LZJurnalBank.sesuaikanBaris(hasilAnalisis[0], { pilar: 'Pendidikan', jenisDana: 'Infak' });
+  const t1Adjusted = LZJurnalBank.sesuaikanBaris(hasilAnalisis[0], { pilar: 'Pendidikan', jenisDana: 'Infak', detailJurnal: 'Beasiswa Yatim' });
   cek('pilar pada penghimpunan dapat dipilih dan disimpan', t1Adjusted.pilar === 'Pendidikan', t1Adjusted);
+  cek('detail jurnal setelah nama tersimpan di baris', t1Adjusted.detailJurnal === 'Beasiswa Yatim', t1Adjusted);
+
+  // Pembersihan kode teknis perbankan dari uraian
+  const kotor = 'QRIS BANK MANDIRI 9360000812011322879 TRM A01 RRN. 609419757823 CMS ID: 8030004750 REF: 000036319036';
+  const bersih = LZJurnalBank.bersihkanUraianBank(kotor);
+  cek('bersihkanUraianBank menghapus nomor panjang, CMS ID, REF, RRN, TRM', !/CMS|REF|RRN|TRM|\d{8,}/.test(bersih) && bersih === 'QRIS BANK MANDIRI', bersih);
 
   // Penyesuaian ke Setor Tunai
   const t1Setor = LZJurnalBank.sesuaikanBaris(hasilAnalisis[0], { tipe: 'setor' });
@@ -136,6 +142,7 @@ function cek(n, syarat, info) {
   const tsvJurnal = LZJurnalBank.bangunTSVJurnal(transaksiFinal, cocokBpd);
   cek('TSV jurnal terbentuk dan berupa teks', typeof tsvJurnal === 'string' && tsvJurnal.length > 0);
   cek('TSV jurnal memuat seksi PENERIMAAN INFAK VIA BANK', /PENERIMAAN INFAK VIA BANK/.test(tsvJurnal));
+  cek('TSV jurnal memuat detail jurnal setelah nama', /Beasiswa Yatim/.test(tsvJurnal));
   cek('TSV jurnal memuat seksi SETOR TUNAI', /SETOR TUNAI/.test(tsvJurnal));
   cek('TSV jurnal memuat seksi UMP', /UMP/.test(tsvJurnal));
 
@@ -280,6 +287,17 @@ function cek(n, syarat, info) {
     return selects.some((s) => [...s.options].some((o) => o.value === 'Pendidikan'));
   });
   cek('dropdown pemilihan pilar tersedia pada baris jurnal', adaSelectPilar);
+
+  // Cek input detail keterangan jurnal
+  const adaInputDetail = await page.$('.jrb-langkah2 input[placeholder*="Detail setelah nama"]');
+  cek('input detail keterangan jurnal tersedia pada baris tabel', !!adaInputDetail);
+
+  // Cek bahwa tabel memiliki scroll container yang tidak memotong baris bawah
+  const scrollInfo = await page.evaluate(() => {
+    const wrap = document.querySelector('.jrb-tabel-wrap');
+    return wrap ? { scrollH: wrap.scrollHeight, clientH: wrap.clientHeight, adaSpacer: !!wrap.querySelector('.jrb-spacer-bottom, tr:last-child') } : null;
+  });
+  cek('tabel berada dalam scroll container yang menampung sampai paling bawah', scrollInfo && scrollInfo.adaSpacer);
 
   // Cek tombol Pecah Detail UMP
   const btnPecah = await page.waitForSelector('.jrb-langkah2 button:has-text("Pecah Detail")', { timeout: 5000 });
