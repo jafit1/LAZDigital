@@ -294,8 +294,31 @@ function cek(n, syarat, info) {
   cek('dropdown pemilihan pilar tersedia pada baris jurnal', adaSelectPilar);
 
   // Cek input detail keterangan jurnal
-  const adaInputDetail = await page.$('.jrb-langkah2 input[placeholder*="Detail setelah nama"]');
+  const adaInputDetail = await page.$('.jrb-langkah2 input[placeholder*="Detail"]');
   cek('input detail keterangan jurnal tersedia pada baris tabel', !!adaInputDetail);
+
+  // Klik dropdown KLL/ULL menyimpan pilihan dan tetap terpilih
+  await page.evaluate(() => {
+    LZJurnalBank.setKantorCepat(0, 'KLL Pajangan');
+  });
+  const valKantor = await page.evaluate(() => {
+    const row = document.querySelectorAll('.jrb-langkah2 tbody tr')[0];
+    const selects = [...row.querySelectorAll('select')];
+    const selKantor = selects.find((s) => [...s.options].some((o) => o.value === 'KLL Pajangan'));
+    return { selVal: selKantor ? selKantor.value : '', txKantor: LZJurnalBank._state.transaksi[0].kantor };
+  });
+  cek('dropdown KLL/ULL menyimpan pilihan dan tetap terpilih', valKantor.selVal === 'KLL Pajangan' && valKantor.txKantor === 'KLL Pajangan', valKantor);
+
+  // Mengubah kategori ke Infak Terikat memunculkan dropdown pilar
+  await page.evaluate(() => {
+    LZJurnalBank.ubahKategori(1, 'infak_terikat');
+  });
+  const pilarAktif = await page.evaluate(() => {
+    const row = document.querySelectorAll('.jrb-langkah2 tbody tr')[1];
+    const selects = [...row.querySelectorAll('select')];
+    return selects.some((s) => [...s.options].some((o) => o.value === 'Pendidikan'));
+  });
+  cek('mengubah kategori ke Infak Terikat memunculkan dropdown pilar', pilarAktif);
 
   // Cek bahwa tabel memiliki scroll container yang tidak memotong baris bawah
   const scrollInfo = await page.evaluate(() => {
@@ -316,6 +339,11 @@ function cek(n, syarat, info) {
   // Tambah baris rincian UMP
   await page.click('#jrbSubModalBg button:has-text("Tambah Baris Rincian")');
   await page.waitForTimeout(100);
+
+  // Mengetik detail di sub-modal Pecah UMP terlihat dan stabil
+  await page.fill('#jrbRincianRowsList input[type="text"]', 'Bantuan Pengobatan Anak');
+  const txtVal = await page.inputValue('#jrbRincianRowsList input[type="text"]');
+  cek('mengetik detail rincian UMP terlihat dan tersimpan', txtVal === 'Bantuan Pengobatan Anak');
 
   // Tutup submodal
   await page.click('#jrbSubModalBg .close-x');

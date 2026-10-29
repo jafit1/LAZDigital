@@ -903,35 +903,64 @@
       modalPecahUmp: null
     });
 
+    if (typeof window !== 'undefined' && window.openModal) {
+      window.openModal(
+        'Pembuat Jurnal dari Rekening Koran Bank',
+        '<div id="jrbModalBodyHost"></div>',
+        '<div id="jrbModalFootHost"></div>'
+      );
+      var mc = document.getElementById('modalCard');
+      if (mc) {
+        mc.classList.add('import-modal', 'jrb-modal');
+        mc.style.maxWidth = '';
+      }
+    }
+
     gambarModal();
   }
 
   function gambarModal() {
-    if (typeof window === 'undefined' || !window.openModal) return;
-    var title = 'Pembuat Jurnal dari Rekening Koran Bank';
-    var body = '';
-    var foot = '';
+    var bodyHost = document.getElementById('jrbModalBodyHost');
+    var footHost = document.getElementById('jrbModalFootHost');
+    if (!bodyHost || !footHost) {
+      if (typeof window !== 'undefined' && window.openModal) {
+        window.openModal(
+          'Pembuat Jurnal dari Rekening Koran Bank',
+          '<div id="jrbModalBodyHost"></div>',
+          '<div id="jrbModalFootHost"></div>'
+        );
+        var mc = document.getElementById('modalCard');
+        if (mc) {
+          mc.classList.add('import-modal', 'jrb-modal');
+          mc.style.maxWidth = '';
+        }
+        bodyHost = document.getElementById('jrbModalBodyHost');
+        footHost = document.getElementById('jrbModalFootHost');
+      }
+    }
+    if (!bodyHost || !footHost) return;
+
+    var wrap = document.querySelector('.jrb-tabel-wrap');
+    var lastScrollTop = wrap ? wrap.scrollTop : 0;
 
     if (STATE.step === 1) {
-      body = gambarLangkah1HTML();
-      foot = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+      bodyHost.innerHTML = gambarLangkah1HTML();
+      footHost.innerHTML = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>'
         + '<button class="btn btn-primary" id="jrbBtnLanjut" ' + (STATE.rekeningTerpilih ? '' : 'disabled') + ' onclick="LZJurnalBank.lanjutKeLangkah2()">Lanjutkan ke Penyesuaian Jurnal &rarr;</button>';
     } else {
-      body = gambarLangkah2HTML();
-      foot = '<button class="btn btn-ghost" onclick="LZJurnalBank.kembaliKeLangkah1()">&larr; Ganti Berkas</button>'
-        + '<button class="btn btn-ghost" onclick="LZJurnalBank.salinTSV()">Salin Teks TSV</button>'
-        + '<button class="btn btn-ghost" onclick="LZJurnalBank.unduhExcel()">Unduh Excel Jurnal</button>'
-        + '<button class="btn btn-primary" onclick="LZJurnalBank.imporKeSistem()">Impor Langsung ke Sistem</button>';
-    }
-
-    window.openModal(title, body, foot);
-    var mc = document.getElementById('modalCard');
-    if (mc) {
-      mc.classList.add('import-modal', 'jrb-modal');
-      mc.style.maxWidth = STATE.step === 1 ? '720px' : '1100px';
+      bodyHost.innerHTML = gambarLangkah2HTML();
+      footHost.innerHTML = '<button class="btn btn-ghost btn-sm" onclick="LZJurnalBank.kembaliKeLangkah1()">&larr; Ganti Berkas</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="LZJurnalBank.salinTSV()">Salin TSV</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="LZJurnalBank.unduhExcel()">Unduh Excel Jurnal</button>'
+        + '<button class="btn btn-primary btn-sm" onclick="LZJurnalBank.imporKeSistem()">Impor Langsung ke Sistem</button>';
     }
 
     pasangEventLangkah();
+
+    var newWrap = document.querySelector('.jrb-tabel-wrap');
+    if (newWrap && lastScrollTop > 0) {
+      newWrap.scrollTop = lastScrollTop;
+    }
   }
 
   function gambarLangkah1HTML() {
@@ -1046,12 +1075,12 @@
       + '<tr>'
       + '  <th style="width:28px;text-align:center"><input type="checkbox" checked onchange="LZJurnalBank.togglePilihSemua(this.checked)"></th>'
       + '  <th style="width:85px">Tanggal</th>'
-      + '  <th style="min-width:210px">Uraian Bersih (Bank)</th>'
-      + '  <th style="width:115px">Jenis</th>'
-      + '  <th style="min-width:170px">Nama Donatur / KLL / ULL</th>'
-      + '  <th style="min-width:150px">Detail Keterangan Jurnal</th>'
-      + '  <th style="width:130px">Pilar</th>'
-      + '  <th style="width:100px;text-align:right">Nominal</th>'
+      + '  <th style="min-width:200px">Uraian Bersih (Bank)</th>'
+      + '  <th style="width:115px">Kategori Dana</th>'
+      + '  <th style="min-width:180px">KLL / ULL / Donatur</th>'
+      + '  <th style="min-width:140px">Detail Keterangan Jurnal</th>'
+      + '  <th style="width:130px">Pilar Program</th>'
+      + '  <th style="width:95px;text-align:right">Nominal</th>'
       + '  <th style="width:75px;text-align:center">Aksi</th>'
       + '</tr>'
       + '</thead><tbody>';
@@ -1074,48 +1103,55 @@
         var isMasuk = t.isMasuk;
         var nomColor = isMasuk ? 'color:var(--green)' : 'color:var(--red)';
 
-        // Pilar options
-        var pilarOpts = '<option value="">(Tanpa Pilar)</option>'
-          + pilars.map(function(p) {
-            return '<option value="' + esc(p) + '"' + (t.pilar === p ? ' selected' : '') + '>' + esc(p) + '</option>';
-          }).join('');
+        var kat = t.kategori || (t.tipe === 'setor' ? 'setor' : t.tipe === 'ump' ? 'ump' : t.tipe === 'biaya' ? 'biaya' : t.jenisDana === 'Zakat' ? 'zakat' : (t.subJenis === 'Infak Terikat' || t.pilar) ? 'infak_terikat' : 'infak_umum');
 
-        // Tipe options
-        var tipeOpts = ''
-          + '<option value="himpun"' + (t.tipe === 'himpun' ? ' selected' : '') + '>Penghimpunan</option>'
-          + '<option value="setor"' + (t.tipe === 'setor' ? ' selected' : '') + '>Setor Tunai</option>'
-          + '<option value="ump"' + (t.tipe === 'ump' ? ' selected' : '') + '>UMP Program</option>'
-          + '<option value="salur"' + (t.tipe === 'salur' ? ' selected' : '') + '>Pentasyarufan</option>'
-          + '<option value="biaya"' + (t.tipe === 'biaya' ? ' selected' : '') + '>Biaya Bank</option>';
+        // Kategori options
+        var katOpts = ''
+          + '<option value="infak_umum"' + (kat === 'infak_umum' ? ' selected' : '') + '>Infak Umum</option>'
+          + '<option value="infak_terikat"' + (kat === 'infak_terikat' ? ' selected' : '') + '>Infak Terikat</option>'
+          + '<option value="zakat"' + (kat === 'zakat' ? ' selected' : '') + '>Zakat Mal</option>'
+          + '<option value="setor"' + (kat === 'setor' ? ' selected' : '') + '>Setor Tunai</option>'
+          + '<option value="ump"' + (kat === 'ump' ? ' selected' : '') + '>UMP Program</option>'
+          + '<option value="biaya"' + (kat === 'biaya' ? ' selected' : '') + '>Biaya Bank</option>'
+          + '<option value="salur"' + (kat === 'salur' ? ' selected' : '') + '>Pentasyarufan</option>';
 
-        // Layanan options
-        var layOpts = '<option value="">-- Pilih KLL/ULL --</option>'
+        // Layanan options: PER BARIS DENGAN SELECTED!
+        var layOpts = '<option value="">-- Donatur Pribadi / QRIS --</option>'
           + layList.map(function(l) {
             var fullNama = (l.tipe || 'KLL') + ' ' + l.nama;
-            return '<option value="' + esc(fullNama) + '">' + esc(fullNama) + '</option>';
+            var isSel = (t.kantor && t.kantor.toLowerCase() === fullNama.toLowerCase()) ? ' selected' : '';
+            return '<option value="' + esc(fullNama) + '"' + isSel + '>' + esc(fullNama) + '</option>';
+          }).join('');
+
+        // Pilar options
+        var isPilarActive = (kat === 'infak_terikat' || kat === 'ump' || kat === 'salur');
+        var pilarOpts = '<option value="">(Pilih Pilar)</option>'
+          + pilars.map(function(p) {
+            return '<option value="' + esc(p) + '"' + (t.pilar === p ? ' selected' : '') + '>' + esc(p) + '</option>';
           }).join('');
 
         h += '<tr style="' + (t.terpilih ? '' : 'opacity:0.45') + '">'
           + '  <td style="text-align:center"><input type="checkbox" ' + (t.terpilih ? 'checked' : '') + ' onchange="LZJurnalBank.ubahPilihan(' + realIdx + ', this.checked)"></td>'
           + '  <td><input type="date" value="' + esc(t.tanggal) + '" onchange="LZJurnalBank.ubahTanggal(' + realIdx + ', this.value)"></td>'
           + '  <td><div class="jrb-uraian-box" title="' + esc(t.uraianAsli) + '">' + esc(t.uraianBersih || t.uraianAsli) + '</div></td>'
-          + '  <td><select onchange="LZJurnalBank.ubahTipe(' + realIdx + ', this.value)">' + tipeOpts + '</select></td>'
+          + '  <td><select onchange="LZJurnalBank.ubahKategori(' + realIdx + ', this.value)">' + katOpts + '</select></td>'
           + '  <td>'
           + '    <div style="display:flex;gap:3px;flex-direction:column">'
-          + '      <input type="text" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(' + realIdx + ', this.value)">'
-          + '      <div style="display:flex;gap:3px;align-items:center">'
-          + '        <select style="font-size:10px;padding:1px 3px;flex:1" onchange="LZJurnalBank.setKantorCepat(' + realIdx + ', this.value)">' + layOpts + '</select>'
-          + (t.tipe !== 'setor' ? '        <button type="button" class="btn btn-xs btn-ghost" style="font-size:10px;padding:1px 4px;height:20px;line-height:1" onclick="LZJurnalBank.setSetorTunaiCepat(' + realIdx + ')">Setor Tunai</button>' : '')
-          + '      </div>'
+          + '      <select onchange="LZJurnalBank.setKantorCepat(' + realIdx + ', this.value)">' + layOpts + '</select>'
+          + '      <input type="text" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(' + realIdx + ', this.value)" placeholder="Nama donatur/person">'
           + '    </div>'
           + '  </td>'
           + '  <td>'
-          + '    <input type="text" placeholder="Detail setelah nama..." value="' + esc(t.detailJurnal || '') + '" oninput="LZJurnalBank.ubahDetailJurnal(' + realIdx + ', this.value)" style="width:100%" title="Keterangan tambahan jurnal yang diletakkan setelah nama">'
+          + '    <input type="text" placeholder="Detail setelah pilar..." value="' + esc(t.detailJurnal || '') + '" oninput="LZJurnalBank.ubahDetailJurnal(' + realIdx + ', this.value)" style="width:100%" title="Keterangan tambahan jurnal yang diletakkan setelah nama atau pilar">'
           + '  </td>'
-          + '  <td><select onchange="LZJurnalBank.ubahPilar(' + realIdx + ', this.value)">' + pilarOpts + '</select></td>'
+          + '  <td>'
+          + (isPilarActive
+            ? '<select onchange="LZJurnalBank.ubahPilar(' + realIdx + ', this.value)">' + pilarOpts + '</select>'
+            : '<span class="muted" style="font-size:10px;padding-left:4px">(Tanpa pilar)</span>')
+          + '  </td>'
           + '  <td style="text-align:right;font-weight:700;' + nomColor + '">' + rp(t.nominal) + '</td>'
           + '  <td style="text-align:center">'
-          + (t.tipe === 'ump' ? '    <button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.bukaModalPecahUmp(' + realIdx + ')">Pecah Detail</button>' : '')
+          + (kat === 'ump' ? '    <button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.bukaModalPecahUmp(' + realIdx + ')">Pecah Detail</button>' : '')
           + '  </td>'
           + '</tr>';
       });
@@ -1328,10 +1364,47 @@
   }
 
   function ubahTipe(idx, tipe) {
-    if (STATE.transaksi[idx]) {
-      STATE.transaksi[idx] = sesuaikanBaris(STATE.transaksi[idx], { tipe: tipe });
-      gambarModal();
+    ubahKategori(idx, tipe);
+  }
+
+  function ubahKategori(idx, kat) {
+    if (!STATE.transaksi[idx]) return;
+    var t = STATE.transaksi[idx];
+    t.kategori = kat;
+    if (kat === 'zakat') {
+      t.tipe = 'himpun';
+      t.jenisDana = 'Zakat';
+      t.subJenis = 'Zakat Mal';
+      t.pilar = '';
+    } else if (kat === 'infak_umum') {
+      t.tipe = 'himpun';
+      t.jenisDana = 'Infak';
+      t.subJenis = 'Infak Umum';
+      t.pilar = '';
+    } else if (kat === 'infak_terikat') {
+      t.tipe = 'himpun';
+      t.jenisDana = 'Infak';
+      t.subJenis = 'Infak Terikat';
+      if (!t.pilar) t.pilar = 'Pendidikan';
+    } else if (kat === 'setor') {
+      t.tipe = 'setor';
+      t.pilar = '';
+      if (!t.namaDonatur.toLowerCase().startsWith('setor tunai')) {
+        t.namaDonatur = 'Setor Tunai ' + (t.kantor ? t.kantor : (t.jenisDana === 'Zakat' ? 'Kas Zakat' : 'Kas Infak'));
+      }
+    } else if (kat === 'ump') {
+      t.tipe = 'ump';
+      t.isMasuk = false;
+      if (!t.pilar) t.pilar = 'Pendidikan';
+    } else if (kat === 'biaya') {
+      t.tipe = 'biaya';
+      t.pilar = '';
+      t.isMasuk = false;
+    } else if (kat === 'salur') {
+      t.tipe = 'salur';
+      t.isMasuk = false;
     }
+    gambarModal();
   }
 
   function ubahNamaDonatur(idx, nama) {
@@ -1354,16 +1427,22 @@
   }
 
   function setKantorCepat(idx, fullNama) {
-    if (STATE.transaksi[idx] && fullNama) {
-      STATE.transaksi[idx] = sesuaikanBaris(STATE.transaksi[idx], { kantor: fullNama });
-      gambarModal();
+    if (!STATE.transaksi[idx]) return;
+    var t = STATE.transaksi[idx];
+    t.kantor = fullNama || '';
+    if (fullNama) {
+      if (t.tipe === 'setor' || t.kategori === 'setor') {
+        t.namaDonatur = 'Setor Tunai ' + fullNama;
+      } else {
+        t.namaDonatur = fullNama;
+      }
     }
+    gambarModal();
   }
 
   function setSetorTunaiCepat(idx) {
     if (STATE.transaksi[idx]) {
-      STATE.transaksi[idx] = sesuaikanBaris(STATE.transaksi[idx], { tipe: 'setor' });
-      gambarModal();
+      ubahKategori(idx, 'setor');
     }
   }
 
@@ -1548,6 +1627,7 @@
     ubahPilihan: ubahPilihan,
     ubahTanggal: ubahTanggal,
     ubahTipe: ubahTipe,
+    ubahKategori: ubahKategori,
     ubahNamaDonatur: ubahNamaDonatur,
     ubahPilar: ubahPilar,
     setKantorCepat: setKantorCepat,
