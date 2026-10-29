@@ -104,6 +104,10 @@ function cek(n, syarat, info) {
   const bersih = LZJurnalBank.bersihkanUraianBank(kotor);
   cek('bersihkanUraianBank menghapus nomor panjang, CMS ID, REF, RRN, TRM', !/CMS|REF|RRN|TRM|\d{8,}/.test(bersih) && bersih === 'QRIS BANK MANDIRI', bersih);
 
+  // QRIS otomatis bernama NN dan detail Qris
+  const qrisRow = LZJurnalBank.analisisTransaksi([{ id: 'q1', tanggal: '2026-09-01', uraian: 'QRIS BANK MANDIRI 9360000812011322879 TRM A01 RRN. 609419757823', debet: 0, kredit: 5000 }], { rekening: cocokBpd, layanan: daftarLayanan })[0];
+  cek('QRIS otomatis namanya NN dan detail Qris tanpa nama bank', qrisRow.namaDonatur === 'NN' && qrisRow.detailJurnal === 'Qris', qrisRow);
+
   // Penyesuaian ke Setor Tunai
   const t1Setor = LZJurnalBank.sesuaikanBaris(hasilAnalisis[0], { tipe: 'setor' });
   cek('baris donasi dapat diubah menjadi Setor Tunai', t1Setor.tipe === 'setor', t1Setor);
@@ -143,6 +147,7 @@ function cek(n, syarat, info) {
   cek('TSV jurnal terbentuk dan berupa teks', typeof tsvJurnal === 'string' && tsvJurnal.length > 0);
   cek('TSV jurnal memuat seksi PENERIMAAN INFAK VIA BANK', /PENERIMAAN INFAK VIA BANK/.test(tsvJurnal));
   cek('TSV jurnal memuat detail jurnal setelah nama', /Beasiswa Yatim/.test(tsvJurnal));
+  cek('penulisan baris jurnal tanpa tanda strip (-)', !/^\d{4}-\d{2}-\d{2}\t[^\t]+\t[^\t]*\t[^\t]*\t.* - .*/m.test(tsvJurnal), tsvJurnal);
   cek('TSV jurnal memuat seksi SETOR TUNAI', /SETOR TUNAI/.test(tsvJurnal));
   cek('TSV jurnal memuat seksi UMP', /UMP/.test(tsvJurnal));
 

@@ -403,7 +403,124 @@
         return prefix + ' ' + l.nama;
       }
     }
+    // Singkatan umum di rekening koran BPD
+    if (/\b(kl|kll)\s*pdg\b/i.test(teks)) return 'KLL Pundong';
+    if (/\b(kl|kll)\s*btl\b/i.test(teks)) return 'KLL Bantul Kota';
+    if (/\b(kl|kll)\s*img\b/i.test(teks)) return 'KLL Imogiri';
+    if (/\b(kl|kll)\s*srd\b/i.test(teks)) return 'KLL Srandakan';
+    if (/\b(kl|kll)\s*pjg\b/i.test(teks)) return 'KLL Pajangan';
+
     return null;
+  }
+
+  function ekstrakNamaDanDetail(raw, pengirimBsi, tipe, listLayanan, defaultFund) {
+    raw = String(raw || '').trim();
+    var uLow = raw.toLowerCase();
+
+    // 1. QRIS: otomatis nama NN, detail Qris (tanpa membaca nama bank dari mana)
+    if (uLow.indexOf('qris') >= 0 || uLow.indexOf('qr ') >= 0 || /^qr\s+\d+/i.test(raw)) {
+      return {
+        nama: 'NN',
+        detail: 'Qris',
+        kantor: '',
+        tipe: 'himpun'
+      };
+    }
+
+    var kantor = cariKantorDariTeks(raw, listLayanan);
+    var clean = bersihkanUraianBank(raw);
+    var nama = '';
+    var detail = '';
+
+    // 2. Setor Tunai
+    if (tipe === 'setor' || uLow.indexOf('str tunai') >= 0 || uLow.indexOf('setor tunai') >= 0 || uLow.indexOf('setoran tunai') >= 0) {
+      var sisa = clean.replace(/\b(str\s*tunai|setor\s*tunai|setoran\s*tunai)[\/:\s]*/gi, '').trim();
+      sisa = sisa.replace(/\b(BTL|IMG)\b/g, '').replace(/[\/\\]+/g, ' ').trim();
+      detail = 'Setor Tunai';
+      if (kantor) {
+        nama = kantor;
+        if (sisa && sisa.toLowerCase() !== kantor.toLowerCase()) detail += ' ' + sisa;
+      } else if (sisa) {
+        nama = sisa;
+      } else {
+        nama = 'Setor Tunai ' + (defaultFund === 'Zakat' ? 'Kas Zakat' : 'Kas Infak');
+      }
+      return { nama: nama, detail: detail, kantor: kantor, tipe: 'setor' };
+    }
+
+    // 3. UMP Program
+    if (tipe === 'ump' || uLow.indexOf('ump') >= 0) {
+      nama = kantor || 'KLL';
+      var sisaUmp = clean.replace(/\bTRF\.?\s*KE\s*/gi, '').replace(/\bUMP\s+(KLL|ULL)?\s*/gi, '').trim();
+      detail = sisaUmp || 'UMP Program';
+      return { nama: nama, detail: detail, kantor: kantor, tipe: 'ump' };
+    }
+
+    // 4. BSI dengan pengirim terstruktur
+    if (pengirimBsi) {
+      var p = pengirimBsi.replace(/Bank\s+[A-Za-z\s]+$/i, '').replace(/BPD\s+DI\s+Yogyakarta/i, '').trim();
+      p = p.replace(/^TRF\s*Dari\s*-\s*/i, '').trim();
+      nama = p || pengirimBsi;
+
+      var d = clean;
+      d = d.replace(/\bBIFAST\s*-\s*TRF\s*Dari\s*-\s*.*$/i, '');
+      d = d.replace(/\bTRF\s*Dari\s*-\s*.*$/i, '');
+      d = d.replace(/[\/\\]+/g, ' ').trim();
+      d = d.replace(/^[-—\s]+|[-—\s]+$/g, '');
+      detail = d;
+      return { nama: nama, detail: detail, kantor: kantor, tipe: tipe };
+    }
+
+    // 5. Pola TRF DARI di BPD
+    var mTrf = clean.match(/TRF\.?\s*DARI[\s\-]+([A-Za-z\s]+?)(?=\s+TRF|\s+QRIS|\s+STR|\s+CMS|\s+REF|\s*$)/i);
+    if (mTrf) {
+      nama = mTrf[1].trim();
+      var sisaTrf = clean.replace(mTrf[0], '').trim();
+      sisaTrf = sisaTrf.replace(/[\/\\]+/g, ' ').replace(/^[-—\s]+|[-—\s]+$/g, '');
+      detail = sisaTrf;
+      if (kantor) {
+        detail = nama + (detail ? ' ' + detail : '');
+        nama = kantor;
+      }
+      return { nama: nama, detail: detail, kantor: kantor, tipe: tipe };
+    }
+
+    // 6. Pola slash di BPD: "NT-INFAQ/MUSSHOLIH/KRP", "INFAQ/BAYU/KTK", "STR INFAK UMUM/KONIAH", "KL PAJANGAN/SITI ISLAMIYAH BTL"
+    if (clean.indexOf('/') >= 0 || raw.indexOf('/') >= 0) {
+      var parts = (raw.indexOf('/') >= 0 ? raw : clean).split(/[\/\\]+/).map(function(x) { return x.trim(); }).filter(Boolean);
+      if (parts.length >= 2) {
+        var p0 = parts[0], p1 = parts[1], p2 = parts.slice(2).join(' ');
+        if (/infaq|infak|zakat|donasi|nt-/i.test(p0) && !/infaq|infak|zakat/i.test(p1)) {
+          nama = p1;
+          detail = p0.replace(/^NT-/i, '') + (p2 ? ' ' + p2 : '');
+        } else if (!/infaq|infak|zakat/i.test(p0) && /infaq|infak|zakat/i.test(p1)) {
+          nama = p0;
+          detail = p1 + (p2 ? ' ' + p2 : '');
+        } else {
+          nama = p0;
+          detail = parts.slice(1).join(' ');
+        }
+        if (kantor) {
+          if (nama.toLowerCase() !== kantor.toLowerCase()) detail = nama + (detail ? ' ' + detail : '');
+          nama = kantor;
+        }
+        return { nama: nama, detail: detail, kantor: kantor, tipe: tipe };
+      }
+    }
+
+    // 7. Pola "SETOR LAZIS PAJANGAN", "INFAQ UTAMA KONIAH", dll
+    var mNama = clean.match(/(?:INFAK|INFAQ|ZAKAT|DONASI)\s+(?:UTAMA\s+)?([A-Za-z\s]+)/i);
+    if (mNama) {
+      nama = mNama[1].trim();
+      detail = clean.replace(nama, '').trim();
+    } else {
+      nama = kantor || clean;
+      detail = '';
+    }
+
+    nama = nama.replace(/^[-—\s]+|[-—\s]+$/g, '').trim();
+    detail = detail.replace(/^[-—\s]+|[-—\s]+$/g, '').trim();
+    return { nama: nama || 'Donatur', detail: detail, kantor: kantor, tipe: tipe };
   }
 
   function analisisTransaksi(barisMentah, opsi) {
@@ -436,48 +553,12 @@
         tipe = 'biaya';
       }
 
-      // Deteksi KLL / ULL
-      var kantor = cariKantorDariTeks(uraianAsli, listLayanan);
-
-      // Bersihkan nama donatur awal
-      var namaDonatur = '';
-      var detailJurnal = r.detailJurnal || '';
-
-      if (r.pengirim) {
-        var pClean = r.pengirim.replace(/Bank\s+[A-Za-z\s]+$/i, '').replace(/BPD\s+DI\s+Yogyakarta/i, '').trim();
-        namaDonatur = pClean || r.pengirim;
-      } else if (tipe === 'setor') {
-        var mStr = uraianAsli.match(/STR\s*TUNAI[\/:\s]+([A-Za-z\s]+?)(?=\s*TRF|\s*$)/i);
-        var penyetor = mStr ? mStr[1].replace(/\b(BTL|IMG)\b/g, '').trim() : '';
-        namaDonatur = 'Setor Tunai ' + (kantor ? kantor : (penyetor ? penyetor : (defaultFund === 'Zakat' ? 'Kas Zakat' : 'Kas Infak')));
-        if (!detailJurnal) detailJurnal = 'Setor Tunai';
-      } else if (kantor) {
-        namaDonatur = kantor;
-      } else if (uLow.indexOf('qris') >= 0 || uLow.indexOf('qr ') >= 0) {
-        var mQris = uraianAsli.match(/QRIS\s+([A-Z\s]+?)(?=\s+\d|\s+TRM|\s*$)/i);
-        namaDonatur = mQris ? ('Donatur QRIS ' + mQris[1].trim()) : 'Donatur QRIS';
-        if (!detailJurnal) detailJurnal = 'QRIS';
-      } else if (uLow.indexOf('trf. dari') >= 0 || uLow.indexOf('trf dari') >= 0) {
-        var mTrf = uraianBersih.match(/TRF\s*DARI\s*([A-Za-z\s]+)/i);
-        namaDonatur = mTrf ? mTrf[1].trim() : uraianBersih;
-      } else {
-        namaDonatur = uraianBersih;
-      }
-
-      if (!namaDonatur) namaDonatur = isMasuk ? 'Donatur' : 'Penerima Manfaat';
-
-      // Cari detail kata kunci dalam teks jika belum ada
-      if (!detailJurnal) {
-        if (uLow.indexOf('donasi ntt') >= 0) detailJurnal = 'Donasi NTT';
-        else if (uLow.indexOf('infaq jumat') >= 0 || uLow.indexOf('infak jumat') >= 0) detailJurnal = 'Infak Jumat';
-        else if (uLow.indexOf('zakat') >= 0) detailJurnal = 'Zakat Mal';
-        else if (uLow.indexOf('gaji driver') >= 0) detailJurnal = 'Gaji Driver';
-        else if (uLow.indexOf('kursus') >= 0) detailJurnal = 'Kursus Bahasa';
-        else if (uLow.indexOf('cicilan masjid') >= 0) detailJurnal = 'Cicilan Masjid';
-        else if (uLow.indexOf('tarjih') >= 0) detailJurnal = 'Fee Ustadz Tarjih';
-        else if (uLow.indexOf('relawan media') >= 0) detailJurnal = 'Fee Relawan Media';
-        else if (tipe === 'ump') detailJurnal = 'UMP Program';
-      }
+      // Ekstrak nama donatur & detail jurnal terpisah
+      var info = ekstrakNamaDanDetail(uraianAsli, r.pengirim, tipe, listLayanan, defaultFund);
+      var namaDonatur = r.namaDonatur || info.nama || 'Donatur';
+      var detailJurnal = r.detailJurnal !== undefined ? r.detailJurnal : info.detail;
+      var kantor = info.kantor || '';
+      if (info.tipe) tipe = info.tipe;
 
       // Deteksi pilar otomatis dari teks
       var pilar = r.pilar || '';
@@ -510,13 +591,13 @@
         uraianAsli: uraianAsli,
         uraianBersih: uraianBersih || uraianAsli,
         namaDonatur: namaDonatur,
-        detailJurnal: detailJurnal,
+        detailJurnal: detailJurnal || '',
         debet: debet,
         kredit: kredit,
         nominal: nominal,
         isMasuk: isMasuk,
         tipe: tipe,
-        kantor: kantor || '',
+        kantor: kantor,
         jenisDana: jenisDana,
         pilar: pilar,
         subJenis: pilar ? 'Infak Terikat' : 'Infak Umum',
@@ -643,12 +724,24 @@
 
     var lines = [];
 
-    function susunKet(nama, detail, fallback) {
+    function formatKeteranganJurnal(nama, pilar, detail) {
       nama = String(nama || '').trim();
-      var d = String(detail || '').trim();
-      if (d) return nama ? (nama + ' - ' + d) : d;
-      if (fallback) return nama ? (nama + ' - ' + fallback) : fallback;
-      return nama || 'Transaksi Mutasi';
+      pilar = String(pilar || '').trim();
+      detail = String(detail || '').trim();
+
+      // Hapus tanda strip/hyphen (-)
+      nama = nama.replace(/\s*[-—]\s*/g, ' ').trim();
+      pilar = pilar.replace(/\s*[-—]\s*/g, ' ').trim();
+      detail = detail.replace(/\s*[-—]\s*/g, ' ').trim();
+
+      var parts = [];
+      if (nama) parts.push(nama);
+      if (pilar) parts.push(pilar);
+      if (detail && (!pilar || detail.toLowerCase() !== pilar.toLowerCase())) {
+        parts.push(detail);
+      }
+
+      return parts.join(' ').replace(/\s+/g, ' ').trim() || 'Transaksi Mutasi';
     }
 
     // 1. PENERIMAAN ZAKAT VIA BANK
@@ -657,8 +750,8 @@
       groups.himpunZakat.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var def = 'Zakat Mal' + (tx.pilar ? ' (' + tx.pilar + ')' : '');
-        var ket = susunKet(tx.namaDonatur, tx.detailJurnal, def);
+        var def = tx.pilar ? tx.pilar : 'Zakat Mal';
+        var ket = formatKeteranganJurnal(tx.namaDonatur, def, tx.detailJurnal);
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\tPenerimaan Zakat Mal\t\t' + nom + '\t' + ket);
       });
@@ -672,7 +765,7 @@
         var nom = Math.round(tx.nominal);
         var akunPos = (tx.pilar || tx.subJenis === 'Infak Terikat') ? 'Penerimaan Infak Terikat' : 'Penerimaan Infak Umum';
         var def = tx.pilar ? tx.pilar : 'Infak Umum';
-        var ket = susunKet(tx.namaDonatur, tx.detailJurnal, def);
+        var ket = formatKeteranganJurnal(tx.namaDonatur, def, tx.detailJurnal);
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + akunPos + '\t\t' + nom + '\t' + ket);
       });
@@ -685,7 +778,7 @@
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
         var akunKas = tx.jenisDana === 'Zakat' ? 'Kas Zakat' : 'Kas Infak';
-        var ket = susunKet(tx.namaDonatur || ('Setor Tunai ' + akunKas), tx.detailJurnal, '');
+        var ket = formatKeteranganJurnal(tx.namaDonatur || ('Setor Tunai ' + akunKas), '', tx.detailJurnal);
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + akunKas + '\t\t' + nom + '\t' + ket);
       });
@@ -699,8 +792,7 @@
         var nom = Math.round(tx.nominal);
         var kantor = tx.kantor || tx.namaDonatur || 'KLL';
         var def = tx.keteranganDetail || tx.uraianBersih || 'UMP Infak';
-        if (tx.pilar && def.indexOf(tx.pilar) < 0) def += ' (' + tx.pilar + ')';
-        var ket = susunKet(kantor, tx.detailJurnal, def);
+        var ket = formatKeteranganJurnal('UMP ' + kantor, tx.pilar, tx.detailJurnal || def);
         var akunUmp = 'UMP ' + kantor;
         lines.push(tgl + '\t' + akunUmp + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
@@ -714,8 +806,7 @@
         var nom = Math.round(tx.nominal);
         var kantor = tx.kantor || tx.namaDonatur || 'KLL';
         var def = tx.keteranganDetail || tx.uraianBersih || 'UMP Zakat';
-        if (tx.pilar && def.indexOf(tx.pilar) < 0) def += ' (' + tx.pilar + ')';
-        var ket = susunKet(kantor, tx.detailJurnal, def);
+        var ket = formatKeteranganJurnal('UMP ' + kantor, tx.pilar, tx.detailJurnal || def);
         var akunUmp = 'UMP ' + kantor;
         lines.push(tgl + '\t' + akunUmp + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
@@ -728,7 +819,7 @@
       groups.biayaBank.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var ket = tx.detailJurnal || tx.uraianBersih || tx.uraianAsli || 'Biaya Administrasi Bank';
+        var ket = formatKeteranganJurnal(tx.namaDonatur || 'Biaya Administrasi Bank', '', tx.detailJurnal || tx.uraianBersih || tx.uraianAsli);
         lines.push(tgl + '\tBiaya Administrasi Bank\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
       });
@@ -740,8 +831,8 @@
       groups.salur.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var def = tx.pilar ? ('Penyaluran (' + tx.pilar + ')') : 'Penyaluran Program';
-        var ket = susunKet(tx.namaDonatur, tx.detailJurnal, def);
+        var def = tx.pilar ? ('Penyaluran ' + tx.pilar) : 'Penyaluran Program';
+        var ket = formatKeteranganJurnal(tx.namaDonatur, def, tx.detailJurnal);
         lines.push(tgl + '\tPenyaluran Program\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + rekLabel + '\t\t' + nom + '\t' + ket);
       });
@@ -1056,19 +1147,19 @@
 
     var pilars = PILAR;
 
-    var h = '<div class="modal-bg show" style="z-index:10050" id="jrbSubModalBg">'
-      + '<div class="modal" style="max-width:680px;background:var(--surface);border-radius:14px;box-shadow:var(--shadow-lg)">'
-      + '<div class="modal-head">'
+    var h = '<div class="jrb-submodal-bg" id="jrbSubModalBg" onclick="if(event.target===this)LZJurnalBank.tutupModalPecahUmp()">'
+      + '<div class="jrb-submodal">'
+      + '<div class="jrb-submodal-head">'
       + '  <h3>Pecah Rincian UMP: ' + esc(tx.kantor || tx.namaDonatur) + '</h3>'
-      + '  <button class="close-x" onclick="LZJurnalBank.tutupModalPecahUmp()">&times;</button>'
+      + '  <button class="close-x" type="button" onclick="LZJurnalBank.tutupModalPecahUmp()">&times;</button>'
       + '</div>'
-      + '<div class="modal-body" style="padding:16px 20px">'
-      + '  <div class="card" style="padding:10px 14px;margin-bottom:12px;background:var(--surface2);border-radius:10px;display:flex;justify-content:space-between;align-items:center">'
-      + '    <div>Total Transfer UMP: <b style="font-size:15px">' + rp(tx.nominal) + '</b></div>'
-      + '    <div>Status: <span class="badge ' + (isPas ? 'green' : 'red') + '">' + (isPas ? '✓ Sesuai (Pas)' : 'Selisih ' + rp(Math.abs(selisih))) + '</span></div>'
+      + '<div class="jrb-submodal-body">'
+      + '  <div class="card" style="padding:10px 14px;margin-bottom:12px;background:var(--surface2);border-radius:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+      + '    <div>Total Transfer UMP: <b style="font-size:15px;color:var(--text)">' + rp(tx.nominal) + '</b></div>'
+      + '    <div>Status: <span id="jrbUmpStatusBadge" class="badge ' + (isPas ? 'green' : 'red') + '">' + (isPas ? '✓ Sesuai (Pas)' : 'Selisih ' + rp(Math.abs(selisih))) + '</span></div>'
       + '  </div>'
-      + '  <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Rincian permohonan / anggaran UMP:</div>'
-      + '  <div style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto">';
+      + '  <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Rincian permohonan / kegiatan:</div>'
+      + '  <div id="jrbRincianRowsList">';
 
     (umpState.rincian || []).forEach(function(item, rIdx) {
       var pOpts = '<option value="">(Pilih Pilar)</option>'
@@ -1076,20 +1167,20 @@
           return '<option value="' + esc(p) + '"' + (item.pilar === p ? ' selected' : '') + '>' + esc(p) + '</option>';
         }).join('');
 
-      h += '<div style="display:flex;gap:6px;align-items:center">'
-        + '  <input type="text" placeholder="Uraian permohonan..." value="' + esc(item.uraian) + '" oninput="LZJurnalBank.ubahRincianItem(' + rIdx + ', \'uraian\', this.value)" style="flex:2;font-size:12px;padding:5px 8px">'
-        + '  <select style="flex:1.2;font-size:11.5px;padding:5px 6px" onchange="LZJurnalBank.ubahRincianItem(' + rIdx + ', \'pilar\', this.value)">' + pOpts + '</select>'
-        + '  <input type="number" placeholder="Nominal Rp" value="' + (item.nominal || '') + '" oninput="LZJurnalBank.ubahRincianItem(' + rIdx + ', \'nominal\', this.value)" style="flex:1.2;font-size:12px;padding:5px 8px;text-align:right">'
-        + '  <button type="button" class="btn btn-xs btn-ghost text-danger" onclick="LZJurnalBank.hapusRincianItem(' + rIdx + ')">&times;</button>'
+      h += '<div class="jrb-rincian-row" id="jrbRow_' + rIdx + '">'
+        + '  <input type="text" placeholder="Uraian permohonan / detail..." value="' + esc(item.uraian) + '" oninput="LZJurnalBank.ubahRincianItem(' + rIdx + ', \'uraian\', this.value)">'
+        + '  <select onchange="LZJurnalBank.ubahRincianItem(' + rIdx + ', \'pilar\', this.value)">' + pOpts + '</select>'
+        + '  <input type="number" placeholder="Nominal Rp" value="' + (item.nominal || '') + '" oninput="LZJurnalBank.ubahRincianItem(' + rIdx + ', \'nominal\', this.value)" style="text-align:right">'
+        + '  <button type="button" class="jrb-rincian-del" onclick="LZJurnalBank.hapusRincianItem(' + rIdx + ')" title="Hapus baris">&times;</button>'
         + '</div>';
     });
 
     h += '  </div>'
-      + '  <button type="button" class="btn btn-sm btn-ghost" onclick="LZJurnalBank.tambahRincianItem()" style="margin-top:10px">+ Tambah Baris Rincian</button>'
+      + '  <button type="button" class="btn btn-sm btn-ghost" onclick="LZJurnalBank.tambahRincianItem()" style="margin-top:6px">+ Tambah Baris Rincian</button>'
       + '</div>'
-      + '<div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center">'
-      + '  <button class="btn btn-ghost" onclick="LZJurnalBank.tutupModalPecahUmp()">Batal</button>'
-      + '  <button class="btn btn-primary" ' + (isPas ? '' : 'disabled') + ' onclick="LZJurnalBank.terapkanRincianUmp()">Terapkan Rincian ke Jurnal</button>'
+      + '<div class="jrb-submodal-foot">'
+      + '  <button class="btn btn-ghost" type="button" onclick="LZJurnalBank.tutupModalPecahUmp()">Batal</button>'
+      + '  <button class="btn btn-primary" type="button" id="jrbBtnTerapkanUmp" ' + (isPas ? '' : 'disabled') + ' onclick="LZJurnalBank.terapkanRincianUmp()">Terapkan Rincian ke Jurnal</button>'
       + '</div>'
       + '</div></div>';
 
@@ -1295,11 +1386,27 @@
     gambarModal();
   }
 
+  function bacaInputRincianDariDOM() {
+    if (!STATE.modalPecahUmp) return;
+    var list = document.getElementById('jrbRincianRowsList');
+    if (!list) return;
+    var rows = list.querySelectorAll('.jrb-rincian-row');
+    rows.forEach(function(r, idx) {
+      if (!STATE.modalPecahUmp.rincian[idx]) return;
+      var inps = r.querySelectorAll('input');
+      var sel = r.querySelector('select');
+      if (inps[0]) STATE.modalPecahUmp.rincian[idx].uraian = inps[0].value;
+      if (sel) STATE.modalPecahUmp.rincian[idx].pilar = sel.value;
+      if (inps[1]) STATE.modalPecahUmp.rincian[idx].nominal = Number(inps[1].value) || 0;
+    });
+  }
+
   function tambahRincianItem() {
     if (!STATE.modalPecahUmp) return;
+    bacaInputRincianDariDOM();
     STATE.modalPecahUmp.rincian.push({
       uraian: '',
-      pilar: '',
+      pilar: 'Pendidikan',
       nominal: 0
     });
     gambarModal();
@@ -1307,6 +1414,7 @@
 
   function hapusRincianItem(rIdx) {
     if (!STATE.modalPecahUmp) return;
+    bacaInputRincianDariDOM();
     STATE.modalPecahUmp.rincian.splice(rIdx, 1);
     gambarModal();
   }
@@ -1315,11 +1423,33 @@
     if (!STATE.modalPecahUmp || !STATE.modalPecahUmp.rincian[rIdx]) return;
     if (key === 'nominal') val = Number(val) || 0;
     STATE.modalPecahUmp.rincian[rIdx][key] = val;
-    gambarModal();
+    segarkanStatusPecahUmp();
+  }
+
+  function segarkanStatusPecahUmp() {
+    if (!STATE.modalPecahUmp) return;
+    var tx = STATE.transaksi[STATE.modalPecahUmp.idx];
+    if (!tx) return;
+    var sum = (STATE.modalPecahUmp.rincian || []).reduce(function(a, b) {
+      return a + (Number(b.nominal) || 0);
+    }, 0);
+    var selisih = tx.nominal - sum;
+    var isPas = selisih === 0;
+
+    var badge = document.getElementById('jrbUmpStatusBadge');
+    if (badge) {
+      badge.className = 'badge ' + (isPas ? 'green' : 'red');
+      badge.textContent = isPas ? '✓ Sesuai (Pas ' + rp(sum) + ')' : 'Selisih ' + rp(Math.abs(selisih)) + (selisih > 0 ? ' kurang' : ' lebih');
+    }
+    var btn = document.getElementById('jrbBtnTerapkanUmp');
+    if (btn) {
+      btn.disabled = !isPas;
+    }
   }
 
   function terapkanRincianUmp() {
     if (!STATE.modalPecahUmp) return;
+    bacaInputRincianDariDOM();
     var idx = STATE.modalPecahUmp.idx;
     var tx = STATE.transaksi[idx];
     var rincian = STATE.modalPecahUmp.rincian;
