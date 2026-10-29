@@ -6840,20 +6840,23 @@ html:not([data-theme="dark"]) .lz-logo-muat .lzm-glow{ display:none; }
 .a2-acak:hover{text-decoration:underline}
 
 /* Pembuat Jurnal dari Rekening Koran Bank */
-.modal.jrb-modal{width:96vw !important;max-width:1320px !important;height:92vh !important;max-height:92vh !important;display:flex !important;flex-direction:column !important}
-.modal.jrb-modal .modal-body{flex:1 1 auto !important;overflow:hidden !important;display:flex !important;flex-direction:column !important;padding:10px 14px 4px !important;min-height:0 !important}
-.jrb-langkah1{padding:4px 0}
-.jrb-langkah2{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;height:100%}
-.jrb-tabs{margin-bottom:12px}
-.jrb-verif-box{padding:14px;border-radius:12px;background:var(--surface2)}
-.jrb-ringkasan-bar{padding:8px 12px;margin-bottom:8px;background:var(--surface2);border-radius:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:11.5px}
-.jrb-tabel-wrap{flex:1 1 auto;min-height:0;overflow-y:auto !important;overflow-x:auto !important;border:1px solid var(--border);border-radius:8px;background:var(--surface);margin-bottom:4px}
+body.jrb-modal-open, html.jrb-modal-open{overflow:hidden !important}
+.modal.jrb-modal{width:95vw !important;max-width:1220px !important;height:88vh !important;max-height:88vh !important;display:flex !important;flex-direction:column !important;overflow:hidden !important;overscroll-behavior:contain !important}
+.modal.jrb-modal .modal-head{flex:0 0 auto !important;padding:10px 16px !important}
+.modal.jrb-modal .modal-body{flex:1 1 auto !important;overflow:hidden !important;display:flex !important;flex-direction:column !important;padding:8px 12px 2px !important;min-height:0 !important;height:calc(100% - 95px) !important}
+#jrbModalBodyHost{flex:1 1 auto;min-height:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.jrb-langkah1{padding:8px 4px;overflow-y:auto}
+.jrb-langkah2{flex:1 1 auto;min-height:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.jrb-tabs{margin-bottom:10px}
+.jrb-verif-box{padding:12px 14px;border-radius:10px;background:var(--surface2)}
+.jrb-ringkasan-bar{flex:0 0 auto;padding:6px 12px;margin-bottom:6px;background:var(--surface2);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px}
+.jrb-tabel-wrap{flex:1 1 auto;min-height:0;overflow-y:scroll !important;overflow-x:auto !important;border:1px solid var(--border);border-radius:8px;background:var(--surface);margin-bottom:4px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .jrb-table{width:100%;font-size:11px;border-collapse:separate;border-spacing:0}
-.jrb-table thead th{position:sticky;top:0;background:var(--surface2);z-index:5;padding:5px 6px;font-size:11px;font-weight:700;border-bottom:1px solid var(--border);white-space:nowrap}
-.jrb-table td{padding:3px 5px;border-bottom:1px solid var(--border);vertical-align:middle}
-.jrb-table input[type="text"],.jrb-table input[type="date"],.jrb-table select{height:25px !important;padding:1px 5px !important;font-size:11px !important;border-radius:5px !important;background:var(--surface);color:var(--text);border:1px solid var(--border)}
-.jrb-uraian-box{font-size:11px;line-height:1.35;color:var(--text);max-width:240px;white-space:normal;word-break:break-word}
-.modal.import-modal.jrb-modal .modal-foot{padding:8px 14px !important;flex-shrink:0 !important}
+.jrb-table thead th{position:sticky;top:0;background:var(--surface2);z-index:5;padding:4px 6px;font-size:10.5px;font-weight:700;border-bottom:1px solid var(--border);white-space:nowrap}
+.jrb-table td{padding:2px 4px;border-bottom:1px solid var(--border);vertical-align:middle}
+.jrb-table input[type="text"],.jrb-table input[type="date"],.jrb-table select{height:24px !important;padding:1px 4px !important;font-size:11px !important;border-radius:4px !important;background:var(--surface);color:var(--text);border:1px solid var(--border);box-sizing:border-box !important}
+.jrb-uraian-box{font-size:10.5px;line-height:1.3;color:var(--text);max-width:220px;white-space:normal;word-break:break-word}
+.modal.import-modal.jrb-modal .modal-foot{flex:0 0 auto !important;padding:6px 12px !important}
 
 /* Sub-modal Pecah Rincian UMP */
 .jrb-submodal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:10050;padding:16px}

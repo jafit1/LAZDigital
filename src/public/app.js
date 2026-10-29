@@ -554,6 +554,8 @@ function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAl
 /* ============ MODAL ============ */
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
 function closeModal(){
+  document.body.classList.remove('jrb-modal-open');
+  document.documentElement.classList.remove('jrb-modal-open');
   el('modalBg').classList.remove('show');
   var mc=el('modalCard'); if(mc) mc.classList.remove('form-modal','import-modal','user-modal');
 }
@@ -7066,6 +7068,9 @@ function enhanceSelects(containerId) {
 
   var selects = parent.querySelectorAll('select');
   selects.forEach(function(sel) {
+    if (sel.dataset.noEnhance === '1' || (sel.closest && sel.closest('.jrb-table, .no-enhance'))) {
+      return;
+    }
     if (sel.id === 'f_rekeningId' && sel.options.length <= 1 && sel.options[0] && sel.options[0].value === '') {
       return;
     }

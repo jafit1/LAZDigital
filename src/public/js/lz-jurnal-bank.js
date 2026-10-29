@@ -38,7 +38,6 @@
   function normalTanggal(str) {
     if (!str) return '';
     str = String(str).trim();
-    // Format: 01-Sep-2026 atau 01-09-2026 atau 01/09/2026
     var m1 = str.match(/^(\d{2})[\/\-]([A-Za-z]{3})[\/\-](\d{4})$/);
     if (m1) {
       var bln = BULAN_MAP[m1[2].toLowerCase()] || '01';
@@ -74,12 +73,10 @@
     var nomor = '';
     var periode = '';
 
-    // Deteksi BPD: "803211000510 \n No. Rekening" atau "No. Rekening : 803211000510"
     var mBpd = teks.match(/(\d{10,16})\s*\n\s*No\.\s*Rekening/i) ||
                teks.match(/No\.\s*Rekening\s*[:\n\s]*(\d{10,16})/i) ||
                teks.match(/No\.\s*Rekening[\s\S]{0,40}?(\d{10,16})/i);
 
-    // Deteksi BSI: "REKENING : IDR 1011959004" atau "1011959004 - BSI"
     var mBsi = teks.match(/REKENING\s*:\s*[A-Z]*\s*(\d{10,16})/i) ||
                teks.match(/(\d{10,16})\s*-\s*BSI/i) ||
                teks.match(/Rekening\s*[:\s]+(\d{10,16})/i);
@@ -96,7 +93,6 @@
       bank = 'bsi';
     }
 
-    // Periode mutasi
     var mPeriode = teks.match(/Hari ini\s*\(\s*([^\)]+)\s*\)/i) ||
                    teks.match(/Periode\s*:\s*([^\r\n]+)/i);
     if (mPeriode) {
@@ -191,12 +187,10 @@
         }
       }
 
-      // Baris tabel di bawah header koordinat y <= 685
       var contentItems = items.filter(function(it) {
         return it.y <= 685 && !['Tgl Transaksi', 'Keterangan', 'Debet', 'Kredit', 'Jumlah Saldo', 'Mutasi Rekening'].includes(it.str);
       });
 
-      // Item tanggal: x < 110 dan format dd-Mmm-yyyy
       var dateItems = contentItems.filter(function(it) {
         return it.x < 110 && /^\d{2}-[A-Za-z]{3}-\d{4}$/.test(it.str);
       }).sort(function(a, b) { return b.y - a.y; });
@@ -211,7 +205,6 @@
           return it.y >= minY && it.y <= maxY;
         });
 
-        // Susun urutan baca: atas ke bawah (y desc), lalu kiri ke kanan (x asc)
         txItems.sort(function(a, b) {
           if (Math.abs(b.y - a.y) > 4) return b.y - a.y;
           return a.x - b.x;
@@ -230,11 +223,8 @@
           if (it === curDate) return;
           if (/^[\d\.]+,\d{2}$/.test(it.str)) {
             var val = parseFloat(it.str.replace(/\./g, '').replace(',', '.'));
-            // Debet column: x < 365
             if (it.x < 365) tx.debet = val;
-            // Kredit column: 365 <= x < 460
             else if (it.x < 460) tx.kredit = val;
-            // Saldo column: x >= 460
             else tx.saldo = val;
           } else if (it.x >= 110 && it.x < 265) {
             tx.uraian += (tx.uraian ? ' ' : '') + it.str;
@@ -273,7 +263,6 @@
         }
       }
 
-      // Baris tabel di bawah y <= 495
       var contentItems = items.filter(function(it) { return it.y <= 495; });
       var rowNumItems = contentItems.filter(function(it) {
         return it.x < 65 && /^\d+$/.test(it.str);
@@ -300,38 +289,24 @@
 
         txItems.forEach(function(it) {
           if (it === curRow) return;
-          // Waktu transaksi: x ~ 65-155
           if (it.x >= 65 && it.x < 155) {
             if (/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/.test(it.str)) tanggal = normalTanggal(it.str);
             else if (/^\d{2}\.\d{2}$/.test(it.str)) jam = it.str;
-          }
-          // No. Referensi: x ~ 155-250
-          else if (it.x >= 155 && it.x < 250) {
+          } else if (it.x >= 155 && it.x < 250) {
             ref += (ref ? ' ' : '') + it.str;
-          }
-          // Nama pengirim: x ~ 250-425
-          else if (it.x >= 250 && it.x < 425) {
+          } else if (it.x >= 250 && it.x < 425) {
             pengirim += (pengirim ? ' ' : '') + it.str;
-          }
-          // Deskripsi: x ~ 650-830
-          else if (it.x >= 650 && it.x < 830) {
+          } else if (it.x >= 650 && it.x < 830) {
             deskripsi += (deskripsi ? ' ' : '') + it.str;
-          }
-          // Debet: x ~ 830-905
-          else if (it.x >= 830 && it.x < 905 && /^[\d,]+\.\d{2}$/.test(it.str)) {
+          } else if (it.x >= 830 && it.x < 905 && /^[\d,]+\.\d{2}$/.test(it.str)) {
             debet = parseFloat(it.str.replace(/,/g, ''));
-          }
-          // Kredit: x ~ 905-995
-          else if (it.x >= 905 && it.x < 995 && /^[\d,]+\.\d{2}$/.test(it.str)) {
+          } else if (it.x >= 905 && it.x < 995 && /^[\d,]+\.\d{2}$/.test(it.str)) {
             kredit = parseFloat(it.str.replace(/,/g, ''));
-          }
-          // Saldo: x >= 995
-          else if (it.x >= 995 && /^[\d,]+\.\d{2}$/.test(it.str)) {
+          } else if (it.x >= 995 && /^[\d,]+\.\d{2}$/.test(it.str)) {
             saldo = parseFloat(it.str.replace(/,/g, ''));
           }
         });
 
-        // Gabungkan deskripsi lengkap
         var uraianLengkap = [deskripsi, pengirim].filter(Boolean).join(' - ');
         if (!uraianLengkap) uraianLengkap = 'Transaksi BSI ' + (ref || curRow.str);
 
@@ -364,24 +339,18 @@
   function bersihkanUraianBank(teks) {
     if (!teks) return '';
     var s = String(teks).trim();
-    // 1. Bersihkan kode CMS ID, REF, RRN, TRM
     s = s.replace(/\bCMS\s*ID:\s*[\w\d]+/gi, '');
     s = s.replace(/\bREF:\s*[\w\d\-\.\/]+/gi, '');
     s = s.replace(/\bRRN\.?\s*[\w\d\-]+/gi, '');
     s = s.replace(/\bTRM\s+[A-Z0-9]+\b/gi, '');
-    // 2. Bersihkan kode transfer SKN & BRINID
     s = s.replace(/\bSKN\s+\d+[\s\-]+[A-Z0-9]+\b/gi, '');
-    // 3. Bersihkan kode agregator/invoice panjang (misal PY26092520033140873D- 1270-25036199)
     s = s.replace(/\b[A-Z0-9]{14,35}\b/gi, '');
     s = s.replace(/\b\d{4,}-\d{4,}\b/g, '');
-    // 4. Bersihkan nomor rekening panjang (8 digit ke atas)
     s = s.replace(/\b\d{8,24}\b/g, '');
-    // 5. Bersihkan kata transfer ganda
     s = s.replace(/\bBIFAST\s*-\s*TRF\s*Dari\s*-\s*/gi, 'TRF DARI ');
     s = s.replace(/\bTRF\s*Dari\s*-\s*/gi, 'TRF DARI ');
     s = s.replace(/\bTRF\.\s*DARI\b/gi, 'TRF DARI ');
     s = s.replace(/\bTRF\.\s*KE\b/gi, 'TRF KE ');
-    // 6. Rapikan tanda baca dan spasi
     s = s.replace(/[\/\\]+/g, ' ');
     s = s.replace(/\s*-\s*-\s*/g, ' - ');
     s = s.replace(/\s+/g, ' ').trim();
@@ -397,13 +366,11 @@
       var l = daftarLayanan[i];
       if (!l || !l.nama) continue;
       var nLow = l.nama.toLowerCase();
-      // Cocokkan nama kantor: mis. Pajangan, Pundong, Sanden, dsb.
       if (tLow.indexOf(nLow) >= 0) {
         var prefix = (l.tipe || 'KLL').toUpperCase();
         return prefix + ' ' + l.nama;
       }
     }
-    // Singkatan umum di rekening koran BPD
     if (/\b(kl|kll)\s*pdg\b/i.test(teks)) return 'KLL Pundong';
     if (/\b(kl|kll)\s*btl\b/i.test(teks)) return 'KLL Bantul Kota';
     if (/\b(kl|kll)\s*img\b/i.test(teks)) return 'KLL Imogiri';
@@ -417,7 +384,7 @@
     raw = String(raw || '').trim();
     var uLow = raw.toLowerCase();
 
-    // 1. QRIS: otomatis nama NN, detail Qris (tanpa membaca nama bank dari mana)
+    // 1. QRIS: otomatis nama NN, detail Qris
     if (uLow.indexOf('qris') >= 0 || uLow.indexOf('qr ') >= 0 || /^qr\s+\d+/i.test(raw)) {
       return {
         nama: 'NN',
@@ -485,7 +452,7 @@
       return { nama: nama, detail: detail, kantor: kantor, tipe: tipe };
     }
 
-    // 6. Pola slash di BPD: "NT-INFAQ/MUSSHOLIH/KRP", "INFAQ/BAYU/KTK", "STR INFAK UMUM/KONIAH", "KL PAJANGAN/SITI ISLAMIYAH BTL"
+    // 6. Pola slash di BPD
     if (clean.indexOf('/') >= 0 || raw.indexOf('/') >= 0) {
       var parts = (raw.indexOf('/') >= 0 ? raw : clean).split(/[\/\\]+/).map(function(x) { return x.trim(); }).filter(Boolean);
       if (parts.length >= 2) {
@@ -508,7 +475,7 @@
       }
     }
 
-    // 7. Pola "SETOR LAZIS PAJANGAN", "INFAQ UTAMA KONIAH", dll
+    // 7. Pola kata kunci donasi/infak
     var mNama = clean.match(/(?:INFAK|INFAQ|ZAKAT|DONASI)\s+(?:UTAMA\s+)?([A-Za-z\s]+)/i);
     if (mNama) {
       nama = mNama[1].trim();
@@ -540,49 +507,57 @@
       var tipe = isMasuk ? 'himpun' : 'salur';
       var uLow = uraianAsli.toLowerCase();
 
-      // Deteksi otomatis Setor Tunai
       if (isMasuk && (uLow.indexOf('str tunai') >= 0 || uLow.indexOf('setor tunai') >= 0 || uLow.indexOf('setoran tunai') >= 0)) {
         tipe = 'setor';
-      }
-      // Deteksi otomatis UMP
-      else if (!isMasuk && (uLow.indexOf('ump') >= 0 || uLow.indexOf('uang muka program') >= 0)) {
+      } else if (!isMasuk && (uLow.indexOf('ump') >= 0 || uLow.indexOf('uang muka program') >= 0)) {
         tipe = 'ump';
-      }
-      // Deteksi biaya administrasi bank / SKN / RTGS
-      else if (!isMasuk && (uLow.indexOf('biaya') >= 0 || uLow.indexOf('skn') >= 0 || uLow.indexOf('adm ') >= 0 || uLow.indexOf('fee ') >= 0)) {
+      } else if (!isMasuk && (uLow.indexOf('biaya') >= 0 || uLow.indexOf('skn') >= 0 || uLow.indexOf('adm ') >= 0 || uLow.indexOf('fee ') >= 0)) {
         tipe = 'biaya';
       }
 
-      // Ekstrak nama donatur & detail jurnal terpisah
       var info = ekstrakNamaDanDetail(uraianAsli, r.pengirim, tipe, listLayanan, defaultFund);
       var namaDonatur = r.namaDonatur || info.nama || 'Donatur';
       var detailJurnal = r.detailJurnal !== undefined ? r.detailJurnal : info.detail;
-      var kantor = info.kantor || '';
-      if (info.tipe) tipe = info.tipe;
+      var kantor = r.kantor !== undefined ? r.kantor : (info.kantor || '');
+      if (info.tipe && !r.tipe) tipe = info.tipe;
 
-      // Deteksi pilar otomatis dari teks
-      var pilar = r.pilar || '';
-      if (!pilar) {
-        if (uLow.indexOf('sekolah') >= 0 || uLow.indexOf('pendidikan') >= 0 || uLow.indexOf('beasiswa') >= 0 || uLow.indexOf('kursus') >= 0) {
-          pilar = 'Pendidikan';
-        } else if (uLow.indexOf('kesehatan') >= 0 || uLow.indexOf('obat') >= 0 || uLow.indexOf('sakit') >= 0 || uLow.indexOf('medis') >= 0) {
-          pilar = 'Kesehatan';
-        } else if (uLow.indexOf('ekonomi') >= 0 || uLow.indexOf('usaha') >= 0 || uLow.indexOf('umkm') >= 0) {
-          pilar = 'Ekonomi & Pemberdayaan';
-        } else if (uLow.indexOf('bencana') >= 0 || uLow.indexOf('ntt') >= 0 || uLow.indexOf('peduli') >= 0 || uLow.indexOf('kemanusiaan') >= 0) {
-          pilar = 'Sosial Kemanusiaan';
-        } else if (uLow.indexOf('tarjih') >= 0 || uLow.indexOf('dakwah') >= 0 || uLow.indexOf('masjid') >= 0) {
-          pilar = 'Dakwah & Advokasi';
-        } else if (uLow.indexOf('lingkungan') >= 0 || uLow.indexOf('sampah') >= 0) {
-          pilar = 'Lingkungan';
-        }
-      }
-
-      // Deteksi jenis dana
+      // Auto-categorization:
+      // Zakat -> zakat
+      // Setor -> setor
+      // UMP -> ump
+      // Biaya -> biaya
+      // Default jika belum jelas: INFAK UMUM (tanpa pilar)
+      var kat = r.kategori || '';
       var jenisDana = r.jenisDana || defaultFund;
-      if (!r.jenisDana) {
-        if (uLow.indexOf('zakat') >= 0) jenisDana = 'Zakat';
-        else if (uLow.indexOf('infaq') >= 0 || uLow.indexOf('infak') >= 0) jenisDana = 'Infak';
+      var subJenis = r.subJenis || 'Infak Umum';
+      var pilar = r.pilar || '';
+
+      if (!kat) {
+        if (uLow.indexOf('zakat') >= 0) {
+          kat = 'zakat';
+          jenisDana = 'Zakat';
+          subJenis = 'Zakat Mal';
+          pilar = '';
+        } else if (tipe === 'setor') {
+          kat = 'setor';
+          jenisDana = defaultFund;
+          pilar = '';
+        } else if (tipe === 'ump') {
+          kat = 'ump';
+          jenisDana = 'Infak';
+          subJenis = 'Infak Terikat';
+          pilar = 'Pendidikan';
+        } else if (tipe === 'biaya') {
+          kat = 'biaya';
+          jenisDana = 'Infak';
+          pilar = '';
+        } else {
+          // Belum jelas -> masuk ke infak umum dulu (tanpa pilar)
+          kat = 'infak_umum';
+          jenisDana = 'Infak';
+          subJenis = 'Infak Umum';
+          pilar = '';
+        }
       }
 
       return {
@@ -597,10 +572,11 @@
         nominal: nominal,
         isMasuk: isMasuk,
         tipe: tipe,
+        kategori: kat,
         kantor: kantor,
         jenisDana: jenisDana,
         pilar: pilar,
-        subJenis: pilar ? 'Infak Terikat' : 'Infak Umum',
+        subJenis: subJenis,
         rincianUmp: r.rincianUmp || null,
         terpilih: r.terpilih !== undefined ? r.terpilih : true
       };
@@ -612,11 +588,47 @@
     var res = Object.assign({}, baris);
     perubahan = perubahan || {};
 
+    if (perubahan.kategori !== undefined) {
+      res.kategori = perubahan.kategori;
+      if (res.kategori === 'zakat') {
+        res.tipe = 'himpun';
+        res.jenisDana = 'Zakat';
+        res.subJenis = 'Zakat Mal';
+        res.pilar = '';
+      } else if (res.kategori === 'infak_umum') {
+        res.tipe = 'himpun';
+        res.jenisDana = 'Infak';
+        res.subJenis = 'Infak Umum';
+        res.pilar = '';
+      } else if (res.kategori === 'infak_terikat') {
+        res.tipe = 'himpun';
+        res.jenisDana = 'Infak';
+        res.subJenis = 'Infak Terikat';
+        if (!res.pilar) res.pilar = 'Pendidikan';
+      } else if (res.kategori === 'setor') {
+        res.tipe = 'setor';
+        res.pilar = '';
+        if (!res.namaDonatur.toLowerCase().startsWith('setor tunai')) {
+          res.namaDonatur = 'Setor Tunai ' + (res.kantor ? res.kantor : (res.jenisDana === 'Zakat' ? 'Kas Zakat' : 'Kas Infak'));
+        }
+      } else if (res.kategori === 'ump') {
+        res.tipe = 'ump';
+        res.isMasuk = false;
+        if (!res.pilar) res.pilar = 'Pendidikan';
+      } else if (res.kategori === 'biaya') {
+        res.tipe = 'biaya';
+        res.pilar = '';
+        res.isMasuk = false;
+      } else if (res.kategori === 'salur') {
+        res.tipe = 'salur';
+        res.isMasuk = false;
+      }
+    }
     if (perubahan.pilar !== undefined) {
       res.pilar = perubahan.pilar;
       if (res.pilar && res.jenisDana === 'Infak') {
         res.subJenis = 'Infak Terikat';
-      } else if (!res.pilar && res.jenisDana === 'Infak') {
+      } else if (!res.pilar && res.jenisDana === 'Infak' && res.kategori !== 'infak_terikat') {
         res.subJenis = 'Infak Umum';
       }
     }
@@ -631,7 +643,13 @@
     }
     if (perubahan.kantor !== undefined) {
       res.kantor = perubahan.kantor;
-      if (res.kantor) res.namaDonatur = res.kantor;
+      if (res.kantor) {
+        if (res.tipe === 'setor' || res.kategori === 'setor') {
+          res.namaDonatur = 'Setor Tunai ' + res.kantor;
+        } else {
+          res.namaDonatur = res.kantor;
+        }
+      }
     }
     if (perubahan.namaDonatur !== undefined) {
       res.namaDonatur = perubahan.namaDonatur;
@@ -707,16 +725,19 @@
 
     (daftarTransaksi || []).forEach(function(tx) {
       if (!tx || !tx.terpilih || tx.nominal <= 0) return;
-      if (tx.tipe === 'setor') {
+      var kat = tx.kategori || (tx.tipe === 'setor' ? 'setor' : tx.tipe === 'ump' ? 'ump' : tx.tipe === 'biaya' ? 'biaya' : tx.jenisDana === 'Zakat' ? 'zakat' : 'infak_umum');
+
+      if (kat === 'setor' || tx.tipe === 'setor') {
         groups.setorTunai.push(tx);
-      } else if (tx.tipe === 'ump') {
+      } else if (kat === 'ump' || tx.tipe === 'ump') {
         if (tx.jenisDana === 'Zakat') groups.umpZakat.push(tx);
         else groups.umpInfak.push(tx);
-      } else if (tx.tipe === 'biaya') {
+      } else if (kat === 'biaya' || tx.tipe === 'biaya') {
         groups.biayaBank.push(tx);
-      } else if (tx.tipe === 'himpun' || tx.isMasuk) {
-        if (tx.jenisDana === 'Zakat') groups.himpunZakat.push(tx);
-        else groups.himpunInfak.push(tx);
+      } else if (kat === 'zakat' || tx.jenisDana === 'Zakat') {
+        groups.himpunZakat.push(tx);
+      } else if (kat === 'infak_umum' || kat === 'infak_terikat' || tx.tipe === 'himpun' || tx.isMasuk) {
+        groups.himpunInfak.push(tx);
       } else {
         groups.salur.push(tx);
       }
@@ -729,7 +750,6 @@
       pilar = String(pilar || '').trim();
       detail = String(detail || '').trim();
 
-      // Hapus tanda strip/hyphen (-)
       nama = nama.replace(/\s*[-—]\s*/g, ' ').trim();
       pilar = pilar.replace(/\s*[-—]\s*/g, ' ').trim();
       detail = detail.replace(/\s*[-—]\s*/g, ' ').trim();
@@ -763,8 +783,9 @@
       groups.himpunInfak.forEach(function(tx) {
         var tgl = tx.tanggal;
         var nom = Math.round(tx.nominal);
-        var akunPos = (tx.pilar || tx.subJenis === 'Infak Terikat') ? 'Penerimaan Infak Terikat' : 'Penerimaan Infak Umum';
-        var def = tx.pilar ? tx.pilar : 'Infak Umum';
+        var isTerikat = (tx.kategori === 'infak_terikat' || tx.subJenis === 'Infak Terikat' || tx.pilar);
+        var akunPos = isTerikat ? 'Penerimaan Infak Terikat' : 'Penerimaan Infak Umum';
+        var def = isTerikat ? tx.pilar : 'Infak Umum';
         var ket = formatKeteranganJurnal(tx.namaDonatur, def, tx.detailJurnal);
         lines.push(tgl + '\t' + rekLabel + '\t' + nom + '\t\t' + ket);
         lines.push(tgl + '\t' + akunPos + '\t\t' + nom + '\t' + ket);
@@ -885,6 +906,20 @@
     return { rekening: rekList, layanan: layList };
   }
 
+  function kunciScrollBody() {
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('jrb-modal-open');
+      document.documentElement.classList.add('jrb-modal-open');
+    }
+  }
+
+  function lepasScrollBody() {
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('jrb-modal-open');
+      document.documentElement.classList.remove('jrb-modal-open');
+    }
+  }
+
   function bukaModal() {
     var master = ambilDaftarMaster();
     Object.assign(STATE, {
@@ -903,6 +938,8 @@
       modalPecahUmp: null
     });
 
+    kunciScrollBody();
+
     if (typeof window !== 'undefined' && window.openModal) {
       window.openModal(
         'Pembuat Jurnal dari Rekening Koran Bank',
@@ -912,11 +949,17 @@
       var mc = document.getElementById('modalCard');
       if (mc) {
         mc.classList.add('import-modal', 'jrb-modal');
-        mc.style.maxWidth = '';
       }
     }
 
     gambarModal();
+  }
+
+  function tutupModal() {
+    lepasScrollBody();
+    if (typeof window !== 'undefined' && window.closeModal) {
+      window.closeModal();
+    }
   }
 
   function gambarModal() {
@@ -932,7 +975,6 @@
         var mc = document.getElementById('modalCard');
         if (mc) {
           mc.classList.add('import-modal', 'jrb-modal');
-          mc.style.maxWidth = '';
         }
         bodyHost = document.getElementById('jrbModalBodyHost');
         footHost = document.getElementById('jrbModalFootHost');
@@ -945,7 +987,7 @@
 
     if (STATE.step === 1) {
       bodyHost.innerHTML = gambarLangkah1HTML();
-      footHost.innerHTML = '<button class="btn btn-ghost" onclick="closeModal()">Batal</button>'
+      footHost.innerHTML = '<button class="btn btn-ghost" onclick="LZJurnalBank.tutupModal()">Batal</button>'
         + '<button class="btn btn-primary" id="jrbBtnLanjut" ' + (STATE.rekeningTerpilih ? '' : 'disabled') + ' onclick="LZJurnalBank.lanjutKeLangkah2()">Lanjutkan ke Penyesuaian Jurnal &rarr;</button>';
     } else {
       bodyHost.innerHTML = gambarLangkah2HTML();
@@ -1024,7 +1066,6 @@
     var pilars = PILAR;
     var layList = STATE.daftarLayanan || [];
 
-    // Hitung ringkasan
     var totalD = 0, totalK = 0, nMasuk = 0, nKeluar = 0, nSetor = 0, nUmp = 0;
     txs.forEach(function(t) {
       if (!t.terpilih) return;
@@ -1035,8 +1076,8 @@
         totalD += t.nominal;
         nKeluar++;
       }
-      if (t.tipe === 'setor') nSetor++;
-      if (t.tipe === 'ump') nUmp++;
+      if (t.tipe === 'setor' || t.kategori === 'setor') nSetor++;
+      if (t.tipe === 'ump' || t.kategori === 'ump') nUmp++;
     });
 
     var h = '<div class="jrb-langkah2">'
@@ -1047,24 +1088,24 @@
       + (STATE.deteksi && STATE.deteksi.periode ? '<span style="color:var(--muted);margin-left:8px">Periode: ' + esc(STATE.deteksi.periode) + '</span>' : '')
       + '  </div>'
       + '  <div style="display:flex;gap:12px;align-items:center">'
-      + '    <span>Kredit (Masuk): <b style="color:var(--green)">' + rp(totalK) + '</b> (' + nMasuk + ')</span>'
-      + '    <span>Debet (Keluar): <b style="color:var(--red)">' + rp(totalD) + '</b> (' + nKeluar + ')</span>'
-      + '    <span>Setor Tunai: <b>' + nSetor + '</b></span>'
-      + '    <span>UMP: <b>' + nUmp + '</b></span>'
+      + '    <span>Kredit (Masuk): <b id="jrbStatKredit" style="color:var(--green)">' + rp(totalK) + '</b> (<span id="jrbStatNMasuk">' + nMasuk + '</span>)</span>'
+      + '    <span>Debet (Keluar): <b id="jrbStatDebet" style="color:var(--red)">' + rp(totalD) + '</b> (<span id="jrbStatNKeluar">' + nKeluar + '</span>)</span>'
+      + '    <span>Setor Tunai: <b id="jrbStatNSetor">' + nSetor + '</b></span>'
+      + '    <span>UMP: <b id="jrbStatNUmp">' + nUmp + '</b></span>'
       + '  </div>'
       + '</div>';
 
     // Filter toolbar
     h += '<div class="toolbar" style="margin-bottom:8px;gap:6px;flex-wrap:wrap">'
       + '  <div class="field" style="margin:0;flex:1;min-width:180px">'
-      + '    <input type="text" id="jrbCari" placeholder="Cari uraian, donatur, KLL/ULL, detail..." value="' + esc(STATE.cari) + '" oninput="LZJurnalBank.cariTeks(this.value)" style="height:28px;padding:3px 8px;font-size:12px;width:100%">'
+      + '    <input type="text" id="jrbCari" placeholder="Cari uraian, donatur, KLL/ULL, detail..." value="' + esc(STATE.cari) + '" oninput="LZJurnalBank.filterTabel()" style="height:28px;padding:3px 8px;font-size:12px;width:100%">'
       + '  </div>'
-      + '  <div class="lap-tabs" style="margin:0">'
-      + '    <button class="lap-tab ' + (STATE.filterTipe === 'semua' ? 'on' : '') + '" onclick="LZJurnalBank.filterTipe(\'semua\')">Semua (' + txs.length + ')</button>'
-      + '    <button class="lap-tab ' + (STATE.filterTipe === 'himpun' ? 'on' : '') + '" onclick="LZJurnalBank.filterTipe(\'himpun\')">Penghimpunan</button>'
-      + '    <button class="lap-tab ' + (STATE.filterTipe === 'setor' ? 'on' : '') + '" onclick="LZJurnalBank.filterTipe(\'setor\')">Setor Tunai</button>'
-      + '    <button class="lap-tab ' + (STATE.filterTipe === 'ump' ? 'on' : '') + '" onclick="LZJurnalBank.filterTipe(\'ump\')">UMP</button>'
-      + '    <button class="lap-tab ' + (STATE.filterTipe === 'salur' ? 'on' : '') + '" onclick="LZJurnalBank.filterTipe(\'salur\')">Penyaluran</button>'
+      + '  <div class="lap-tabs jrb-filter-tabs" style="margin:0">'
+      + '    <button class="lap-tab ' + (STATE.filterTipe === 'semua' ? 'on' : '') + '" data-tipe="semua" onclick="LZJurnalBank.filterTipe(\'semua\')">Semua (' + txs.length + ')</button>'
+      + '    <button class="lap-tab ' + (STATE.filterTipe === 'himpun' ? 'on' : '') + '" data-tipe="himpun" onclick="LZJurnalBank.filterTipe(\'himpun\')">Penghimpunan</button>'
+      + '    <button class="lap-tab ' + (STATE.filterTipe === 'setor' ? 'on' : '') + '" data-tipe="setor" onclick="LZJurnalBank.filterTipe(\'setor\')">Setor Tunai</button>'
+      + '    <button class="lap-tab ' + (STATE.filterTipe === 'ump' ? 'on' : '') + '" data-tipe="ump" onclick="LZJurnalBank.filterTipe(\'ump\')">UMP</button>'
+      + '    <button class="lap-tab ' + (STATE.filterTipe === 'salur' ? 'on' : '') + '" data-tipe="salur" onclick="LZJurnalBank.filterTipe(\'salur\')">Penyaluran</button>'
       + '  </div>'
       + '</div>';
 
@@ -1073,7 +1114,7 @@
       + '<table class="jrb-table">'
       + '<thead>'
       + '<tr>'
-      + '  <th style="width:28px;text-align:center"><input type="checkbox" checked onchange="LZJurnalBank.togglePilihSemua(this.checked)"></th>'
+      + '  <th style="width:28px;text-align:center"><input type="checkbox" id="jrbCbAll" checked onchange="LZJurnalBank.togglePilihSemua(this.checked)"></th>'
       + '  <th style="width:85px">Tanggal</th>'
       + '  <th style="min-width:200px">Uraian Bersih (Bank)</th>'
       + '  <th style="width:115px">Kategori Dana</th>'
@@ -1085,27 +1126,14 @@
       + '</tr>'
       + '</thead><tbody>';
 
-    var filtered = txs.filter(function(t) {
-      if (STATE.filterTipe !== 'semua' && t.tipe !== STATE.filterTipe) return false;
-      if (STATE.cari) {
-        var q = STATE.cari.toLowerCase();
-        var txt = (t.uraianAsli + ' ' + (t.uraianBersih || '') + ' ' + t.namaDonatur + ' ' + (t.detailJurnal || '') + ' ' + (t.kantor || '') + ' ' + (t.pilar || '')).toLowerCase();
-        if (txt.indexOf(q) < 0) return false;
-      }
-      return true;
-    });
-
-    if (!filtered.length) {
-      h += '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Tidak ada baris transaksi yang cocok dengan saringan.</td></tr>';
+    if (!txs.length) {
+      h += '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Belum ada data transaksi mutasi.</td></tr>';
     } else {
-      filtered.forEach(function(t, idx) {
-        var realIdx = txs.indexOf(t);
+      txs.forEach(function(t, realIdx) {
         var isMasuk = t.isMasuk;
         var nomColor = isMasuk ? 'color:var(--green)' : 'color:var(--red)';
-
         var kat = t.kategori || (t.tipe === 'setor' ? 'setor' : t.tipe === 'ump' ? 'ump' : t.tipe === 'biaya' ? 'biaya' : t.jenisDana === 'Zakat' ? 'zakat' : (t.subJenis === 'Infak Terikat' || t.pilar) ? 'infak_terikat' : 'infak_umum');
 
-        // Kategori options
         var katOpts = ''
           + '<option value="infak_umum"' + (kat === 'infak_umum' ? ' selected' : '') + '>Infak Umum</option>'
           + '<option value="infak_terikat"' + (kat === 'infak_terikat' ? ' selected' : '') + '>Infak Terikat</option>'
@@ -1115,7 +1143,6 @@
           + '<option value="biaya"' + (kat === 'biaya' ? ' selected' : '') + '>Biaya Bank</option>'
           + '<option value="salur"' + (kat === 'salur' ? ' selected' : '') + '>Pentasyarufan</option>';
 
-        // Layanan options: PER BARIS DENGAN SELECTED!
         var layOpts = '<option value="">-- Donatur Pribadi / QRIS --</option>'
           + layList.map(function(l) {
             var fullNama = (l.tipe || 'KLL') + ' ' + l.nama;
@@ -1123,47 +1150,45 @@
             return '<option value="' + esc(fullNama) + '"' + isSel + '>' + esc(fullNama) + '</option>';
           }).join('');
 
-        // Pilar options
         var isPilarActive = (kat === 'infak_terikat' || kat === 'ump' || kat === 'salur');
         var pilarOpts = '<option value="">(Pilih Pilar)</option>'
           + pilars.map(function(p) {
             return '<option value="' + esc(p) + '"' + (t.pilar === p ? ' selected' : '') + '>' + esc(p) + '</option>';
           }).join('');
 
-        h += '<tr style="' + (t.terpilih ? '' : 'opacity:0.45') + '">'
-          + '  <td style="text-align:center"><input type="checkbox" ' + (t.terpilih ? 'checked' : '') + ' onchange="LZJurnalBank.ubahPilihan(' + realIdx + ', this.checked)"></td>'
-          + '  <td><input type="date" value="' + esc(t.tanggal) + '" onchange="LZJurnalBank.ubahTanggal(' + realIdx + ', this.value)"></td>'
+        h += '<tr id="jrbRow_' + realIdx + '" class="jrb-row" data-idx="' + realIdx + '" style="' + (t.terpilih ? '' : 'opacity:0.45') + '">'
+          + '  <td style="text-align:center"><input type="checkbox" class="jrb-cb-row" data-no-enhance="1" ' + (t.terpilih ? 'checked' : '') + ' onchange="LZJurnalBank.ubahPilihan(this, ' + realIdx + ')"></td>'
+          + '  <td><input type="date" value="' + esc(t.tanggal) + '" onchange="LZJurnalBank.ubahTanggal(this, ' + realIdx + ')"></td>'
           + '  <td><div class="jrb-uraian-box" title="' + esc(t.uraianAsli) + '">' + esc(t.uraianBersih || t.uraianAsli) + '</div></td>'
-          + '  <td><select onchange="LZJurnalBank.ubahKategori(' + realIdx + ', this.value)">' + katOpts + '</select></td>'
+          + '  <td><select id="jrbSelKat_' + realIdx + '" class="jrb-sel-kat" data-no-enhance="1" onchange="LZJurnalBank.ubahKategori(this, ' + realIdx + ')">' + katOpts + '</select></td>'
           + '  <td>'
           + '    <div style="display:flex;gap:3px;flex-direction:column">'
-          + '      <select onchange="LZJurnalBank.setKantorCepat(' + realIdx + ', this.value)">' + layOpts + '</select>'
-          + '      <input type="text" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(' + realIdx + ', this.value)" placeholder="Nama donatur/person">'
+          + '      <select id="jrbSelLay_' + realIdx + '" class="jrb-sel-lay" data-no-enhance="1" onchange="LZJurnalBank.setKantorCepat(this, ' + realIdx + ')">' + layOpts + '</select>'
+          + '      <input type="text" id="jrbInpNama_' + realIdx + '" value="' + esc(t.namaDonatur) + '" oninput="LZJurnalBank.ubahNamaDonatur(this, ' + realIdx + ')" placeholder="Nama donatur/person">'
           + '    </div>'
           + '  </td>'
           + '  <td>'
-          + '    <input type="text" placeholder="Detail setelah pilar..." value="' + esc(t.detailJurnal || '') + '" oninput="LZJurnalBank.ubahDetailJurnal(' + realIdx + ', this.value)" style="width:100%" title="Keterangan tambahan jurnal yang diletakkan setelah nama atau pilar">'
+          + '    <input type="text" id="jrbInpDetail_' + realIdx + '" placeholder="Detail setelah pilar..." value="' + esc(t.detailJurnal || '') + '" oninput="LZJurnalBank.ubahDetailJurnal(this, ' + realIdx + ')" style="width:100%" title="Keterangan tambahan jurnal yang diletakkan setelah nama atau pilar">'
           + '  </td>'
-          + '  <td>'
+          + '  <td id="jrbPilarCell_' + realIdx + '">'
           + (isPilarActive
-            ? '<select onchange="LZJurnalBank.ubahPilar(' + realIdx + ', this.value)">' + pilarOpts + '</select>'
+            ? '<select id="jrbSelPilar_' + realIdx + '" class="jrb-sel-pilar" data-no-enhance="1" onchange="LZJurnalBank.ubahPilar(this, ' + realIdx + ')">' + pilarOpts + '</select>'
             : '<span class="muted" style="font-size:10px;padding-left:4px">(Tanpa pilar)</span>')
           + '  </td>'
-          + '  <td style="text-align:right;font-weight:700;' + nomColor + '">' + rp(t.nominal) + '</td>'
-          + '  <td style="text-align:center">'
-          + (kat === 'ump' ? '    <button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.bukaModalPecahUmp(' + realIdx + ')">Pecah Detail</button>' : '')
+          + '  <td class="jrb-cell-nom" id="jrbNomCell_' + realIdx + '" style="text-align:right;font-weight:700;' + nomColor + '">' + rp(t.nominal) + '</td>'
+          + '  <td class="jrb-cell-aksi" id="jrbAksiCell_' + realIdx + '" style="text-align:center">'
+          + (kat === 'ump' ? '<button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.bukaModalPecahUmp(' + realIdx + ')">Pecah Detail</button>' : '')
           + '  </td>'
           + '</tr>';
       });
 
-      // Spacer row di paling bawah agar baris terakhir tidak mepet/terpotong
-      h += '<tr><td colspan="9" style="height:48px;border:none!important;background:transparent!important"></td></tr>';
+      h += '<tr id="jrbRowKosong" style="display:none"><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Tidak ada baris transaksi yang cocok dengan saringan.</td></tr>';
+      h += '<tr class="jrb-spacer"><td colspan="9" style="height:60px;border:none!important;background:transparent!important"></td></tr>';
     }
 
     h += '</tbody></table></div>';
     h += '</div>';
 
-    // Sub-modal Pecah UMP jika sedang terbuka
     if (STATE.modalPecahUmp) {
       h += gambarModalPecahUmpHTML(STATE.modalPecahUmp);
     }
@@ -1277,11 +1302,9 @@
             periode: res.periode
           };
 
-          // Cocokkan nomor rekening otomatis
           var cocok = cocokkanRekening(res.noRek, STATE.daftarRekening);
           STATE.rekeningTerpilih = cocok;
 
-          // Analisis transaksi awal
           STATE.transaksi = analisisTransaksi(res.transaksi, {
             rekening: cocok,
             layanan: STATE.daftarLayanan
@@ -1305,7 +1328,6 @@
     var btn = document.getElementById('jrbBtnLanjut');
     if (btn) btn.disabled = !STATE.rekeningTerpilih;
 
-    // Perbarui fund group & rekening pada transaksi
     if (STATE.transaksi && STATE.transaksi.length) {
       STATE.transaksi = analisisTransaksi(STATE.transaksi, {
         rekening: STATE.rekeningTerpilih,
@@ -1328,125 +1350,239 @@
     gambarModal();
   }
 
-  function cariTeks(q) {
-    STATE.cari = q || '';
-    gambarModal();
-    var inp = document.getElementById('jrbCari');
-    if (inp) {
-      inp.focus();
-      inp.setSelectionRange(inp.value.length, inp.value.length);
-    }
+  // Live in-place update for top summary bar
+  function segarkanRingkasanBar() {
+    var totalD = 0, totalK = 0, nMasuk = 0, nKeluar = 0, nSetor = 0, nUmp = 0;
+    (STATE.transaksi || []).forEach(function(t) {
+      if (!t.terpilih) return;
+      if (t.isMasuk) {
+        totalK += t.nominal;
+        nMasuk++;
+      } else {
+        totalD += t.nominal;
+        nKeluar++;
+      }
+      if (t.tipe === 'setor' || t.kategori === 'setor') nSetor++;
+      if (t.tipe === 'ump' || t.kategori === 'ump') nUmp++;
+    });
+
+    var elKredit = document.getElementById('jrbStatKredit');
+    var elDebet = document.getElementById('jrbStatDebet');
+    var elNMasuk = document.getElementById('jrbStatNMasuk');
+    var elNKeluar = document.getElementById('jrbStatNKeluar');
+    var elNSetor = document.getElementById('jrbStatNSetor');
+    var elNUmp = document.getElementById('jrbStatNUmp');
+
+    if (elKredit) elKredit.textContent = rp(totalK);
+    if (elDebet) elDebet.textContent = rp(totalD);
+    if (elNMasuk) elNMasuk.textContent = nMasuk;
+    if (elNKeluar) elNKeluar.textContent = nKeluar;
+    if (elNSetor) elNSetor.textContent = nSetor;
+    if (elNUmp) elNUmp.textContent = nUmp;
+  }
+
+  // Filter in-place: toggle CSS display without re-rendering HTML
+  function filterTabel() {
+    var qInp = document.getElementById('jrbCari');
+    var q = qInp ? qInp.value.toLowerCase().trim() : '';
+    STATE.cari = q;
+
+    var rows = document.querySelectorAll('.jrb-table tbody tr.jrb-row');
+    var nCocok = 0;
+
+    rows.forEach(function(tr) {
+      var idx = Number(tr.dataset.idx);
+      var t = STATE.transaksi[idx];
+      if (!t) return;
+      var tipeCocok = (STATE.filterTipe === 'semua' || t.tipe === STATE.filterTipe);
+      var qCocok = !q || (t.uraianAsli + ' ' + (t.uraianBersih || '') + ' ' + t.namaDonatur + ' ' + (t.detailJurnal || '') + ' ' + (t.kantor || '') + ' ' + (t.pilar || '')).toLowerCase().indexOf(q) >= 0;
+      var tampil = tipeCocok && qCocok;
+      tr.style.display = tampil ? '' : 'none';
+      if (tampil) nCocok++;
+    });
+
+    var kosongRow = document.getElementById('jrbRowKosong');
+    if (kosongRow) kosongRow.style.display = (nCocok === 0 && rows.length > 0) ? '' : 'none';
   }
 
   function filterTipe(tipe) {
     STATE.filterTipe = tipe || 'semua';
-    gambarModal();
+    var tabs = document.querySelectorAll('.jrb-filter-tabs .lap-tab');
+    tabs.forEach(function(b) {
+      b.classList.toggle('on', b.dataset.tipe === STATE.filterTipe);
+    });
+    filterTabel();
+  }
+
+  function cariTeks(q) {
+    var qInp = document.getElementById('jrbCari');
+    if (qInp && qInp.value !== q) qInp.value = q;
+    filterTabel();
   }
 
   function togglePilihSemua(checked) {
-    (STATE.transaksi || []).forEach(function(t) {
+    (STATE.transaksi || []).forEach(function(t, idx) {
       t.terpilih = Boolean(checked);
+      var tr = document.getElementById('jrbRow_' + idx);
+      if (tr) {
+        tr.style.opacity = t.terpilih ? '1' : '0.45';
+        var cb = tr.querySelector('.jrb-cb-row');
+        if (cb) cb.checked = t.terpilih;
+      }
     });
-    gambarModal();
+    segarkanRingkasanBar();
   }
 
-  function ubahPilihan(idx, checked) {
+  function ubahPilihan(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var checked = el ? el.checked : Boolean(arg2);
+
     if (STATE.transaksi[idx]) {
-      STATE.transaksi[idx].terpilih = Boolean(checked);
-      gambarModal();
+      STATE.transaksi[idx].terpilih = checked;
+      var tr = document.getElementById('jrbRow_' + idx);
+      if (tr) {
+        tr.style.opacity = checked ? '1' : '0.45';
+        var cb = tr.querySelector('.jrb-cb-row');
+        if (cb && cb !== el) cb.checked = checked;
+      }
+      segarkanRingkasanBar();
     }
   }
 
-  function ubahTanggal(idx, tgl) {
+  function ubahTanggal(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var tgl = el ? el.value : String(arg2);
+
     if (STATE.transaksi[idx]) {
       STATE.transaksi[idx].tanggal = tgl;
     }
   }
 
-  function ubahTipe(idx, tipe) {
-    ubahKategori(idx, tipe);
+  function ubahTipe(arg1, arg2) {
+    ubahKategori(arg1, arg2);
   }
 
-  function ubahKategori(idx, kat) {
-    if (!STATE.transaksi[idx]) return;
+  function ubahKategori(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var kat = el ? el.value : String(arg2);
+
     var t = STATE.transaksi[idx];
-    t.kategori = kat;
-    if (kat === 'zakat') {
-      t.tipe = 'himpun';
-      t.jenisDana = 'Zakat';
-      t.subJenis = 'Zakat Mal';
-      t.pilar = '';
-    } else if (kat === 'infak_umum') {
-      t.tipe = 'himpun';
-      t.jenisDana = 'Infak';
-      t.subJenis = 'Infak Umum';
-      t.pilar = '';
-    } else if (kat === 'infak_terikat') {
-      t.tipe = 'himpun';
-      t.jenisDana = 'Infak';
-      t.subJenis = 'Infak Terikat';
-      if (!t.pilar) t.pilar = 'Pendidikan';
-    } else if (kat === 'setor') {
-      t.tipe = 'setor';
-      t.pilar = '';
-      if (!t.namaDonatur.toLowerCase().startsWith('setor tunai')) {
-        t.namaDonatur = 'Setor Tunai ' + (t.kantor ? t.kantor : (t.jenisDana === 'Zakat' ? 'Kas Zakat' : 'Kas Infak'));
+    if (!t) return;
+
+    STATE.transaksi[idx] = sesuaikanBaris(t, { kategori: kat });
+    t = STATE.transaksi[idx];
+
+    // In-place DOM update in this specific row (NO full-table re-render!)
+    var tr = document.getElementById('jrbRow_' + idx);
+    if (tr) {
+      // 1. Update pilar cell
+      var pilarCell = document.getElementById('jrbPilarCell_' + idx);
+      if (pilarCell) {
+        var isPilarActive = (kat === 'infak_terikat' || kat === 'ump' || kat === 'salur');
+        if (isPilarActive) {
+          var pOpts = '<option value="">(Pilih Pilar)</option>'
+            + PILAR.map(function(p) {
+              return '<option value="' + esc(p) + '"' + (t.pilar === p ? ' selected' : '') + '>' + esc(p) + '</option>';
+            }).join('');
+          pilarCell.innerHTML = '<select id="jrbSelPilar_' + idx + '" class="jrb-sel-pilar" data-no-enhance="1" onchange="LZJurnalBank.ubahPilar(this, ' + idx + ')">' + pOpts + '</select>';
+        } else {
+          pilarCell.innerHTML = '<span class="muted" style="font-size:10px;padding-left:4px">(Tanpa pilar)</span>';
+        }
       }
-    } else if (kat === 'ump') {
-      t.tipe = 'ump';
-      t.isMasuk = false;
-      if (!t.pilar) t.pilar = 'Pendidikan';
-    } else if (kat === 'biaya') {
-      t.tipe = 'biaya';
-      t.pilar = '';
-      t.isMasuk = false;
-    } else if (kat === 'salur') {
-      t.tipe = 'salur';
-      t.isMasuk = false;
+
+      // 2. Update aksi cell
+      var aksiCell = document.getElementById('jrbAksiCell_' + idx);
+      if (aksiCell) {
+        if (kat === 'ump') {
+          aksiCell.innerHTML = '<button type="button" class="btn btn-xs ' + (t.rincianUmp && t.rincianUmp.length ? 'btn-primary' : 'btn-ghost') + '" style="font-size:10px;padding:2px 5px" onclick="LZJurnalBank.bukaModalPecahUmp(' + idx + ')">Pecah Detail</button>';
+        } else {
+          aksiCell.innerHTML = '';
+        }
+      }
+
+      // 3. Update nama input jika berubah ke Setor Tunai
+      var inpNama = document.getElementById('jrbInpNama_' + idx);
+      if (inpNama) {
+        inpNama.value = t.namaDonatur;
+      }
+
+      // 4. Update nominal text color
+      var nomCell = document.getElementById('jrbNomCell_' + idx);
+      if (nomCell) {
+        nomCell.style.color = t.isMasuk ? 'var(--green)' : 'var(--red)';
+      }
     }
-    gambarModal();
+
+    segarkanRingkasanBar();
   }
 
-  function ubahNamaDonatur(idx, nama) {
+  function ubahNamaDonatur(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var nama = el ? el.value : String(arg2);
+
     if (STATE.transaksi[idx]) {
       STATE.transaksi[idx].namaDonatur = nama;
     }
   }
 
-  function ubahDetailJurnal(idx, val) {
+  function ubahDetailJurnal(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var val = el ? el.value : String(arg2);
+
     if (STATE.transaksi[idx]) {
       STATE.transaksi[idx].detailJurnal = val;
     }
   }
 
-  function ubahPilar(idx, pilar) {
+  function ubahPilar(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var pilar = el ? el.value : String(arg2);
+
     if (STATE.transaksi[idx]) {
       STATE.transaksi[idx] = sesuaikanBaris(STATE.transaksi[idx], { pilar: pilar });
-      gambarModal();
+      var selP = document.getElementById('jrbSelPilar_' + idx);
+      if (selP && selP !== el) selP.value = pilar;
     }
   }
 
-  function setKantorCepat(idx, fullNama) {
-    if (!STATE.transaksi[idx]) return;
+  function setKantorCepat(arg1, arg2) {
+    var el = typeof arg1 === 'object' ? arg1 : null;
+    var idx = typeof arg1 === 'number' ? arg1 : Number(arg2);
+    var fullNama = el ? el.value : String(arg2 || '');
+
     var t = STATE.transaksi[idx];
-    t.kantor = fullNama || '';
-    if (fullNama) {
-      if (t.tipe === 'setor' || t.kategori === 'setor') {
-        t.namaDonatur = 'Setor Tunai ' + fullNama;
-      } else {
-        t.namaDonatur = fullNama;
-      }
-    }
-    gambarModal();
+    if (!t) return;
+
+    STATE.transaksi[idx] = sesuaikanBaris(t, { kantor: fullNama });
+    t = STATE.transaksi[idx];
+
+    // In-place update: update input nama & dropdown value WITHOUT re-rendering table!
+    var inpNama = document.getElementById('jrbInpNama_' + idx);
+    if (inpNama) inpNama.value = t.namaDonatur;
+
+    var selLay = document.getElementById('jrbSelLay_' + idx);
+    if (selLay && selLay !== el) selLay.value = fullNama;
   }
 
   function setSetorTunaiCepat(idx) {
     if (STATE.transaksi[idx]) {
-      ubahKategori(idx, 'setor');
+      var selKat = document.getElementById('jrbSelKat_' + idx);
+      if (selKat) {
+        selKat.value = 'setor';
+        ubahKategori(selKat, idx);
+      } else {
+        ubahKategori(idx, 'setor');
+      }
     }
   }
 
-  // Pecah UMP controller
+  // Pecah UMP sub-modal controller
   function bukaModalPecahUmp(idx) {
     var tx = STATE.transaksi[idx];
     if (!tx) return;
@@ -1462,7 +1598,8 @@
 
   function tutupModalPecahUmp() {
     STATE.modalPecahUmp = null;
-    gambarModal();
+    var subBg = document.getElementById('jrbSubModalBg');
+    if (subBg) subBg.remove();
   }
 
   function bacaInputRincianDariDOM() {
@@ -1488,14 +1625,22 @@
       pilar: 'Pendidikan',
       nominal: 0
     });
-    gambarModal();
+    var subBg = document.getElementById('jrbSubModalBg');
+    if (subBg) subBg.remove();
+    var host = document.getElementById('jrbModalBodyHost');
+    if (host) host.insertAdjacentHTML('beforeend', gambarModalPecahUmpHTML(STATE.modalPecahUmp));
+    segarkanStatusPecahUmp();
   }
 
   function hapusRincianItem(rIdx) {
     if (!STATE.modalPecahUmp) return;
     bacaInputRincianDariDOM();
     STATE.modalPecahUmp.rincian.splice(rIdx, 1);
-    gambarModal();
+    var subBg = document.getElementById('jrbSubModalBg');
+    if (subBg) subBg.remove();
+    var host = document.getElementById('jrbModalBodyHost');
+    if (host) host.insertAdjacentHTML('beforeend', gambarModalPecahUmpHTML(STATE.modalPecahUmp));
+    segarkanStatusPecahUmp();
   }
 
   function ubahRincianItem(rIdx, key, val) {
@@ -1540,7 +1685,6 @@
     }
 
     var expanded = terapkanPecahUmp(tx, rincian);
-    // Gantikan baris UMP dengan baris-baris rincian
     STATE.transaksi.splice(idx, 1, ...expanded);
     STATE.modalPecahUmp = null;
     gambarModal();
@@ -1577,16 +1721,11 @@
       return;
     }
 
-    var tglBln = (STATE.transaksi[0] && STATE.transaksi[0].tanggal) ? STATE.transaksi[0].tanggal.slice(0, 7) : new Date().toISOString().slice(0, 7);
+    tutupModal();
 
-    // Tutup modal generator jurnal
-    if (typeof window !== 'undefined' && window.closeModal) window.closeModal();
-
-    // Buka modal impor jurnal dengan teks TSV yang sudah terisi otomatis
     if (typeof window !== 'undefined' && typeof window.openImportModal === 'function') {
       window.openImportModal('himpun', 'berkas');
       setTimeout(function() {
-        // Alihkan ke tab tempel teks dan isikan TSV
         if (typeof window.setImportTab === 'function') window.setImportTab('text');
         var txtArea = document.getElementById('import_text');
         if (txtArea) {
@@ -1616,11 +1755,13 @@
 
     // UI Controller
     bukaModal: bukaModal,
+    tutupModal: tutupModal,
     pilihBank: pilihBank,
     prosesBerkas: prosesBerkas,
     gantiRekeningSistem: gantiRekeningSistem,
     lanjutKeLangkah2: lanjutKeLangkah2,
     kembaliKeLangkah1: kembaliKeLangkah1,
+    filterTabel: filterTabel,
     cariTeks: cariTeks,
     filterTipe: filterTipe,
     togglePilihSemua: togglePilihSemua,
@@ -1646,4 +1787,3 @@
     _state: STATE
   };
 });
-
