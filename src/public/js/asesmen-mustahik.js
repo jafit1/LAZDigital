@@ -47,6 +47,94 @@
 
   const semuaTanya = () => C.formulir.bagian.flatMap((b) => b.pertanyaan);
 
+  function pesanToast(pesan, merah = false) {
+    const t = document.getElementById('toast');
+    if (t) {
+      t.textContent = pesan;
+      t.className = 'toast show' + (merah ? ' toast--danger' : '');
+      clearTimeout(t._tmr);
+      t._tmr = setTimeout(() => { t.className = 'toast'; }, 3200);
+      return;
+    }
+    if (window.toast) {
+      window.toast(pesan, merah);
+      return;
+    }
+    alert(pesan);
+  }
+
+  function konfirmasiHapus(namaMustahik, onYa) {
+    let modalBg = document.getElementById('modalBg');
+    let modalTitle = document.getElementById('modalTitle');
+    let modalBody = document.getElementById('modalBody');
+    let modalFoot = document.getElementById('modalFoot');
+
+    if (!modalBg) {
+      modalBg = document.createElement('div');
+      modalBg.id = 'amModalKonfirmasiBg';
+      modalBg.className = 'modal-bg';
+      modalBg.innerHTML = `
+        <div class="modal" id="amModalCard" style="max-width:440px">
+          <div class="modal-head">
+            <h3 id="amModalTitle">Konfirmasi Hapus</h3>
+            <button class="close-x" type="button" id="amBtnCloseX">&times;</button>
+          </div>
+          <div class="modal-body" id="amModalBody"></div>
+          <div class="modal-foot" id="amModalFoot"></div>
+        </div>
+      `;
+      document.body.appendChild(modalBg);
+      modalTitle = document.getElementById('amModalTitle');
+      modalBody = document.getElementById('amModalBody');
+      modalFoot = document.getElementById('amModalFoot');
+      const closeX = document.getElementById('amBtnCloseX');
+      if (closeX) closeX.onclick = () => modalBg.classList.remove('show');
+    }
+
+    if (modalTitle) modalTitle.textContent = 'Hapus Asesmen Mustahik';
+    if (modalBody) {
+      modalBody.innerHTML = `
+        <div style="text-align:center;padding:12px 6px 6px">
+          <div style="width:52px;height:52px;border-radius:50%;background:rgba(239,68,68,0.12);color:var(--red);display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <h4 style="margin:0 0 8px;font-size:15px;font-weight:700;color:var(--text)">Yakin ingin menghapus riwayat ini?</h4>
+          <p class="muted" style="margin:0;font-size:13px;line-height:1.45">
+            Hasil survei dan penilaian untuk <b>${H(namaMustahik)}</b> akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan.
+          </p>
+        </div>
+      `;
+    }
+    if (modalFoot) {
+      modalFoot.innerHTML = `
+        <button class="btn btn-ghost" type="button" id="amBtnBatalHapus">Batal</button>
+        <button class="btn btn-danger" type="button" id="amBtnYaHapus">Ya, Hapus Asesmen</button>
+      `;
+    }
+
+    modalBg.classList.add('show');
+
+    const tutup = () => {
+      modalBg.classList.remove('show');
+    };
+
+    const btnBatal = document.getElementById('amBtnBatalHapus');
+    if (btnBatal) btnBatal.onclick = tutup;
+
+    const btnYa = document.getElementById('amBtnYaHapus');
+    if (btnYa) {
+      btnYa.onclick = async () => {
+        tutup();
+        await onYa();
+      };
+    }
+  }
+
   function kelasHasil(h) {
     if (/Sangat/i.test(h)) return 'am-badge-sangat';
     if (/Belum/i.test(h)) return 'am-badge-belum';
@@ -648,7 +736,7 @@
       const t = inp ? inp.value.trim() : '';
       if (!t) {
         if (inp) inp.focus();
-        alert('Tuliskan atau pilih tujuan kebutuhan asesmen.');
+        pesanToast('Tuliskan atau pilih tujuan kebutuhan asesmen.', true);
         return;
       }
       draf.tujuan = t;
@@ -701,36 +789,40 @@
     }
     if (a.startsWith('hapus:')) {
       const x = gabung().find((z) => z.id === a.slice(6));
-      if (!x || !confirm('Hapus asesmen untuk "' + x.mustahik + '"?')) return;
-      if (x.sumber === 'perangkat') {
-        lokal = lokal.filter((z) => z.id !== x.id);
-        simpanLokal(lokal);
-      } else {
-        try {
-          await API('surat.asesmenMustahik.hapus', { id: x.id });
-          server = server.filter((z) => z.id !== x.id);
+      if (!x) return;
+      konfirmasiHapus(x.mustahik, async () => {
+        if (x.sumber === 'perangkat') {
           lokal = lokal.filter((z) => z.id !== x.id);
           simpanLokal(lokal);
-        } catch (e) {
-          alert('Gagal menghapus dari server: ' + e.message);
-          return;
+          pesanToast('Asesmen berhasil dihapus dari perangkat.');
+        } else {
+          try {
+            await API('surat.asesmenMustahik.hapus', { id: x.id });
+            server = server.filter((z) => z.id !== x.id);
+            lokal = lokal.filter((z) => z.id !== x.id);
+            simpanLokal(lokal);
+            pesanToast('Asesmen berhasil dihapus dari server.');
+          } catch (e) {
+            pesanToast('Gagal menghapus dari server: ' + e.message, true);
+            return;
+          }
         }
-      }
-      induk.innerHTML = judul() + gambarRiwayat();
-      ikatTombol();
+        induk.innerHTML = judul() + gambarRiwayat();
+        ikatTombol();
+      });
       return;
     }
     if (a === 'simpan') {
       const nama = induk.querySelector('[data-kunci="mustahik"]');
       if (!nama || !nama.value.trim()) {
         if (nama) { nama.focus(); nama.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-        alert('Nama mustahik wajib diisi.');
+        pesanToast('Nama mustahik wajib diisi.', true);
         return;
       }
       const tujuan = induk.querySelector('[data-kunci="tujuan"]');
       if (!tujuan || !tujuan.value.trim()) {
         if (tujuan) { tujuan.focus(); tujuan.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-        alert('Tujuan/kebutuhan asesmen wajib diisi.');
+        pesanToast('Tujuan/kebutuhan asesmen wajib diisi.', true);
         return;
       }
       draf.mustahik = nama.value.trim();
@@ -741,7 +833,7 @@
         const pertama = belumJawab[0];
         const target = $('#tanya_' + pertama.id);
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        alert('Masih ada ' + belumJawab.length + ' butir penilaian yang belum dipilih. Mohon lengkapi seluruh butir.');
+        pesanToast('Masih ada ' + belumJawab.length + ' butir penilaian yang belum dipilih. Mohon lengkapi seluruh butir.', true);
         return;
       }
 
