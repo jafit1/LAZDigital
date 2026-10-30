@@ -120,13 +120,11 @@ const MENU = [
   { kode: 'dasbor', label: 'Beranda' },
   { kode: 'masuk', label: 'Surat Masuk' },
   { kode: 'keluar', label: 'Surat Keluar' },
-  { kode: 'pengajuan', label: 'Pengajuan' },
   { kode: 'disposisi', label: 'Disposisi Saya' },
-  { kode: 'asesmen-mustahik', label: 'Asesmen Mustahik' },
 ];
 function gambarMenu() {
   const nav = $('#nav');
-  nav.innerHTML = MENU.filter((m) => m.kode !== 'asesmen-mustahik' || N.izin.ubah).map((m) => `<button class="tn-item" id="nav_${m.kode}" type="button" title="${H(m.label)}" aria-label="${H(m.label)}">`
+  nav.innerHTML = MENU.map((m) => `<button class="tn-item" id="nav_${m.kode}" type="button" title="${H(m.label)}" aria-label="${H(m.label)}">`
     + `<span class="ic">${IKON[m.kode]}</span><span class="tn-tip">${H(m.label)}</span>`
     + (m.kode === 'disposisi' ? '<span class="sr-nav-angka" id="angkaDisposisi" hidden></span>' : '') + '</button>').join('');
   MENU.forEach((m) => { $('#nav_' + m.kode).onclick = () => { location.hash = '#' + m.kode; }; });

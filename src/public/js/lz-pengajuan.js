@@ -6,7 +6,7 @@
  *   - Kalender Detail interaktif (pemetaan tanggal pengajuan dan pentasyarufan)
  *   - Rekapan khusus admin yang diizinkan (statistik lengkap, ekspor Excel & TSV)
  *   - Upload berkas proposal ke Google Drive (atau basis data aman)
- *   - Integrasi hasil Asesmen Mustahik
+ *   - Modul Asesmen Mustahik (F.Survei 31 Butir) terintegrasi dan saling terhubung
  */
 'use strict';
 
@@ -21,6 +21,7 @@
     drive: false,
     daftar: [],
     ringkasan: null,
+    daftarAsesmen: [],
     saring: {
       cari: '',
       status: 'semua',
@@ -47,7 +48,6 @@
     excel: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m9 13 4 5"/><path d="m13 13-4 5"/></svg>'
   };
 
-  // Helper fungsi umum
   function el(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -78,7 +78,6 @@
     setTimeout(() => { t.className = 'toast'; }, 3200);
   }
 
-  // RPC ke server
   async function rpc(tindakan, data = {}) {
     const token = localStorage.getItem('laz_token') || sessionStorage.getItem('laz_token') || '';
     const res = await fetch('/api/media', {
@@ -93,7 +92,6 @@
     return j;
   }
 
-  // Modal controller
   function openModal(judul, htmlBody, htmlFoot = '') {
     el('modalTitle').textContent = judul;
     el('modalBody').innerHTML = htmlBody;
@@ -106,7 +104,6 @@
   }
   window.tutupModal = closeModal;
 
-  // Inisialisasi Aplikasi
   async function inisialisasi() {
     try {
       const res = await rpc('pengajuan.status');
@@ -121,7 +118,6 @@
       pasangMenu();
       await muatData();
 
-      // Navigasi route hash
       window.addEventListener('hashchange', tanganiHash);
       tanganiHash();
 
@@ -141,7 +137,7 @@
       { kode: 'daftar', label: 'Daftar Pengajuan', ikon: IKON.daftar },
       { kode: 'kalender', label: 'Kalender Detail', ikon: IKON.kalender },
       { kode: 'rekapan', label: 'Rekapan Admin', ikon: IKON.rekapan },
-      { kode: 'asesmen', label: 'Form Asesmen F.Survei', ikon: IKON.asesmen },
+      { kode: 'asesmen', label: 'Asesmen Mustahik (F.Survei)', ikon: IKON.asesmen },
     ];
 
     const nav = el('nav');
@@ -175,6 +171,12 @@
       const res = await rpc('pengajuan.daftar', STATE.saring);
       STATE.daftar = res.daftar || [];
       STATE.ringkasan = res.ringkasan || null;
+
+      // Ambil riwayat asesmen mustahik untuk referensi relasi
+      try {
+        const resAs = await rpc('pengajuan.asesmenMustahik.daftar');
+        STATE.daftarAsesmen = resAs.asesmen || [];
+      } catch (_) {}
     } catch (e) {
       toast('Gagal memuat data: ' + e.message, true);
     }
@@ -197,16 +199,15 @@
       wadah.innerHTML = gambarRekapanHTML();
       pasangEventRekapan();
     } else if (STATE.rute === 'asesmen') {
-      wadah.innerHTML = `<div class="page-head">
-        <div><h2>Formulir Asesmen Mustahik (F.Survei 31 Butir)</h2><div class="muted" style="font-size:12px">Survei kelayakan mustahik terintegrasi dengan pengajuan bantuan</div></div>
-      </div>
-      <div id="asesmenHost"></div>`;
-      if (window.LZAsesmenMustahik) {
-        window.LZAsesmenMustahik.buka(el('asesmenHost'), {
-          onSelesai: (hasil) => {
-            toast(`Asesmen selesai: ${hasil.hasil} (Skor ${hasil.skor})`);
-          }
-        });
+      wadah.innerHTML = '<div id="asesmenHost"></div>';
+      if (window.LZAsesmenMustahik && typeof window.LZAsesmenMustahik.gambar === 'function') {
+        window.LZAsesmenMustahik.gambar(
+          el('asesmenHost'),
+          { pengguna: STATE.pengguna, izin: STATE.izin, hariIni: new Date().toISOString().slice(0, 10) },
+          rpc
+        );
+      } else {
+        wadah.innerHTML = '<div class="card" style="margin:20px 0;padding:24px;text-align:center"><p class="muted">Memuat formulir asesmen mustahik...</p></div>';
       }
     }
   }
@@ -227,6 +228,7 @@
       <div class="page-head-aksi">
         <button class="btn btn-ghost btn-sm" id="btnSalinTSV" type="button" title="Salin TSV">Salin TSV</button>
         <button class="btn btn-ghost btn-sm" id="btnUnduhExcel" type="button" title="Unduh Excel">${IKON.excel} Excel</button>
+        ${canTambah ? `<button class="btn btn-ghost btn-sm" id="btnBukaImpor" type="button" title="Impor dari Google Spreadsheet / Berkas">${IKON.proposal} Impor Spreadsheet</button>` : ''}
         ${canTambah ? `<button class="btn btn-primary btn-sm" id="btnTambahPengajuan" type="button">${IKON.plus} Catat Pengajuan</button>` : ''}
       </div>
     </div>`;
@@ -264,7 +266,7 @@
       <button class="btn btn-ghost btn-sm" id="btnResetSaring" type="button" style="height:32px">Reset</button>
     </div>`;
 
-    // Tabel Pengajuan (Kolom: Hari, Tanggal, Pemohon, Alamat, Keperluan, Hasil Asesment, Status, Tanggal Pentasyarufan, Jenis Bantuan)
+    // Tabel Pengajuan
     h += `
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
@@ -276,7 +278,7 @@
               <th style="padding:9px 10px;min-width:140px">Pemohon</th>
               <th style="padding:9px 10px;min-width:150px">Alamat</th>
               <th style="padding:9px 10px;min-width:160px">Keperluan</th>
-              <th style="padding:9px 10px;width:125px">Hasil Asesment</th>
+              <th style="padding:9px 10px;width:135px">Hasil Asesment</th>
               <th style="padding:9px 10px;width:105px">Status</th>
               <th style="padding:9px 10px;width:110px">Tgl Pentasyarufan</th>
               <th style="padding:9px 10px;min-width:130px">Jenis Bantuan</th>
@@ -294,8 +296,7 @@
         const tglSalur = r.tanggalPentasyarufan ? formatTglIndo(r.tanggalPentasyarufan) : '-';
 
         let badgeStatus = 'badge-muted';
-        if (r.status === 'Disetujui') badgeStatus = 'green';
-        else if (r.status === 'Ditasyarufkan') badgeStatus = 'green';
+        if (r.status === 'Disetujui' || r.status === 'Ditasyarufkan') badgeStatus = 'green';
         else if (r.status === 'Diproses') badgeStatus = 'amber';
         else if (r.status === 'Ditolak') badgeStatus = 'red';
 
@@ -318,7 +319,18 @@
             ${r.nominalDiajukan ? `<div class="muted" style="font-size:11px;margin-top:2px">Nominal: <b>${rp(r.nominalDiajukan)}</b></div>` : ''}
           </td>
           <td style="padding:8px 10px">
-            <span class="badge ${badgeAsesmen}" style="font-size:10.5px">${esc(r.hasilAsesmen || 'Belum Diasesmen')}</span>
+            <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
+              ${r.asesmenId ? `
+                <button type="button" class="badge ${badgeAsesmen}" style="font-size:10px;cursor:pointer;border:none;text-align:left" title="Lihat lembar hasil survei resmi" onclick="LZPengajuan.lihatAsesmen('${esc(r.asesmenId)}')">
+                  ✓ ${esc(r.hasilAsesmen || 'Layak')}
+                </button>
+              ` : `
+                <span class="badge ${badgeAsesmen}" style="font-size:10.5px">${esc(r.hasilAsesmen || 'Belum Diasesmen')}</span>
+                <button type="button" class="btn btn-xs btn-ghost" style="font-size:9.5px;padding:1px 5px" onclick="LZPengajuan.mulaiAsesmenUntukPengajuan('${esc(r.id)}')">
+                  + Asesmen
+                </button>
+              `}
+            </div>
           </td>
           <td style="padding:8px 10px">
             <span class="badge ${badgeStatus}" style="font-size:10.5px">${esc(r.status)}</span>
@@ -406,6 +418,9 @@
 
     const btnTSV = el('btnSalinTSV');
     if (btnTSV) btnTSV.onclick = salinTSV;
+
+    const btnImpor = el('btnBukaImpor');
+    if (btnImpor) btnImpor.onclick = bukaModalImpor;
   }
 
   // ==================================================================
@@ -418,10 +433,9 @@
     const namaBln = NAMA_BULAN[bln];
 
     const tglPertama = new Date(thn, bln, 1);
-    const hariMulai = tglPertama.getDay(); // 0 (Ahad) s/d 6 (Sabtu)
+    const hariMulai = tglPertama.getDay();
     const jmlHari = new Date(thn, bln + 1, 0).getDate();
 
-    // Petakan pengajuan ke tanggal
     const mapMasuk = {};
     const mapSalur = {};
 
@@ -447,7 +461,6 @@
       </div>
     </div>`;
 
-    // Header Bulan
     h += `
     <div class="card" style="margin-bottom:14px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;background:var(--surface2)">
       <div style="font-size:16px;font-weight:800;color:var(--text)">${namaBln} ${thn}</div>
@@ -457,7 +470,6 @@
       </div>
     </div>`;
 
-    // Grid Kalender
     h += `
     <div class="card" style="padding:10px;margin-bottom:16px">
       <div style="display:grid;grid-template-columns:repeat(7, 1fr);gap:4px;text-align:center;font-size:12px">`;
@@ -466,7 +478,6 @@
       h += `<div style="font-weight:700;padding:6px 0;color:var(--muted)">${namaH}</div>`;
     });
 
-    // Sel kosong sebelum tanggal 1
     for (let i = 0; i < hariMulai; i++) {
       h += `<div style="min-height:75px;background:var(--surface2);opacity:0.3;border-radius:6px"></div>`;
     }
@@ -498,7 +509,6 @@
 
     h += `</div></div>`;
 
-    // Drawer / Rincian Tanggal Terpilih
     const tglAktif = k.tglPilih || tglHariIni;
     const rincianM = mapMasuk[tglAktif] || [];
     const rincianS = mapSalur[tglAktif] || [];
@@ -616,7 +626,6 @@
       </div>
     </div>`;
 
-    // 4 KPI Cards
     h += `
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:18px">
       <div class="card" style="padding:14px;border-left:4px solid var(--accent)">
@@ -637,7 +646,6 @@
       </div>
     </div>`;
 
-    // Dana permohonan vs penyaluran
     h += `
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;margin-bottom:18px">
       <div class="card" style="padding:16px">
@@ -652,7 +660,6 @@
       </div>
     </div>`;
 
-    // Rincian per Jenis Bantuan & Hasil Asesmen
     h += `
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:14px">
       <div class="card" style="padding:16px">
@@ -699,6 +706,8 @@
       alamat: '',
       keperluan: '',
       hasilAsesmen: 'Belum Diasesmen',
+      asesmenId: '',
+      asesmenSkor: 0,
       status: 'Masuk',
       tanggalPentasyarufan: '',
       jenisBantuan: 'Sosial Kemanusiaan',
@@ -722,9 +731,13 @@
 
   function tampilkanFormModal(judul, item, isBaru) {
     const driveReady = STATE.drive;
+    const listAsesmen = STATE.daftarAsesmen || [];
 
     const htmlBody = `
     <form id="fPengajuan" onsubmit="return false">
+      <input type="hidden" id="pjInpAsesmenId" value="${esc(item.asesmenId || '')}">
+      <input type="hidden" id="pjInpAsesmenSkor" value="${item.asesmenSkor || 0}">
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Tanggal Pengajuan *</label>
@@ -772,19 +785,31 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
-        <div class="field" style="margin:0">
-          <label style="font-weight:700;font-size:12px">Hasil Asesment</label>
-          <div style="display:flex;gap:4px">
-            <select id="pjInpAsesmen" class="input" style="flex:1">
-              <option value="Belum Diasesmen" ${item.hasilAsesmen === 'Belum Diasesmen' ? 'selected' : ''}>Belum Diasesmen</option>
-              <option value="Belum Layak" ${/belum layak/i.test(item.hasilAsesmen) ? 'selected' : ''}>Belum Layak</option>
-              <option value="Layak" ${/^layak/i.test(item.hasilAsesmen) ? 'selected' : ''}>Layak</option>
-              <option value="Sangat Layak" ${/sangat layak/i.test(item.hasilAsesmen) ? 'selected' : ''}>Sangat Layak</option>
+      <!-- Hubungkan Asesmen Mustahik -->
+      <div class="card" style="padding:12px;background:var(--surface2);border-radius:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <label style="font-weight:700;font-size:12px;margin:0">Hubungkan Hasil Asesmen Mustahik</label>
+          <button type="button" class="btn btn-xs btn-primary" onclick="LZPengajuan.bukaAsesmenUntukForm()">+ Isi Asesmen Baru</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="field" style="margin:0">
+            <select id="pjPilihAsesmenTersimpan" class="input" style="width:100%;font-size:11.5px">
+              <option value="">-- Hubungkan dari Riwayat Asesmen --</option>
+              ${listAsesmen.map((as) => `
+                <option value="${esc(as.id)}" ${item.asesmenId === as.id ? 'selected' : ''}>
+                  ${esc(as.mustahik)} (${esc(as.hasil)} - Skor ${as.skor})
+                </option>
+              `).join('')}
             </select>
-            <button type="button" class="btn btn-ghost btn-sm" title="Buka Formulir Survei 31 Butir" onclick="location.hash='#asesmen';LZPengajuan.tutupModal();">F.Survei</button>
+          </div>
+          <div class="field" style="margin:0">
+            <input type="text" id="pjInpAsesmen" class="input" placeholder="Hasil kelayakan" value="${esc(item.hasilAsesmen || 'Belum Diasesmen')}" style="width:100%;font-size:11.5px">
           </div>
         </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Status Pengajuan</label>
           <select id="pjInpStatus" class="input" style="width:100%">
@@ -795,17 +820,15 @@
             <option value="Ditolak" ${item.status === 'Ditolak' ? 'selected' : ''}>Ditolak</option>
           </select>
         </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-        <div class="field" style="margin:0">
-          <label style="font-weight:700;font-size:12px">Tanggal Pentasyarufan</label>
-          <input type="date" id="pjInpTglSalur" class="input" value="${esc(item.tanggalPentasyarufan || '')}" style="width:100%">
-        </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nominal Disetujui (Rp)</label>
           <input type="number" id="pjInpNomDisetujui" class="input" placeholder="Contoh: 1000000" value="${item.nominalDisetujui || ''}" style="width:100%">
         </div>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label style="font-weight:700;font-size:12px">Tanggal Pentasyarufan (Bila Disetujui/Diserahkan)</label>
+        <input type="date" id="pjInpTglSalur" class="input" value="${esc(item.tanggalPentasyarufan || '')}" style="width:100%">
       </div>
 
       <!-- Berkas Proposal & Google Drive -->
@@ -836,7 +859,7 @@
         <div class="field" style="margin:0">
           <input type="file" id="pjInpFileProposal" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp" style="font-size:12px;width:100%">
           <div class="muted" style="font-size:10.5px;margin-top:4px">
-            Pilih berkas baru (PDF, Word, Excel, Gambar; maks 5 MB). Berkas akan otomatis diunggah ke Google Drive.
+            Pilih berkas proposal (PDF, Word, Excel, Gambar; maks 5 MB). Otomatis masuk ke Google Drive.
           </div>
         </div>
       </div>
@@ -854,7 +877,7 @@
 
     openModal(judul, htmlBody, htmlFoot);
 
-    // Event input tanggal otomatis hitung hari
+    // Otomatis hitung hari saat tanggal berubah
     const inpTgl = el('pjInpTanggal');
     const inpHari = el('pjInpHari');
     if (inpTgl && inpHari) {
@@ -863,7 +886,20 @@
       };
     }
 
-    // Tombol simpan
+    // Hubungkan pilihan asesmen tersimpan
+    const selAsesmen = el('pjPilihAsesmenTersimpan');
+    if (selAsesmen) {
+      selAsesmen.onchange = () => {
+        const asId = selAsesmen.value;
+        const target = listAsesmen.find((x) => x.id === asId);
+        if (target) {
+          el('pjInpAsesmenId').value = target.id;
+          el('pjInpAsesmenSkor').value = target.skor || 0;
+          el('pjInpAsesmen').value = `${target.hasil} (Skor ${target.skor})`;
+        }
+      };
+    }
+
     el('btnSimpanPengajuan').onclick = async () => {
       await simpanDataForm(item.id, isBaru);
     };
@@ -890,13 +926,14 @@
       jenisBantuan: el('pjInpJenis').value,
       nominalDiajukan: Number(el('pjInpNominal').value) || 0,
       hasilAsesmen: el('pjInpAsesmen').value,
+      asesmenId: el('pjInpAsesmenId') ? el('pjInpAsesmenId').value : '',
+      asesmenSkor: el('pjInpAsesmenSkor') ? Number(el('pjInpAsesmenSkor').value) || 0 : 0,
       status: el('pjInpStatus').value,
       tanggalPentasyarufan: el('pjInpTglSalur').value || '',
       nominalDisetujui: Number(el('pjInpNomDisetujui').value) || 0,
       catatan: el('pjInpCatatan').value.trim(),
     };
 
-    // Cek apakah ada lampiran proposal baru
     const fileInp = el('pjInpFileProposal');
     if (fileInp && fileInp.files && fileInp.files[0]) {
       const file = fileInp.files[0];
@@ -1009,7 +1046,84 @@
   }
 
   // ==================================================================
-  // 5. EKSPOR DATA (EXCEL & TSV)
+  // 5. PENGHUBUNG ASESMEN MUSTAHIK DENGAN PENGAJUAN
+  // ==================================================================
+  function bukaAsesmenUntukForm() {
+    const pemohon = el('pjInpPemohon') ? el('pjInpPemohon').value.trim() : '';
+    const alamat = el('pjInpAlamat') ? el('pjInpAlamat').value.trim() : '';
+    const keperluan = el('pjInpKeperluan') ? el('pjInpKeperluan').value.trim() : '';
+
+    closeModal();
+    location.hash = '#asesmen';
+
+    setTimeout(() => {
+      const host = el('asesmenHost');
+      if (host && window.LZAsesmenMustahik) {
+        const btnBaru = host.querySelector('[data-aksi="baru"]');
+        if (btnBaru) {
+          btnBaru.click();
+          setTimeout(() => {
+            const inpTujuan = el('amTujuan');
+            if (inpTujuan) inpTujuan.value = keperluan || 'Bantuan Kebutuhan Pokok';
+            const btnLanjut = host.querySelector('[data-aksi="lanjut"]');
+            if (btnLanjut) {
+              btnLanjut.click();
+              setTimeout(() => {
+                const inpNama = host.querySelector('[data-kunci="mustahik"]');
+                if (inpNama && pemohon) inpNama.value = pemohon;
+                const inpAlm = host.querySelector('[data-kunci="alamat"]');
+                if (inpAlm && alamat) inpAlm.value = alamat;
+              }, 60);
+            }
+          }, 60);
+        }
+      }
+    }, 100);
+  }
+
+  function mulaiAsesmenUntukPengajuan(pengajuanId) {
+    const item = STATE.daftar.find((x) => x.id === pengajuanId);
+    if (!item) return;
+
+    location.hash = '#asesmen';
+    setTimeout(() => {
+      const host = el('asesmenHost');
+      if (host && window.LZAsesmenMustahik) {
+        const btnBaru = host.querySelector('[data-aksi="baru"]');
+        if (btnBaru) {
+          btnBaru.click();
+          setTimeout(() => {
+            const inpTujuan = el('amTujuan');
+            if (inpTujuan) inpTujuan.value = item.keperluan || 'Bantuan Kebutuhan Pokok';
+            const btnLanjut = host.querySelector('[data-aksi="lanjut"]');
+            if (btnLanjut) {
+              btnLanjut.click();
+              setTimeout(() => {
+                const inpNama = host.querySelector('[data-kunci="mustahik"]');
+                if (inpNama) inpNama.value = item.pemohon;
+                const inpAlm = host.querySelector('[data-kunci="alamat"]');
+                if (inpAlm) inpAlm.value = item.alamat;
+              }, 60);
+            }
+          }, 60);
+        }
+      }
+    }, 100);
+  }
+
+  function lihatAsesmen(asesmenId) {
+    location.hash = '#asesmen';
+    setTimeout(() => {
+      const host = el('asesmenHost');
+      if (host) {
+        const btnLihat = host.querySelector(`[data-aksi="lihat:${asesmenId}"]`);
+        if (btnLihat) btnLihat.click();
+      }
+    }, 100);
+  }
+
+  // ==================================================================
+  // 6. EKSPOR DATA (EXCEL & TSV)
   // ==================================================================
   function bangunAoaPengajuan() {
     const list = STATE.daftar;
@@ -1062,7 +1176,263 @@
     }
   }
 
-  // Publikasikan API controller
+  // ==================================================================
+  // 7. IMPOR DARI GOOGLE SPREADSHEET / EXCEL / CSV
+  // ==================================================================
+  function bukaModalImpor() {
+    STATE.dataImporPreview = [];
+
+    const defaultUrl = 'https://docs.google.com/spreadsheets/d/1_rtfT67OQDmE5d4uGOfExeZUqM5btYYXy-ZnHNumrew/edit?gid=0#gid=0';
+
+    const htmlBody = `
+    <div style="font-size:12px;margin-bottom:12px;color:var(--text2)">
+      Impor daftar pengajuan langsung dari Google Spreadsheet resmi LAZISMU atau berkas Excel (.xlsx / .csv).
+    </div>
+
+    <div class="card" style="padding:12px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text)">1. Tautan Google Spreadsheet:</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="pjInpUrlSpreadsheet" class="input" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(defaultUrl)}" style="flex:1;font-size:12px">
+        <button type="button" class="btn btn-primary btn-sm" id="btnTarikSpreadsheet" onclick="LZPengajuan.tarikSpreadsheet()">Tarik Data</button>
+      </div>
+      <div class="muted" style="font-size:11px;margin-top:5px">
+        Kolom terbaca otomatis: <i>No, Hari, Tanggal, Pemohon, Alamat, Keperluan, Hasil Asesment, Keterangan, Status, Tanggal Pentasyarufan, Jenis Bantuan</i>.
+      </div>
+    </div>
+
+    <div class="card" style="padding:12px 14px;background:var(--surface2);border-radius:10px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text)">2. Atau Unggah Berkas Excel / CSV:</div>
+      <input type="file" id="pjInpBerkasExcel" accept=".xlsx,.xls,.csv" onchange="LZPengajuan.prosesBerkasLokal(this.files)" style="font-size:12px;width:100%">
+    </div>
+
+    <div id="pjAreaPratinjauImpor">
+      <div class="muted" style="text-align:center;padding:24px;border:1px dashed var(--border);border-radius:8px;font-size:12px">
+        Belum ada data ditarik. Klik <b>Tarik Data</b> atau pilih berkas Excel/CSV untuk melihat pratinjau.
+      </div>
+    </div>
+    `;
+
+    const htmlFoot = `
+      <button class="btn btn-ghost" type="button" onclick="LZPengajuan.tutupModal()">Batal</button>
+      <button class="btn btn-primary" type="button" id="btnProsesImporSimpan" disabled onclick="LZPengajuan.simpanDataImpor()">Impor ke Sistem</button>
+    `;
+
+    openModal('Impor Pengajuan dari Google Spreadsheet / Berkas', htmlBody, htmlFoot);
+  }
+
+  async function tarikSpreadsheet() {
+    const inp = el('pjInpUrlSpreadsheet');
+    const url = inp ? inp.value.trim() : '';
+    if (!url) return toast('Masukkan tautan Google Spreadsheet.', true);
+
+    const btn = el('btnTarikSpreadsheet');
+    if (btn) { btn.disabled = true; btn.textContent = 'Menarik Data...'; }
+
+    const area = el('pjAreaPratinjauImpor');
+    if (area) area.innerHTML = '<div class="muted" style="text-align:center;padding:24px">⏳ Mengambil dan membaca data dari Google Spreadsheet...</div>';
+
+    try {
+      const res = await rpc('pengajuan.imporSpreadsheet', { url, simpanLangsung: false });
+      const baris = res.baris || [];
+      STATE.dataImporPreview = baris;
+      tampilkanPratinjauImpor(baris);
+    } catch (e) {
+      if (area) {
+        area.innerHTML = `<div class="card" style="padding:14px;border-color:var(--red);color:var(--red);font-size:12px">
+          <b>Gagal membaca spreadsheet:</b> ${esc(e.message)}
+          <div class="muted" style="margin-top:6px;font-size:11px">Pastikan dokumen spreadsheet memiliki hak akses "Siapa saja yang memiliki link dapat melihat" (Viewer).</div>
+        </div>`;
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Tarik Data'; }
+    }
+  }
+
+  function prosesBerkasLokal(files) {
+    if (!files || !files.length) return;
+    const file = files[0];
+    const reader = new FileReader();
+
+    const area = el('pjAreaPratinjauImpor');
+    if (area) area.innerHTML = '<div class="muted" style="text-align:center;padding:24px">⏳ Membaca isi berkas...</div>';
+
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        if (!window.XLSX) throw new Error('Pustaka pembaca berkas Excel belum siap.');
+        const wb = window.XLSX.read(data, { type: 'array' });
+        const sheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+        const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        
+        const parsed = parseMatrixSpreadsheetKlien(matrix);
+        STATE.dataImporPreview = parsed;
+        tampilkanPratinjauImpor(parsed);
+      } catch (err) {
+        if (area) {
+          area.innerHTML = `<div class="card" style="padding:14px;border-color:var(--red);color:var(--red);font-size:12px">
+            <b>Gagal membaca berkas:</b> ${esc(err.message)}
+          </div>`;
+        }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function parseMatrixSpreadsheetKlien(matrix) {
+    if (!Array.isArray(matrix) || !matrix.length) return [];
+    let headerIdx = -1;
+    const colMap = {};
+
+    for (let i = 0; i < matrix.length; i++) {
+      const row = (matrix[i] || []).map((c) => String(c || '').toLowerCase().trim());
+      if (row.includes('pemohon') && (row.includes('tanggal') || row.includes('keperluan'))) {
+        headerIdx = i;
+        row.forEach((colName, cIdx) => {
+          colMap[colName] = cIdx;
+        });
+        break;
+      }
+    }
+
+    if (headerIdx === -1) {
+      throw new Error('Kolom tidak cocok. Pastikan ada baris judul dengan kolom Pemohon, Tanggal, dan Keperluan.');
+    }
+
+    const hasil = [];
+    for (let i = headerIdx + 1; i < matrix.length; i++) {
+      const row = matrix[i] || [];
+      const pemohon = String(row[colMap['pemohon']] || '').trim();
+      if (!pemohon || pemohon.toLowerCase() === 'pemohon') continue;
+
+      const tglRaw = row[colMap['tanggal']] || '';
+      let tgl = String(tglRaw).trim();
+      if (tgl.includes('/')) {
+        const p = tgl.split('/');
+        if (p.length === 3) tgl = `${p[2]}-${String(p[1]).padStart(2,'0')}-${String(p[0]).padStart(2,'0')}`;
+      } else if (/\b(october|oktober)\b/i.test(tgl)) {
+        const m = tgl.match(/^(\d{1,2})\s+[A-Za-z]+\s+(\d{4})$/);
+        if (m) tgl = `${m[2]}-10-${String(m[1]).padStart(2,'0')}`;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) tgl = new Date().toISOString().slice(0, 10);
+
+      const tglSalurRaw = row[colMap['tanggal pentasyarufan']] || '';
+      let tglSalur = String(tglSalurRaw).trim();
+      if (tglSalur.includes('/')) {
+        const p = tglSalur.split('/');
+        if (p.length === 3) tglSalur = `${p[2]}-${String(p[1]).padStart(2,'0')}-${String(p[0]).padStart(2,'0')}`;
+      } else if (/\b(october|oktober)\b/i.test(tglSalur)) {
+        const m = tglSalur.match(/^(\d{1,2})\s+[A-Za-z]+\s+(\d{4})$/);
+        if (m) tglSalur = `${m[2]}-10-${String(m[1]).padStart(2,'0')}`;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(tglSalur)) tglSalur = '';
+
+      const stRaw = String(row[colMap['status']] || '').toLowerCase().trim();
+      let status = 'Masuk';
+      if (stRaw.includes('acc') || stRaw.includes('setuju')) status = 'Disetujui';
+      else if (stRaw.includes('sudah') || stRaw.includes('cair')) status = tglSalur ? 'Ditasyarufkan' : 'Disetujui';
+      else if (stRaw.includes('sedang') || stRaw.includes('proses')) status = 'Diproses';
+      else if (stRaw.includes('tidak') || stRaw.includes('tolak')) status = 'Ditolak';
+
+      const keperluan = String(row[colMap['keperluan']] || '').trim();
+      const jenisBantuanRaw = String(row[colMap['jenis bantuan']] || '').trim();
+      const keterangan = String(row[colMap['keterangan']] || '').trim();
+
+      hasil.push({
+        tanggal: tgl,
+        hari: row[colMap['hari']] || hitungHari(tgl),
+        pemohon: pemohon,
+        alamat: String(row[colMap['alamat']] || 'Alamat pemohon').trim(),
+        keperluan: keperluan || 'Permohonan bantuan',
+        hasilAsesmen: String(row[colMap['hasil asesment']] || 'Belum Diasesmen').trim(),
+        status: status,
+        tanggalPentasyarufan: tglSalur,
+        jenisBantuan: /pendidikan|spp/i.test(keperluan + jenisBantuanRaw) ? 'Pendidikan' : /kesehatan|obat|operasi/i.test(keperluan + jenisBantuanRaw) ? 'Kesehatan' : 'Sosial Kemanusiaan',
+        nominalDiajukan: 0,
+        nominalDisetujui: 0,
+        catatan: [keterangan, jenisBantuanRaw ? `Bantuan: ${jenisBantuanRaw}` : ''].filter(Boolean).join(' | ')
+      });
+    }
+    return hasil;
+  }
+
+  function tampilkanPratinjauImpor(baris) {
+    const area = el('pjAreaPratinjauImpor');
+    const btnSimpan = el('btnProsesImporSimpan');
+    if (!area) return;
+
+    if (!baris || !baris.length) {
+      area.innerHTML = '<div class="muted" style="text-align:center;padding:24px">Tidak ditemukan data pengajuan yang valid di spreadsheet.</div>';
+      if (btnSimpan) { btnSimpan.disabled = true; btnSimpan.textContent = 'Impor ke Sistem'; }
+      return;
+    }
+
+    let h = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-weight:700;font-size:12.5px;color:var(--green)">
+        ✓ Ditemukan ${baris.length} baris data pengajuan siap diimpor:
+      </div>
+    </div>
+    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+      <table style="width:100%;font-size:11px;border-collapse:collapse;text-align:left">
+        <thead>
+          <tr style="background:var(--surface2);position:sticky;top:0;border-bottom:1px solid var(--border)">
+            <th style="padding:6px 8px">No</th>
+            <th style="padding:6px 8px">Tanggal</th>
+            <th style="padding:6px 8px">Pemohon</th>
+            <th style="padding:6px 8px">Keperluan</th>
+            <th style="padding:6px 8px">Hasil Asesment</th>
+            <th style="padding:6px 8px">Status</th>
+            <th style="padding:6px 8px">Tgl Salur</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+    baris.slice(0, 50).forEach((r, idx) => {
+      h += `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 8px">${idx + 1}</td>
+        <td style="padding:5px 8px;white-space:nowrap">${esc(r.tanggal)}</td>
+        <td style="padding:5px 8px;font-weight:700">${esc(r.pemohon)}</td>
+        <td style="padding:5px 8px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.keperluan)}</td>
+        <td style="padding:5px 8px">${esc(r.hasilAsesmen)}</td>
+        <td style="padding:5px 8px"><span class="badge ${r.status === 'Disetujui' || r.status === 'Ditasyarufkan' ? 'green' : 'amber'}" style="font-size:9.5px">${esc(r.status)}</span></td>
+        <td style="padding:5px 8px;white-space:nowrap">${esc(r.tanggalPentasyarufan || '-')}</td>
+      </tr>`;
+    });
+
+    if (baris.length > 50) {
+      h += `<tr><td colspan="7" style="text-align:center;padding:6px;color:var(--muted)">... dan ${baris.length - 50} data lainnya</td></tr>`;
+    }
+
+    h += `</tbody></table></div>`;
+    area.innerHTML = h;
+
+    if (btnSimpan) {
+      btnSimpan.disabled = false;
+      btnSimpan.textContent = `Impor ${baris.length} Data ke Sistem`;
+    }
+  }
+
+  async function simpanDataImpor() {
+    const baris = STATE.dataImporPreview || [];
+    if (!baris.length) return toast('Tidak ada data untuk diimpor.', true);
+
+    const btn = el('btnProsesImporSimpan');
+    if (btn) { btn.disabled = true; btn.textContent = 'Mengimpor ke sistem...'; }
+
+    try {
+      const res = await rpc('pengajuan.imporBaris', { baris });
+      toast(res.pesan || `Berhasil mengimpor ${baris.length} data pengajuan.`);
+      closeModal();
+      await muatData();
+      gambarHalaman();
+    } catch (e) {
+      toast('Gagal mengimpor: ' + e.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = `Impor ${baris.length} Data ke Sistem`; }
+    }
+  }
+
   window.LZPengajuan = {
     inisialisasi,
     bukaFormTambah,
@@ -1070,6 +1440,13 @@
     hapusPengajuan,
     unduhProposal,
     hapusProposal,
+    bukaAsesmenUntukForm,
+    mulaiAsesmenUntukPengajuan,
+    lihatAsesmen,
+    bukaModalImpor,
+    tarikSpreadsheet,
+    prosesBerkasLokal,
+    simpanDataImpor,
     tutupModal: closeModal,
     _state: STATE
   };

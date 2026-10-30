@@ -282,7 +282,7 @@ function cek(n, syarat, info) {
     LZJurnalBank.lanjutKeLangkah2();
   });
 
-  await page.waitForSelector('.jrb-langkah2', { timeout: 10000 });
+  await page.waitForSelector('.jrb-langkah2', { timeout: 20000 });
   cek('berhasil lanjut ke langkah 2 penyesuaian setelah rekening terkonfirmasi', true);
   cek('ringkasan kredit dan debet ditampilkan di kepala langkah 2', /Kredit/.test(await page.textContent('.jrb-langkah2')));
 

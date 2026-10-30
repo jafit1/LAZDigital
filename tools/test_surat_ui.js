@@ -35,6 +35,7 @@ const engine = require(path.join(AKAR, 'api', '_engine.js'));
 const skema = require(path.join(AKAR, 'lib', 'laz-skema.js'));
 const media = require(path.join(AKAR, 'api', 'media.js'));
 const suratApi = require(path.join(AKAR, 'lib', 'surat', 'api.js'));
+const pengajuanApi = require(path.join(AKAR, 'lib', 'pengajuan', 'api.js'));
 
 let ok = 0, gagal = 0;
 const cek = (nama, syarat, info) => {
@@ -44,6 +45,7 @@ const cek = (nama, syarat, info) => {
 const SANDI = 'Admin12345';
 let DB = null;
 suratApi._uji.aturDasar(async () => DB);
+pengajuanApi._uji.aturDasar(async () => DB);
 
 /* PNG bergradasi dan berderau: besar sebagai PNG (sekitar 2 sampai 3 MB untuk
    1600x1200), persis seperti foto ponsel atau hasil scan yang dikirim apa adanya. */
@@ -166,15 +168,16 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     cek('beranda: empat kartu angka', kpi.join('|') === 'Surat masuk bulan ini|Pengajuan berjalan|Disposisi untuk saya|Lewat tenggat', kpi);
     const lebarKpi = await page.evaluate(() => [...document.querySelectorAll('.sr-kpi')].map((x) => Math.round(x.getBoundingClientRect().width)));
     cek('empat kartu sama lebar (tidak kena proporsi dashboard utama)', Math.max(...lebarKpi) - Math.min(...lebarKpi) <= 2, lebarKpi);
-    cek('menu modul: Beranda, Surat Masuk, Surat Keluar, Pengajuan, Disposisi Saya, Asesmen Mustahik untuk pengelola', (await page.$$('#nav .tn-item')).length === 6 && (await page.$('#nav_asesmen-mustahik')) !== null);
-    await page.click('#nav_asesmen-mustahik'); await siap('asesmen-mustahik');
-    cek('menu asesmen membuka survei dan riwayat', /Asesmen Mustahik/.test(await page.locator('#isiHalaman').innerText()) && /Asesmen baru/.test(await page.locator('#isiHalaman').innerText()));
-    await page.click('#isiHalaman [data-aksi="baru"]');
+    cek('menu modul Surat: Beranda, Surat Masuk, Surat Keluar, Disposisi Saya', (await page.$$('#nav .tn-item')).length === 4);
+    await page.goto(A + '/pengajuan.html#asesmen');
+    await page.waitForSelector('#asesmenHost', { timeout: 15000 });
+    cek('menu asesmen membuka survei dan riwayat', /Asesmen Mustahik/.test(await page.locator('#asesmenHost').innerText()) && /Asesmen baru/.test(await page.locator('#asesmenHost').innerText()));
+    await page.click('#asesmenHost [data-aksi="baru"]');
     await page.fill('#amTujuan', 'Kebutuhan pokok');
-    await page.click('#isiHalaman [data-aksi="lanjut"]');
+    await page.click('#asesmenHost [data-aksi="lanjut"]');
     await page.waitForSelector('.am-tanya');
     cek('form asesmen menampilkan 31 butir dari XLSX', await page.$$('.am-tanya') && (await page.$$('.am-tanya')).length === 31);
-    cek('formulir menampilkan survei dan tujuan kebutuhan yang dipilih di awal', /Survei Calon Mustahik/.test(await page.locator('#isiHalaman').innerText()) && (await page.inputValue('[data-kunci="tujuan"]')) === 'Kebutuhan pokok');
+    cek('formulir menampilkan survei dan tujuan kebutuhan yang dipilih di awal', /Survei Calon Mustahik/.test(await page.locator('#asesmenHost').innerText()) && (await page.inputValue('[data-kunci="tujuan"]')) === 'Kebutuhan pokok');
     await page.fill('[data-kunci="mustahik"]', 'Mustahik Fiktif');
     await page.fill('[data-kunci="alamat"]', 'Alamat Uji Fiktif');
     await page.fill('[data-kunci="tujuan"]', 'Kebutuhan pokok');
@@ -187,11 +190,11 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await page.waitForSelector('.am-hasil');
     cek('ringkasan menunjukkan total skor dan hasil dari ambang formulir', /155/.test(await page.locator('.am-hasil').innerText()) && /Sangat Layak dibantu/.test(await page.locator('.am-hasil').innerText()));
     await page.click('.am-aksi-bawah [data-aksi="riwayat"]');
-    cek('hasil asesmen tampil di riwayat', /Mustahik Fiktif/.test(await page.locator('#isiHalaman').innerText()));
+    cek('hasil asesmen tampil di riwayat', /Mustahik Fiktif/.test(await page.locator('#asesmenHost').innerText()));
     await page.setViewportSize({ width: 390, height: 844 });
     cek('form asesmen di HP tidak bergeser ke samping', await page.evaluate(() => document.documentElement.scrollWidth <= 391));
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.evaluate(() => { location.hash = '#dasbor'; });
+    await page.goto(A + '/surat.html#dasbor');
     await siap('dasbor');
     await page.waitForFunction(() => /terpakai/.test((document.getElementById('srRuang') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
     const ruang = await page.$('#srRuang') ? await page.textContent('#srRuang') : '';

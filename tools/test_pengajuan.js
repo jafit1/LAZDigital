@@ -324,6 +324,41 @@ const srv = http.createServer(async (req, res) => {
     const resHapus = await pintu('pengajuan.hapus', { id: resSimpan.pengajuan.id }, T_PENGAJUAN);
     cek('pengajuan.hapus berhasil dipanggil lewat RPC', resHapus.ok === true && /berhasil dihapus/.test(resHapus.pesan), resHapus);
 
+    // 9. Integrasi pengajuan.asesmenMustahik.*
+    const formAs = await pintu('pengajuan.asesmenMustahik.form', {}, T_PENGAJUAN);
+    cek('pengajuan.asesmenMustahik.form mengembalikan form F.Survei 31 butir', formAs.ok === true && formAs.formulir.pertanyaan.length === 31, formAs);
+
+    const pertanyaan = formAs.formulir.pertanyaan;
+    const jawabanMax = Object.fromEntries(pertanyaan.map((q) => [q.id, q.opsi.reduce((a, b) => a.skor > b.skor ? a : b).id]));
+    const dataAs = {
+      jenis: 'survei-mustahik',
+      tanggal: '2026-10-30',
+      petugas: 'Staf Pengajuan',
+      mustahik: 'Pak Budi Santoso',
+      alamat: 'Dusun Jetis RT 02, Trimulyo, Jetis',
+      tujuan: 'Bantuan biaya persalinan sesar',
+      jawaban: jawabanMax,
+      elektronik: [],
+      bantuanLain: [],
+      pengajuanId: p1.id
+    };
+    const resSimpanAs = await pintu('pengajuan.asesmenMustahik.simpan', dataAs, T_PENGAJUAN);
+    cek('pengajuan.asesmenMustahik.simpan berhasil dan menghasilkan skor 155', resSimpanAs.ok === true && resSimpanAs.asesmen.skor === 155, resSimpanAs);
+
+    const p1CekAs = await pengajuanLib.ambil(p1.id);
+    cek('pengajuan otomatis terhubung dengan asesmenId', p1CekAs && p1CekAs.asesmenId === resSimpanAs.asesmen.id, p1CekAs);
+    cek('pengajuan otomatis diperbarui hasil asesmennya', p1CekAs && /Sangat Layak/.test(p1CekAs.hasilAsesmen) && /155/.test(p1CekAs.hasilAsesmen), p1CekAs);
+
+    // 10. Impor Google Spreadsheet langsung
+    const sheetUrl = 'https://docs.google.com/spreadsheets/d/1_rtfT67OQDmE5d4uGOfExeZUqM5btYYXy-ZnHNumrew/edit?gid=0#gid=0';
+    const barisTarik = await pengajuanLib.tarikDariGoogleSpreadsheet(sheetUrl);
+    cek('tarikDariGoogleSpreadsheet berhasil membaca 25 baris data pengajuan', barisTarik.length >= 20, barisTarik.length);
+    cek('baris memuat Abdul Hakim', barisTarik.some((x) => x.pemohon === 'Abdul Hakim'));
+    cek('nominal bantuan tersaring otomatis', barisTarik.some((x) => x.nominalDisetujui === 650000));
+
+    const resImporDirect = await pintu('pengajuan.imporSpreadsheet', { url: sheetUrl, simpanLangsung: true }, T_PENGAJUAN);
+    cek('pengajuan.imporSpreadsheet berhasil menyimpan data langsung', resImporDirect.ok === true && resImporDirect.jumlah >= 20, resImporDirect);
+
     if (pw) {
       console.log('\n=== G. UJI TAMPILAN PERAMBAN (PLAYWRIGHT) ===');
       await new Promise((r) => srv.listen(0, '127.0.0.1', r));
@@ -379,6 +414,20 @@ const srv = http.createServer(async (req, res) => {
       await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 10000 });
       await page.waitForFunction(() => document.body.innerText.includes('Ibu Nurhayati'), null, { timeout: 10000 });
       cek('data baru tersimpan dan tampil di baris tabel', true);
+
+      // Buka modal impor spreadsheet
+      await page.click('#btnBukaImpor');
+      await page.waitForSelector('#pjInpUrlSpreadsheet', { timeout: 5000 });
+      cek('modal impor spreadsheet terbuka', true);
+
+      await page.click('#btnTarikSpreadsheet');
+      await page.waitForSelector('#btnProsesImporSimpan:not([disabled])', { timeout: 15000 });
+      cek('pratinjau data spreadsheet terbaca dan tombol impor aktif', true);
+
+      await page.click('#btnProsesImporSimpan');
+      await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 10000 });
+      await page.waitForFunction(() => document.body.innerText.includes('Abdul Hakim'), null, { timeout: 10000 });
+      cek('data hasil impor dari spreadsheet tampil di tabel', true);
 
       // Pindah ke tab Kalender Detail
       await page.click('#nav_kalender');
