@@ -6873,3 +6873,9 @@ body.jrb-modal-open, html.jrb-modal-open{overflow:hidden !important}
 .jrb-rincian-row input[type="text"],.jrb-rincian-row input[type="number"],.jrb-rincian-row select{height:34px !important;padding:4px 8px !important;font-size:12px !important;border-radius:6px !important;border:1px solid var(--border) !important;background:var(--surface) !important;color:var(--text) !important;box-sizing:border-box !important}
 .jrb-rincian-del{width:34px;height:34px;padding:0;font-size:18px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:var(--red) !important;background:var(--surface2);border:1px solid var(--border);cursor:pointer}
 .jrb-submodal-foot{display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-top:1px solid var(--border);background:var(--surface2);flex-shrink:0}
+
+/* Modul Pengajuan Permohonan & Bantuan */
+.pj-table th, .pj-table td{vertical-align:middle;box-sizing:border-box}
+.pj-table tr:hover td{background:rgba(var(--accent-rgb),0.02)}
+.pj-kal-sel{transition:transform .12s ease,border-color .15s ease}
+.pj-kal-sel:hover{border-color:var(--accent) !important;transform:translateY(-1px)}

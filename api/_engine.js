@@ -101,7 +101,7 @@ var SHEETS = {
    memperlihatkan uang yang dipegang tiap kantor layanan. Staff yang cuma
    perlu melihat ringkasan jadi ikut melihat saldo rekening. Sekarang tiga
    izin sendiri-sendiri. Akun lama dijembatani MODUL_ASAL di bawah. */
-var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media','surat'];
+var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media','pengajuan','surat'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -112,7 +112,7 @@ var MODUL_LABEL = {
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
   log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
   fundraising:'Fundraising (Penghimpunan Lapangan)', ai:'AI Asisten',
-  media:'Media & Desain', surat:'Surat & Pengajuan'
+  media:'Media & Desain', surat:'Surat', pengajuan:'Pengajuan'
 };
 var MODUL_KET = {
   dashboard:'Halaman Dashboard: ringkasan angka, grafik, dan Link Publik. Hanya "lihat" yang dipakai.',
@@ -132,7 +132,8 @@ var MODUL_KET = {
   fundraising:'Modul fundraiser lapangan: database donatur, jadwal pengambilan, pencatatan, dan pencocokan dengan buku utama. Centang "hapus" menjadikannya koordinator yang melihat data semua fundraiser.',
   ai:'AI Asisten: "lihat" membaca percakapan, "tambah" boleh bertanya, "ubah" boleh menyunting pengetahuan & persona, "hapus" boleh menghapus percakapan (percakapan dipakai bersama seluruh tim). Pengaturan provider dan kunci API tetap khusus superadmin.',
   media:'Permohonan desain ke tim media: "lihat" membuka modul dan melihat permohonan, "tambah" boleh mengajukan permohonan dan meminta revisi atas permohonannya sendiri, "ubah" menjadikannya tim media yang mengerjakan, "hapus" menjadikannya koordinator yang membagi bidang, mengatur anggota tim, dan melihat rekap. Bidang foto/video/desain diatur terpisah di halaman Tim Media.',
-  surat:'Surat masuk, surat keluar, dan pengajuan bantuan/sponsorship/proposal: "lihat" membuka modul, melihat surat, dan menjawab disposisi untuknya, "tambah" mencatat surat atau pengajuan baru beserta lampirannya, "ubah" memindah progres (asesmen, disetujui, dicairkan) dan membuat disposisi, "hapus" menghapus surat.'
+  surat:'Surat masuk, surat keluar, dan disposisi: "lihat" membuka modul, melihat surat, dan menjawab disposisi untuknya, "tambah" mencatat surat baru beserta lampirannya, "ubah" membuat disposisi dan menyunting surat, "hapus" menghapus surat.',
+  pengajuan:'Pengajuan bantuan dan permohonan mustahik: "lihat" membuka daftar dan kalender pengajuan, "tambah" mencatat pengajuan dan upload proposal, "ubah" memperbarui status, asesmen, dan pentasyarufan, "hapus" menghapus pengajuan.'
 };
 /* Aksi yang benar-benar berlaku untuk tiap modul — mencentang "hapus" pada
    modul yang tidak punya aksi hapus hanya membingungkan. */
@@ -148,7 +149,7 @@ var MODUL_AKSI = {
    kuncinya BELUM PERNAH ADA. Begitu superadmin menyimpan izin akun itu satu
    kali, kunci barunya tertulis apa adanya dan jembatan ini tidak menyentuh
    akun tersebut lagi — termasuk saat izinnya justru dicabut. */
-var MODUL_ASAL = { saldo:'dashboard', saldokll:'dashboard' };
+var MODUL_ASAL = { saldo:'dashboard', saldokll:'dashboard', pengajuan:'surat' };
 
 /* Daftar nama fundraising/sumber. Disimpan di Settings (kunci fundraisingList)
    supaya bisa ditambah sendiri lewat menu Pengaturan, bukan terkunci di kode. */

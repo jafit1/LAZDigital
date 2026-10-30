@@ -22,8 +22,9 @@ const timLib = require('../lib/media/tim');
 const pmLib = require('../lib/media/permohonan');
 const rpc = require('./rpc.js');
 /* Modul Surat & Pengajuan menumpang pintu ini supaya tidak menambah fungsi
-   Vercel (batas 12, terpakai 10). Lihat lib/surat/api.js. */
+   Vercel (batas 12, terpakai 10). Lihat lib/surat/api.js dan lib/pengajuan/api.js. */
 const suratApi = require('../lib/surat/api');
+const pengajuanApi = require('../lib/pengajuan/api');
 
 const { sukses, gagal, bacaBody, GalatAplikasi } = util;
 
@@ -423,6 +424,7 @@ module.exports = async function penangan(req, res) {
     /* Diteruskan SEBELUM pemeriksaan izin Media: izinnya sendiri (modul
        'surat'), dan tindakan surat.lacak memang terbuka tanpa masuk. */
     if (nama.startsWith('surat.')) return suratApi.tangani(req, res, badan, util);
+    if (nama.startsWith('pengajuan.')) return pengajuanApi.tangani(req, res, badan, util);
     const data = badan.data || {};
 
     const pintu = tindakan[nama];

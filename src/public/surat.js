@@ -199,7 +199,7 @@ halaman['asesmen-mustahik'] = {
   },
 };
 halaman.dasbor = {
-  judul: 'Surat & Pengajuan',
+  judul: 'Surat',
   aksi: () => tombolCatat(''),
   async gambar(el) {
     await muatDaftar();
@@ -976,7 +976,7 @@ async function buka(rute) {
   if (rute.startsWith('s/')) {
     tandaiMenu('');
     h = { gambar: (el) => gambarDetail(el, rute.slice(2)) };
-    judul = 'Surat & Pengajuan';
+    judul = 'Surat';
     /* Kembali ke halaman asal (daftar atau papan), bukan selalu ke Beranda. */
     aksi = '<button type="button" class="btn btn-sm" id="srKembali">&larr; Kembali</button>';
   } else {
@@ -1020,7 +1020,7 @@ async function buka(rute) {
   const peran = N.izin.ubah ? 'Pengelola surat' : N.izin.tambah ? 'Pencatat' : 'Penerima';
   $('#uRole').textContent = peran;
   $('#uAvatar').textContent = (s.pengguna.nama || 'S').trim().charAt(0).toUpperCase();
-  document.title = 'Surat & Pengajuan - LAZ Digital';
+  document.title = 'Surat - LAZ Digital';
   gambarMenu();
   window.addEventListener('hashchange', () => buka(location.hash.slice(1) || 'dasbor'));
   try { await buka(location.hash.slice(1) || 'dasbor'); } finally { selesaiMemuat(); }

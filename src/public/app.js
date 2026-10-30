@@ -142,7 +142,8 @@ var NAV_ICONS={
   fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>'),
   ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>'),
   media: navIcon('<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="M3.5 17.5 9 12.5l3.5 3 3-2.5 5 4.5"/>'),
-  surat: navIcon('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>')};
+  surat: navIcon('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>'),
+  pengajuan: navIcon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/>')};
 var MENU=[
   {id:'dashboard',label:'Dashboard',ic:NAV_ICONS.dashboard,mod:'dashboard'},
   {id:'penghimpunan',label:'Penghimpunan',ic:NAV_ICONS.penghimpunan,mod:'penghimpunan'},
@@ -157,7 +158,8 @@ var MENU=[
   {id:'fundraising',label:'Fundraising',ic:NAV_ICONS.fundraising,mod:'fundraising',url:'/fund.html'},
   {id:'ai',label:'AI Asisten',ic:NAV_ICONS.ai,mod:'ai',url:'/ai.html'},
   {id:'media',label:'Media & Desain',ic:NAV_ICONS.media,mod:'media',url:'/media.html'},
-  {id:'surat',label:'Surat & Pengajuan',ic:NAV_ICONS.surat,mod:'surat',url:'/surat.html'},
+  {id:'surat',label:'Surat',ic:NAV_ICONS.surat,mod:'surat',url:'/surat.html'},
+  {id:'pengajuan',label:'Pengajuan',ic:NAV_ICONS.pengajuan,mod:'pengajuan',url:'/pengajuan.html'},
   {id:'log',label:'Log Aktivitas',ic:NAV_ICONS.log,mod:'log'}
 ];
 /* Kembarannya can() di api/_engine.js, termasuk jembatan MODUL_ASAL-nya.
@@ -166,7 +168,7 @@ var MENU=[
    kunci itu, jadi selama kuncinya belum pernah ada, izin asalnya yang
    dipakai. Tanpa ini menunya hilang dari bilah kiri walau servernya masih
    mengizinkan, dan itu terbaca sebagai fitur yang raib. */
-var MODUL_ASAL={saldo:'dashboard',saldokll:'dashboard'};
+var MODUL_ASAL={saldo:'dashboard',saldokll:'dashboard',pengajuan:'surat'};
 function canDo(mod,act){
   if(!ME)return false;
   if(ME.role==='superadmin')return true;

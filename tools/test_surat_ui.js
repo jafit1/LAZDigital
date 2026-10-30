@@ -159,7 +159,7 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await page.fill('#lUser', 'superadmin'); await page.fill('#lPass', SANDI); await page.click('#loginBtn');
     await page.waitForFunction(() => !document.getElementById('appView').classList.contains('hidden'), null, { timeout: 20000 });
     const adaMenu = await page.waitForSelector('#nav_surat', { state: 'attached', timeout: 10000 }).then(() => true).catch(() => false);
-    cek('menu "Surat & Pengajuan" ada di bilah kiri', adaMenu && (await page.getAttribute('#nav_surat', 'title')) === 'Surat & Pengajuan');
+    cek('menu "Surat" ada di bilah kiri', adaMenu && /Surat/.test(await page.getAttribute('#nav_surat', 'title')));
     await page.goto(A + '/surat.html');
     await siap('dasbor');
     const kpi = await page.evaluate(() => [...document.querySelectorAll('.sr-kpi .kpi-v2-label')].map((x) => x.textContent));

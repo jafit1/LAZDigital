@@ -96,6 +96,7 @@ const DAFTAR = [
   { label: 'Folder Drive khusus lampiran Surat', berkas: 'test_drive_surat_folder.js' },
   { label: 'Diagnosis kesiapan Google Drive', berkas: 'test_cek_drive.js' },
   { label: 'Tampilan Surat dan Pengajuan', berkas: 'test_surat_ui.js' },
+  { label: 'Modul Pengajuan Mandiri', berkas: 'test_pengajuan.js' },
   { label: 'Kwitansi WhatsApp (server)', berkas: 'test_kwitansi_wa.js' },
   { label: 'Kwitansi WhatsApp (tampilan)', berkas: 'test_kwitansi_ui.js' },
   { label: 'Fitur AI Asisten', berkas: 'test_ai_fitur.js' },
