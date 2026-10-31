@@ -41,6 +41,7 @@ const DAFTAR = [
   { label: 'Layar Impor Jurnal per Berkas', berkas: 'test_impor_berkas_ui.js' },
   { label: 'Pembuat Jurnal Rekening Koran Bank', berkas: 'test_jurnal_bank.js' },
   { label: 'Samakan jurnal dengan rekap', berkas: 'test_samakan_rekap.js' },
+  { label: 'Impor kas spreadsheet dan anti-duplikat', berkas: 'test_impor_kas_spreadsheet.js' },
   { label: 'Impor tempel: setor tunai, pilar, rekening', berkas: 'test_impor_headerless_aman.js' },
   { label: 'Impor: tab kembali ke Unggah File', berkas: 'test_impor_tab_reset.js' },
   { label: 'Impor: lewati duplikat, pesan dalam modal', berkas: 'test_impor_lewati_duplikat.js' },
@@ -240,6 +241,24 @@ async function jalankan(argv) {
 
   let daftar = DAFTAR;
   if (process.env.LAZ_UJI_DAFTAR) daftar = JSON.parse(process.env.LAZ_UJI_DAFTAR);
+  if (argumen.includes('--cepat')) {
+    try {
+      const st = spawnSync('git', ['status', '--porcelain'], { cwd: AKAR, encoding: 'utf8' });
+      const files = (st.stdout || '').split(/\r?\n/).map((l) => l.slice(3).trim()).filter(Boolean);
+      const kataKunci = [];
+      files.forEach((f) => {
+        const b = path.basename(f, path.extname(f)).toLowerCase();
+        if (b.includes('engine') || b.includes('impor') || b.includes('import')) kataKunci.push('impor', 'jurnal', 'kas');
+        if (b.includes('pengajuan')) kataKunci.push('pengajuan');
+        if (b.includes('surat')) kataKunci.push('surat');
+        if (b.includes('bank')) kataKunci.push('bank', 'jurnal');
+        if (b.startsWith('test_')) kataKunci.push(b.replace(/^test_/, ''));
+      });
+      if (kataKunci.length) {
+        daftar = daftar.filter((u) => kataKunci.some((k) => (u.label + ' ' + u.berkas).toLowerCase().includes(k)));
+      }
+    } catch (_) {}
+  }
   if (saring.length) daftar = daftar.filter((u) => saring.some((k) => (u.label + ' ' + u.berkas).toLowerCase().includes(k)));
 
   const folderLog = path.join(os.tmpdir(), 'laz-uji');

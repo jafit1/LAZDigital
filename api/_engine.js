@@ -3950,15 +3950,15 @@ function detectPilarFromText(text) {
   var s = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   function ada(re){ return re.test(s); }
 
-  if (ada(/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara timur\b/)) return 'Kemanusiaan';
-  if (ada(/\bkekeringan\b|\bdropping air\b/)) return 'Sosial Dakwah';
-  if (ada(/\bkesehatan\b|\bambulan\w*\b|\bklinik\b|\bberobat\b|\bdonor darah\b|\bsakit\b|\bobat\b/)) return 'Kesehatan';
-  if (ada(/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bppdb\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bguru\b|\bgtt\b|\bptt\b|\bsdua\b|\bsd\b|\bsmp\b|\bsma\b|\bsmk\b|\btk\b|\baba\b|\buad\b|\bkuliah\b/)) return 'Pendidikan';
-  if (ada(/\bkemanusiaan\b|\bbencana\b|\bgempa\b|\bbanjir\b|\bkebakaran\b|\blongsor\b|\btsunami\b|\berupsi\b|\bpengungsi\b|\bsumatera\b/)) return 'Kemanusiaan';
+  if (ada(/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara timur\b|\bair bersih\b|\bsumur bor\b|\bpipanisasi\b|\btoren\b/)) return 'Kemanusiaan';
+  if (ada(/\bkekeringan\b|\bdropping air\b/)) return 'Kemanusiaan';
+  if (ada(/\bkesehatan\b|\bambulan\w*\b|\bklinik\b|\bberobat\b|\bdonor darah\b|\bsakit\b|\bobat\b|\basy[- ]?syifa\b/)) return 'Kesehatan';
+  if (ada(/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bspp\b|\bppdb\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bguru\b|\bgtt\b|\bptt\b|\bsdua\b|\bsd\b|\bsmp\b|\bsma\b|\bsmk\b|\btk\b|\baba\b|\buad\b|\bkuliah\b|\bfilantropis\b|\bipm\b|\bimm\b/)) return 'Pendidikan';
+  if (ada(/\bkemanusiaan\b|\bbencana\b|\bkebencanaan\b|\bgempa\b|\bbanjir\b|\bkebakaran\b|\blongsor\b|\btsunami\b|\berupsi\b|\bpengungsi\b|\bsumatera\b/)) return 'Kemanusiaan';
   if (ada(/\bqurban\b|\bkurban\b|\bdam hadyu\b|\bjagalmu\b/)) return 'Qurban';
   if (ada(/\bumkm\b|\busaha\b|\bmodal\b|\bekonomi\b/)) return 'Ekonomi';
   if (ada(/\blingkungan\b|\bsampah\b/)) return 'Lingkungan';
-  if (ada(/\bkeagamaan\b|\bmuadzin\b/)) return 'Keagamaan';
+  if (ada(/\bkeagamaan\b|\bmasjid\b|\bmusholl?a\b|\btakmir\b|\bmuadzin\b|\b(al[- ])?quran\b|\bramadhan\b|\bkado ramadhan\b|\bifthar\b/)) return 'Keagamaan';
   return 'Sosial Dakwah';
 }
 
@@ -4972,7 +4972,31 @@ async function apiParseImportUrl(t, url, type, opsi) {
         };
       }
       
-      var json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      var targetSheet = workbook.Sheets[sheetTerbaca[0] || workbook.SheetNames[0]];
+      var headersAwal = (rawRows[0] || []).map(function(c){ return String(c || '').trim(); });
+      if (type === 'himpun' && isBukuKasHeader(headersAwal)) {
+        var jsonBK = XLSX.utils.sheet_to_json(targetSheet, { defval: '' });
+        var bk = parseBukuKas(jsonBK, listLayanan);
+        var validBK = [];
+        var invalidBK = [];
+        (bk.valid || []).forEach(function(row) {
+          if (row.namaDonatur && row.jumlah > 0) validBK.push(row);
+          else invalidBK.push(row);
+        });
+        markDuplicates(validBK, []);
+        return {
+          success: true,
+          isJurnal: false,
+          isBukuKas: true,
+          valid: validBK,
+          invalid: invalidBK,
+          dilewatiSetor: (bk.dilewati && bk.dilewati.setor && bk.dilewati.setor.length) || 0,
+          dilewatiKosong: (bk.dilewati && bk.dilewati.kosong && bk.dilewati.kosong.length) || 0,
+          totalCount: jsonBK.length
+        };
+      }
+
+      var json = XLSX.utils.sheet_to_json(targetSheet, { defval: '' });
       var parsed = json.map(function(row) {
         var mapped = mapImportedRow(row, type);
         var tglKey = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z0-9]/g, '') === 'tanggal');
@@ -5041,11 +5065,7 @@ function parseHeaderlessRows(rawRows, type, listLayanan, listRek) {
      Itu bukan donasi. Ia adalah Kas -> rekening bank, seperti transferRows
      pada jurnal berpasangan. Pisahkan sebelum membangun himpunRows agar saldo
      rekening tidak hilang dan uang tidak tercatat sebagai donasi. */
-  // Format: Date \t Name \t (empty/col3) \t (empty/col4) \t Amount \t Fundraising
-  // Rules:
-  //  - If Name contains KLL or ULL, map to layanan
-  //  - Last non-empty string column after amount = fundraising name
-  //  - If after KL/name there's a pilar keyword, map to infak terikat pilar
+  // Format: Date \t Name \t (Alamat) \t (No HP) \t Amount \t ... \t Fundraising
   var results = [];
   var transferRows = [];
   var akunAsing = [];
@@ -5054,26 +5074,41 @@ function parseHeaderlessRows(rawRows, type, listLayanan, listRek) {
     var dateStr = cols[0] || '';
     var tanggal = parseImportDate(dateStr);
     var rawName = String(cols[1] || '').trim();
-    
-    // Find the numeric amount - scan from col index 2 onwards
+    if (!rawName) return;
+
+    // Abaikan saldo awal dan perhitungan saldo teller (bukan donasi)
+    if (/^saldo\s*awal\b|^saldo\b/i.test(rawName)) return;
+
     var jumlah = 0;
     var amountIdx = -1;
+    var noTelepon = '';
+    var alamatTeks = '';
+
     for (var i = 2; i < cols.length; i++) {
-      var amt = parseAmount(cols[i]);
-      if (amt > 0) {
+      var valCell = String(cols[i] || '').trim();
+      if (!valCell) continue;
+
+      var cleanTelp = valCell.replace(/[^0-9+]/g, '');
+      if (/^(?:\+?62|08|8)\d{7,13}$/.test(cleanTelp) && i < cols.length - 1) {
+        noTelepon = cleanTelp.startsWith('8') ? '0' + cleanTelp : cleanTelp;
+        continue;
+      }
+
+      var amt = parseAmount(valCell);
+      if (amt > 0 && amountIdx === -1) {
         jumlah = amt;
         amountIdx = i;
-        break;
+        continue;
+      }
+
+      if (amountIdx === -1 && !alamatTeks && isNaN(Number(valCell.replace(/[.,]/g, '')))) {
+        alamatTeks = valCell;
       }
     }
-    
-    /* Setor tunai/Stor tunai: nominal berada di kolom setelah teks uraian,
-       bukan di kolom jumlah donasi. Jangan masukkan ke Penghimpunan. Nomor
-       rekening di ujung nama dipakai untuk akun tujuan; bila belum terdaftar,
-       tetap tampil sebagai akun asing agar pemilik bisa mendaftarkannya. */
-    var setor = /^stor\s+tunai\b|^setor\s+tunai\b/i.test(rawName);
+
+    var setor = /^stor\s+tunai\b|^setor\s+tunai\b|^setoran\s+tunai\b/i.test(rawName);
     if (setor && amountIdx >= 0) {
-      var labelRek = rawName.replace(/^stor\s+tunai\s+/i, '').replace(/^setor\s+tunai\s+/i, '').trim();
+      var labelRek = rawName.replace(/^stor\s+tunai\s+/i, '').replace(/^setor\s+tunai\s+/i, '').replace(/^setoran\s+tunai\s+/i, '').trim();
       var tujuan = akunDariLabel(labelRek, listRek || []);
       if (!tujuan.dikenal) akunAsing.push(labelRek);
       transferRows.push({ tanggal: tanggal, jenis: 'setor', dariKas: /\bzakat\b/i.test(labelRek) ? 'Kas Zakat' : 'Kas Infak',
@@ -5082,26 +5117,19 @@ function parseHeaderlessRows(rawRows, type, listLayanan, listRek) {
       return;
     }
 
-    // Fundraising = first non-empty cell after the amount column
     var fundraising = '';
     if (amountIdx >= 0) {
       for (var j = amountIdx + 1; j < cols.length; j++) {
-        if (cols[j] && cols[j].trim()) {
-          fundraising = cols[j].trim();
-          break;
+        var sVal = String(cols[j] || '').trim();
+        if (sVal && !/^rp\b/i.test(sVal) && isNaN(Number(sVal.replace(/[.,]/g, '')))) {
+          if (!/^saldo\b/i.test(sVal)) {
+            fundraising = sVal;
+            break;
+          }
         }
       }
     }
-    
-    // Gather extra text from columns between name and amount (col3, col4 etc) that might contain pilar info
-    var extraText = '';
-    for (var k = 2; k < (amountIdx >= 0 ? amountIdx : cols.length); k++) {
-      if (cols[k] && cols[k].trim()) {
-        extraText += ' ' + cols[k].trim();
-      }
-    }
-    extraText = extraText.trim();
-    
+
     if (type === 'himpun') {
       var parsed = parseUraianDetails(rawName, listLayanan);
       var namaDonatur = parsed.donorName;
@@ -5115,77 +5143,51 @@ function parseHeaderlessRows(rawRows, type, listLayanan, listRek) {
         tipeDonatur = namaDonatur.toUpperCase().indexOf('KLL ') === 0 ? 'Kantor Layanan (KLL)' : 'Unit Layanan (ULL)';
       }
       
-      var jDana = 'Infak';
-      var sJenis = 'Infak Umum';
-      var pilar = '';
-      var program = 'Infak Umum';
-      
-      // Check for pilar in suffix or extraText
-      var pilarSource = (parsed.suffix + ' ' + extraText).toLowerCase();
-      if (pilarSource.trim()) {
-        var detectedPilar = detectPilarTegas(pilarSource);
-        if (detectedPilar) {
-          jDana = 'Infak';
-          sJenis = 'Infak Terikat';
-          pilar = detectedPilar;
-          program = detectedPilar;
-        }
-      }
-      
-      // Check for zakat, amil, wakaf in name
-      var upperName = rawName.toUpperCase();
-      if (upperName.indexOf('ZAKAT') >= 0) {
-        jDana = 'Zakat'; sJenis = 'Zakat Mal'; pilar = ''; program = 'Penerimaan Zakat';
-        if (upperName.indexOf('FITRAH') >= 0 || upperName.indexOf('FITRI') >= 0) sJenis = 'Zakat Fitrah';
-        else if (upperName.indexOf('PROFESI') >= 0 || upperName.indexOf('PENGHASILAN') >= 0) sJenis = 'Zakat Profesi/Penghasilan';
-      } else if (upperName.indexOf('AMIL') >= 0) {
-        jDana = 'Amil'; sJenis = 'Amil'; pilar = ''; program = 'Penerimaan Amil';
-      } else if (upperName.indexOf('WAKAF') >= 0) {
-        jDana = 'Wakaf'; sJenis = 'Wakaf Uang'; pilar = ''; program = 'Penerimaan Wakaf';
-      }
+      var kls = bkKlasifikasi(parsed.suffix, rawName);
+
+      var frFinal = (tipeDonatur !== 'Perorangan' && tipeDonatur !== 'Lembaga/Perusahaan' && tipeDonatur !== 'Hamba Allah')
+        ? namaDonatur
+        : (cleanFundraisingName(fundraising) || 'Lazismu Daerah Bantul');
       
       results.push({
         tanggal: tanggal,
-        jenisDana: jDana,
-        subJenis: sJenis,
-        pilar: pilar,
-        program: program,
+        jenisDana: kls.jenisDana,
+        subJenis: kls.subJenis,
+        pilar: kls.pilar,
+        program: kls.program || kls.pilar || kls.subJenis,
         namaDonatur: namaDonatur,
         tipeDonatur: tipeDonatur,
         layananId: layananId,
-        telepon: '',
+        telepon: noTelepon,
         email: '',
-        alamat: '',
+        alamat: alamatTeks,
         jumlah: jumlah,
         metode: 'Cash/Tunai',
         rekeningId: '',
-        bank: '',
+        bank: 'Kas',
         statusBayar: 'Lunas',
-        keterangan: extraText,
-        fundraising: cleanFundraisingName(fundraising)
+        keterangan: rawName,
+        fundraising: frFinal
       });
     } else {
       results.push({
         tanggal: tanggal,
         ashnaf: 'Miskin',
         sumberDana: 'Zakat',
-        program: extraText || '',
+        program: rawName || '',
         namaPenerima: rawName,
         nik: '',
-        telepon: '',
-        alamat: '',
+        telepon: noTelepon,
+        alamat: alamatTeks,
         jumlah: jumlah,
         bentukBantuan: 'Uang Tunai',
         metode: 'Cash/Tunai',
         statusSalur: 'Tersalur',
-        keterangan: '',
+        keterangan: rawName,
         fundraising: cleanFundraisingName(fundraising)
       });
     }
   });
-  /* Properti tambahan tetap ditempel pada array supaya pemanggil lama yang
-     melakukan parsed.forEach() tidak berubah, sementara UI mendapat pergerakan
-     kas dan daftar rekening yang belum dikenal. */
   results.transferRows = transferRows;
   results.akunAsing = akunAsing.filter(function(x, i, a){ return a.indexOf(x) === i; });
   return results;
@@ -5245,12 +5247,12 @@ function isBukuKasHeader(headers){
 /* Pilar & jenis dana dari teks kategori setelah tanda "-" */
 function bkKlasifikasi(kategori, namaLengkap){
   var k = bkNorm(kategori);
-  var semua = bkNorm(namaLengkap + ' ' + kategori);
-  var out = { jenisDana:'Infak', subJenis:'Infak Umum', pilar:'', program: String(kategori||'').trim() };
+  var semua = bkNorm(namaLengkap + ' ' + (kategori || ''));
+  var out = { jenisDana:'Infak', subJenis:'Infak Umum', pilar:'', program: String(kategori || namaLengkap || '').trim() };
 
   if (/zakat/.test(semua)) {
     out.jenisDana = 'Zakat';
-    if (/fitrah/.test(semua)) out.subJenis = 'Zakat Fitrah';
+    if (/fitrah|fitri/.test(semua)) out.subJenis = 'Zakat Fitrah';
     else if (/profesi|penghasilan/.test(semua)) out.subJenis = 'Zakat Profesi/Penghasilan';
     else if (/perdagangan|dagang/.test(semua)) out.subJenis = 'Zakat Perdagangan';
     else if (/pertanian/.test(semua)) out.subJenis = 'Zakat Pertanian';
@@ -5259,37 +5261,77 @@ function bkKlasifikasi(kategori, namaLengkap){
     out.pilar = '';
     return out;
   }
-  if (/wakaf/.test(semua)) { out.jenisDana='Wakaf'; out.subJenis='Wakaf'; return out; }
+  if (/wakaf/.test(semua)) { out.jenisDana='Wakaf'; out.subJenis='Wakaf Uang'; return out; }
   if (/fidyah|fidiah/.test(semua)) { out.jenisDana='Fidyah'; out.subJenis='Fidyah'; return out; }
   if (/\bqurban\b|\bkurban\b/.test(semua)) { out.jenisDana='Kurban'; out.subJenis='Kurban'; return out; }
   if (/\bamil\b/.test(semua)) { out.jenisDana='DSKL'; out.subJenis='Amil'; return out; }
 
-  if (!k || /infak umum|infaq umum|umum|saldo/.test(k)) { out.subJenis='Infak Umum'; out.pilar=''; return out; }
-
-  /* Aturan yang ditegaskan pengguna, diuji lebih dulu supaya tidak
-     tertimpa aturan umum di bawahnya:
-       - donasi Palestina dan NTT  -> Kemanusiaan
-       - kekeringan                -> Sosial Dakwah                       */
-  if (/palestin|gaza|\bntt\b|nusa tenggara timur/.test(k)) {
-    out.subJenis='Infak Terikat'; out.pilar='Kemanusiaan'; return out;
-  }
-  if (/kekeringan|dropping air/.test(k)) {
-    out.subJenis='Infak Terikat'; out.pilar='Sosial Dakwah'; return out;
+  if (/infak umum|infaq umum/.test(k) || (/infak umum|infaq umum/.test(semua) && !/kemanusiaan|bencana|kebencanaan|kesehatan|pendidikan|dakwah|sosial|keagamaan/.test(semua))) {
+    out.subJenis='Infak Umum'; out.pilar=''; return out;
   }
 
-  var peta = [
-    [/kesehatan|sehat|ambulan|klinik|berobat|donor darah/, 'Kesehatan'],
-    [/pendidikan|sekolah|beasiswa|pondok|pesantren|sdua|madrasah|guru|santri/, 'Pendidikan'],
-    [/kemanusiaan|bencana|palestin|gempa|banjir|kebakaran|longsor|tsunami|erupsi|pengungsi/, 'Kemanusiaan'],
-    [/dam\b|kulit|kambing/, 'DAM'],
-    [/filantropis/, 'Pendidikan/Filanatropis'],
-    [/dakwah|sosial|masjid|musholla|mushola|pembangunan|takmir|yatim|dhuafa|lansia/, 'Sosial Dakwah']
-  ];
-  for (var i = 0; i < peta.length; i++) {
-    if (peta[i][0].test(k)) { out.subJenis='Infak Terikat'; out.pilar=peta[i][1]; return out; }
+  // Kemanusiaan (bencana, gempa, NTT, Palestina, air bersih, sumur bor, dsb.)
+  if (/kemanusiaan|bencana|kebencanaan|gempa|ntt|nusa tenggara timur|palestin|gaza|air bersih|sumur bor|toren|pipanisasi|kekeringan|dropping air|banjir|kebakaran|longsor|tsunami|erupsi|pengungsi/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Kemanusiaan';
+    return out;
   }
-  /* Kategori tak dikenal tetap dicatat sebagai terikat dengan pilar Sosial Dakwah
-     (aturan lama), teks aslinya disimpan di program agar tidak hilang. */
+
+  // Kesehatan
+  if (/kesehatan|sehat|ambulan|ambulanmu|klinik|berobat|donor darah|sakit|obat|asy[- ]?syifa/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Kesehatan';
+    return out;
+  }
+
+  // Pendidikan
+  if (/pendidikan|sekolah|beasiswa|spp|pondok|pesantren|sdua|madrasah|santri|guru|peduli guru|filantropis|ipm|imm|pfp|pkttmu/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Pendidikan';
+    return out;
+  }
+
+  // Keagamaan
+  if (/keagamaan|masjid|musholl?a|takmir|muadzin|al[- ]?quran|quran|penghafal quran|ramadhan|kado ramadhan|ifthar|islamic center/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Keagamaan';
+    return out;
+  }
+
+  // Ekonomi & Pemberdayaan
+  if (/ekonomi|umkm|modal usaha|modal|usaha|pemberdayaan/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Ekonomi & Pemberdayaan';
+    return out;
+  }
+
+  // Dakwah & Advokasi / Sosial Dakwah
+  if (/dakwah|sosial dakwah|sosial|advokasi|kajian|kramat|pdm|pcm|prm|kokam/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Sosial Dakwah';
+    return out;
+  }
+
+  // Lingkungan
+  if (/lingkungan|sampah|penghijauan/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'Lingkungan';
+    return out;
+  }
+
+  // DAM
+  if (/dam\b|kulit|kambing/.test(k || semua)) {
+    out.subJenis = 'Infak Terikat';
+    out.pilar = 'DAM';
+    return out;
+  }
+
+  if (!k || /umum|saldo/.test(k)) {
+    out.subJenis = 'Infak Umum';
+    out.pilar = '';
+    return out;
+  }
+
   out.subJenis = 'Infak Terikat';
   out.pilar = 'Sosial Dakwah';
   return out;
@@ -5309,7 +5351,13 @@ function bkBarisKeHimpun(row, listLayanan, layMap){
   var debet  = bkAngka(ambil(['debet','debit','masuk']));
   var uraian = String(ambil(['uraian','keterangan','deskripsi','description']) || '').trim();
 
+  // Abaikan baris saldo awal dan perhitungan kas teller
+  if (/^saldo\s*awal\b|^saldo\b/i.test(uraian)) return { skip: 'kosong', uraian: uraian, jumlah: 0 };
+
+  // Setor tunai ke bank dilewati dari penghimpunan
   if (kredit > 0) return { skip: 'setor', uraian: uraian, jumlah: kredit };
+  if (/^stor\s+tunai\b|^setor\s+tunai\b|^setoran\s+tunai\b/i.test(uraian)) return { skip: 'setor', uraian: uraian, jumlah: debet };
+
   if (!(debet > 0)) return { skip: 'kosong', uraian: uraian, jumlah: 0 };
   if (!uraian) return { skip: 'kosong', uraian: '', jumlah: debet };
 
@@ -6282,13 +6330,27 @@ async function apiSaveImportedData(t, rows, type) {
   var isHimpun = type === 'himpun';
   var sheetName = isHimpun ? SHEETS.PENGHIMPUNAN : SHEETS.PENTASYARUFAN;
   
-  var currentRows = readAll(sheetName);
+  var currentRows = readAll(sheetName) || [];
   var savedCount = 0;
 
   var monthsToSync = {};
   var _petaImp = isHimpun ? _petaDonatur() : null;
   var _layImp = [];
   if (isHimpun) { try { _layImp = readAll(SHEETS.LAYANAN) || []; } catch (e) {} }
+
+  var kwitansiTerpakai = {};
+  var maksUrutPerBulan = {};
+  if (isHimpun) {
+    currentRows.forEach(function(r) {
+      var kw = String(r.noKwitansi || '').trim();
+      if (kw) kwitansiTerpakai[kw] = 1;
+    });
+  } else {
+    currentRows.forEach(function(r) {
+      var bk = String(r.noBukti || '').trim();
+      if (bk) kwitansiTerpakai[bk] = 1;
+    });
+  }
   
   rows.forEach(function(row) {
     row.fundraising = cleanFundraisingName(row.fundraising);
@@ -6298,9 +6360,26 @@ async function apiSaveImportedData(t, rows, type) {
     
     var m = getMonthFromDate(row.tanggal);
     if (m) monthsToSync[m] = true;
+
+    var ym = String(row.tanggal || '').replace(/[^0-9]/g, '').slice(0, 6);
+    if (ym.length < 6) ym = Utilities.formatDate(new Date(), TZ, 'yyyyMM');
     
     if (isHimpun) {
-      row.noKwitansi = row.noKwitansi || ('KW/' + row.tanggal.replace(/-/g, '').slice(0, 6) + '/' + ('0000' + (currentRows.length + savedCount + 1)).slice(-4));
+      var awalanKw = 'KW/' + ym + '/';
+      var noKw = String(row.noKwitansi || '').trim();
+      if (!noKw || kwitansiTerpakai[noKw]) {
+        if (maksUrutPerBulan[ym] === undefined) {
+          maksUrutPerBulan[ym] = _nomorUrutTerakhir(sheetName, 'noKwitansi', awalanKw);
+        }
+        do {
+          maksUrutPerBulan[ym]++;
+          var numStr = maksUrutPerBulan[ym] < 10000 ? ('0000' + maksUrutPerBulan[ym]).slice(-4) : String(maksUrutPerBulan[ym]);
+          noKw = awalanKw + numStr;
+        } while (kwitansiTerpakai[noKw]);
+      }
+      row.noKwitansi = noKw;
+      kwitansiTerpakai[noKw] = 1;
+
       if (row.rekeningId) {
         var rk = (readAll(SHEETS.REKENING) || []).find(function(x) { return String(x.id) === String(row.rekeningId); });
         if (rk) {
@@ -6309,7 +6388,20 @@ async function apiSaveImportedData(t, rows, type) {
         }
       }
     } else {
-      row.noBukti = row.noBukti || ('BPT/' + row.tanggal.replace(/-/g, '').slice(0, 6) + '/' + ('0000' + (currentRows.length + savedCount + 1)).slice(-4));
+      var awalanBk = 'BPT/' + ym + '/';
+      var noBk = String(row.noBukti || '').trim();
+      if (!noBk || kwitansiTerpakai[noBk]) {
+        if (maksUrutPerBulan[ym] === undefined) {
+          maksUrutPerBulan[ym] = _nomorUrutTerakhir(sheetName, 'noBukti', awalanBk);
+        }
+        do {
+          maksUrutPerBulan[ym]++;
+          var numStrBk = maksUrutPerBulan[ym] < 10000 ? ('0000' + maksUrutPerBulan[ym]).slice(-4) : String(maksUrutPerBulan[ym]);
+          noBk = awalanBk + numStrBk;
+        } while (kwitansiTerpakai[noBk]);
+      }
+      row.noBukti = noBk;
+      kwitansiTerpakai[noBk] = 1;
     }
     
     insertRow(sheetName, row);
@@ -6971,14 +7063,16 @@ function detectPilarTegas(text){
   if (!text) return '';
   var s = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   var peta = [
-    [/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara timur\b/, 'Kemanusiaan'],
-    [/\bkekeringan\b|\bdropping air\b/, 'Sosial Dakwah'],
-    [/\bkesehatan\b|\bambulan\w*\b|\bklinik\b|\bberobat\b|\bdonor darah\b/, 'Kesehatan'],
-    [/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bsdua\b/, 'Pendidikan'],
-    [/\bkemanusiaan\b|\bbencana\b|\bgempa\b|\bbanjir\b|\bkebakaran\b|\blongsor\b|\btsunami\b|\berupsi\b|\bpengungsi\b/, 'Kemanusiaan'],
+    [/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara timur\b|\bair bersih\b|\bsumur bor\b|\bpipanisasi\b|\btoren\b|\bkekeringan\b|\bdropping air\b/, 'Kemanusiaan'],
+    [/\bkemanusiaan\b|\bbencana\b|\bkebencanaan\b|\bgempa\b|\bbanjir\b|\bkebakaran\b|\blongsor\b|\btsunami\b|\berupsi\b|\bpengungsi\b|\bsumatera\b/, 'Kemanusiaan'],
+    [/\bkesehatan\b|\bambulan\w*\b|\bklinik\b|\bberobat\b|\bdonor darah\b|\bsakit\b|\bobat\b|\basy[- ]?syifa\b/, 'Kesehatan'],
+    [/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bspp\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bguru\b|\bgtt\b|\bptt\b|\bsdua\b|\bsd\b|\bsmp\b|\bsma\b|\bsmk\b|\btk\b|\baba\b|\buad\b|\bkuliah\b|\bfilantropis\b|\bipm\b|\bimm\b|\bpfp\b|\bpkttmu\b/, 'Pendidikan'],
     [/\bqurban\b|\bkurban\b/, 'Qurban'],
-    [/\bumkm\b|\bmodal usaha\b|\bekonomi\b/, 'Ekonomi'],
-    [/\blingkungan\b|\bsampah\b/, 'Lingkungan']
+    [/\bumkm\b|\busaha\b|\bmodal usaha\b|\bmodal\b|\bekonomi\b/, 'Ekonomi'],
+    [/\blingkungan\b|\bsampah\b|\bpenghijauan\b/, 'Lingkungan'],
+    [/\bkeagamaan\b|\bmasjid\b|\bmusholl?a\b|\btakmir\b|\bmuadzin\b|\b(al[- ])?quran\b|\bramadhan\b|\bkado ramadhan\b|\bifthar\b|\bislamic center\b/, 'Keagamaan'],
+    [/\bdakwah\b|\bsosial dakwah\b|\bsosial\b|\badvokasi\b|\bkajian\b|\bkramat\b|\bpdm\b|\bpcm\b|\bprm\b|\bkokam\b/, 'Sosial Dakwah'],
+    [/\bkelembagaan\b|\bpembangunan kantor\b|\bperlengkapan kantor\b/, 'Kelembagaan']
   ];
   for (var i = 0; i < peta.length; i++) if (peta[i][0].test(s)) return peta[i][1];
   return '';

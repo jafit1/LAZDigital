@@ -188,8 +188,8 @@ var SUBJENIS={
   'DSKL':['CSR Perusahaan','Bagi Hasil Bank','Dana Sosial Lainnya'],
   'Amil':['Amil','Hak Amil Zakat','Hak Amil Infak','Bagi Hasil Bank']
 };
-var PILAR=['Pendidikan','Kesehatan','Ekonomi & Pemberdayaan','Dakwah & Advokasi','Sosial Kemanusiaan','Lingkungan'];
-var KATEGORI_TERIKAT=['Kesehatan','Pendidikan','Sosial Dakwah','DAM','Kemanusiaan','Fidyah','Qurban'];
+var PILAR=['Pendidikan','Kesehatan','Ekonomi & Pemberdayaan','Dakwah & Advokasi','Sosial Kemanusiaan','Keagamaan','Lingkungan'];
+var KATEGORI_TERIKAT=['Kesehatan','Pendidikan','Sosial Dakwah','Kemanusiaan','Keagamaan','DAM','Fidyah','Qurban'];
 var METODE=['Cash/Tunai','Transfer Bank','QRIS','E-Wallet','Debit/Kartu'];
 var TIPE_DONATUR=['Perorangan','Lembaga/Perusahaan','Hamba Allah','Kantor Layanan (KLL)','Unit Layanan (ULL)'];
 var FUNDRAISING_OPTIONS=['Lazismu Daerah Bantul','Kantor','Qris','Sherli','Renata','Ariya','Nur Yulianto','Muzakki'];

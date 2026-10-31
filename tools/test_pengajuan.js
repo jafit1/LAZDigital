@@ -396,8 +396,13 @@ const srv = http.createServer(async (req, res) => {
       cek('modal tambah pengajuan terbuka', true);
 
       // Ubah tanggal dan cek hari terhitung otomatis
-      await page.fill('#pjInpTanggal', '2026-11-04');
-      await page.dispatchEvent('#pjInpTanggal', 'change');
+      await page.evaluate(() => {
+        const inp = document.getElementById('pjInpTanggal');
+        if (inp) {
+          inp.value = '2026-11-04';
+          inp.dispatchEvent(new Event('change'));
+        }
+      });
       const valHari = await page.inputValue('#pjInpHari');
       cek('input tanggal mengubah hari otomatis menjadi Rabu', valHari === 'Rabu', valHari);
 

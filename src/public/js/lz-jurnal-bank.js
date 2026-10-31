@@ -25,6 +25,7 @@
     'Ekonomi & Pemberdayaan',
     'Sosial Kemanusiaan',
     'Dakwah & Advokasi',
+    'Keagamaan',
     'Lingkungan',
     'Kelembagaan'
   ];
