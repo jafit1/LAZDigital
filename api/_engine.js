@@ -5145,9 +5145,7 @@ function parseHeaderlessRows(rawRows, type, listLayanan, listRek) {
       
       var kls = bkKlasifikasi(parsed.suffix, rawName);
 
-      var frFinal = (tipeDonatur !== 'Perorangan' && tipeDonatur !== 'Lembaga/Perusahaan' && tipeDonatur !== 'Hamba Allah')
-        ? namaDonatur
-        : (cleanFundraisingName(fundraising) || 'Lazismu Daerah Bantul');
+      var frFinal = cleanFundraisingName(fundraising);
       
       results.push({
         tanggal: tanggal,
@@ -5391,9 +5389,7 @@ function bkBarisKeHimpun(row, listLayanan, layMap){
 
   var kls = bkKlasifikasi(kategori, nama);
 
-  /* Fundraising hanya untuk transaksi tingkat daerah. Transaksi KLL/ULL
-     dicatat atas nama layanannya, bukan petugas fundraising. */
-  var fr = adalahLayanan ? namaDonatur : bkFundraising(ambil(['fundraising','fr','petugas','amil']));
+  var fr = bkFundraising(ambil(['fundraising','fr','petugas','amil'])) || 'Lazismu Daerah Bantul';
 
   return {
     tanggal: parseImportDate(ambil(['tanggal','tgl','date'])),

@@ -74,6 +74,8 @@ async function rpcLaz(fn, args) {
   const rFilantropis = resParse.valid.find(x => x.keterangan.includes('Filantropis'));
   cek('Filantropis masuk pilar Pendidikan', rFilantropis && rFilantropis.pilar === 'Pendidikan', rFilantropis);
 
+  cek('FR baris KLL terbaca Lazismu Daerah Bantul, bukan nama KLL', resParse.valid.every(x => x.fundraising === 'Lazismu Daerah Bantul'), resParse.valid.map(x => x.fundraising));
+
   console.log('\n=== C. UJI PENYIMPANAN DATA IMPOR (ANTI-DUPLICATE CONSTRAINT) ===');
   // Simpan data hasil impor! Dulu ini GAGAL dengan: duplicate key value violates unique constraint "penghimpunan_kwitansi"
   const resSave = await rpcLaz('apiSaveImportedData', [SU, resParse.valid, 'himpun']);
