@@ -1367,10 +1367,25 @@
       return;
     }
 
+    const sidik = (x) => `${x.tanggal}|${String(x.pemohon || '').toLowerCase().trim()}|${String(x.keperluan || '').toLowerCase().trim()}`;
+    const adaSet = new Set((STATE.daftar || []).map(sidik));
+
+    let nBaru = 0, nAda = 0;
+    baris.forEach((r) => {
+      if (adaSet.has(sidik(r))) {
+        r._sudahAda = true;
+        nAda++;
+      } else {
+        r._sudahAda = false;
+        nBaru++;
+      }
+    });
+
     let h = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font-weight:700;font-size:12.5px;color:var(--green)">
-        ✓ Ditemukan ${baris.length} baris data pengajuan siap diimpor:
+      <div style="font-weight:700;font-size:12.5px;color:var(--text)">
+        ${nBaru > 0 ? `<span style="color:var(--green)">✓ ${nBaru} data baru siap diimpor</span>` : '<span style="color:var(--amber)">Semua data sudah ada di web</span>'}
+        ${nAda > 0 ? `<span class="muted" style="font-weight:normal;margin-left:8px">(${nAda} data sudah ada di web &amp; otomatis dilewati)</span>` : ''}
       </div>
     </div>
     <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
@@ -1378,6 +1393,7 @@
         <thead>
           <tr style="background:var(--surface2);position:sticky;top:0;border-bottom:1px solid var(--border)">
             <th style="padding:6px 8px">No</th>
+            <th style="padding:6px 8px">Status Cek</th>
             <th style="padding:6px 8px">Tanggal</th>
             <th style="padding:6px 8px">Pemohon</th>
             <th style="padding:6px 8px">Keperluan</th>
@@ -1390,8 +1406,9 @@
 
     baris.slice(0, 50).forEach((r, idx) => {
       h += `
-      <tr style="border-bottom:1px solid var(--border)">
+      <tr style="border-bottom:1px solid var(--border);${r._sudahAda ? 'background:rgba(239,68,68,0.06);opacity:0.65' : ''}">
         <td style="padding:5px 8px">${idx + 1}</td>
+        <td style="padding:5px 8px">${r._sudahAda ? '<span class="badge red" style="font-size:9.5px">Sudah Ada (Dilewati)</span>' : '<span class="badge green" style="font-size:9.5px">Baru</span>'}</td>
         <td style="padding:5px 8px;white-space:nowrap">${esc(r.tanggal)}</td>
         <td style="padding:5px 8px;font-weight:700">${esc(r.pemohon)}</td>
         <td style="padding:5px 8px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.keperluan)}</td>
@@ -1402,21 +1419,27 @@
     });
 
     if (baris.length > 50) {
-      h += `<tr><td colspan="7" style="text-align:center;padding:6px;color:var(--muted)">... dan ${baris.length - 50} data lainnya</td></tr>`;
+      h += `<tr><td colspan="8" style="text-align:center;padding:6px;color:var(--muted)">... dan ${baris.length - 50} data lainnya</td></tr>`;
     }
 
     h += `</tbody></table></div>`;
     area.innerHTML = h;
 
     if (btnSimpan) {
-      btnSimpan.disabled = false;
-      btnSimpan.textContent = `Impor ${baris.length} Data ke Sistem`;
+      if (nBaru > 0) {
+        btnSimpan.disabled = false;
+        btnSimpan.textContent = `Impor ${nBaru} Data Baru ke Sistem`;
+      } else {
+        btnSimpan.disabled = true;
+        btnSimpan.textContent = 'Semua Data Sudah Ada (Dilewati)';
+      }
     }
   }
 
   async function simpanDataImpor() {
-    const baris = STATE.dataImporPreview || [];
-    if (!baris.length) return toast('Tidak ada data untuk diimpor.', true);
+    const semua = STATE.dataImporPreview || [];
+    const baris = semua.filter((r) => !r._sudahAda);
+    if (!baris.length) return toast('Semua data sudah ada di web, tidak ada data baru untuk diimpor.');
 
     const btn = el('btnProsesImporSimpan');
     if (btn) { btn.disabled = true; btn.textContent = 'Mengimpor ke sistem...'; }
@@ -1429,7 +1452,7 @@
       gambarHalaman();
     } catch (e) {
       toast('Gagal mengimpor: ' + e.message, true);
-      if (btn) { btn.disabled = false; btn.textContent = `Impor ${baris.length} Data ke Sistem`; }
+      if (btn) { btn.disabled = false; btn.textContent = `Impor ${baris.length} Data Baru ke Sistem`; }
     }
   }
 

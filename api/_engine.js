@@ -4839,7 +4839,7 @@ function markDuplicates(himpunList, salurList) {
         var tglMatch = (x.tanggal === r.tanggal);
         var nameMatch = (String(x.namaDonatur || '').toLowerCase().trim() === String(r.namaDonatur || '').toLowerCase().trim());
         var amtMatch = (Math.abs((Number(x.jumlah) || 0) - (Number(r.jumlah) || 0)) < 0.01);
-        var progMatch = (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
+        var progMatch = !r.program || !x.program || (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
         return tglMatch && nameMatch && amtMatch && progMatch;
       });
       if (isDup) {
@@ -4854,7 +4854,7 @@ function markDuplicates(himpunList, salurList) {
         var tglMatch = (x.tanggal === r.tanggal);
         var nameMatch = (String(x.namaPenerima || '').toLowerCase().trim() === String(r.namaPenerima || '').toLowerCase().trim());
         var amtMatch = (Math.abs((Number(x.jumlah) || 0) - (Number(r.jumlah) || 0)) < 0.01);
-        var progMatch = (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
+        var progMatch = !r.program || !x.program || (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
         return tglMatch && nameMatch && amtMatch && progMatch;
       });
       if (isDup) {

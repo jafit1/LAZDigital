@@ -357,7 +357,10 @@ const srv = http.createServer(async (req, res) => {
     cek('nominal bantuan tersaring otomatis', barisTarik.some((x) => x.nominalDisetujui === 650000));
 
     const resImporDirect = await pintu('pengajuan.imporSpreadsheet', { url: sheetUrl, simpanLangsung: true }, T_PENGAJUAN);
-    cek('pengajuan.imporSpreadsheet berhasil menyimpan data langsung', resImporDirect.ok === true && resImporDirect.jumlah >= 20, resImporDirect);
+    cek('pengajuan.imporSpreadsheet berhasil menyimpan data langsung atau mendeteksi yang sudah ada', resImporDirect.ok === true && (resImporDirect.jumlah >= 20 || resImporDirect.dilewati >= 20), resImporDirect);
+
+    const resImpor2 = await pintu('pengajuan.imporSpreadsheet', { url: sheetUrl, simpanLangsung: true }, T_PENGAJUAN);
+    cek('impor kedua kali: data yang sudah ada di web otomatis dilewati', resImpor2.ok === true && resImpor2.dilewati >= 20 && resImpor2.jumlah === 0, resImpor2);
 
     if (pw) {
       console.log('\n=== G. UJI TAMPILAN PERAMBAN (PLAYWRIGHT) ===');
@@ -426,13 +429,12 @@ const srv = http.createServer(async (req, res) => {
       cek('modal impor spreadsheet terbuka', true);
 
       await page.click('#btnTarikSpreadsheet');
-      await page.waitForSelector('#btnProsesImporSimpan:not([disabled])', { timeout: 15000 });
-      cek('pratinjau data spreadsheet terbaca dan tombol impor aktif', true);
+      await page.waitForFunction(() => document.body.innerText.includes('sudah ada di web'), null, { timeout: 15000 });
+      cek('pratinjau data spreadsheet terbaca dan data yang sudah ada otomatis ditandai dilewati', true);
 
-      await page.click('#btnProsesImporSimpan');
+      await page.click('#modalFoot button:has-text("Batal")');
       await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 10000 });
-      await page.waitForFunction(() => document.body.innerText.includes('Abdul Hakim'), null, { timeout: 10000 });
-      cek('data hasil impor dari spreadsheet tampil di tabel', true);
+      cek('data hasil impor dari spreadsheet sudah tampil di tabel', await page.evaluate(() => document.body.innerText.includes('Abdul Hakim')));
 
       // Pindah ke tab Kalender Detail
       await page.click('#nav_kalender');
