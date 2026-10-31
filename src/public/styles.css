@@ -3802,30 +3802,48 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
    45. Closing Bulanan (pratinjau layar)
    ============================================================ */
 .cl-card .cl-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.cl-kpis{display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;margin-bottom:18px}
+.cl-kpi{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.cl-kpi-title{font-size:12.5px;font-weight:700;color:var(--text);display:flex;align-items:center;justify-content:space-between}
+.cl-kpi-sub{font-size:11px;color:var(--muted);font-weight:normal}
+.cl-kpi-stats{display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:8px;font-size:11px}
+.cl-kpi-stat b{font-size:13px;display:block;margin-top:2px;font-variant-numeric:tabular-nums}
+.cl-kpi-stat.himpun b{color:var(--green)}
+.cl-kpi-stat.salur b{color:var(--amber)}
+
 .cl-sec-title{
-  font-family:var(--head);font-weight:700;font-size:14px;letter-spacing:.01em;
-  color:var(--accent);margin:18px 0 8px;padding-bottom:5px;border-bottom:2px solid rgba(var(--accent-rgb),.25);
+  font-family:var(--head);font-weight:700;font-size:13.5px;letter-spacing:.01em;
+  color:var(--accent);margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid rgba(var(--accent-rgb),.25);
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;
 }
 .cl-sec-title:first-of-type{margin-top:4px}
-.cl-sec-title .muted{font-weight:500;font-size:12px}
+.cl-sec-title .muted{font-weight:500;font-size:11.5px}
 
-.cl-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width:640px){.cl-pair{grid-template-columns:1fr}}
+.cl-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:720px){.cl-pair{grid-template-columns:1fr}}
 
-.cl-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
-.cl-tbl th,.cl-tbl td{border:1px solid var(--border);padding:5px 9px}
+.cl-tbl-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,0.02)}
+.cl-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.cl-tbl th,.cl-tbl td{padding:7px 12px;border-bottom:1px solid var(--border2)}
 .cl-tbl thead th{
   background:var(--surface2);text-align:left;font-family:var(--head);font-weight:700;
-  font-size:11.5px;letter-spacing:.03em;color:var(--text);
+  font-size:11.5px;letter-spacing:.03em;color:var(--text);border-bottom:1px solid var(--border);
 }
+.cl-th-himpun{color:var(--green) !important}
+.cl-th-salur{color:var(--amber) !important}
+.cl-tbl tr:hover td{background:rgba(var(--accent-rgb),0.02)}
 .cl-tbl td.cl-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.cl-tbl tfoot td{font-weight:700;background:var(--surface2)}
+.cl-tbl td.cl-num-ada{font-weight:600;color:var(--text)}
+.cl-nol{color:var(--muted);opacity:0.35;font-weight:normal}
+.cl-tbl tfoot td{font-weight:700;background:var(--surface2);border-top:1.5px solid var(--border);font-size:12.5px}
+.cl-foot-himpun td.cl-num{color:var(--green)}
+.cl-foot-salur td.cl-num{color:var(--amber)}
 
-.cl-detail{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
-@media (max-width:640px){.cl-detail{grid-template-columns:1fr}}
-.cl-box{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.cl-detail{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+@media (max-width:720px){.cl-detail{grid-template-columns:1fr}}
+.cl-box{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column}
 .cl-box-h{
-  font-family:var(--head);font-weight:700;font-size:12.5px;padding:7px 11px;border-bottom:1px solid var(--border);
+  font-family:var(--head);font-weight:700;font-size:12px;padding:8px 12px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:6px;
 }
 .cl-orange .cl-box-h{background:rgba(234,138,44,.16);color:#9a5a12}
@@ -3833,14 +3851,15 @@ html[data-theme="dark"] .sel-pop .dropdown-search{background:var(--glass-strong,
 [data-theme="dark"] .cl-orange .cl-box-h{color:#f0b072}
 [data-theme="dark"] .cl-green .cl-box-h{color:#6dd4a0}
 .cl-box-h select{
-  margin-left:auto;font:inherit;font-size:12px;font-weight:600;padding:2px 6px;border-radius:7px;
+  margin-left:auto;font:inherit;font-size:11.5px;font-weight:600;padding:2px 6px;border-radius:6px;
   background:var(--surface);border:1px solid var(--border);color:var(--text);max-width:60%;
 }
-.cl-box-r{display:flex;justify-content:space-between;gap:10px;padding:5px 11px;border-bottom:1px solid var(--border2);font-size:12.5px}
+.cl-box-body{flex:1 1 auto;max-height:280px;overflow-y:auto}
+.cl-box-r{display:flex;justify-content:space-between;gap:10px;padding:6px 12px;border-bottom:1px solid var(--border2);font-size:12px}
 .cl-box-r span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cl-box-r b{font-variant-numeric:tabular-nums;white-space:nowrap}
 .cl-box-r:last-child{border-bottom:0}
-.cl-box-tot{font-weight:700;background:var(--surface2)}
+.cl-box-tot{font-weight:700;background:var(--surface2);border-top:1.5px solid var(--border)}
 
 /* ---------- 46. CADANGAN OTOMATIS & PEMULIHAN ---------- */
 .cad-kotak{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 13px;border-radius:11px;background:var(--surface2);border:1px solid var(--border);font-size:13px}

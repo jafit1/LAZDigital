@@ -41,6 +41,7 @@ const DAFTAR = [
   { label: 'Layar Impor Jurnal per Berkas', berkas: 'test_impor_berkas_ui.js' },
   { label: 'Pembuat Jurnal Rekening Koran Bank', berkas: 'test_jurnal_bank.js' },
   { label: 'Samakan jurnal dengan rekap', berkas: 'test_samakan_rekap.js' },
+  { label: 'Bagi hasil masuk closing bulanan', berkas: 'test_closing_bagi_hasil.js' },
   { label: 'Impor kas spreadsheet dan anti-duplikat', berkas: 'test_impor_kas_spreadsheet.js' },
   { label: 'Impor tempel: setor tunai, pilar, rekening', berkas: 'test_impor_headerless_aman.js' },
   { label: 'Impor: tab kembali ke Unggah File', berkas: 'test_impor_tab_reset.js' },

@@ -10286,14 +10286,25 @@ function loadClosing(){
 
 /* Satu blok dana (penghimpunan / penyaluran) sebagai tabel label→nilai. */
 function clBlok(judul, peta, baris){
+  var isHimpun = judul.toUpperCase().indexOf('HIMPUN') >= 0;
   var rows = baris.map(function(p){
     var v = Number((peta || {})[p[0]]) || 0;
     if (p[0] === 'lain' && v === 0) return '';
-    return '<tr><td>' + esc(p[1]) + '</td><td class="cl-num">' + rpCetak(v) + '</td></tr>';
+    var adaVal = v > 0;
+    return '<tr class="' + (adaVal ? 'cl-row-ada' : 'cl-row-nol') + '">'
+      + '<td class="cl-label' + (adaVal ? '' : ' muted') + '">' + esc(p[1]) + '</td>'
+      + '<td class="cl-num ' + (adaVal ? 'cl-num-ada' : '') + '">'
+      + (adaVal ? rpCetak(v) : '<span class="cl-nol">—</span>')
+      + '</td></tr>';
   }).join('');
-  return '<table class="cl-tbl"><thead><tr><th colspan="2">' + esc(judul) + '</th></tr></thead>'
+  return '<div class="cl-tbl-wrap">'
+    + '<table class="cl-tbl"><thead><tr><th colspan="2" class="' + (isHimpun ? 'cl-th-himpun' : 'cl-th-salur') + '">'
+    + '<span class="badge ' + (isHimpun ? 'green' : 'amber') + '" style="font-size:10px;margin-right:6px">●</span> '
+    + esc(judul) + '</th></tr></thead>'
     + '<tbody>' + rows + '</tbody>'
-    + '<tfoot><tr><td>Total</td><td class="cl-num">' + rpCetak((peta || {}).total) + '</td></tr></tfoot></table>';
+    + '<tfoot class="' + (isHimpun ? 'cl-foot-himpun' : 'cl-foot-salur') + '"><tr>'
+    + '<td>Total ' + esc(judul.toLowerCase()) + '</td><td class="cl-num cl-total-val">' + rpCetak((peta || {}).total) + '</td>'
+    + '</tr></tfoot></table></div>';
 }
 
 function clPasangan(blokJudul, obj){
@@ -10306,28 +10317,64 @@ function clPasangan(blokJudul, obj){
 function renderClosingPreview(d){
   var h = '<div class="card cl-card">'
     + '<div class="cl-head">'
-    + '<div><h3 style="margin:0">Closing Bulanan</h3><div class="muted" style="font-size:13px">REKAP ' + esc((SETTINGS.namaLembaga || 'LAZISMU').toUpperCase()) + ' — ' + esc(d.periode) + '</div></div>'
+    + '<div><h3 style="margin:0">Closing Bulanan</h3><div class="muted" style="font-size:12.5px;margin-top:2px">Rekap ' + esc((SETTINGS.namaLembaga || 'LAZISMU').toUpperCase()) + ' — <b>' + esc(d.periode) + '</b></div></div>'
     + '<button class="btn btn-primary btn-sm" onclick="cetakClosing()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button>'
     + '</div>';
 
-  h += '<div class="cl-sec-title">SE BANTUL <span class="muted">(daerah + seluruh KLL/ULL)</span></div>';
+  var selisihSeBantul = (d.seBantul.penghimpunan.total || 0) - (d.seBantul.penyaluran.total || 0);
+  var selisihDaerah = (d.daerah.penghimpunan.total || 0) - (d.daerah.penyaluran.total || 0);
+  var selisihKll = (d.kll.penghimpunan.total || 0) - (d.kll.penyaluran.total || 0);
+
+  h += '<div class="cl-kpis">'
+    + '  <div class="cl-kpi">'
+    + '    <div class="cl-kpi-title">LAZISMU DAERAH <span class="cl-kpi-sub">(Kantor Daerah)</span></div>'
+    + '    <div class="cl-kpi-stats">'
+    + '      <div class="cl-kpi-stat himpun"><span class="muted">Penghimpunan</span><b>' + rpCetak(d.daerah.penghimpunan.total) + '</b></div>'
+    + '      <div class="cl-kpi-stat salur"><span class="muted">Penyaluran</span><b>' + rpCetak(d.daerah.penyaluran.total) + '</b></div>'
+    + '      <div class="cl-kpi-stat"><span class="muted">Surplus</span><b style="color:' + (selisihDaerah >= 0 ? 'var(--blue)' : 'var(--red)') + '">' + rpCetak(selisihDaerah) + '</b></div>'
+    + '    </div>'
+    + '  </div>'
+    + '  <div class="cl-kpi">'
+    + '    <div class="cl-kpi-title">SE BANTUL <span class="cl-kpi-sub">(Konsolidasi)</span></div>'
+    + '    <div class="cl-kpi-stats">'
+    + '      <div class="cl-kpi-stat himpun"><span class="muted">Penghimpunan</span><b>' + rpCetak(d.seBantul.penghimpunan.total) + '</b></div>'
+    + '      <div class="cl-kpi-stat salur"><span class="muted">Penyaluran</span><b>' + rpCetak(d.seBantul.penyaluran.total) + '</b></div>'
+    + '      <div class="cl-kpi-stat"><span class="muted">Surplus</span><b style="color:' + (selisihSeBantul >= 0 ? 'var(--blue)' : 'var(--red)') + '">' + rpCetak(selisihSeBantul) + '</b></div>'
+    + '    </div>'
+    + '  </div>'
+    + '  <div class="cl-kpi">'
+    + '    <div class="cl-kpi-title">KANTOR LAYANAN <span class="cl-kpi-sub">(KLL / ULL)</span></div>'
+    + '    <div class="cl-kpi-stats">'
+    + '      <div class="cl-kpi-stat himpun"><span class="muted">Penghimpunan</span><b>' + rpCetak(d.kll.penghimpunan.total) + '</b></div>'
+    + '      <div class="cl-kpi-stat salur"><span class="muted">Penyaluran</span><b>' + rpCetak(d.kll.penyaluran.total) + '</b></div>'
+    + '      <div class="cl-kpi-stat"><span class="muted">Surplus</span><b style="color:' + (selisihKll >= 0 ? 'var(--blue)' : 'var(--red)') + '">' + rpCetak(selisihKll) + '</b></div>'
+    + '    </div>'
+    + '  </div>'
+    + '</div>';
+
+  h += '<div class="cl-sec-title"><span>LAZISMU DAERAH</span> <span class="muted">(Penerimaan &amp; Penyaluran Kantor Daerah)</span></div>';
+  h += clPasangan('DAERAH', d.daerah);
+
+  h += '<div class="cl-sec-title"><span>SE BANTUL</span> <span class="muted">(Konsolidasi Seluruh Kabupaten)</span></div>';
   h += clPasangan('SE BANTUL', d.seBantul);
 
-  h += '<div class="cl-sec-title">LAZISMU DAERAH <span class="muted">(tanpa KLL/ULL)</span></div>';
-  h += clPasangan('DAERAH', d.daerah);
+  h += '<div class="cl-sec-title"><span>KANTOR LAYANAN (KLL / ULL)</span> <span class="muted">(Selisih Konsolidasi - Daerah)</span></div>';
+  h += clPasangan('KLL / ULL', d.kll);
 
   /* Detail Fundraising (oranye) + Detail per fundraiser (hijau) */
   h += '<div class="cl-detail">';
-  h += '<div class="cl-box cl-orange"><div class="cl-box-h">Detail Sumber / Fundraising</div>'
+  h += '<div class="cl-box cl-orange"><div class="cl-box-h"><span>Detail Sumber / Fundraising</span></div>'
+    + '<div class="cl-box-body">'
     + (d.detailFundraising.length
         ? d.detailFundraising.map(function(f){ return '<div class="cl-box-r"><span>' + esc(f.nama) + '</span><b>' + rpCetak(f.jumlah) + '</b></div>'; }).join('')
-        : '<div class="muted" style="padding:8px 0;font-size:12px">Belum ada data fundraising daerah.</div>')
-    + '<div class="cl-box-r cl-box-tot"><span>JUMLAH</span><b>' + rpCetak(d.totalFundraising) + '</b></div></div>';
+        : '<div class="muted" style="padding:10px 12px;font-size:12px">Belum ada data fundraising daerah.</div>')
+    + '</div>'
+    + '<div class="cl-box-r cl-box-tot"><span>TOTAL FUNDRAISING</span><b>' + rpCetak(d.totalFundraising) + '</b></div></div>';
 
   var frOpts = (d.daftarFundraiser || []).map(function(n){ return '<option value="' + esc(n) + '"' + (n === CLOSING_FR ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
   var dk = d.detailKantor || { rincian: [], total: 0 };
-  h += '<div class="cl-box cl-green"><div class="cl-box-h">Detail <select id="cl_frPilih" onchange="closingPilihFr()">' + frOpts + '</select></div>'
-    + '<div id="cl_frRincian">' + clRincianHTML(dk) + '</div></div>';
+  h += '<div class="cl-box cl-green"><div class="cl-box-h"><span>Detail Peruntukan:</span> <select id="cl_frPilih" onchange="closingPilihFr()">' + frOpts + '</select></div>'
+    + '<div id="cl_frRincian" class="cl-box-body">' + clRincianHTML(dk) + '</div></div>';
   h += '</div>';
 
   h += '</div>';
@@ -10336,8 +10383,10 @@ function renderClosingPreview(d){
 
 function clRincianHTML(dk){
   if (!dk || !dk.rincian || !dk.rincian.length)
-    return '<div class="muted" style="padding:8px 0;font-size:12px">Tidak ada rincian untuk sumber ini.</div>';
-  return dk.rincian.map(function(r){ return '<div class="cl-box-r"><span>' + esc(r.peruntukan) + '</span><b>' + rpCetak(r.jumlah) + '</b></div>'; }).join('')
+    return '<div class="muted" style="padding:10px 12px;font-size:12px">Tidak ada rincian untuk sumber ini.</div>';
+  return '<div class="cl-box-rows">'
+    + dk.rincian.map(function(r){ return '<div class="cl-box-r"><span>' + esc(r.peruntukan) + '</span><b>' + rpCetak(r.jumlah) + '</b></div>'; }).join('')
+    + '</div>'
     + '<div class="cl-box-r cl-box-tot"><span>JUMLAH</span><b>' + rpCetak(dk.total) + '</b></div>';
 }
 

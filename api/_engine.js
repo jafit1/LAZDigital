@@ -8089,12 +8089,24 @@ function _lhJumlah(peta, kunci, n){
    Terikat, Infak Umum, Amil. Terikat/umum penyaluran dibaca dari seksi/
    keterangan (sinyal yang tersedia di jurnal). */
 function _closingKatH(r){
-  var jl = _norm(r.jenisDana), sl = _norm(r.subJenis), ak = _norm(r.akunKredit);
-  var bh = sl.indexOf('bagi hasil') >= 0;
-  if (jl.indexOf('zakat') >= 0) return bh ? 'bhZakat' : 'zakat';
-  if (jl.indexOf('amil')  >= 0) return bh ? 'bhAmil'  : 'amil';
+  var jl = _norm(r.jenisDana), sl = _norm(r.subJenis), ak = _norm(r.akunKredit),
+      ur = _norm(r.keterangan) + ' ' + _norm(r.namaDonatur);
+  var bh = sl.indexOf('bagi hasil') >= 0 || jl.indexOf('bagi hasil') >= 0 || ak.indexOf('bagi hasil') >= 0 || ur.indexOf('bagi hasil') >= 0;
+
+  if (bh) {
+    if (jl.indexOf('zakat') >= 0 || ak.indexOf('zakat') >= 0 || ur.indexOf('zakat') >= 0) return 'bhZakat';
+    if (jl.indexOf('amil') >= 0 || ak.indexOf('amil') >= 0 || ur.indexOf('amil') >= 0) return 'bhAmil';
+    if (ak.indexOf('terikat') >= 0 || sl.indexOf('terikat') >= 0 || (!!String(r.pilar || '').trim() && sl.indexOf('umum') < 0)) return 'bhInfakTerikat';
+    return 'bhInfak';
+  }
+
+  if (sl.indexOf('administrasi') >= 0 || jl.indexOf('administrasi') >= 0 || ur.indexOf('administrasi bank') >= 0) {
+    return 'lain';
+  }
+
+  if (jl.indexOf('zakat') >= 0) return 'zakat';
+  if (jl.indexOf('amil')  >= 0) return 'amil';
   if (jl.indexOf('infa') >= 0 || jl.indexOf('sedekah') >= 0){
-    if (bh) return (ak.indexOf('terikat') >= 0) ? 'bhInfakTerikat' : 'bhInfak';
     var terikat = sl.indexOf('terikat') >= 0 || (!!String(r.pilar||'').trim() && sl.indexOf('umum') < 0);
     return terikat ? 'infakTerikat' : 'infakUmum';
   }
@@ -8130,10 +8142,13 @@ function apiClosingBulanan(t, bulan){
   var seBantul = { penghimpunan: kosongH(), penyaluran: kosongT() };
   var daerah   = { penghimpunan: kosongH(), penyaluran: kosongT() };
 
-  /* Bagi hasil bank adalah pendapatan lembaga (kas/bank), BUKAN penghimpunan
-     tingkat daerah dari fundraiser. Karena itu bagi hasil dihitung di SE BANTUL
-     tetapi TIDAK dimasukkan ke blok DAERAH — sesuai rekap manual. */
-  function _isBagiHasil(r){ return /bagi hasil/i.test(String(r.subJenis || '')); }
+  function _isBagiHasil(r){
+    return /bagi hasil/i.test(String(r.subJenis || '')) ||
+           /bagi hasil/i.test(String(r.jenisDana || '')) ||
+           /bagi hasil/i.test(String(r.akunKredit || '')) ||
+           /bagi hasil/i.test(String(r.namaDonatur || '')) ||
+           /bagi hasil/i.test(String(r.keterangan || ''));
+  }
   /* Bagi hasil dari rekening BDW (Bank BDW / BDW Umum / BDW Kebencanaan) tidak
      dihitung di rekap, sesuai patokan rekap manual. */
   function _bagiHasilBDW(r){
@@ -8147,7 +8162,7 @@ function apiClosingBulanan(t, bulan){
     if (_isSetorTunaiHimpun(r)) return;    // setor tunai bukan penghimpunan
     var k = _closingKatH(r), n = Number(r.jumlah) || 0;
     seBantul.penghimpunan[k] += n; seBantul.penghimpunan.total += n;
-    if (isDaerah(r) && !_isBagiHasil(r)){ daerah.penghimpunan[k] += n; daerah.penghimpunan.total += n; }
+    if (isDaerah(r)){ daerah.penghimpunan[k] += n; daerah.penghimpunan.total += n; }
   });
   /* Penyaluran closing = penyaluran AKTUAL: LPJ (per program) + penyaluran
      langsung daerah + operasional amil. TIDAK termasuk:
@@ -8186,12 +8201,17 @@ function apiClosingBulanan(t, bulan){
     penyaluran: selisih(seBantul.penyaluran, daerah.penyaluran)
   };
 
-  // Detail Sumber/Fundraising: penghimpunan DAERAH per nama fundraising (mentah).
-  // Bagi hasil dikecualikan agar JUMLAH-nya = total penghimpunan daerah.
+  // Detail Sumber/Fundraising: penghimpunan DAERAH per nama fundraising.
   var frPeta = {};
   H.forEach(function(r){
-    if (!isDaerah(r) || _isBagiHasil(r)) return;
-    var nama = String(r.fundraising || '').trim() || 'Lainnya';
+    if (!isDaerah(r)) return;
+    if (_bagiHasilBDW(r)) return;
+    if (_isSetorTunaiHimpun(r)) return;
+    var nama = String(r.fundraising || '').trim();
+    if (_isBagiHasil(r) && (!nama || nama === 'Lazismu Daerah Bantul')) {
+      nama = 'Bagi Hasil Bank';
+    }
+    nama = nama || 'Lazismu Daerah Bantul';
     frPeta[nama] = (frPeta[nama] || 0) + (Number(r.jumlah) || 0);
   });
   var detailFundraising = Object.keys(frPeta).map(function(k){ return { nama: k, jumlah: frPeta[k] }; })
@@ -8205,8 +8225,13 @@ function apiClosingBulanan(t, bulan){
     if (!namaFr) return { fundraiser: '', rincian: [], total: 0 };
     var peta = {};
     H.forEach(function(r){
-      if (!isDaerah(r) || _isBagiHasil(r)) return;
-      if (_norm(r.fundraising) !== _norm(namaFr)) return;
+      if (!isDaerah(r)) return;
+      if (_bagiHasilBDW(r)) return;
+      if (_isSetorTunaiHimpun(r)) return;
+      var frName = String(r.fundraising || '').trim();
+      if (_isBagiHasil(r) && (!frName || frName === 'Lazismu Daerah Bantul')) frName = 'Bagi Hasil Bank';
+      frName = frName || 'Lazismu Daerah Bantul';
+      if (_norm(frName) !== _norm(namaFr)) return;
       var per = String(r.pilar || '').trim() || String(r.program || '').trim() || String(r.subJenis || r.jenisDana || 'Lainnya').trim();
       peta[per] = (peta[per] || 0) + (Number(r.jumlah) || 0);
     });
@@ -8240,8 +8265,11 @@ function apiClosingRincianFundraiser(t, bulan, namaFr){
   var peta = {};
   H.forEach(function(r){
     if (resolveLayananName(r, layList, layMap) !== LAYANAN_DAERAH) return;
-    if (/bagi hasil/i.test(String(r.subJenis || ''))) return;
-    if (_norm(r.fundraising) !== _norm(namaFr)) return;
+    var frName = String(r.fundraising || '').trim();
+    var isBh = /bagi hasil/i.test(String(r.subJenis || '')) || /bagi hasil/i.test(String(r.jenisDana || '')) || /bagi hasil/i.test(String(r.keterangan || '')) || /bagi hasil/i.test(String(r.namaDonatur || ''));
+    if (isBh && (!frName || frName === 'Lazismu Daerah Bantul')) frName = 'Bagi Hasil Bank';
+    frName = frName || 'Lazismu Daerah Bantul';
+    if (_norm(frName) !== _norm(namaFr)) return;
     var per = String(r.pilar || '').trim() || String(r.program || '').trim() || String(r.subJenis || r.jenisDana || 'Lainnya').trim();
     peta[per] = (peta[per] || 0) + (Number(r.jumlah) || 0);
   });
