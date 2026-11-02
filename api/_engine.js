@@ -4068,9 +4068,14 @@ function jpSeksiBaku(sec){
   if (!s) return s;
   s = s.replace(/\bOPESIONAL\b/g, 'OPERASIONAL').replace(/\bPENYALIRAN\b/g, 'PENYALURAN');
   var m;
-  if ((m = s.match(/^UMP\s+LPJ\s+(ZAKAT|INFAK|AMIL)\b/))) return 'UMP LPJ ' + m[1];
-  if ((m = s.match(/^PENYALURAN\s+UMP\s+(ZAKAT|INFAK|AMIL)\b/))) return 'UMP LPJ ' + m[1];
-  if ((m = s.match(/^UMP\s+(ZAKAT|INFAK|AMIL)\b/))) return 'UMP ' + m[1];
+  if ((m = s.match(/^UMP\s+LPJ\s+(ZAKAT|INFAK|INFAQ|AMIL)\b/))) return 'UMP LPJ ' + (m[1] === 'INFAQ' ? 'INFAK' : m[1]);
+  if ((m = s.match(/^LPJ\s+UMP\s+(ZAKAT|INFAK|INFAQ|AMIL)\b/))) return 'UMP LPJ ' + (m[1] === 'INFAQ' ? 'INFAK' : m[1]);
+  if ((m = s.match(/^PENYALURAN\s+UMP\s+(ZAKAT|INFAK|INFAQ|AMIL)\b/))) return 'UMP LPJ ' + (m[1] === 'INFAQ' ? 'INFAK' : m[1]);
+  if ((m = s.match(/^PERTANGGUNGJAWABAN\s+UMP\s*(ZAKAT|INFAK|INFAQ|AMIL)?\b/))) return 'UMP LPJ ' + (!m[1] || m[1] === 'INFAQ' ? 'INFAK' : m[1]);
+  if ((m = s.match(/^UMP\s+(ZAKAT|INFAK|INFAQ|AMIL)\b/))) return 'UMP ' + (m[1] === 'INFAQ' ? 'INFAK' : m[1]);
+  if ((m = s.match(/^UANG\s+MUKA\s+(?:PROGRAM\s+)?(ZAKAT|INFAK|INFAQ|AMIL)\b/))) return 'UMP ' + (m[1] === 'INFAQ' ? 'INFAK' : m[1]);
+  if (/^UANG\s+MUKA\s+PROGRAM\b|^UMP\s+PROGRAM\b|^UMP$/i.test(s)) return 'UMP INFAK';
+  if (/^UMP\s+LPJ\b|^LPJ\s+UMP\b/i.test(s)) return 'UMP LPJ INFAK';
   if (/^PENGEMBALIAN\s+(UMP|UANG\s+MUKA)\b/.test(s)) return 'PENGEMBALIAN UMP';
   if (/^SETOR\s+TUNAI\b/.test(s)) return 'SETOR TUNAI';
   if (/^TARIK\s+TUNAI\b/.test(s)) return 'TARIK TUNAI';
@@ -4401,19 +4406,24 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
 
       if (_seksiUmpKeluar(currentSection)) {
         /* debet = akun UMP (aset), kredit = rekening/kas yang mengeluarkan uang */
-        var dUmp = /ZAKAT/i.test(currentSection) ? 'Zakat' : /AMIL/i.test(currentSection) ? 'Amil' : 'Infak';
-        var layU = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian, _layMaster()) : null;
-        var layNama = layU ? (layU.tipe + ' ' + layU.nama) : (extractLayananFromText(pUraian, listLayanan) ? _layLabel(extractLayananFromText(pUraian, listLayanan)) : '');
+        var dUmp = /ZAKAT/i.test(currentSection) || /zakat/i.test(akunDebet) ? 'Zakat' : /AMIL/i.test(currentSection) || /amil/i.test(akunDebet) ? 'Amil' : 'Infak';
+        var sumberLayUmp = pUraian + ' ' + akunDebet;
+        var layU = (typeof _layFromPrefix === 'function') ? (_layFromPrefix(pUraian, _layMaster()) || _layFromPrefix(akunDebet, _layMaster())) : null;
+        var layHitUmp = extractLayananFromText(sumberLayUmp, listLayanan);
+        var layNama = layU ? (layU.tipe + ' ' + layU.nama) : (layHitUmp ? _layLabel(layHitUmp) : '');
         umpRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:'keluar', dana:dUmp, layanan:layNama || 'Lainnya',
           akun:aK.label, rekeningId:aK.rekeningId, kasNama:aK.kasNama, nominal:pDebet,
-          keterangan:pUraian, section:currentSection, akunDikenal:aK.dikenal });
+          keterangan:pUraian || akunDebet, section:currentSection, akunDikenal:aK.dikenal });
       } else if (/^PENGEMBALIAN UMP$/i.test(currentSection)) {
         /* debet = rekening/kas yang menerima uang kembali, kredit = akun UMP */
         var dK = /zakat/i.test(akunKredit) ? 'Zakat' : /amil/i.test(akunKredit) ? 'Amil' : 'Infak';
-        var layK = (typeof _layFromPrefix === 'function') ? _layFromPrefix(pUraian, _layMaster()) : null;
-        umpRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:'kembali', dana:dK, layanan: layK ? (layK.tipe + ' ' + layK.nama) : 'Lainnya',
+        var sumberLayK = pUraian + ' ' + akunKredit;
+        var layK = (typeof _layFromPrefix === 'function') ? (_layFromPrefix(pUraian, _layMaster()) || _layFromPrefix(akunKredit, _layMaster())) : null;
+        var layHitK = extractLayananFromText(sumberLayK, listLayanan);
+        var layNamaK = layK ? (layK.tipe + ' ' + layK.nama) : (layHitK ? _layLabel(layHitK) : '');
+        umpRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:'kembali', dana:dK, layanan: layNamaK || 'Lainnya',
           akun:aD.label, rekeningId:aD.rekeningId, kasNama:aD.kasNama, nominal:pDebet,
-          keterangan:pUraian, section:currentSection, akunDikenal:aD.dikenal });
+          keterangan:pUraian || akunKredit, section:currentSection, akunDikenal:aD.dikenal });
       } else {
         var jT = /SETOR/i.test(currentSection) ? 'setor' : /TARIK/i.test(currentSection) ? 'tarik' : 'mutasi';
         transferRows.push({ _baris: i + 1, tanggal:pTgl, tglBeda:pBeda, jenis:jT,
@@ -4470,6 +4480,36 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
         var _akunKredit = '';
         var _nx = rawRows[i+1];
         if (_nx && parseAmount(_nx[3]) > 0 && !parseAmount(_nx[2])) _akunKredit = String(_nx[1] || '').trim();
+
+        /* Deteksi otomatis UMP Keluar & Pengembalian UMP dari nama akun walaupun
+           tidak berada di bawah header seksi khusus (mis. berkas tanpa seksi atau
+           digabung di seksi umum). */
+        if (!currentSection || !(_seksiUmpKeluar(currentSection) || /^PENGEMBALIAN UMP$/i.test(currentSection))) {
+          if (/^(ump|uang\s+muka)\b/i.test(accName) && !/^(ump|uang\s+muka)\b/i.test(_akunKredit)) {
+            var dUmpAuto = /zakat/i.test(accName + ' ' + uraian) ? 'Zakat' : /amil/i.test(accName + ' ' + uraian) ? 'Amil' : 'Infak';
+            var sumberLayAuto = uraian + ' ' + accName;
+            var layUAuto = (typeof _layFromPrefix === 'function') ? (_layFromPrefix(uraian, _layMaster()) || _layFromPrefix(accName, _layMaster())) : null;
+            var layHitAuto = extractLayananFromText(sumberLayAuto, listLayanan);
+            var layNamaAuto = layUAuto ? (layUAuto.tipe + ' ' + layUAuto.nama) : (layHitAuto ? _layLabel(layHitAuto) : '');
+            var aKAuto = akunDariLabel(_akunKredit, listRek);
+            umpRows.push({ _baris: i + 1, tanggal: dateStr, tglBeda: _tglBeda, jenis: 'keluar', dana: dUmpAuto, layanan: layNamaAuto || 'Lainnya',
+              akun: aKAuto.label, rekeningId: aKAuto.rekeningId, kasNama: aKAuto.kasNama, nominal: debet,
+              keterangan: uraian || accName, section: currentSection || ('UMP ' + dUmpAuto.toUpperCase()), akunDikenal: aKAuto.dikenal });
+            continue;
+          }
+          if (/^pengembalian\s+ump\b/i.test(uraian) && /^(ump|uang\s+muka)\b/i.test(_akunKredit)) {
+            var dKAuto = /zakat/i.test(_akunKredit + ' ' + uraian) ? 'Zakat' : /amil/i.test(_akunKredit + ' ' + uraian) ? 'Amil' : 'Infak';
+            var sumberKAuto = uraian + ' ' + _akunKredit;
+            var layKAuto = (typeof _layFromPrefix === 'function') ? (_layFromPrefix(uraian, _layMaster()) || _layFromPrefix(_akunKredit, _layMaster())) : null;
+            var layHitKAuto = extractLayananFromText(sumberKAuto, listLayanan);
+            var layNamaKAuto = layKAuto ? (layKAuto.tipe + ' ' + layKAuto.nama) : (layHitKAuto ? _layLabel(layHitKAuto) : '');
+            var aDAuto = akunDariLabel(accName, listRek);
+            umpRows.push({ _baris: i + 1, tanggal: dateStr, tglBeda: _tglBeda, jenis: 'kembali', dana: dKAuto, layanan: layNamaKAuto || 'Lainnya',
+              akun: aDAuto.label, rekeningId: aDAuto.rekeningId, kasNama: aDAuto.kasNama, nominal: debet,
+              keterangan: uraian || _akunKredit, section: 'PENGEMBALIAN UMP', akunDikenal: aDAuto.dikenal });
+            continue;
+          }
+        }
 
         // Match bank account
         /* Seksi yang judulnya bukan "PENERIMAAN ..." tetap boleh berisi
@@ -4701,7 +4741,11 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
           currentSection === 'UMP LPJ ZAKAT' ||
           currentSection === 'UMP LPJ INFAK' ||
           currentSection === 'UMP LPJ AMIL' ||
-          currentSection === 'BIAYA ADMINISTRASI BANK'
+          currentSection === 'BIAYA ADMINISTRASI BANK' ||
+          /^PENYALURAN\b/i.test(accName) ||
+          /^UMP\s+LPJ\b/i.test(accName) ||
+          /^LPJ\s+UMP\b/i.test(accName) ||
+          /^(operasional|beban)\b/i.test(accName)
         ) {
           var sumberDana = 'Infak';
           var ashnaf = 'Fi Sabilillah';
@@ -4712,10 +4756,12 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
              operasional langsung tingkat daerah tetap DAERAH walau nama KLL
              kebetulan disebut. (UMP advance sendiri sudah dilewati di skip.) */
           var _isKLLsec = /^UMP\s+LPJ\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection)
-                       || /^UMP\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection);
+                       || /^UMP\s+(ZAKAT|INFAK|AMIL)$/i.test(currentSection)
+                       || /^UMP\s+LPJ\b/i.test(accName) || /^LPJ\s+UMP\b/i.test(accName);
           if (_isKLLsec) {
-            var _pre = (typeof _layFromPrefix === 'function') ? _layFromPrefix(uraian, _layMaster()) : null;
-            var _lay = extractLayananFromText(uraian, listLayanan);
+            var _sumberLpj = uraian + ' ' + _akunKredit;
+            var _pre = (typeof _layFromPrefix === 'function') ? (_layFromPrefix(uraian, _layMaster()) || _layFromPrefix(_akunKredit, _layMaster())) : null;
+            var _lay = extractLayananFromText(_sumberLpj, listLayanan);
             if (_lay) namaPenerima = (String(_lay.tipe).toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + _lay.nama;
             else if (_pre) namaPenerima = _pre.tipe + ' ' + _pre.nama;
           }

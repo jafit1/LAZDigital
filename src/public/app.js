@@ -3848,6 +3848,11 @@ var KLL_CARI = '';
 var KLL_BUKA = '';            /* nama kantor yang rinciannya sedang dibuka */
 var KLL_DATA = null;
 
+function namaBulan(ym){
+  var p = String(ym || '').split('-');
+  return p.length === 2 ? (BULAN[Number(p[1])] || p[1]) + ' ' + p[0] : String(ym || '');
+}
+
 function _opsiBulanKll(){
   var thn = Number((KLL_TGL || today()).slice(0,4)) || new Date().getFullYear();
   var h = '<option value=""'+(KLL_BULAN===''?' selected':'')+'>Kumulatif s/d Tanggal</option>';
