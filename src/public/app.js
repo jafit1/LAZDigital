@@ -3843,20 +3843,36 @@ function haSimpan(){
    saldo KLL - uang muka (+ yang dikembalikan) = sisa yang masih di daerah;
    uang muka - LPJ - dikembalikan = yang belum di-LPJ-kan (ada di KLL). */
 var KLL_TGL = '';
+var KLL_BULAN = '';          /* YYYY-MM untuk saringan per bulan; kosong = kumulatif s/d KLL_TGL */
 var KLL_CARI = '';
 var KLL_BUKA = '';            /* nama kantor yang rinciannya sedang dibuka */
 var KLL_DATA = null;
+
+function _opsiBulanKll(){
+  var thn = Number((KLL_TGL || today()).slice(0,4)) || new Date().getFullYear();
+  var h = '<option value=""'+(KLL_BULAN===''?' selected':'')+'>Kumulatif s/d Tanggal</option>';
+  for (var y = thn; y >= thn - 1; y--) {
+    for (var m = 12; m >= 1; m--) {
+      var ym = y + '-' + ('0' + m).slice(-2);
+      if (ym > today().slice(0,7)) continue;
+      h += '<option value="'+ym+'"'+(KLL_BULAN===ym?' selected':'')+'>'+BULAN[m]+' '+y+'</option>';
+    }
+  }
+  return h;
+}
 
 function viewKll(fokus){
   if(!KLL_TGL) KLL_TGL = today();
   if(fokus) KLL_BUKA = fokus;
   var c = el('content');
-  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo KLL &amp; ULL</h2><div class="desc">Setoran, hak amil, dan sisa uang tiap kantor layanan</div></div>'
-    + '<div class="saldo-head-alat">'
-    + '<div class="field" style="margin:0;min-width:150px"><label>Posisi per tanggal</label><input type="date" id="kllTgl" value="'+esc(KLL_TGL)+'" max="'+today()+'" onchange="KLL_TGL=this.value;viewKll();"></div>'
-    + (canDo('settings','edit') ? '<button class="btn btn-ghost" onclick="go(\'settings\');setTimeout(function(){setTab(\'hakamil\');},300);">Atur hak amil</button>' : '')
+  c.innerHTML = '<div class="page-head saldo-head"><div><h2>Saldo KLL &amp; ULL</h2><div class="desc">Setoran, hak amil, uang muka (UMP), dan kekurangan yang belum LPJ tiap kantor layanan</div></div>'
+    + '<div class="saldo-head-alat" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">'
+    + '<div class="field" style="margin:0;min-width:170px"><label>Periode Bulanan</label><select id="kllBulan" onchange="KLL_BULAN=this.value;viewKll();">'+_opsiBulanKll()+'</select></div>'
+    + (KLL_BULAN ? '' : '<div class="field" style="margin:0;min-width:145px"><label>Posisi per tanggal</label><input type="date" id="kllTgl" value="'+esc(KLL_TGL)+'" max="'+today()+'" onchange="KLL_TGL=this.value;viewKll();"></div>')
+    + '<button class="btn btn-primary btn-sm" style="height:36px" onclick="cetakSaldoKll()">'+SVG_ICONS.cetak+' Ekspor PDF Saldo</button>'
+    + (canDo('settings','edit') ? '<button class="btn btn-ghost btn-sm" style="height:36px" onclick="go(\'settings\');setTimeout(function(){setTab(\'hakamil\');},300);">Atur hak amil</button>' : '')
     + '</div></div><div id="kllBody"><div class="muted" style="padding:20px 0">Memuat...</div></div>';
-  gas('apiSaldoLayanan')(TOKEN, KLL_TGL).then(function(d){ KLL_DATA = d; renderKll(); }).catch(handleErr);
+  gas('apiSaldoLayanan')(TOKEN, KLL_TGL, KLL_BULAN).then(function(d){ KLL_DATA = d; renderKll(); }).catch(handleErr);
 }
 
 /* Saringan daftar kantor. Dipisah dari pencarian teks supaya keduanya bisa
@@ -3921,9 +3937,10 @@ function renderKll(hanyaTabel){
 
     /* Pemilik minta tanpa kalimat penjelasan panjang (1 Oktober 2026).
        Persen hak amil tetap bisa dilihat dengan menunjuk judul kartu. */
+    var labelPeriode = d.bulan ? ('Bulan ' + namaBulan(d.bulan)) : ('per ' + fdate(d.tanggal));
     h += '<div class="card sk-card"><div class="pub-card-t" style="margin-bottom:12px" title="Hak amil: '+esc(pj||'belum diatur')+'"><span class="dot" style="background:#3b82f6"></span>'
       + (d.dibatasi ? 'Kantor: '+esc(d.dibatasi) : 'Kantor layanan')
-      + ' <span class="ket">'+d.jumlahLayanan+' kantor &middot; per '+esc(fdate(d.tanggal))+'</span></div>'
+      + ' <span class="ket">'+d.jumlahLayanan+' kantor &middot; '+esc(labelPeriode)+'</span></div>'
       + '<div class="kll-alat">'
       + '  <div class="kll-cari"><input id="kllCari" placeholder="Cari nama KLL / ULL..." value="'+esc(KLL_CARI)+'" oninput="kllCari(this.value)"></div>'
       + '  <div class="kll-saring">'
@@ -4152,7 +4169,7 @@ function kllBuka(nama){
 
 function kllMuatRinci(nama){
   var host = el(_idKll(nama)); if(!host) return;
-  gas('apiDetailSaldoLayanan')(TOKEN, nama, KLL_TGL).then(function(d){
+  gas('apiDetailSaldoLayanan')(TOKEN, nama, KLL_TGL, KLL_BULAN).then(function(d){
     var host2 = el(_idKll(nama)); if(!host2) return;
     var r = d.ringkas;
     var h = '<div class="kll-alur">'
@@ -4200,6 +4217,71 @@ function _tab(kol, baris, kaki){
   baris.forEach(function(r){ h += '<tr>'+r.map(function(c,i){ return '<td'+(/^Rp/.test(String(c))?' class="num"':'')+'>'+c+'</td>'; }).join('')+'</tr>'; });
   h += '</tbody>'+(kaki?'<tfoot><tr>'+kaki.map(function(c){ return '<td'+(/^Rp/.test(String(c))?' class="num strong"':'')+'>'+(c||'')+'</td>'; }).join('')+'</tr></tfoot>':'')+'</table></div>';
   return h;
+}
+
+function cetakSaldoKll(){
+  var d = KLL_DATA;
+  if(!d){ toast('Data saldo KLL belum termuat', true); return; }
+  var semua = (d.daftar || []).filter(function(x){ return x.tipe !== 'Daerah'; });
+  var baris = _kllSaring(semua);
+  var nm = (SETTINGS.namaLembaga || 'LAZISMU DAERAH BANTUL').toUpperCase();
+  var periodeTeks = d.bulan ? ('BULAN ' + namaBulan(d.bulan).toUpperCase()) : ('POSISI PER ' + fdate(d.tanggal).toUpperCase());
+
+  var sumHimpun = 0, sumAmil = 0, sumSaldoKll = 0, sumUmp = 0, sumLpj = 0, sumBelumLpj = 0, sumSisa = 0;
+  var rowsHtml = baris.map(function(x, idx){
+    var umpBersih = (Number(x.umpKeluar)||0) - (Number(x.umpKembali)||0);
+    sumHimpun += Number(x.himpun)||0;
+    sumAmil += Number(x.hakAmil)||0;
+    sumSaldoKll += Number(x.saldoKLL)||0;
+    sumUmp += umpBersih;
+    sumLpj += Number(x.lpj)||0;
+    sumBelumLpj += Number(x.belumLPJ)||0;
+    sumSisa += Number(x.sisaSaldo)||0;
+    return '<tr>'
+      + '<td style="text-align:center">' + (idx + 1) + '</td>'
+      + '<td><b>' + esc(x.layanan) + '</b></td>'
+      + '<td style="text-align:center">' + esc(x.tipe) + '</td>'
+      + '<td class="n">' + rpCetak(x.himpun) + '</td>'
+      + '<td class="n">' + rpCetak(x.hakAmil) + '</td>'
+      + '<td class="n">' + rpCetak(x.saldoKLL) + '</td>'
+      + '<td class="n">' + rpCetak(umpBersih) + '</td>'
+      + '<td class="n">' + rpCetak(x.lpj) + '</td>'
+      + '<td class="n" style="' + (x.belumLPJ > 0 ? 'color:#b91c1c;font-weight:bold' : '') + '">' + rpCetak(x.belumLPJ) + '</td>'
+      + '<td class="n" style="font-weight:bold;color:#0d7a4f">' + rpCetak(x.sisaSaldo) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var docHtml = '<!doctype html><html><head><meta charset="utf-8"><title>Rekap Saldo KLL &amp; ULL - ' + esc(periodeTeks) + '</title><style>'
+    + '@page{size:A4 landscape;margin:12mm}'
+    + '*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:11px;margin:0}'
+    + 'h1{font-size:15px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:11.5px;color:#444;margin-bottom:14px;font-weight:bold}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + 'th,td{border:1px solid #888;padding:5px 7px}'
+    + 'thead th{background:#f0f0f0;font-size:10.5px;text-align:center;font-weight:bold}'
+    + 'td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'
+    + 'tfoot td{background:#f7f7f7;font-weight:bold;border-top:2px solid #444}'
+    + '</style></head><body>'
+    + '<h1>LAPORAN SALDO KANTOR LAYANAN (KLL &amp; ULL) — ' + esc(nm) + '</h1>'
+    + '<div class="sub">' + esc(periodeTeks) + ' (Setoran, UMP, dan Kekurangan Belum LPJ)</div>'
+    + '<table><thead><tr>'
+    + '<th style="width:28px">No</th><th>Kantor Layanan</th><th style="width:45px">Tipe</th>'
+    + '<th>Setoran</th><th>Hak Amil</th><th>Saldo KLL</th><th>UMP Keluar</th><th>Sudah LPJ</th><th>Kekurangan Belum LPJ</th><th>Sisa Saldo</th>'
+    + '</tr></thead><tbody>'
+    + (rowsHtml || '<tr><td colspan="10" style="text-align:center;padding:16px">Tidak ada data kantor layanan.</td></tr>')
+    + '</tbody><tfoot><tr>'
+    + '<td colspan="3">TOTAL (' + baris.length + ' Kantor)</td>'
+    + '<td class="n">' + rpCetak(sumHimpun) + '</td>'
+    + '<td class="n">' + rpCetak(sumAmil) + '</td>'
+    + '<td class="n">' + rpCetak(sumSaldoKll) + '</td>'
+    + '<td class="n">' + rpCetak(sumUmp) + '</td>'
+    + '<td class="n">' + rpCetak(sumLpj) + '</td>'
+    + '<td class="n" style="color:#b91c1c">' + rpCetak(sumBelumLpj) + '</td>'
+    + '<td class="n" style="color:#0d7a4f">' + rpCetak(sumSisa) + '</td>'
+    + '</tr></tfoot></table>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+
+  printDoc(docHtml);
 }
 
 /* ============ SALDO AWAL (Pengaturan) ============ */
@@ -10318,7 +10400,11 @@ function renderClosingPreview(d){
   var h = '<div class="card cl-card">'
     + '<div class="cl-head">'
     + '<div><h3 style="margin:0">Closing Bulanan</h3><div class="muted" style="font-size:12.5px;margin-top:2px">Rekap ' + esc((SETTINGS.namaLembaga || 'LAZISMU').toUpperCase()) + ' — <b>' + esc(d.periode) + '</b></div></div>'
-    + '<button class="btn btn-primary btn-sm" onclick="cetakClosing()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '  <button class="btn btn-ghost btn-sm" onclick="eksporClosingDonaturExcel()">Ekspor Excel Donatur &amp; FR</button>'
+    + '  <button class="btn btn-ghost btn-sm" onclick="eksporClosingDonaturPdf()">'+SVG_ICONS.cetak+' Ekspor PDF Donatur &amp; FR</button>'
+    + '  <button class="btn btn-primary btn-sm" onclick="cetakClosing()">'+SVG_ICONS.cetak+' Cetak Ringkasan Closing</button>'
+    + '</div>'
     + '</div>';
 
   var selisihSeBantul = (d.seBantul.penghimpunan.total || 0) - (d.seBantul.penyaluran.total || 0);
@@ -10377,8 +10463,153 @@ function renderClosingPreview(d){
     + '<div id="cl_frRincian" class="cl-box-body">' + clRincianHTML(dk) + '</div></div>';
   h += '</div>';
 
+  // Bagian Rincian Bulanan per Donatur & Fundraising
+  var listDon = d.rincianDonatur || [];
+  var frSet = {};
+  listDon.forEach(function(r){ if(r.fundraising) frSet[r.fundraising] = 1; });
+  var frListDon = Object.keys(frSet).sort();
+
+  h += '<div class="cl-sec-title" style="margin-top:24px">'
+    + '<span>RINCIAN BULANAN PER DONATUR &amp; FUNDRAISING <span class="muted">(' + listDon.length + ' transaksi)</span></span>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '  <select id="cl_donFrFilter" class="input" style="height:28px;font-size:11.5px;padding:2px 8px;width:auto" onchange="filterClosingDonatur()">'
+    + '    <option value="">Semua Fundraising (' + listDon.length + ')</option>'
+    +      frListDon.map(function(fn){ return '<option value="' + esc(fn) + '">' + esc(fn) + '</option>'; }).join('')
+    + '  </select>'
+    + '  <button class="btn btn-xs btn-ghost" type="button" onclick="eksporClosingDonaturExcel()">Unduh Excel (.xlsx)</button>'
+    + '  <button class="btn btn-xs btn-primary" type="button" onclick="eksporClosingDonaturPdf()">Cetak / PDF</button>'
+    + '</div>'
+    + '</div>';
+
+  h += '<div id="cl_donaturTableHost">' + renderTabelClosingDonatur(listDon) + '</div>';
+
   h += '</div>';
   el('closingPreview').innerHTML = h;
+}
+
+function renderTabelClosingDonatur(rows){
+  if (!rows || !rows.length) {
+    return '<div class="muted" style="text-align:center;padding:20px;border:1px solid var(--border);border-radius:10px">Tidak ada rincian donatur untuk saringan ini.</div>';
+  }
+  var total = rows.reduce(function(a, b){ return a + (Number(b.jumlah) || 0); }, 0);
+  var h = '<div class="cl-tbl-wrap" style="max-height:380px;overflow-y:auto">'
+    + '<table class="cl-tbl" style="font-size:11.5px">'
+    + '<thead style="position:sticky;top:0;z-index:2"><tr>'
+    + '<th style="width:36px">No</th><th style="width:90px">Tanggal</th><th style="width:125px">No Kwitansi</th>'
+    + '<th>Nama Donatur</th><th>Kantor / Wilayah</th><th>Jenis Dana &amp; Pilar</th><th>Fundraising</th><th style="text-align:right">Nominal (Rp)</th>'
+    + '</tr></thead><tbody>';
+
+  rows.slice(0, 300).forEach(function(r, idx){
+    var jenisTeks = (r.subJenis || r.jenisDana || '') + (r.pilar ? ' · ' + r.pilar : '');
+    h += '<tr>'
+      + '<td>' + (idx + 1) + '</td>'
+      + '<td style="white-space:nowrap">' + esc(r.tanggal) + '</td>'
+      + '<td style="white-space:nowrap;font-family:monospace;font-size:11px">' + esc(r.noKwitansi || '-') + '</td>'
+      + '<td><b>' + esc(r.namaDonatur) + '</b>' + (r.keterangan ? '<div class="muted" style="font-size:10.5px">' + esc(r.keterangan) + '</div>' : '') + '</td>'
+      + '<td>' + esc(r.layanan || 'Daerah') + '</td>'
+      + '<td>' + esc(jenisTeks) + '</td>'
+      + '<td><span class="badge badge-muted" style="font-size:10px;background:var(--surface2)">' + esc(r.fundraising) + '</span></td>'
+      + '<td class="cl-num cl-num-ada">' + rpCetak(r.jumlah) + '</td>'
+      + '</tr>';
+  });
+  if (rows.length > 300) {
+    h += '<tr><td colspan="8" style="text-align:center;padding:8px" class="muted">... dan ' + (rows.length - 300) + ' transaksi lainnya (gunakan Ekspor Excel atau PDF untuk melihat semua ' + rows.length + ' baris)</td></tr>';
+  }
+  h += '</tbody><tfoot class="cl-foot-himpun"><tr>'
+    + '<td colspan="7">TOTAL (' + rows.length + ' Transaksi)</td>'
+    + '<td class="cl-num cl-total-val">' + rpCetak(total) + '</td>'
+    + '</tr></tfoot></table></div>';
+  return h;
+}
+
+function getFilteredClosingDonatur(){
+  if (!CLOSING_DATA || !CLOSING_DATA.rincianDonatur) return [];
+  var sel = el('cl_donFrFilter');
+  var fr = sel ? sel.value : '';
+  if (!fr) return CLOSING_DATA.rincianDonatur;
+  return CLOSING_DATA.rincianDonatur.filter(function(r){ return r.fundraising === fr; });
+}
+
+function filterClosingDonatur(){
+  var host = el('cl_donaturTableHost');
+  if (host) host.innerHTML = renderTabelClosingDonatur(getFilteredClosingDonatur());
+}
+
+function eksporClosingDonaturExcel(){
+  if (!CLOSING_DATA || !CLOSING_DATA.rincianDonatur) {
+    return toast('Tampilkan data closing terlebih dahulu', true);
+  }
+  if (!window.XLSX) {
+    return toast('Pustaka Excel belum termuat', true);
+  }
+  var rows = getFilteredClosingDonatur();
+  var header = ['No', 'Tanggal', 'No Kwitansi', 'Nama Donatur', 'Tipe Donatur', 'Kantor / Wilayah', 'Jenis Dana', 'Sub Jenis', 'Pilar', 'Program', 'Metode', 'Bank', 'Fundraising', 'Keterangan', 'Nominal (Rp)'];
+  var aoa = [header];
+  rows.forEach(function(r, i){
+    aoa.push([
+      i + 1, r.tanggal, r.noKwitansi, r.namaDonatur, r.tipeDonatur, r.layanan,
+      r.jenisDana, r.subJenis, r.pilar, r.program, r.metode, r.bank,
+      r.fundraising, r.keterangan, Number(r.jumlah) || 0
+    ]);
+  });
+  var wb = window.XLSX.utils.book_new();
+  var ws = window.XLSX.utils.aoa_to_sheet(aoa);
+  window.XLSX.utils.book_append_sheet(wb, ws, 'Rincian Donatur');
+  var fn = 'Closing_Rincian_Donatur_' + (CLOSING_DATA.bulan || 'Bulanan') + '.xlsx';
+  window.XLSX.writeFile(wb, fn);
+  toast('Berkas Excel rincian donatur berhasil diunduh.');
+}
+
+function eksporClosingDonaturPdf(){
+  if (!CLOSING_DATA || !CLOSING_DATA.rincianDonatur) {
+    return toast('Tampilkan data closing terlebih dahulu', true);
+  }
+  var rows = getFilteredClosingDonatur();
+  var sel = el('cl_donFrFilter');
+  var frLabel = (sel && sel.value) ? ('FUNDRAISING: ' + sel.value.toUpperCase()) : 'SEMUA FUNDRAISING';
+  var nm = (SETTINGS.namaLembaga || 'LAZISMU DAERAH BANTUL').toUpperCase();
+  var total = rows.reduce(function(a, b){ return a + (Number(b.jumlah) || 0); }, 0);
+
+  var trHtml = rows.map(function(r, i){
+    var jenisTeks = (r.subJenis || r.jenisDana || '') + (r.pilar ? ' (' + r.pilar + ')' : '');
+    return '<tr>'
+      + '<td style="text-align:center">' + (i + 1) + '</td>'
+      + '<td style="white-space:nowrap">' + esc(r.tanggal) + '</td>'
+      + '<td style="white-space:nowrap">' + esc(r.noKwitansi || '-') + '</td>'
+      + '<td><b>' + esc(r.namaDonatur) + '</b></td>'
+      + '<td>' + esc(r.layanan || 'Daerah') + '</td>'
+      + '<td>' + esc(jenisTeks) + '</td>'
+      + '<td>' + esc(r.fundraising) + '</td>'
+      + '<td>' + esc(r.keterangan || '-') + '</td>'
+      + '<td class="n">' + rpCetak(r.jumlah) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var doc = '<!doctype html><html><head><meta charset="utf-8"><title>Rincian Donatur Closing ' + esc(CLOSING_DATA.periode) + '</title><style>'
+    + '@page{size:A4 landscape;margin:12mm}'
+    + '*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10.5px;margin:0}'
+    + 'h1{font-size:14px;text-align:center;margin:0 0 3px}.sub{text-align:center;font-size:11px;color:#444;margin-bottom:12px;font-weight:bold}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + 'th,td{border:1px solid #888;padding:4px 6px}'
+    + 'thead th{background:#f0f0f0;font-size:10px;text-align:left;font-weight:bold}'
+    + 'td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'
+    + 'tfoot td{background:#f7f7f7;font-weight:bold;border-top:2px solid #444}'
+    + '</style></head><body>'
+    + '<h1>RINCIAN PENERIMAAN PER DONATUR &amp; FUNDRAISING — ' + esc(nm) + '</h1>'
+    + '<div class="sub">PERIODE CLOSING: ' + esc(CLOSING_DATA.periode.toUpperCase()) + ' &middot; ' + esc(frLabel) + '</div>'
+    + '<table><thead><tr>'
+    + '<th style="width:28px;text-align:center">No</th><th style="width:75px">Tanggal</th><th style="width:110px">No Kwitansi</th>'
+    + '<th>Nama Donatur</th><th>Kantor / Wilayah</th><th>Jenis Dana &amp; Pilar</th><th>Fundraising</th><th>Keterangan</th><th style="text-align:right">Nominal (Rp)</th>'
+    + '</tr></thead><tbody>'
+    + (trHtml || '<tr><td colspan="9" style="text-align:center;padding:16px">Tidak ada data transaksi.</td></tr>')
+    + '</tbody><tfoot><tr>'
+    + '<td colspan="8">TOTAL (' + rows.length + ' Transaksi)</td>'
+    + '<td class="n">' + rpCetak(total) + '</td>'
+    + '</tr></tfoot></table>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+
+  printDoc(doc);
 }
 
 function clRincianHTML(dk){

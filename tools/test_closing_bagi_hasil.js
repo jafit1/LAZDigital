@@ -100,6 +100,51 @@ async function rpcLaz(fn, args) {
   cek('totalFundraising cocok persis dengan total penghimpunan daerah', Math.abs(resClosing.totalFundraising - totalEkspektasi) < 0.01, { totalFr: resClosing.totalFundraising, totalH: himpunDaerah.total });
   cek('detailFundraising memiliki item Bagi Hasil Bank', resClosing.detailFundraising.some(x => x.nama === 'Bagi Hasil Bank'), resClosing.detailFundraising);
 
+  // Rincian Donatur & Fundraising untuk ekspor Excel/PDF
+  cek('rincianDonatur tersedia dan berisi 5 transaksi', Array.isArray(resClosing.rincianDonatur) && resClosing.rincianDonatur.length === 5, resClosing.rincianDonatur);
+  cek('setiap baris rincianDonatur memuat namaDonatur, fundraising, dan jumlah', resClosing.rincianDonatur.every(r => r.namaDonatur && r.fundraising && r.jumlah > 0));
+
+  console.log('\n=== C. UJI FILTER BULANAN SALDO KLL & ULL ===');
+  // Tambah setoran KLL di bulan September dan Oktober, serta UMP di bulan Oktober
+  await rpcLaz('apiSavePenghimpunan', [SU, {
+    tanggal: '2026-09-10',
+    namaDonatur: 'KLL Bantul Kota',
+    tipeDonatur: 'Kantor Layanan (KLL)',
+    jenisDana: 'Infak',
+    subJenis: 'Infak Umum',
+    jumlah: 1000000
+  }]);
+  await rpcLaz('apiSavePenghimpunan', [SU, {
+    tanggal: '2026-10-12',
+    namaDonatur: 'KLL Bantul Kota',
+    tipeDonatur: 'Kantor Layanan (KLL)',
+    jenisDana: 'Infak',
+    subJenis: 'Infak Umum',
+    jumlah: 2000000
+  }]);
+  await rpcLaz('apiSaveImportedData', [SU, [{
+    tanggal: '2026-10-15',
+    jenis: 'keluar',
+    layanan: 'KLL Bantul Kota',
+    dana: 'Infak',
+    akun: 'Kas Infak',
+    nominal: 500000,
+    keterangan: 'UMP Oktober'
+  }], 'ump']);
+
+  const saldoKumulatif = await rpcLaz('apiSaldoLayanan', [SU, '2026-10-31', '']);
+  const kllKum = saldoKumulatif.daftar.find(x => x.layanan === 'KLL Bantul Kota');
+  cek('saldo kumulatif KLL Bantul Kota menghimpun 3.000.000 (Sep + Okt)', kllKum && kllKum.himpun === 3000000, kllKum);
+
+  const saldoOkt = await rpcLaz('apiSaldoLayanan', [SU, '2026-10-31', '2026-10']);
+  const kllOkt = saldoOkt.daftar.find(x => x.layanan === 'KLL Bantul Kota');
+  cek('filter bulanan 2026-10 KLL Bantul Kota hanya menghimpun 2.000.000', kllOkt && kllOkt.himpun === 2000000, kllOkt);
+  cek('filter bulanan 2026-10 mencatat UMP keluar 500.000 dan belum LPJ 500.000', kllOkt && kllOkt.umpKeluar === 500000 && kllOkt.belumLPJ === 500000, kllOkt);
+
+  const saldoSep = await rpcLaz('apiSaldoLayanan', [SU, '2026-10-31', '2026-09']);
+  const kllSep = saldoSep.daftar.find(x => x.layanan === 'KLL Bantul Kota');
+  cek('filter bulanan 2026-09 KLL Bantul Kota hanya menghimpun 1.000.000 dan UMP 0', kllSep && kllSep.himpun === 1000000 && kllSep.umpKeluar === 0, kllSep);
+
   console.log(`\n=== HASIL: ${ok} lulus, ${gagal} gagal ===`);
   if (gagal > 0) process.exit(1);
 })();

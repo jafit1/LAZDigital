@@ -436,6 +436,14 @@ const srv = http.createServer(async (req, res) => {
       await page.waitForFunction(() => !document.getElementById('modalBg').classList.contains('show'), null, { timeout: 10000 });
       cek('data hasil impor dari spreadsheet sudah tampil di tabel', await page.evaluate(() => document.body.innerText.includes('Abdul Hakim')));
 
+      // Uji mengetik di kolom pencarian tidak menghilangkan fokus
+      await page.click('#pjCari');
+      await page.type('#pjCari', 'Abdul', { delay: 60 });
+      await page.waitForTimeout(400);
+      const masihFokus = await page.evaluate(() => document.activeElement && document.activeElement.id === 'pjCari');
+      cek('mengetik di kolom pencarian tidak menghilangkan fokus input', masihFokus);
+      await page.click('#btnResetSaring');
+
       // Pindah ke tab Kalender Detail
       await page.click('#nav_kalender');
       await page.waitForSelector('.pj-kal-sel', { timeout: 10000 });

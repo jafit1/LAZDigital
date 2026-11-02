@@ -285,86 +285,97 @@
               <th style="padding:9px 10px;width:105px;text-align:center">Proposal & Aksi</th>
             </tr>
           </thead>
-          <tbody>`;
-
-    if (!list.length) {
-      h += `<tr><td colspan="10" style="text-align:center;padding:36px;color:var(--muted)">Belum ada data pengajuan permohonan.</td></tr>`;
-    } else {
-      list.forEach((r) => {
-        const hari = r.hari || hitungHari(r.tanggal);
-        const tgl = formatTglIndo(r.tanggal);
-        const tglSalur = r.tanggalPentasyarufan ? formatTglIndo(r.tanggalPentasyarufan) : '-';
-
-        let badgeStatus = 'badge-muted';
-        if (r.status === 'Disetujui' || r.status === 'Ditasyarufkan') badgeStatus = 'green';
-        else if (r.status === 'Diproses') badgeStatus = 'amber';
-        else if (r.status === 'Ditolak') badgeStatus = 'red';
-
-        let badgeAsesmen = 'badge-muted';
-        if (/sangat layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'green';
-        else if (/layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'blue';
-        else if (/belum layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'red';
-
-        h += `
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:8px 10px;font-weight:600;color:var(--text2)">${esc(hari)}</td>
-          <td style="padding:8px 10px;white-space:nowrap">${esc(tgl)}</td>
-          <td style="padding:8px 10px">
-            <div style="font-weight:700;color:var(--text)">${esc(r.pemohon)}</div>
-            ${r.telepon ? `<div class="muted" style="font-size:11px">${esc(r.telepon)}</div>` : ''}
-          </td>
-          <td style="padding:8px 10px;color:var(--text2);line-height:1.35;max-width:200px">${esc(r.alamat)}</td>
-          <td style="padding:8px 10px;line-height:1.35;max-width:220px">
-            <div>${esc(r.keperluan)}</div>
-            ${r.nominalDiajukan ? `<div class="muted" style="font-size:11px;margin-top:2px">Nominal: <b>${rp(r.nominalDiajukan)}</b></div>` : ''}
-          </td>
-          <td style="padding:8px 10px">
-            <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
-              ${r.asesmenId ? `
-                <button type="button" class="badge ${badgeAsesmen}" style="font-size:10px;cursor:pointer;border:none;text-align:left" title="Lihat lembar hasil survei resmi" onclick="LZPengajuan.lihatAsesmen('${esc(r.asesmenId)}')">
-                  ✓ ${esc(r.hasilAsesmen || 'Layak')}
-                </button>
-              ` : `
-                <span class="badge ${badgeAsesmen}" style="font-size:10.5px">${esc(r.hasilAsesmen || 'Belum Diasesmen')}</span>
-                <button type="button" class="btn btn-xs btn-ghost" style="font-size:9.5px;padding:1px 5px" onclick="LZPengajuan.mulaiAsesmenUntukPengajuan('${esc(r.id)}')">
-                  + Asesmen
-                </button>
-              `}
-            </div>
-          </td>
-          <td style="padding:8px 10px">
-            <span class="badge ${badgeStatus}" style="font-size:10.5px">${esc(r.status)}</span>
-          </td>
-          <td style="padding:8px 10px;white-space:nowrap">
-            ${esc(tglSalur)}
-            ${r.nominalDisetujui ? `<div style="font-size:11px;color:var(--green);font-weight:700">${rp(r.nominalDisetujui)}</div>` : ''}
-          </td>
-          <td style="padding:8px 10px">
-            <span class="badge badge-muted" style="font-size:10.5px;background:var(--surface2)">${esc(r.jenisBantuan)}</span>
-          </td>
-          <td style="padding:8px 10px;text-align:center;white-space:nowrap">
-            <div style="display:flex;gap:4px;justify-content:center;align-items:center">
-              ${r.proposal ? `
-                <button type="button" class="btn btn-xs btn-ghost" title="Unduh Proposal: ${esc(r.proposal.nama)}" onclick="LZPengajuan.unduhProposal('${esc(r.id)}')">
-                  ${IKON.proposal}
-                </button>
-              ` : ''}
-              <button type="button" class="btn btn-xs btn-ghost" title="Sunting" onclick="LZPengajuan.bukaFormEdit('${esc(r.id)}')">
-                ${IKON.edit}
-              </button>
-              ${STATE.izin.hapus || STATE.pengguna.peran === 'superadmin' ? `
-                <button type="button" class="btn btn-xs btn-ghost text-danger" title="Hapus" onclick="LZPengajuan.hapusPengajuan('${esc(r.id)}')">
-                  ${IKON.hapus}
-                </button>
-              ` : ''}
-            </div>
-          </td>
-        </tr>`;
-      });
-    }
-
-    h += `</tbody></table></div></div>`;
+          <tbody id="pjTabelBody">
+            ${gambarBarisTabelHTML(list)}
+          </tbody>
+        </table></div></div>`;
     return h;
+  }
+
+  function gambarBarisTabelHTML(list) {
+    if (!list || !list.length) {
+      return `<tr><td colspan="10" style="text-align:center;padding:36px;color:var(--muted)">Belum ada data pengajuan permohonan yang cocok.</td></tr>`;
+    }
+    return list.map((r) => {
+      const hari = r.hari || hitungHari(r.tanggal);
+      const tgl = formatTglIndo(r.tanggal);
+      const tglSalur = r.tanggalPentasyarufan ? formatTglIndo(r.tanggalPentasyarufan) : '-';
+
+      let badgeStatus = 'badge-muted';
+      if (r.status === 'Disetujui' || r.status === 'Ditasyarufkan') badgeStatus = 'green';
+      else if (r.status === 'Diproses') badgeStatus = 'amber';
+      else if (r.status === 'Ditolak') badgeStatus = 'red';
+
+      let badgeAsesmen = 'badge-muted';
+      if (/sangat layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'green';
+      else if (/layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'blue';
+      else if (/belum layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'red';
+
+      return `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 10px;font-weight:600;color:var(--text2)">${esc(hari)}</td>
+        <td style="padding:8px 10px;white-space:nowrap">${esc(tgl)}</td>
+        <td style="padding:8px 10px">
+          <div style="font-weight:700;color:var(--text)">${esc(r.pemohon)}</div>
+          ${r.telepon ? `<div class="muted" style="font-size:11px">${esc(r.telepon)}</div>` : ''}
+        </td>
+        <td style="padding:8px 10px;color:var(--text2);line-height:1.35;max-width:200px">${esc(r.alamat)}</td>
+        <td style="padding:8px 10px;line-height:1.35;max-width:220px">
+          <div>${esc(r.keperluan)}</div>
+          ${r.nominalDiajukan ? `<div class="muted" style="font-size:11px;margin-top:2px">Nominal: <b>${rp(r.nominalDiajukan)}</b></div>` : ''}
+        </td>
+        <td style="padding:8px 10px">
+          <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">
+            ${r.asesmenId ? `
+              <button type="button" class="badge ${badgeAsesmen}" style="font-size:10px;cursor:pointer;border:none;text-align:left" title="Lihat lembar hasil survei resmi" onclick="LZPengajuan.lihatAsesmen('${esc(r.asesmenId)}')">
+                ✓ ${esc(r.hasilAsesmen || 'Layak')}
+              </button>
+            ` : `
+              <span class="badge ${badgeAsesmen}" style="font-size:10.5px">${esc(r.hasilAsesmen || 'Belum Diasesmen')}</span>
+              <button type="button" class="btn btn-xs btn-ghost" style="font-size:9.5px;padding:1px 5px" onclick="LZPengajuan.mulaiAsesmenUntukPengajuan('${esc(r.id)}')">
+                + Asesmen
+              </button>
+            `}
+          </div>
+        </td>
+        <td style="padding:8px 10px">
+          <span class="badge ${badgeStatus}" style="font-size:10.5px">${esc(r.status)}</span>
+        </td>
+        <td style="padding:8px 10px;white-space:nowrap">
+          ${esc(tglSalur)}
+          ${r.nominalDisetujui ? `<div style="font-size:11px;color:var(--green);font-weight:700">${rp(r.nominalDisetujui)}</div>` : ''}
+        </td>
+        <td style="padding:8px 10px">
+          <span class="badge badge-muted" style="font-size:10.5px;background:var(--surface2)">${esc(r.jenisBantuan)}</span>
+        </td>
+        <td style="padding:8px 10px;text-align:center;white-space:nowrap">
+          <div style="display:flex;gap:4px;justify-content:center;align-items:center">
+            ${r.proposal ? `
+              <button type="button" class="btn btn-xs btn-ghost" title="Unduh Proposal: ${esc(r.proposal.nama)}" onclick="LZPengajuan.unduhProposal('${esc(r.id)}')">
+                ${IKON.proposal}
+              </button>
+            ` : ''}
+            <button type="button" class="btn btn-xs btn-ghost" title="Sunting" onclick="LZPengajuan.bukaFormEdit('${esc(r.id)}')">
+              ${IKON.edit}
+            </button>
+            ${STATE.izin.hapus || STATE.pengguna.peran === 'superadmin' ? `
+              <button type="button" class="btn btn-xs btn-ghost text-danger" title="Hapus" onclick="LZPengajuan.hapusPengajuan('${esc(r.id)}')">
+                ${IKON.hapus}
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function segarkanTabelDaftarSaja() {
+    const tbody = el('pjTabelBody');
+    if (tbody) {
+      tbody.innerHTML = gambarBarisTabelHTML(STATE.daftar);
+    } else {
+      gambarHalaman();
+    }
   }
 
   function pasangEventDaftar() {
@@ -376,8 +387,8 @@
         tmr = setTimeout(async () => {
           STATE.saring.cari = inpCari.value.trim();
           await muatData();
-          gambarHalaman();
-        }, 300);
+          segarkanTabelDaftarSaja();
+        }, 250);
       };
     }
 
@@ -386,7 +397,7 @@
       selStatus.onchange = async () => {
         STATE.saring.status = selStatus.value;
         await muatData();
-        gambarHalaman();
+        segarkanTabelDaftarSaja();
       };
     }
 
@@ -395,7 +406,7 @@
       selJenis.onchange = async () => {
         STATE.saring.jenisBantuan = selJenis.value;
         await muatData();
-        gambarHalaman();
+        segarkanTabelDaftarSaja();
       };
     }
 

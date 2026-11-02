@@ -165,7 +165,7 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await page.goto(A + '/surat.html');
     await siap('dasbor');
     const kpi = await page.evaluate(() => [...document.querySelectorAll('.sr-kpi .kpi-v2-label')].map((x) => x.textContent));
-    cek('beranda: empat kartu angka', kpi.join('|') === 'Surat masuk bulan ini|Pengajuan berjalan|Disposisi untuk saya|Lewat tenggat', kpi);
+    cek('beranda: empat kartu angka', kpi.join('|') === 'Surat masuk bulan ini|Surat keluar bulan ini|Disposisi untuk saya|Lewat tenggat', kpi);
     const lebarKpi = await page.evaluate(() => [...document.querySelectorAll('.sr-kpi')].map((x) => Math.round(x.getBoundingClientRect().width)));
     cek('empat kartu sama lebar (tidak kena proporsi dashboard utama)', Math.max(...lebarKpi) - Math.min(...lebarKpi) <= 2, lebarKpi);
     cek('menu modul Surat: Beranda, Surat Masuk, Surat Keluar, Disposisi Saya', (await page.$$('#nav .tn-item')).length === 4);
@@ -203,13 +203,14 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     console.log('\n=== B. CATAT SURAT MASUK DENGAN FOTO BESAR ===');
     await page.click('[data-catat]');
     await page.waitForSelector('.sr-pilih-jenis', { timeout: 5000 });
-    cek('formulir menawarkan lima jenis', (await page.$$('.sr-pilih-jenis button')).length === 5);
+    cek('formulir menawarkan dua jenis (Surat Masuk & Surat Keluar)', (await page.$$('.sr-pilih-jenis button')).length === 2);
     await page.click('.sr-pilih-jenis button[data-j="masuk"]');
     await page.fill('#cPerihal', 'Undangan rapat koordinasi');
     await page.fill('#cSiapa', 'PCM Contoh');
-    await page.click('.sr-pilih-jenis button[data-j="bantuan"]');
-    cek('berganti jenis tidak menghapus isian yang sudah diketik', (await page.inputValue('#cPerihal')) === 'Undangan rapat koordinasi' && (await page.$('#cNominal')) !== null);
+    await page.click('.sr-pilih-jenis button[data-j="keluar"]');
+    cek('berganti jenis tidak menghapus isian yang sudah diketik', (await page.inputValue('#cPerihal')) === 'Undangan rapat koordinasi');
     await page.click('.sr-pilih-jenis button[data-j="masuk"]');
+    await page.fill('#cSiapa', 'PCM Contoh');
     await page.fill('#cNomorSurat', '45/PCM/X/2026');
     await page.setInputFiles('#cBerkas', fotoBesar);
     cek('lampiran masuk antrean formulir', /scan_undangan\.png/.test(await page.textContent('#cAntreDaftar')));
@@ -282,52 +283,24 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     cek('pdf.js dimuat dari server sendiri, bukan dari CDN', urlDiminta.some((u) => /\/js\/vendor\/pdf\.min\.js/.test(u)) && urlDiminta.some((u) => /\/js\/vendor\/pdf\.worker\.min\.js/.test(u)) && !urlDiminta.some((u) => /cdnjs[^ ]*pdf\.js/.test(u)), urlDiminta.filter((u) => /pdf/.test(u)));
     await page.unroute(/cdnjs\.cloudflare\.com\/ajax\/libs\/jspdf\//);
 
-    console.log('\n=== E. PENGAJUAN DI PAPAN ===');
-    await page.goto(A + '/surat.html#pengajuan');
-    await siap('pengajuan');
+    console.log('\n=== E. SURAT KELUAR ===');
+    await page.goto(A + '/surat.html#keluar');
+    await siap('keluar');
     await page.click('.page-head [data-catat]');
-    await page.waitForSelector('#cNominal', { timeout: 5000 });
-    cek('dari halaman Pengajuan, formulir langsung jenis Pengajuan Bantuan', await page.evaluate(() => document.querySelector('.sr-pilih-jenis button.on').dataset.j === 'bantuan'));
-    await page.fill('#cPerihal', 'Bantuan biaya sekolah');
-    await page.fill('#cSiapa', 'Pemohon Contoh');
-    await page.type('#cNominal', '2500000');
-    cek('nominal diketik jadi berformat ribuan', (await page.inputValue('#cNominal')) === '2.500.000', await page.inputValue('#cNominal'));
+    await page.waitForSelector('#cPerihal', { timeout: 5000 });
+    cek('dari halaman Surat Keluar, formulir langsung jenis Surat Keluar', await page.evaluate(() => document.querySelector('.sr-pilih-jenis button.on').dataset.j === 'keluar'));
+    await page.fill('#cPerihal', 'Surat tugas koordinasi');
+    await page.fill('#cSiapa', 'KLL Bantul Kota');
     await page.click('#cSimpan');
     await page.waitForFunction(() => /^s\//.test(document.body.getAttribute('data-halaman-siap') || ''), null, { timeout: 15000 });
     const kode = await page.evaluate(() => (document.querySelector('.sr-kode span') || {}).textContent);
     const nomorP = await page.textContent('.sr-nomor');
     const tautanP = await page.inputValue('#srTautan');
-    cek('kode lacak 6 huruf tampil untuk diberikan ke pemohon', /^[A-Z2-9]{6}$/.test(kode || ''), kode);
-    await page.goto(A + '/surat.html#pengajuan');
-    await siap('pengajuan');
-    const kolom = await page.evaluate(() => [...document.querySelectorAll('.sr-kolom')].map((k) => k.dataset.status + ':' + k.querySelectorAll('.sr-kartu').length));
-    cek('papan: tujuh kolom, kartu baru di Diterima', kolom.length === 7 && kolom[0] === 'diterima:1', kolom);
-    /* Seret ke kolom yang melompat: harus dijelaskan, bukan diam. */
-    await page.evaluate(() => {
-      const k = document.querySelector('.sr-kartu'), dt = new DataTransfer();
-      dt.setData('text/plain', k.dataset.id);
-      document.querySelector('.sr-kolom[data-status="disetujui"]').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true }));
-    });
-    cek('menyeret melompati langkah ditolak dengan penjelasan', /hanya bisa ke Diproses/.test(await toastTeks()), await toastTeks());
-    await page.click('.sr-lanjut');
-    await page.waitForSelector('#pSimpan', { timeout: 5000 });
-    await page.fill('#pCatatan', 'Berkas lengkap');
-    await page.click('#pSimpan');
-    const pindahOk = await page.waitForFunction(() => document.querySelector('.sr-kolom[data-status="diproses"] .sr-kartu'), null, { timeout: 10000 }).then(() => true).catch(() => false);
-    cek('tombol lanjut memindah kartu ke Diproses', pindahOk, [await toastTeks(), await page.evaluate(() => document.getElementById('modalBg').className + ' ' + document.getElementById('modalBody').innerText.slice(0, 200))]);
-    if (!pindahOk) throw new Error('berhenti');
-    await page.evaluate(() => {
-      const k = document.querySelector('.sr-kartu'), dt = new DataTransfer();
-      dt.setData('text/plain', k.dataset.id);
-      document.querySelector('.sr-kolom[data-status="asesmen"]').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true }));
-    });
-    await page.waitForSelector('#pSimpan', { timeout: 5000 });
-    cek('menyeret ke langkah berikutnya membuka konfirmasi', /Asesmen/.test(await page.textContent('#modalTitle')));
-    await page.click('#pSimpan');
-    await page.waitForFunction(() => document.querySelector('.sr-kolom[data-status="asesmen"] .sr-kartu'), null, { timeout: 10000 });
-    await page.click('.sr-tampil button[data-t="daftar"]');
+    cek('kode lacak 6 huruf tampil untuk surat keluar', /^[A-Z2-9]{6}$/.test(kode || ''), kode);
+    await page.goto(A + '/surat.html#keluar');
+    await siap('keluar');
     await page.waitForSelector('.sr-daftar .sr-baris', { timeout: 5000 });
-    cek('tampilan daftar pengajuan', (await page.$$('.sr-daftar .sr-baris')).length === 1);
+    cek('tampilan daftar surat keluar', (await page.$$('.sr-daftar .sr-baris')).length === 1);
 
     console.log('\n=== F. LACAK PUBLIK ===');
     const lacak = await ctx.newPage();
@@ -337,8 +310,8 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     await lacak.click('#lkCari');
     await lacak.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
     const lk = await lacak.evaluate(() => ({ teks: document.body.innerText, ya: document.querySelectorAll('.lk-langkah li.ya').length }));
-    cek('pemohon melihat status Asesmen dengan tiga langkah terlewati', /Status sekarang: Asesmen/.test(lk.teks) && lk.ya === 3, lk);
-    cek('halaman lacak tidak menampilkan nama pemohon, petugas, atau catatan internal', !/Pemohon Contoh|Berkas lengkap|Super/i.test(lk.teks), lk.teks.slice(0, 200));
+    cek('pemohon melihat status Draf dengan langkah pertama aktif', /Status sekarang: Draf/.test(lk.teks) && lk.ya === 1, lk);
+    cek('halaman lacak tidak menampilkan tujuan, petugas, atau catatan internal', !/KLL Bantul Kota|Super/i.test(lk.teks), lk.teks.slice(0, 200));
     await lacak.setViewportSize({ width: 390, height: 800 });
     cek('lacak di HP tanpa geser ke samping', await lacak.evaluate(() => document.documentElement.scrollWidth <= 391));
     const oto = await ctx.newPage();
@@ -359,7 +332,7 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
       await tp.goto(tautanP);
       await tp.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
       const a = await tp.evaluate(() => document.body.innerText);
-      cek('tautan pengajuan langsung menampilkan progres tanpa mengetik apa pun', /Status sekarang: Asesmen/.test(a), a.slice(0, 200));
+      cek('tautan surat keluar langsung menampilkan progres tanpa mengetik apa pun', /Status sekarang: Draf/.test(a), a.slice(0, 200));
       await tp.goto(tautanMasuk);
       await tp.waitForSelector('#lkKartu, #lkGalat', { timeout: 10000 });
       const m = await tp.evaluate(() => ({ teks: document.body.innerText, langkah: document.querySelectorAll('.lk-langkah li').length }));
@@ -375,7 +348,7 @@ const JSPDF_TIRUAN = `window.jspdf = { jsPDF: function (o) {
     {
       const PINDAI = require('./_kontras.js');
       await page.evaluate(() => { localStorage.setItem('laz_theme', 'dark'); document.documentElement.setAttribute('data-theme', 'dark'); });
-      for (const rute of ['dasbor', 'masuk', 'keluar', 'pengajuan', 'disposisi']) {
+      for (const rute of ['dasbor', 'masuk', 'keluar', 'disposisi']) {
         await page.goto(A + '/surat.html#' + rute);
         await siap(rute);
         await page.waitForTimeout(500);

@@ -202,38 +202,21 @@ halaman.dasbor = {
   async gambar(el) {
     await muatDaftar();
     const r = N.ringkas;
+    const barisSuratSaja = N.baris.filter((x) => !pengajuan(x.jenis));
     let h = `<div class="kpis-v2 kpi-surat">${kpi('Surat masuk bulan ini', r.masukBulan || 0, '#3b82f6', 'masuk')}`
-      + kpi('Pengajuan berjalan', r.pengajuanAktif || 0, '#f59e0b', 'pengajuan')
+      + kpi('Surat keluar bulan ini', r.keluarBulan || 0, '#14b8a6', 'keluar')
       + kpi('Disposisi untuk saya', r.disposisiSaya || 0, '#8b5cf6', 'disposisi')
       + kpi('Lewat tenggat', r.telat || 0, '#ef4444', 'masuk') + '</div>';
-    const perhatian = N.baris.filter((x) => x.telat || x.disposisiSaya).slice(0, 8);
-    const terbaru = N.baris.slice().sort((a, b) => String(b.diubah).localeCompare(String(a.diubah))).slice(0, 8);
-    /* Corong pengajuan: berapa yang berhenti di tiap langkah. Batangnya
-       dibandingkan dengan langkah terbanyak, bukan dengan total, supaya
-       langkah yang sepi tetap terlihat. */
-    const alurP = N.alur.pengajuan || [];
-    const per = r.perStatus || {};
-    const maks = Math.max(1, ...alurP.map((s) => per[s] || 0), per.ditolak || 0);
-    const corong = alurP.concat(['ditolak']).map((s) => `<button type="button" class="sr-corong" data-status="${s}">
-        <span class="sr-corong-l">${H(N.labelStatus[s])}</span>
-        <span class="sr-corong-bar"><i style="width:${((per[s] || 0) / maks * 100).toFixed(1)}%;background:${WARNA[s]}"></i></span>
-        <b>${per[s] || 0}</b></button>`).join('');
-    const dana = (r.diajukanTahun || r.disetujuiTahun || r.dicairkanTahun)
-      ? `<div class="sr-dana">${[['Diajukan', r.diajukanTahun, '#94a3b8'], ['Disetujui', r.disetujuiTahun, '#14b8a6'], ['Dicairkan', r.dicairkanTahun, '#16a34a']].map(([l, v, w]) =>
-        `<div class="sr-dana-b"><div class="sr-dana-l">${l}</div><div class="sr-dana-v" style="color:${w}">${fmtRp(v)}</div>
-         <div class="sr-dana-bar"><i style="width:${(Number(v) / Math.max(1, r.diajukanTahun, r.disetujuiTahun) * 100).toFixed(1)}%;background:${w}"></i></div></div>`).join('')}</div>`
-      : '<p class="muted sr-kecil">Belum ada pengajuan bernominal tahun ini.</p>';
+    const perhatian = barisSuratSaja.filter((x) => x.telat || x.disposisiSaya).slice(0, 8);
+    const terbaru = barisSuratSaja.slice().sort((a, b) => String(b.diubah).localeCompare(String(a.diubah))).slice(0, 8);
     h += '<div class="sr-grid">'
       + wc('Perlu perhatian', '#ef4444', perhatian.length ? perhatian.map(barisSurat).join('') : kosong('&#10003;', 'Tidak ada yang lewat tenggat atau menunggu disposisi Anda.'))
-      + wc('Alur pengajuan', '#f59e0b', corong)
-      + wc('Dana pengajuan ' + N.hariIni.slice(0, 4), '#16a34a', dana)
       + wc('Terbaru', '#3b82f6', terbaru.length ? terbaru.map(barisSurat).join('') : kosong(IKON.masuk, 'Belum ada surat tercatat.'))
       + wc('Ruang lampiran', '#8b5cf6', '<div id="srRuang" class="muted sr-kecil">Menghitung...</div>', 'sr-penuh')
       + '</div>';
     el.innerHTML = h;
     pasangBaris(el);
     $$('.sr-kpi', el).forEach((b) => { b.onclick = () => { if (b.dataset.ke) location.hash = '#' + b.dataset.ke; }; });
-    $$('.sr-corong', el).forEach((b) => { b.onclick = () => { N.saring.pengajuan = { status: b.dataset.status }; N.tampilPengajuan = 'daftar'; location.hash = '#pengajuan'; }; });
     rpc('surat.ruang').then((u) => {
       const t = $('#srRuang');
       if (!t) return;
@@ -836,10 +819,11 @@ function bukaTautan(id, nama) {
 
 // ------------------------------------------------------------ catat / sunting
 function bukaCatat(jenis, lama, balasUntuk) {
-  jenis = jenis || 'masuk';
+  jenis = (jenis === 'keluar') ? 'keluar' : 'masuk';
   const sunting = !!lama;
   const r = lama || (balasUntuk ? { perihal: 'Balasan: ' + balasUntuk.perihal, tujuan: balasUntuk.pengirim, balasanDari: balasUntuk.id } : {});
-  const pilihJenis = sunting ? '' : `<div class="sr-pilih-jenis">${Object.keys(N.jenis).map((j) => `<button type="button" class="${j === jenis ? 'on' : ''}" data-j="${j}">
+  const jenisSurat = ['masuk', 'keluar'].filter((j) => N.jenis[j]);
+  const pilihJenis = sunting ? '' : `<div class="sr-pilih-jenis">${jenisSurat.map((j) => `<button type="button" class="${j === jenis ? 'on' : ''}" data-j="${j}">
       <span>${IKON[j]}</span>${H(N.jenis[j].label)}</button>`).join('')}</div>`;
   modal(sunting ? 'Sunting ' + r.nomor : balasUntuk ? 'Balas ' + balasUntuk.nomor : 'Catat surat', pilihJenis + '<div id="cForm"></div>',
     `<button class="btn" type="button" onclick="tutupModal()">Batal</button><button class="btn btn-primary" type="button" id="cSimpan">${sunting ? 'Simpan perubahan' : 'Catat'}</button>`, 'sr-modal-catat');

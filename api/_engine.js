@@ -507,7 +507,11 @@ function _nomorUrutTerakhir(nama, kolom, awalan){
   });
   return maks;
 }
-function generateNoKwitansi(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='KW/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENGHIMPUNAN,'noKwitansi',awalan)+1)).slice(-4); }
+function generateNoKwitansi(tgl){
+  var ym = tgl && /^\d{4}-\d{2}/.test(String(tgl)) ? String(tgl).replace(/[^0-9]/g, '').slice(0, 6) : Utilities.formatDate(new Date(), TZ, 'yyyyMM');
+  var awalan = 'KW/' + ym + '/';
+  return awalan + ('0000' + (_nomorUrutTerakhir(SHEETS.PENGHIMPUNAN, 'noKwitansi', awalan) + 1)).slice(-4);
+}
 /* BENTUK PADAT untuk daftar besar (3 Okt 2026). apiListPenghimpunan mengirim tiap baris
    sebagai objek, jadi 22 nama kolom diulang di setiap baris: 15.000 baris terukur
    7,72 MB, padahal Vercel membatasi badan respons fungsi sekitar 4,5 MB. Bentuk padat
@@ -563,7 +567,7 @@ async function _simpanPenghimpunan(u,d){
     res = findById(SHEETS.PENGHIMPUNAN,d.id);
   }
   else {
-    d.id=makeId(); d.noKwitansi=d.noKwitansi||generateNoKwitansi(); d.petugas=u.nama; d.dibuat=new Date().toISOString();
+    d.id=makeId(); d.noKwitansi=d.noKwitansi||generateNoKwitansi(d.tanggal); d.petugas=u.nama; d.dibuat=new Date().toISOString();
     insertRow(SHEETS.PENGHIMPUNAN,d);
     audit(u.id,u.username,'create_penghimpunan',d.noKwitansi||d.id,
       {modul:'penghimpunan',entitasId:d.id,
@@ -1965,10 +1969,15 @@ function _layananUmp(nama, layList){
   return dekat ? dekat.label : s;
 }
 
-function hitungSaldoLayanan(sampai){
+function hitungSaldoLayanan(sampai, bulan){
   sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
-  var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
-  var dalam = function(t){ t = String(t || '').slice(0,10); return t >= awalTahun && t <= sampai; };
+  bulan = (bulan && /^\d{4}-\d{2}$/.test(String(bulan))) ? String(bulan) : '';
+  var tahun = bulan ? bulan.slice(0,4) : sampai.slice(0,4), awalTahun = tahun + '-01-01';
+  var dalam = function(t){
+    t = String(t || '').slice(0,10);
+    if (bulan) return t.slice(0,7) === bulan;
+    return t >= awalTahun && t <= sampai;
+  };
   var cfg = _bacaHakAmil();
   var layList = readAll(SHEETS.LAYANAN) || [];
   var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
@@ -2064,7 +2073,7 @@ function hitungSaldoLayanan(sampai){
   });
   var barisDaerah = daftar.filter(function(s){ return s.tipe === 'Daerah'; })[0] || null;
 
-  return { tanggal: sampai, tahun: tahun, persen: cfg.persen, kecuali: cfg.kecuali,
+  return { tanggal: sampai, bulan: bulan, tahun: tahun, persen: cfg.persen, kecuali: cfg.kecuali,
     daftar: daftar, total: total, totalKll: totalKll, daerah: barisDaerah,
     jumlahLayanan: daftar.filter(function(s){ return s.tipe !== 'Daerah'; }).length };
 }
@@ -2077,9 +2086,9 @@ function _bolehLihatLayanan(u, nama){
   return _norm(milik) === _norm(nama);
 }
 
-function apiSaldoLayanan(t, sampai){
+function apiSaldoLayanan(t, sampai, bulan){
   var u = _requirePerm(t, 'saldokll', 'view');
-  var hasil = hitungSaldoLayanan(sampai);
+  var hasil = hitungSaldoLayanan(sampai, bulan);
 
   /* Penghimpunan Daerah disaring DI SERVER, bukan sekadar disembunyikan di
      tampilan — kalau hanya disembunyikan, angkanya tetap terkirim ke peramban
@@ -2107,7 +2116,7 @@ function apiSaldoLayanan(t, sampai){
 }
 
 /* Rincian satu KLL/ULL: setoran, uang muka, dan LPJ-nya baris per baris. */
-function apiDetailSaldoLayanan(t, nama, sampai){
+function apiDetailSaldoLayanan(t, nama, sampai, bulan){
   var u = _requirePerm(t, 'saldokll', 'view');
   nama = String(nama || '').trim();
   if (!nama) throw new Error('Kantor layanan belum dipilih.');
@@ -2116,8 +2125,13 @@ function apiDetailSaldoLayanan(t, nama, sampai){
   }
   if (!_bolehLihatLayanan(u, nama)) throw new Error('IZIN: hanya boleh melihat ' + _layananSaya(u) + '.');
   sampai = (sampai && /^\d{4}-\d{2}-\d{2}$/.test(String(sampai))) ? String(sampai) : _hariIni();
-  var tahun = sampai.slice(0,4), awalTahun = tahun + '-01-01';
-  var dalam = function(x){ x = String(x || '').slice(0,10); return x >= awalTahun && x <= sampai; };
+  bulan = (bulan && /^\d{4}-\d{2}$/.test(String(bulan))) ? String(bulan) : '';
+  var tahun = bulan ? bulan.slice(0,4) : sampai.slice(0,4), awalTahun = tahun + '-01-01';
+  var dalam = function(x){
+    x = String(x || '').slice(0,10);
+    if (bulan) return x.slice(0,7) === bulan;
+    return x >= awalTahun && x <= sampai;
+  };
   var cfg = _bacaHakAmil();
   var layList = readAll(SHEETS.LAYANAN) || [];
   var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
@@ -2151,9 +2165,9 @@ function apiDetailSaldoLayanan(t, nama, sampai){
   var urutTgl = function(a,b){ return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0; };
   setoran.sort(urutTgl); uangMuka.sort(urutTgl); lpj.sort(urutTgl);
 
-  var ring = hitungSaldoLayanan(sampai).daftar.filter(function(s){ return sama(s.layanan); })[0]
+  var ring = hitungSaldoLayanan(sampai, bulan).daftar.filter(function(s){ return sama(s.layanan); })[0]
     || { layanan:nama, tipe:'KLL', himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
-  return { layanan:nama, tanggal:sampai, tahun:tahun, ringkas:ring, persen:cfg.persen, kecuali:cfg.kecuali,
+  return { layanan:nama, tanggal:sampai, bulan:bulan, tahun:tahun, ringkas:ring, persen:cfg.persen, kecuali:cfg.kecuali,
     setoran:setoran, uangMuka:uangMuka, lpj:lpj };
 }
 
@@ -8240,6 +8254,30 @@ function apiClosingBulanan(t, bulan){
     return { fundraiser: namaFr, rincian: rincian, total: rincian.reduce(function(a, b){ return a + b.jumlah; }, 0) };
   }
 
+  var rincianDonatur = H.filter(function(r){
+    return !_bagiHasilBDW(r) && !_isSetorTunaiHimpun(r) && (Number(r.jumlah) || 0) > 0;
+  }).map(function(r){
+    return {
+      tanggal: String(r.tanggal || '').slice(0,10),
+      noKwitansi: String(r.noKwitansi || ''),
+      namaDonatur: String(r.namaDonatur || 'Hamba Allah'),
+      tipeDonatur: String(r.tipeDonatur || 'Perorangan'),
+      layanan: resolveLayananName(r, layList, layMap),
+      jenisDana: String(r.jenisDana || 'Infak'),
+      subJenis: String(r.subJenis || ''),
+      pilar: String(r.pilar || ''),
+      program: String(r.program || ''),
+      metode: String(r.metode || ''),
+      bank: String(r.bank || ''),
+      fundraising: String(r.fundraising || 'Lazismu Daerah Bantul'),
+      keterangan: String(r.keterangan || ''),
+      jumlah: Number(r.jumlah) || 0
+    };
+  }).sort(function(a, b){
+    if (a.tanggal !== b.tanggal) return a.tanggal < b.tanggal ? -1 : 1;
+    return a.noKwitansi.localeCompare(b.noKwitansi);
+  });
+
   return {
     bulan: prefix,
     periode: (BULAN[Number(prefix.split('-')[1])] || '') + ' ' + prefix.split('-')[0],
@@ -8250,6 +8288,7 @@ function apiClosingBulanan(t, bulan){
     totalFundraising: totalFundraising,
     daftarFundraiser: detailFundraising.map(function(f){ return f.nama; }),
     detailKantor: rincianFundraiser(pilihanKantor),
+    rincianDonatur: rincianDonatur,
     jumlahTransaksi: { himpun: H.length, salur: T.length },
     settings: getAllSettings()
   };
