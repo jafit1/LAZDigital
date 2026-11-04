@@ -45,7 +45,8 @@
     proposal: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
     edit: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
     hapus: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
-    excel: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m9 13 4 5"/><path d="m13 13-4 5"/></svg>'
+    excel: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="m9 13 4 5"/><path d="m13 13-4 5"/></svg>',
+    salur: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>'
   };
 
   function el(id) { return document.getElementById(id); }
@@ -110,6 +111,7 @@
       STATE.pengguna = res.pengguna;
       STATE.izin = res.izin || {};
       STATE.drive = !!res.drive;
+      STATE.daftarRekening = res.daftarRekening || [];
 
       if (el('uName')) el('uName').textContent = res.pengguna.nama || 'Pengguna';
       if (el('uRole')) el('uRole').textContent = res.pengguna.peran || 'Staff';
@@ -293,6 +295,7 @@
   }
 
   function gambarBarisTabelHTML(list) {
+    const canTambah = (STATE.izin && STATE.izin.tambah) || (STATE.pengguna && STATE.pengguna.peran === 'superadmin');
     if (!list || !list.length) {
       return `<tr><td colspan="10" style="text-align:center;padding:36px;color:var(--muted)">Belum ada data pengajuan permohonan yang cocok.</td></tr>`;
     }
@@ -344,12 +347,20 @@
         <td style="padding:8px 10px;white-space:nowrap">
           ${esc(tglSalur)}
           ${r.nominalDisetujui ? `<div style="font-size:11px;color:var(--green);font-weight:700">${rp(r.nominalDisetujui)}</div>` : ''}
+          ${r.noBuktiSalur ? `<div class="muted" style="font-size:10px;color:var(--blue)">✓ BPT: ${esc(r.noBuktiSalur)}</div>` : ''}
         </td>
         <td style="padding:8px 10px">
           <span class="badge badge-muted" style="font-size:10.5px;background:var(--surface2)">${esc(r.jenisBantuan)}</span>
         </td>
         <td style="padding:8px 10px;text-align:center;white-space:nowrap">
           <div style="display:flex;gap:4px;justify-content:center;align-items:center">
+            ${r.pentasyarufanId ? `
+              <span class="badge green" style="font-size:9.5px;padding:2px 5px" title="Tersalurkan di buku kas (No. ${esc(r.noBuktiSalur)})">✓ Tersalur</span>
+            ` : (canTambah ? `
+              <button type="button" class="btn btn-xs btn-primary" style="font-size:10px;padding:2px 6px;background:var(--green);border-color:var(--green)" title="Satu klik salurkan ke pembukuan utama" onclick="LZPengajuan.bukaModalSalurkan('${esc(r.id)}')">
+                ${IKON.salur} Salurkan
+              </button>
+            ` : '')}
             ${r.proposal ? `
               <button type="button" class="btn btn-xs btn-ghost" title="Unduh Proposal: ${esc(r.proposal.nama)}" onclick="LZPengajuan.unduhProposal('${esc(r.id)}')">
                 ${IKON.proposal}
@@ -1134,6 +1145,157 @@
   }
 
   // ==================================================================
+  // 5B. SATU KLIK SALURKAN KE PENTASYARUFAN (ONE-CLICK DISBURSE)
+  // ==================================================================
+  function bukaModalSalurkan(id) {
+    const item = STATE.daftar.find((x) => x.id === id);
+    if (!item) return toast('Data pengajuan tidak ditemukan.', true);
+
+    if (item.pentasyarufanId) {
+      return toast(`Pengajuan ini sudah pernah disalurkan ke buku kas (No. ${item.noBuktiSalur}).`, true);
+    }
+
+    const tglDefault = item.tanggalPentasyarufan || new Date().toISOString().slice(0, 10);
+    const nominalDefault = item.nominalDisetujui || item.nominalDiajukan || 0;
+    const listRek = STATE.daftarRekening || [];
+
+    const ashnafDefault = item.jenisBantuan === 'Pendidikan' ? 'Fi Sabilillah' : 'Fakir Miskin';
+    const ashnafOpts = ['Fakir Miskin', 'Fi Sabilillah', 'Gharimin', 'Ibnu Sabil', 'Mualaf', 'Amil', 'Riqab']
+      .map((a) => `<option value="${a}" ${a === ashnafDefault ? 'selected' : ''}>${a}</option>`).join('');
+
+    const rekOpts = '<option value="">-- Kas Tunai (Tanpa Bank) --</option>'
+      + listRek.map((rk) => `
+        <option value="${esc(rk.id)}" data-bank="${esc(rk.namaBank)}">
+          ${esc(rk.namaBank)} - ${esc(rk.nomor)} (${esc(rk.atasNama)})
+        </option>
+      `).join('');
+
+    const htmlBody = `
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.4">
+      Otomasi pencatatan pengeluaran kas/bank untuk pengajuan <b>${esc(item.pemohon)}</b>. Data otomatis terhubung ke pembukuan utama dan menghasilkan nomor bukti resmi (BPT).
+    </div>
+
+    <form id="fSalurkan" onsubmit="return false">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Tanggal Penyaluran *</label>
+          <input type="date" id="slrTanggal" class="input" value="${esc(tglDefault)}" required style="width:100%">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Nominal Penyaluran (Rp) *</label>
+          <input type="number" id="slrJumlah" class="input" value="${nominalDefault}" placeholder="Rp" required style="width:100%;font-weight:700;color:var(--green)">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Nama Penerima / Mustahik *</label>
+          <input type="text" id="slrNama" class="input" value="${esc(item.pemohon)}" required style="width:100%;font-weight:600">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Golongan Asnaf *</label>
+          <select id="slrAshnaf" class="input" style="width:100%">${ashnafOpts}</select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Pilar / Program Penyaluran *</label>
+          <input type="text" id="slrProgram" class="input" value="${esc(item.jenisBantuan)}" required style="width:100%">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Sumber Dana *</label>
+          <select id="slrSumberDana" class="input" style="width:100%">
+            <option value="Zakat" ${/zakat/i.test(item.jenisBantuan) ? 'selected' : ''}>Zakat</option>
+            <option value="Infak" ${!/zakat/i.test(item.jenisBantuan) ? 'selected' : ''}>Infak</option>
+            <option value="DSKL">DSKL</option>
+            <option value="Amil">Amil</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Metode Penyaluran *</label>
+          <select id="slrMetode" class="input" style="width:100%" onchange="LZPengajuan.onMetodeSalurChange(this.value)">
+            <option value="Cash/Tunai">Cash / Tunai</option>
+            <option value="Transfer Bank">Transfer Bank</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-weight:700;font-size:12px">Rekening / Kas Pengeluaran</label>
+          <select id="slrRekening" class="input" style="width:100%">${rekOpts}</select>
+        </div>
+      </div>
+
+      <div class="field" style="margin:0">
+        <label style="font-weight:700;font-size:12px">Keterangan Penyaluran Buku Kas</label>
+        <textarea id="slrKeterangan" class="input" rows="2" style="width:100%">Penyaluran ${esc(item.keperluan)} (${esc(item.pemohon)})</textarea>
+      </div>
+    </form>`;
+
+    const htmlFoot = `
+      <button class="btn btn-ghost" type="button" onclick="LZPengajuan.tutupModal()">Batal</button>
+      <button class="btn btn-primary" type="button" id="btnProsesSalurkan" style="background:var(--green);border-color:var(--green)" onclick="LZPengajuan.eksekusiSalurkan('${esc(item.id)}')">
+        ⚡ Tasyarufkan Sekarang
+      </button>
+    `;
+
+    openModal('Tasyarufkan Bantuan ke Buku Utama', htmlBody, htmlFoot);
+  }
+
+  function onMetodeSalurChange(val) {
+    const selRek = el('slrRekening');
+    if (!selRek) return;
+    if (val === 'Transfer Bank' && selRek.options.length > 1 && !selRek.value) {
+      selRek.selectedIndex = 1;
+    } else if (val === 'Cash/Tunai') {
+      selRek.value = '';
+    }
+  }
+
+  async function eksekusiSalurkan(id) {
+    const tgl = el('slrTanggal') ? el('slrTanggal').value : '';
+    const jml = el('slrJumlah') ? Number(el('slrJumlah').value) : 0;
+    if (!tgl) return toast('Tanggal penyaluran wajib diisi.', true);
+    if (!jml || jml <= 0) return toast('Nominal penyaluran harus lebih dari 0.', true);
+
+    const selRek = el('slrRekening');
+    const rekId = selRek ? selRek.value : '';
+    let bankNama = 'Kas';
+    if (rekId && selRek.selectedOptions && selRek.selectedOptions[0]) {
+      bankNama = selRek.selectedOptions[0].dataset.bank || 'Bank';
+    }
+
+    const payload = {
+      id: id,
+      tanggal: tgl,
+      jumlah: jml,
+      ashnaf: el('slrAshnaf') ? el('slrAshnaf').value : 'Fi Sabilillah',
+      program: el('slrProgram') ? el('slrProgram').value.trim() : 'Sosial Kemanusiaan',
+      sumberDana: el('slrSumberDana') ? el('slrSumberDana').value : 'Zakat',
+      metode: el('slrMetode') ? el('slrMetode').value : 'Cash/Tunai',
+      rekeningId: rekId,
+      bank: bankNama,
+      keterangan: el('slrKeterangan') ? el('slrKeterangan').value.trim() : ''
+    };
+
+    const btn = el('btnProsesSalurkan');
+    if (btn) { btn.disabled = true; btn.textContent = 'Menyalurkan...'; }
+
+    try {
+      const res = await rpc('pengajuan.salurkan', payload);
+      toast(res.pesan || 'Bantuan berhasil disalurkan ke buku utama.');
+      closeModal();
+      await muatData();
+      gambarHalaman();
+    } catch (e) {
+      toast('Gagal: ' + e.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Tasyarufkan Sekarang'; }
+    }
+  }
+
+  // ==================================================================
   // 6. EKSPOR DATA (EXCEL & TSV)
   // ==================================================================
   function bangunAoaPengajuan() {
@@ -1477,6 +1639,9 @@
     bukaAsesmenUntukForm,
     mulaiAsesmenUntukPengajuan,
     lihatAsesmen,
+    bukaModalSalurkan,
+    onMetodeSalurChange,
+    eksekusiSalurkan,
     bukaModalImpor,
     tarikSpreadsheet,
     prosesBerkasLokal,

@@ -283,7 +283,10 @@ const srv = http.createServer(async (req, res) => {
     };
 
     const T_SURAT = await buatAkun('stafsurat', 'Staf Surat', { surat: { view: true, create: true, edit: true } });
-    const T_PENGAJUAN = await buatAkun('stafpengajuan', 'Staf Pengajuan', { pengajuan: { view: true, create: true, edit: true, delete: true } });
+    const T_PENGAJUAN = await buatAkun('stafpengajuan', 'Staf Pengajuan', {
+      pengajuan: { view: true, create: true, edit: true, delete: true },
+      pentasyarufan: { view: true, create: true, edit: true }
+    });
     const T_NOL = await buatAkun('stafbiasa', 'Staf Biasa', { donatur: { view: true } });
 
     // 1. Akun tanpa izin ditolak
@@ -362,6 +365,33 @@ const srv = http.createServer(async (req, res) => {
     const resImpor2 = await pintu('pengajuan.imporSpreadsheet', { url: sheetUrl, simpanLangsung: true }, T_PENGAJUAN);
     cek('impor kedua kali: data yang sudah ada di web otomatis dilewati', resImpor2.ok === true && resImpor2.dilewati >= 20 && resImpor2.jumlah === 0, resImpor2);
 
+    // 11. Satu Klik Salurkan (pengajuan.salurkan)
+    const pSalurDraf = await pengajuanLib.buat({
+      tanggal: '2026-10-31',
+      pemohon: 'Mustahik Siap Salur',
+      alamat: 'Dusun Imogiri',
+      keperluan: 'Bantuan modal gerobak',
+      jenisBantuan: 'Ekonomi & Pemberdayaan',
+      nominalDisetujui: 1500000,
+      status: 'Disetujui'
+    }, USER_STAF);
+
+    const resSalurAksi = await pintu('pengajuan.salurkan', {
+      id: pSalurDraf.id,
+      jumlah: 1500000,
+      metode: 'Cash/Tunai',
+      keterangan: 'Penyaluran modal gerobak'
+    }, T_PENGAJUAN);
+
+    cek('pengajuan.salurkan berhasil membuat baris pentasyarufan', resSalurAksi.ok === true && !!resSalurAksi.pentasyarufan, resSalurAksi);
+    cek('status pengajuan otomatis berubah menjadi Ditasyarufkan', resSalurAksi.pengajuan && resSalurAksi.pengajuan.status === 'Ditasyarufkan');
+    cek('nomor bukti salur BPT terhubung ke pengajuan', resSalurAksi.pengajuan && /^BPT\//.test(resSalurAksi.pengajuan.noBuktiSalur));
+
+    let errSalurDobel = null;
+    try { await pintu('pengajuan.salurkan', { id: pSalurDraf.id, jumlah: 1500000 }, T_PENGAJUAN); } catch (e) { errSalurDobel = e; }
+    const resSalurDobel = await pintu('pengajuan.salurkan', { id: pSalurDraf.id, jumlah: 1500000 }, T_PENGAJUAN);
+    cek('pencegahan penyaluran ganda (anti-dobel) aktif', resSalurDobel.kode === 409 && /sudah pernah disalurkan/.test(resSalurDobel.pesan), resSalurDobel);
+
     if (pw) {
       console.log('\n=== G. UJI TAMPILAN PERAMBAN (PLAYWRIGHT) ===');
       await new Promise((r) => srv.listen(0, '127.0.0.1', r));
@@ -385,6 +415,7 @@ const srv = http.createServer(async (req, res) => {
 
       // Buka modul Pengajuan
       await page.goto(A + '/pengajuan.html');
+      await page.waitForSelector('.pj-table', { timeout: 15000 });
       await page.waitForSelector('.pj-table', { timeout: 15000 });
       cek('halaman pengajuan terbuka dan tabel pengajuan muncul', true);
 
