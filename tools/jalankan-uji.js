@@ -64,6 +64,7 @@ const DAFTAR = [
   { label: 'Setor tunai tercatat & jurnal dari sistem', berkas: 'test_setor_dan_jurnal_sistem.js' },
   { label: 'Laporan harian: nomor rekening tampil', berkas: 'test_harian_nomor_rekening.js' },
   { label: 'Formulir A2: tanda tangan tersimpan sekali', berkas: 'test_a2_tanda_tangan.js' },
+  { label: 'Formulir A1, A2, A3 dan rentang kuitansi KLL', berkas: 'test_a1_a2_a3_rentang.js' },
   { label: 'Formulir A2: selalu satu lembar A5', berkas: 'test_a2_satu_lembar.js' },
   { label: 'Formulir A2: kolom petugas Lazismu Daerah Bantul', berkas: 'test_a2_petugas.js' },
   { label: 'Impor: panel Perlu diperiksa di paling atas', berkas: 'test_impor_periksa_atas.js' },

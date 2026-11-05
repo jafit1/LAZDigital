@@ -10980,11 +10980,16 @@ function a2Panel(){
       + '</div>';
   };
 
+  var periodeTeksHeader = A2_DATA ? (A2_DATA.tanggalSampai ? (tglIndo(A2_DATA.tanggal) + ' s/d ' + tglIndo(A2_DATA.tanggalSampai)) : tglIndo(A2_DATA.tanggal)) : '';
   var h = '<div class="card" id="a2Card">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px">'
-      + '<div><h3>Pratinjau Formulir A2</h3>'
-      + '<div class="muted" style="font-size:13px">'+esc(tglIndo(A2_DATA?A2_DATA.tanggal:''))+'</div></div>'
-      + '<button class="btn btn-primary btn-sm" onclick="cetakA2()">'+SVG_ICONS.cetak+' Cetak Formulir A2</button>'
+      + '<div><h3>Pratinjau Formulir A1, A2 &amp; A3 (A5)</h3>'
+      + '<div class="muted" style="font-size:13px">'+esc(periodeTeksHeader)+'</div></div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      + '  <button class="btn btn-ghost btn-sm" onclick="cetakA1Kosong()">'+SVG_ICONS.cetak+' Cetak A1 (Kosong)</button>'
+      + '  <button class="btn btn-primary btn-sm" onclick="cetakA2()">'+SVG_ICONS.cetak+' Cetak Formulir A2</button>'
+      + '  <button class="btn btn-primary btn-sm" style="background:#15803d;border-color:#15803d" onclick="cetakA3()">'+SVG_ICONS.cetak+' Cetak Formulir A3</button>'
+      + '</div>'
     + '</div>';
 
   h += '<div class="a2-grid">';
@@ -11041,17 +11046,17 @@ function a2Panel(){
   h += '</div>';   /* kolom denominasi */
 
   /* --- identitas penanda tangan --- */
+  var valLembar = (A2_DATA && A2_DATA.ringkas && (A2_DATA.ringkas.kuitansiCount !== undefined ? A2_DATA.ringkas.kuitansiCount : A2_DATA.ringkas.himpunCount)) || 0;
   h += '<div class="a2-kolom">'
-    + '<div class="a2-sub">Tanda tangan &amp; tempat</div>'
+    + '<div class="a2-sub">Tanda tangan &amp; identitas</div>'
     + '<div class="fgrid">'
-      + fld(12,'Tempat','<input id="a2_kota" value="'+esc(s.formA2Kota||'')+'" placeholder="cth: Kabupaten Bantul" onchange="a2SimpanTtd()" maxlength="80">')
-      + fld(12,'Nama Kasir','<input id="a2_kasir" value="'+esc(s.formA2Kasir||'')+'" placeholder="nama kasir" onchange="a2SimpanTtd()" maxlength="80">')
-      + fld(12,'Nama Bagian Keuangan','<input id="a2_keuangan" value="'+esc(s.formA2Keuangan||'')+'" placeholder="nama bagian keuangan" onchange="a2SimpanTtd()" maxlength="80">')
-      + fld(12,'Jumlah lembar kuitansi','<input type="number" min="0" id="a2_lembar" value="'+((A2_DATA&&A2_DATA.ringkas.himpunCount)||0)+'">')
+      + fld(12,'Tempat','<input id="a2_kota" value="'+esc(s.formA2Kota||'Kabupaten Bantul')+'" placeholder="cth: Kabupaten Bantul" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Nama Kasir (A1 &amp; A2)','<input id="a2_kasir" value="'+esc(s.formA2Kasir||'')+'" placeholder="nama kasir" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Nama Bagian Keuangan (A2 &amp; A3)','<input id="a2_keuangan" value="'+esc(s.formA2Keuangan||'')+'" placeholder="nama bagian keuangan" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Nama Penyusun (Manager Fundraising - A3)','<input id="a2_a3_penyusun" value="'+esc(s.formA3Penyusun||'Serli Monicawati')+'" placeholder="nama penyusun" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Nama Menyetujui (Direktur - A3)','<input id="a2_a3_menyetujui" value="'+esc(s.formA3Menyetujui||'Zainal Arifin')+'" placeholder="nama direktur" onchange="a2SimpanTtd()" maxlength="80">')
+      + fld(12,'Jumlah lembar kuitansi (otomatis KLL gabung 1)','<input type="number" min="0" id="a2_lembar" value="'+valLembar+'">')
     + '</div>'
-    /* Tiga isian pertama cukup diisi sekali: tersimpan otomatis begitu diubah,
-       dipakai di setiap cetak, dan bisa diganti kapan saja (pemilik, 21 Oktober
-       2026). Jumlah lembar sengaja tidak disimpan: angkanya berubah tiap hari. */
     + '<div id="a2_ttd_status" class="a2-ttd-status" role="status" aria-live="polite">'
       + (s.formA2Kota||s.formA2Kasir||s.formA2Keuangan ? 'Tersimpan. Dipakai di setiap cetak sampai Anda menggantinya.' : 'Cukup diisi sekali. Tersimpan otomatis dan dipakai di setiap cetak.')
     + '</div>'
@@ -11064,15 +11069,19 @@ function a2Panel(){
 /* ---------------- tab Formulir A2 ---------------- */
 
 function renderA2Form(){
+  var tglAwal = A2_DATA ? A2_DATA.tanggal : today();
+  var tglAkhir = (A2_DATA && A2_DATA.tanggalSampai) ? A2_DATA.tanggalSampai : '';
   var form = '<div class="fgrid">'
-    + fld(3,'Tanggal Formulir','<input type="date" id="a2_tanggal" value="'+esc(A2_DATA?A2_DATA.tanggal:today())+'">')
-    + fld(9,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Serah terima kasir A5 melintang, penerimaan dipisah tunai dan bank.</div>')
+    + fld(3,'Tanggal Mulai *','<input type="date" id="a2_tanggal" value="'+esc(tglAwal)+'">')
+    + fld(3,'Tanggal Sampai (Opsional Rentang)','<input type="date" id="a2_tanggal_sampai" value="'+esc(tglAkhir)+'" placeholder="Kosongkan jika 1 hari">')
+    + fld(6,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Cetak Formulir A1 (kosong), A2 (kasir harian/rentang), atau A3 (tutup hari berjenjang) format A5.</div>')
     + '</div>';
   var acts = '<button class="btn" onclick="a2Geser(-1)">&laquo; Hari sebelumnya</button>'
     + '<button class="btn" onclick="a2Geser(1)">Hari berikutnya &raquo;</button>'
-    + '<button class="btn btn-primary" onclick="loadA2()">Tampilkan</button>';
-  el('lapBody').innerHTML = lapPanel('Formulir A2 — Laporan Penerimaan Harian',
-      'Formulir kasir yang ringkas. Untuk rekap lengkap beserta rincian transaksi dan pentasyarufan, gunakan tab Cetak Harian.',
+    + '<button class="btn btn-primary" onclick="loadA2()">Tampilkan Data</button>'
+    + '<button class="btn btn-ghost" onclick="cetakA1Kosong()" title="Cetak formulir A1 kosong tanpa data">'+SVG_ICONS.cetak+' Cetak A1 Kosong</button>';
+  el('lapBody').innerHTML = lapPanel('Formulir A1, A2 &amp; A3 — Laporan Penerimaan A5',
+      'Format resmi A5 standar Lazismu. A1 untuk form fisik kosong, A2 untuk serah terima kasir harian/rentang tanggal, dan A3 untuk laporan tutup hari dengan pengesahan berjenjang.',
       form, acts)
     + '<div id="a2Host" class="lap-result"></div>';
   if (A2_DATA) el('a2Host').innerHTML = a2Panel();
@@ -11084,6 +11093,8 @@ function a2Geser(hari){
   d.setDate(d.getDate() + hari);
   var p2 = function(n){ return ('0'+n).slice(-2); };
   inp.value = d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+  var inpSampai = el('a2_tanggal_sampai');
+  if (inpSampai) inpSampai.value = '';
   var btn = document.querySelector('.datepicker-enhanced-btn span');
   if (btn && typeof formatIndoDate === 'function') btn.textContent = formatIndoDate(inp.value);
   loadA2();
@@ -11091,9 +11102,10 @@ function a2Geser(hari){
 
 function loadA2(){
   var tgl = el('a2_tanggal').value;
+  var tglSampai = (el('a2_tanggal_sampai')||{}).value || '';
   if (!tgl) { toast('Pilih tanggal dulu', true); return; }
   el('a2Host').innerHTML = BOXES_SPINNER;
-  gas('apiLaporanHarian')(TOKEN, tgl).then(function(d){
+  gas('apiLaporanHarian')(TOKEN, tgl, tglSampai).then(function(d){
     A2_DATA = d;
     el('a2Host').innerHTML = a2Panel();
     if (typeof runEnhancers === 'function') runEnhancers();
@@ -11145,12 +11157,15 @@ function a2SimpanTtd(){
   var isi = {
     kota: (el('a2_kota')||{}).value || '',
     kasir: (el('a2_kasir')||{}).value || '',
-    keuangan: (el('a2_keuangan')||{}).value || ''
+    keuangan: (el('a2_keuangan')||{}).value || '',
+    a3Penyusun: (el('a2_a3_penyusun')||{}).value || '',
+    a3Menyetujui: (el('a2_a3_menyetujui')||{}).value || ''
   };
   if (st) { st.className = 'a2-ttd-status'; st.textContent = 'Menyimpan...'; }
   gas('apiSimpanTandaTanganA2')(TOKEN, isi).then(function(r){
     var s = (typeof SETTINGS === 'object' && SETTINGS) ? SETTINGS : (SETTINGS = {});
     s.formA2Kota = r.kota; s.formA2Kasir = r.kasir; s.formA2Keuangan = r.keuangan;
+    s.formA3Penyusun = r.a3Penyusun; s.formA3Menyetujui = r.a3Menyetujui;
     if (st) { st.className = 'a2-ttd-status ok'; st.textContent = 'Tersimpan. Dipakai di setiap cetak sampai Anda menggantinya.'; }
   }).catch(function(e){
     if (st) { st.className = 'a2-ttd-status gagal'; st.textContent = 'Belum tersimpan: ' + String((e && e.message) || e).replace(/^(IZIN:|Error:)\s*/, ''); }
@@ -11159,30 +11174,81 @@ function a2SimpanTtd(){
 
 function a2Angka(n){ return (Number(n)||0).toLocaleString('id-ID'); }
 
+function cetakA2(){
+  if (!A2_DATA) { toast('Tampilkan datanya dulu', true); return; }
+  var kota = (el('a2_kota')||{}).value || '';
+  var kasir = (el('a2_kasir')||{}).value || '';
+  var keuangan = (el('a2_keuangan')||{}).value || '';
+  var lembar = (el('a2_lembar')||{}).value || '';
+  printDoc(buildA2HTML(A2_DATA, {kota:kota, kasir:kasir, keuangan:keuangan, lembar:lembar, tipe:'A2'}));
+}
+
+function cetakA3(){
+  if (!A2_DATA) { toast('Tampilkan datanya dulu', true); return; }
+  var kota = (el('a2_kota')||{}).value || '';
+  var keuangan = (el('a2_keuangan')||{}).value || '';
+  var penyusun = (el('a2_a3_penyusun')||{}).value || '';
+  var menyetujui = (el('a2_a3_menyetujui')||{}).value || '';
+  var lembar = (el('a2_lembar')||{}).value || '';
+  printDoc(buildA2HTML(A2_DATA, {kota:kota, keuangan:keuangan, penyusun:penyusun, menyetujui:menyetujui, lembar:lembar, tipe:'A3'}));
+}
+
+function cetakA1Kosong(){
+  var kota = (el('a2_kota')||{}).value || 'Kabupaten Bantul';
+  var kasir = (el('a2_kasir')||{}).value || '';
+  var lembar = (el('a2_lembar')||{}).value || '';
+  var tglKini = (A2_DATA && A2_DATA.tanggal) || today();
+  printDoc(buildA2HTML({tanggal: tglKini, himpun: []}, {kota:kota, kasir:kasir, lembar:lembar, tipe:'A1', kosong:true}));
+}
+
 function buildA2HTML(d, opt){
   opt = opt || {};
-  var s = d.settings || {};
-  var g = a2Kelompok(d.himpun);
-  var nilai = a2Nilai();
-  var manualKosong = (A2_MODE === 'manual' && !Object.keys(A2_MANUAL).length);
+  var tipeForm = String(opt.tipe || 'A2').toUpperCase();
+  var isA1 = (tipeForm === 'A1');
+  var isA3 = (tipeForm === 'A3');
+  var isKosong = !!opt.kosong || isA1;
 
-  var tglPanjang = tglIndo(d.tanggal);          /* "Rabu, 12 Agustus 2026" */
-  var tglRingkas = tglPanjang.replace(/^[^,]+,\s*/, '');   /* "12 Agustus 2026" */
-  var hari = (tglPanjang.split(',')[0] || '').trim();
+  var s = d.settings || (typeof SETTINGS === 'object' && SETTINGS) || {};
+  var g = isKosong ? { tunai: [], bank: [], totalTunai: 0, totalBank: 0, total: 0 } : a2Kelompok(d.himpun);
+  var nilai = isKosong ? {} : a2Nilai();
+  var manualKosong = isKosong || (A2_MODE === 'manual' && !Object.keys(A2_MANUAL).length);
 
-  /* Baris isi + baris kosong penyeimbang supaya tinggi formulir tetap sama
-     walau transaksinya sedikit. */
+  var isRentang = !isKosong && d.tanggalSampai && d.tanggalSampai !== d.tanggal;
+  var tglPanjangAwal = tglIndo(d.tanggal);
+  var tglRingkasAwal = tglPanjangAwal.replace(/^[^,]+,\s*/, '');
+  var hariAwal = (tglPanjangAwal.split(',')[0] || '').trim();
+
+  var tglPanjangAkhir = isRentang ? tglIndo(d.tanggalSampai) : '';
+  var tglRingkasAkhir = isRentang ? tglPanjangAkhir.replace(/^[^,]+,\s*/, '') : '';
+  var hariAkhir = isRentang ? (tglPanjangAkhir.split(',')[0] || '').trim() : '';
+
+  var teksTanggalBasmalah = '';
+  var teksTanggalTtd = '';
+
+  if (isA1) {
+    teksTanggalBasmalah = 'Hari Ini ...................., ................................... 2026';
+    teksTanggalTtd = (opt.kota || 'Kabupaten Bantul') + ', ................................... 2026';
+  } else if (isRentang) {
+    teksTanggalBasmalah = 'Periode <b>' + esc(hariAwal) + ', ' + esc(tglRingkasAwal) + '</b> s/d <b>' + esc(hariAkhir) + ', ' + esc(tglRingkasAkhir) + '</b>';
+    teksTanggalTtd = (opt.kota || s.formA2Kota || 'Kabupaten Bantul') + ', ' + esc(tglRingkasAkhir);
+  } else {
+    teksTanggalBasmalah = 'Hari Ini <b>' + esc(hariAwal) + ', ' + esc(tglRingkasAwal) + '</b>';
+    teksTanggalTtd = (opt.kota || s.formA2Kota || 'Kabupaten Bantul') + (opt.kota || s.formA2Kota ? ', ' : '') + esc(tglRingkasAwal);
+  }
+
   function blok(judul, arr, total, minBaris){
     var h = '<tr class="grup"><td colspan="3">' + judul + '</td></tr>'
           + '<tr class="kol"><td>Keterangan</td><td>Petugas</td><td>Jumlah</td></tr>';
     var n = 0;
-    arr.forEach(function(b){
-      h += '<tr><td>' + esc(b.label) + '</td><td>' + esc(b.petugas || '') + '</td>'
-         + '<td class="num">' + a2Angka(b.jumlah) + '</td></tr>';
-      n++;
-    });
+    if (!isKosong) {
+      arr.forEach(function(b){
+        h += '<tr><td>' + esc(b.label) + '</td><td>' + esc(b.petugas || '') + '</td>'
+           + '<td class="num">' + a2Angka(b.jumlah) + '</td></tr>';
+        n++;
+      });
+    }
     for (; n < minBaris; n++) h += '<tr><td>&nbsp;</td><td></td><td></td></tr>';
-    h += '<tr class="tot"><td></td><td>Total :</td><td class="num">' + a2Angka(total) + '</td></tr>';
+    h += '<tr class="tot"><td></td><td>Total :</td><td class="num">' + (isKosong ? '' : a2Angka(total)) + '</td></tr>';
     return h;
   }
 
@@ -11192,24 +11258,44 @@ function buildA2HTML(d, opt){
     return '<tr><td>' + a2Angka(p) + '</td><td class="num">' + (manualKosong ? '' : (v || '')) + '</td></tr>';
   }
 
+  var lembarTeks = isKosong ? '' : esc(opt.lembar || '');
   var kiri = '<table class="kiri">'
-    + '<tr class="kuitansi"><td colspan="2">Dokumen Kuitansi Penerimaan : ' + esc(opt.lembar || '') + ' lembar</td><td></td></tr>'
+    + '<tr class="kuitansi"><td colspan="2">Dokumen Kuitansi Penerimaan : ' + lembarTeks + ' lembar</td><td></td></tr>'
     + blok('DONASI CASH', g.tunai, g.totalTunai, 3)
     + '<tr class="spasi"><td colspan="3"></td></tr>'
     + blok('DONASI BANK', g.bank, g.totalBank, 4)
-    + '<tr class="jml"><td></td><td>JUMLAH</td><td class="num">' + a2Angka(g.total) + '</td></tr>'
+    + '<tr class="jml"><td></td><td>JUMLAH</td><td class="num">' + (isKosong ? '' : a2Angka(g.total)) + '</td></tr>'
     + '</table>';
 
-  /* Tanda tangan di bawah tabel penerimaan (kolom kiri), susunan semula yang
-     sudah dipakai dan dinilai pas oleh pemilik (21 Oktober 2026). Muat satu
-     lembar dijaga oleh pengecil otomatis di skrip cetak, bukan dengan memindah
-     posisi. */
-  var ttd = '<table class="ttd">'
-      + '<tr><td colspan="2" class="tempat">' + esc(opt.kota || '') + (opt.kota ? ', ' : '') + esc(tglRingkas) + '</td></tr>'
-      + '<tr class="kol"><td>Kasir</td><td>Keuangan</td></tr>'
-      + '<tr class="ruang"><td></td><td></td></tr>'
-      + '<tr class="nama"><td>' + esc(opt.kasir || '') + '</td><td>' + esc(opt.keuangan || '') + '</td></tr>'
-    + '</table>';
+  var ttd = '';
+  if (isA1) {
+    ttd = '<table class="ttd ttd-a1">'
+        + '<tr><td colspan="2" class="tempat">' + esc(teksTanggalTtd) + '</td></tr>'
+        + '<tr class="kol"><td>AR/FO</td><td>Kasir</td></tr>'
+        + '<tr class="ruang"><td></td><td></td></tr>'
+        + '<tr class="nama"><td>( ........................................ )</td><td>' + esc(opt.kasir || s.formA2Kasir || '( ........................................ )') + '</td></tr>'
+      + '</table>';
+  } else if (isA3) {
+    var penyusunNama = opt.penyusun || s.formA3Penyusun || 'Serli Monicawati';
+    var keuanganNama = opt.keuangan || s.formA2Keuangan || 'Laila Nurkhasanah';
+    var menyetujuiNama = opt.menyetujui || s.formA3Menyetujui || 'Zainal Arifin';
+    ttd = '<table class="ttd ttd-a3">'
+        + '<tr><td colspan="3" class="tempat">' + esc(teksTanggalTtd) + '</td></tr>'
+        + '<tr class="kol"><td>Penyusun</td><td>Diperiksa</td><td>Menyetujui</td></tr>'
+        + '<tr class="jabatan"><td>Manager Fundraising</td><td>Keuangan</td><td>Direktur</td></tr>'
+        + '<tr class="ruang"><td></td><td></td><td></td></tr>'
+        + '<tr class="nama"><td>' + esc(penyusunNama) + '</td><td>' + esc(keuanganNama) + '</td><td>' + esc(menyetujuiNama) + '</td></tr>'
+      + '</table>';
+  } else {
+    var kasirNama = opt.kasir || s.formA2Kasir || '';
+    var keuanganNamaA2 = opt.keuangan || s.formA2Keuangan || '';
+    ttd = '<table class="ttd ttd-a2">'
+        + '<tr><td colspan="2" class="tempat">' + esc(teksTanggalTtd) + '</td></tr>'
+        + '<tr class="kol"><td>Kasir</td><td>Keuangan</td></tr>'
+        + '<tr class="ruang"><td></td><td></td></tr>'
+        + '<tr class="nama"><td>' + esc(kasirNama) + '</td><td>' + esc(keuanganNamaA2) + '</td></tr>'
+      + '</table>';
+  }
 
   var kanan = '<table class="kanan">'
     + '<tr class="grup"><td colspan="2">DENOMINASI TUNAI</td></tr>'
@@ -11219,8 +11305,11 @@ function buildA2HTML(d, opt){
     + A2_KOIN.map(function(p){ return denBaris(p, true); }).join('')
     + '</table>';
 
+  var judulKop = isA3 ? 'LAPORAN TUTUP HARI PENERIMAAN' : 'LAPORAN PENERIMAAN HARIAN';
+  var kodeForm = isA1 ? 'Formulir A 1' : isA3 ? 'Formulir A 3' : 'Formulir A 2';
+
   return '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
-    + '<title>Formulir A2 ' + esc(d.tanggal) + '</title><style>'
+    + '<title>' + kodeForm + ' ' + esc(d.tanggal) + '</title><style>'
     + '@page{size:A5 landscape;margin:7mm}'
     + '*{box-sizing:border-box;margin:0;padding:0}'
     + 'body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#e9eaec;font-size:7.6pt;line-height:1.3}'
@@ -11259,40 +11348,28 @@ function buildA2HTML(d, opt){
     + 'table.kanan td:nth-child(1){width:52%;text-align:right;padding-right:9pt}'
     + 'table.kanan td:nth-child(2){width:48%}'
 
-    + 'table.ttd{margin-top:6mm}'
+    + 'table.ttd{margin-top:5mm}'
     + 'table.ttd td{text-align:center}'
-    + 'table.ttd tr.tempat td{border:none;text-align:center;padding-bottom:3pt}'
-    + 'table.ttd tr.ruang td{height:17mm}'
-    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline}'
+    + 'table.ttd tr.tempat td{border:none;text-align:center;padding-bottom:2pt;font-size:7.5pt}'
+    + 'table.ttd tr.kol td{font-weight:600;font-size:7.6pt}'
+    + 'table.ttd tr.jabatan td{font-size:7pt;color:#333;font-style:italic}'
+    + 'table.ttd tr.ruang td{height:16mm}'
+    + 'table.ttd tr.nama td{font-weight:600;text-decoration:underline;font-size:7.6pt}'
 
     + '.bar{text-align:center;margin:10px 0 22px}'
     + '.bar button{font:inherit;font-size:9pt;font-weight:700;background:#16161d;color:#fff;border:none;padding:8px 20px;border-radius:999px;cursor:pointer}'
-    /* Cetak: lembar dikunci setinggi area cetak A5 (134 mm) dikurangi sedikit
-       ruang aman, dan apa pun yang melewatinya dipotong, bukan dilanjutkan ke
-       halaman kedua. Skrip di bawah mengecilkan isinya lebih dulu supaya tidak ada
-       yang terpotong. */
     + '@media print{html,body{height:auto;background:#fff}.lembar{width:auto;height:132mm;min-height:0;margin:0;padding:0;box-shadow:none;overflow:hidden;break-after:avoid;page-break-after:avoid}.konten{transform:scale(var(--skala,1));transform-origin:top left;width:calc(100% / var(--skala,1))}.bar{display:none}}'
     + '</style></head><body>'
 
     + '<div class="lembar"><div class="konten">'
-      + '<div class="kop"><div class="j">LAPORAN PENERIMAAN HARIAN</div><div class="f">Formulir A 2</div></div>'
-      + '<div class="basmalah">Bissmillahirrohmanirrohim Pada Hari Ini <b>' + esc(hari) + ', ' + esc(tglRingkas) + '</b> , '
+      + '<div class="kop"><div class="j">' + judulKop + '</div><div class="f">' + kodeForm + '</div></div>'
+      + '<div class="basmalah">Bissmillahirrohmanirrohim Pada ' + teksTanggalBasmalah + ' , '
         + 'Alhamdulillah telah diterima dana Zakat, Infaq dan Shodaqoh dengan rincian:</div>'
       + '<div class="isi"><div class="sisi">' + kiri + ttd + '</div><div class="sisi kn">' + kanan + '</div></div>'
     + '</div></div>'
-    + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (A5 melintang)</button></div>'
-    /* Pengaman satu lembar. Tata letaknya sudah dibuat muat untuk isi terburuk
-       yang wajar (enam jenis dana, tunai dan bank), tetapi nama petugas panjang
-       atau jenis dana tak terduga bisa menambah tinggi. Bila isinya masih lebih
-       tinggi dari area cetak, seluruhnya dikecilkan secukupnya, bukan jatuh ke
-       lembar kedua. Hanya berlaku saat mencetak; di layar tidak mengubah apa pun. */
+    + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (' + kodeForm + ' - A5)</button></div>'
     + '<script>(function(){'
-      + 'var mm=96/25.4,MAKS=132*mm,k=document.querySelector(".konten");if(!k)return;'
-      /* Diukur pada lebar cetak (196 mm) saat dimuat, bukan menunggu peristiwa
-         cetak: peristiwa itu tidak andal (tidak terpicu saat disimpan jadi PDF
-         lewat peramban tanpa kepala, dan versi sebelumnya diam-diam tidak
-         mengecilkan apa pun sementara overflow memotong tanda tangan). Hasilnya
-         hanya variabel --skala; yang memakainya aturan @media print. */
+      + 'var mm=96/25.4,MAKS=130*mm,k=document.querySelector(".konten");if(!k)return;'
       + 'var w=k.style.width;k.style.width=(196*mm)+"px";'
       + 'var h=k.offsetHeight;k.style.width=w;'
       + 'k.style.setProperty("--skala",h>MAKS?(MAKS/h).toFixed(4):"1");'

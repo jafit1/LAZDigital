@@ -1087,7 +1087,12 @@ function _teksTtd(v){
 function apiSimpanTandaTanganA2(t, d){
   var u = _requirePerm(t, 'laporan', 'edit');
   d = d || {};
-  var peta = { kota: 'formA2Kota', kasir: 'formA2Kasir', keuangan: 'formA2Keuangan' };
+  var peta = {
+    kota: 'formA2Kota', kasir: 'formA2Kasir', keuangan: 'formA2Keuangan',
+    a3Penyusun: 'formA3Penyusun', a3JabatanPenyusun: 'formA3JabatanPenyusun',
+    a3Diperiksa: 'formA3Diperiksa', a3JabatanDiperiksa: 'formA3JabatanDiperiksa',
+    a3Menyetujui: 'formA3Menyetujui', a3JabatanMenyetujui: 'formA3JabatanMenyetujui'
+  };
   var ada = Object.keys(peta).filter(function(k){ return Object.prototype.hasOwnProperty.call(d, k); });
   if (!ada.length) throw new Error('Tidak ada isian untuk disimpan.');
   var hasil = { ok: true };
@@ -8363,10 +8368,13 @@ function apiClosingRincianFundraiser(t, bulan, namaFr){
   return { fundraiser: namaFr, rincian: rincian, total: rincian.reduce(function(a, b){ return a + b.jumlah; }, 0) };
 }
 
-function apiLaporanHarian(t, tanggal){
+function apiLaporanHarian(t, tanggal, tanggalSampai){
   _requirePerm(t, 'laporan', 'view');
-  var tgl = String(tanggal || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid.');
+  var tglAwal = String(tanggal || '').slice(0, 10);
+  var tglAkhir = tanggalSampai ? String(tanggalSampai).slice(0, 10) : tglAwal;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tglAwal)) throw new Error('Tanggal tidak valid.');
+  if (tglAkhir && !/^\d{4}-\d{2}-\d{2}$/.test(tglAkhir)) tglAkhir = tglAwal;
+  if (tglAkhir < tglAwal) { var _tmp = tglAwal; tglAwal = tglAkhir; tglAkhir = _tmp; }
 
   var layList = readAll(SHEETS.LAYANAN) || [];
   var layMap = {}; layList.forEach(function(l){ if (l && l.id) layMap[l.id] = l; });
@@ -8381,8 +8389,14 @@ function apiLaporanHarian(t, tanggal){
     return String(r.bank || '').trim();
   }
 
-  var himpun = (readAll(SHEETS.PENGHIMPUNAN) || [])
-    .filter(function(r){ return _lhTanggalSama(r.tanggal, tgl); })
+  function _dalamRentangTgl(t){
+    var s = String(t || '').slice(0, 10);
+    return s >= tglAwal && s <= tglAkhir;
+  }
+
+  var rawHimpun = readAll(SHEETS.PENGHIMPUNAN) || [];
+  var himpun = rawHimpun
+    .filter(function(r){ return _dalamRentangTgl(r.tanggal); })
     .map(function(r){
       /* Transaksi KLL/ULL dicatat atas nama layanannya, bukan petugas
          fundraising — aturan yang sama dipakai di rekap dan impor.
@@ -8391,9 +8405,11 @@ function apiLaporanHarian(t, tanggal){
       var _lay = resolveLayananName(r, layList, layMap);
       var _fr = (_lay !== LAYANAN_DAERAH) ? _lay : cleanFundraisingName(r.fundraising);
       return {
+        tanggal: String(r.tanggal || '').slice(0, 10),
         noKwitansi: r.noKwitansi || '-',
         namaDonatur: r.namaDonatur || '-',
         layanan: _lay,
+        tipeDonatur: r.tipeDonatur || '',
         jenisDana: r.jenisDana || '-',
         subJenis: r.subJenis || '',
         pilar: r.pilar || '',
@@ -8406,12 +8422,17 @@ function apiLaporanHarian(t, tanggal){
         jumlah: Number(r.jumlah) || 0
       };
     })
-    .sort(function(a,b){ return String(a.noKwitansi).localeCompare(String(b.noKwitansi)); });
+    .sort(function(a,b){
+      var tA = a.tanggal, tB = b.tanggal;
+      if (tA !== tB) return tA.localeCompare(tB);
+      return String(a.noKwitansi).localeCompare(String(b.noKwitansi));
+    });
 
   var salur = (readAll(SHEETS.PENTASYARUFAN) || [])
-    .filter(function(r){ return _lhTanggalSama(r.tanggal, tgl); })
+    .filter(function(r){ return _dalamRentangTgl(r.tanggal); })
     .map(function(r){
       return {
+        tanggal: String(r.tanggal || '').slice(0, 10),
         noBukti: r.noBukti || '-',
         namaPenerima: r.namaPenerima || '-',
         ashnaf: r.ashnaf || '-',
@@ -8425,7 +8446,11 @@ function apiLaporanHarian(t, tanggal){
         jumlah: Number(r.jumlah) || 0
       };
     })
-    .sort(function(a,b){ return String(a.noBukti).localeCompare(String(b.noBukti)); });
+    .sort(function(a,b){
+      var tA = a.tanggal, tB = b.tanggal;
+      if (tA !== tB) return tA.localeCompare(tB);
+      return String(a.noBukti).localeCompare(String(b.noBukti));
+    });
 
   var rk = {
     himpunTotal: 0, salurTotal: 0,
@@ -8433,6 +8458,13 @@ function apiLaporanHarian(t, tanggal){
     perAshnaf: {}, perProgram: {}, perSumber: {},
     petugasHimpun: {}, petugasSalur: {}
   };
+
+  /* Penghitungan lembar kuitansi penerimaan:
+     Untuk KLL atau ULL pada tanggal yang sama, beberapa setoran dengan pilar
+     berbeda dihitung 1 kuitansi (karena penulisan FO menggabungkan beberapa pilar
+     dalam satu kuitansi). Donatur umum/perorangan dihitung per transaksi/kwitansi. */
+  var kuitansiMap = {};
+  var totalKuitansiHitung = 0;
 
   himpun.forEach(function(r){
     rk.himpunTotal += r.jumlah;
@@ -8442,6 +8474,17 @@ function apiLaporanHarian(t, tanggal){
     _lhJumlah(rk.perLayanan, r.layanan, r.jumlah);
     _lhJumlah(rk.perFundraising, r.fundraising, r.jumlah);
     _lhJumlah(rk.petugasHimpun, r.petugas, r.jumlah);
+
+    var isKantor = (r.layanan !== LAYANAN_DAERAH) || /^(kll|ull)\b/i.test(r.namaDonatur) || /kantor layanan|unit layanan/i.test(r.tipeDonatur);
+    if (isKantor) {
+      var idKwitansiKantor = r.tanggal + '|' + (r.layanan !== LAYANAN_DAERAH ? r.layanan : r.namaDonatur).toLowerCase().trim();
+      if (!kuitansiMap[idKwitansiKantor]) {
+        kuitansiMap[idKwitansiKantor] = true;
+        totalKuitansiHitung++;
+      }
+    } else {
+      totalKuitansiHitung++;
+    }
   });
   salur.forEach(function(r){
     rk.salurTotal += r.jumlah;
@@ -8452,11 +8495,13 @@ function apiLaporanHarian(t, tanggal){
   });
 
   return {
-    tanggal: tgl,
+    tanggal: tglAwal,
+    tanggalSampai: (tglAkhir !== tglAwal ? tglAkhir : ''),
     himpun: himpun,
     salur: salur,
     ringkas: {
       himpunTotal: rk.himpunTotal, himpunCount: himpun.length,
+      kuitansiCount: totalKuitansiHitung,
       salurTotal: rk.salurTotal, salurCount: salur.length,
       selisih: rk.himpunTotal - rk.salurTotal,
       perJenis: rk.perJenis, perMetode: rk.perMetode, perLayanan: rk.perLayanan,
