@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10 Rekomendasi Desain Dashboard LAZDigital 2026</title>
+<style>
+  @page {
+    size: A4 landscape;
+    margin: 8mm 10mm;
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Plus Jakarta Sans", Helvetica, Arial, sans-serif;
+    color: #18181b;
+    background: #f4f4f5;
+    font-size: 8.5pt;
+    line-height: 1.4;
+    margin: 0;
+    padding: 20px 10px;
+  }
+  
+  /* Web Preview Shell */
+  .web-shell {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .web-nav {
+    position: sticky;
+    top: 12px;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid #e4e4e7;
+    border-radius: 14px;
+    padding: 10px 16px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .web-nav h2 { margin: 0; font-size: 13pt; font-weight: 800; color: #09090b; }
+  .web-nav .tabs { display: flex; gap: 4px; overflow-x: auto; max-width: 100%; padding-bottom: 4px; }
+  .web-nav .tab-btn {
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid #e4e4e7;
+    background: #ffffff;
+    font-size: 8pt;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .web-nav .tab-btn:hover { background: #f4f4f5; }
+  .web-nav .tab-btn.on { background: #ea580c; color: #ffffff; border-color: #ea580c; }
+  .web-nav .pdf-btn {
+    background: #09090b;
+    color: #ffffff;
+    padding: 7px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 8.5pt;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Slide / Page container */
+  .slide-page {
+    width: 100%;
+    max-width: 279mm;
+    min-height: auto;
+    margin: 0 auto 36px auto;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e4e4e7; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.04);
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  /* Slide Header */
+  .slide-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1.5px solid #e4e4e7;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+  .slide-title-wrap { display: flex; align-items: center; gap: 8px; }
+  .slide-num {
+    background: #ea580c;
+    color: #ffffff;
+    font-size: 9pt;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .slide-title { font-size: 13pt; font-weight: 800; color: #09090b; margin: 0; }
+  .slide-badge {
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .badge-orange { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
+  .badge-blue { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
+  .badge-green { background: #f0fdf4; color: #15803d; border: 1px solid #dcfce7; }
+  .badge-dark { background: #18181b; color: #f4f4f5; border: 1px solid #27272a; }
+  .badge-purple { background: #faf5ff; color: #7e22ce; border: 1px solid #f3e8ff; }
+
+  .slide-meta {
+    font-size: 8pt;
+    color: #52525b;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 16px;
+    background: #f8fafc;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid #f1f5f9;
+  }
+  .slide-meta span b { color: #0f172a; }
+
+  /* MOCKUP FRAME (Realistic Browser/App Canvas) */
+  .mockup-frame {
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f8fafc;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+    margin-bottom: 6px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .mockup-browser-bar {
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 7pt;
+    color: #64748b;
+  }
+  .mockup-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .dot-red { background: #f87171; }
+  .dot-yellow { background: #fbbf24; }
+  .dot-green { background: #34d399; }
+  .mockup-url {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 1px 8px;
+    flex: 1;
+    max-width: 260px;
+    margin-left: 6px;
+    font-family: ui-monospace, monospace;
+    font-size: 6.5pt;
+  }
+
+  .mockup-canvas {
+    padding: 8px 10px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Internal Mockup Shared Components */
+  .m-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 5px 10px;
+  }
+  .m-brand { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 8.5pt; }
+  .m-badge-logo { background: #ea580c; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 7pt; }
+  .m-actions { display: flex; gap: 4px; align-items: center; }
+  .m-btn {
+    padding: 2.5px 7px;
+    border-radius: 5px;
+    font-size: 7pt;
+    font-weight: 700;
+    border: 1px solid transparent;
+    cursor: default;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .m-btn-primary { background: #ea580c; color: #ffffff; }
+  .m-btn-green { background: #16a34a; color: #ffffff; }
+  .m-btn-blue { background: #2563eb; color: #ffffff; }
+  .m-btn-ghost { background: #f1f5f9; color: #334155; border-color: #e2e8f0; }
+  .m-btn-dark { background: #27272a; color: #fafafa; border-color: #3f3f46; }
+
+  /* KPI Cards */
+  .m-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .m-kpi-5 { grid-template-columns: repeat(5, 1fr); }
+  .m-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    padding: 6px 8px;
+  }
+  .m-card-title { font-size: 6.8pt; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 2px; }
+  .m-card-val { font-size: 11pt; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .m-card-sub { font-size: 6.5pt; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+  .m-up { color: #16a34a; font-weight: 700; }
+  .m-down { color: #dc2626; font-weight: 700; }
+
+  /* Charts & Bars */
+  .bar-rail { background: #f1f5f9; border-radius: 999px; height: 5px; width: 100%; overflow: hidden; margin-top: 2px; }
+  .bar-fill { height: 100%; border-radius: 999px; }
+  .bg-orange { background: #ea580c; }
+  .bg-blue { background: #2563eb; }
+  .bg-green { background: #16a34a; }
+  .bg-purple { background: #9333ea; }
+  .bg-amber { background: #d97706; }
+
+  /* Slide Foot */
+  .slide-foot {
+    border-top: 1px solid #e4e4e7;
+    padding-top: 4px;
+    font-size: 7.2pt;
+    color: #71717a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Specific Design Theme Adjustments */
+  /* Dark theme */
+  .dark-canvas {
+    background: #09090b !important;
+    color: #f4f4f5 !important;
+  }
+  .dark-canvas .m-card, .dark-canvas .m-header {
+    background: #18181b !important;
+    border-color: #27272a !important;
+    color: #f4f4f5 !important;
+  }
+  .dark-canvas .m-card-title { color: #a1a1aa !important; }
+  .dark-canvas .m-card-val { color: #fafafa !important; }
+  .dark-canvas .bar-rail { background: #27272a !important; }
+
+  /* Glassmorphism theme */
+  .glass-canvas {
+    background: linear-gradient(135deg, #fef3c7 0%, #fee2e2 50%, #f3e8ff 100%) !important;
+  }
+  .glass-canvas .m-card, .glass-canvas .m-header {
+    background: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03) !important;
+  }
+</style>
+</head>
+<body>
+
+
+<div class="web-shell">
+  <div class="web-nav">
+    <div>
+      <h2>10 Rekomendasi Desain Dashboard LAZDigital</h2>
+      <div style="font-size:8.5pt;color:#71717a">Pratinjau visual interaktif langsung &middot; Klik tab opsi di bawah untuk melihat desain</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="tabs">
+        <button class="tab-btn on" onclick="bukaTab(1)">Opsi 1</button><button class="tab-btn " onclick="bukaTab(2)">Opsi 2</button><button class="tab-btn " onclick="bukaTab(3)">Opsi 3</button><button class="tab-btn " onclick="bukaTab(4)">Opsi 4</button><button class="tab-btn " onclick="bukaTab(5)">Opsi 5</button><button class="tab-btn " onclick="bukaTab(6)">Opsi 6</button><button class="tab-btn " onclick="bukaTab(7)">Opsi 7</button><button class="tab-btn " onclick="bukaTab(8)">Opsi 8</button><button class="tab-btn " onclick="bukaTab(9)">Opsi 9</button><button class="tab-btn " onclick="bukaTab(10)">Opsi 10</button>
+      </div>
+      <a href="/10_Rekomendasi_Desain_Dashboard_LAZDigital.pdf" target="_blank" class="pdf-btn">📄 Buka PDF</a>
+    </div>
+  </div>
+</div>
+
+
+<div class="web-shell">
+
+<!-- ==========================================
+     OPSI 1: BENTO GRID INTERAKTIF
+     ========================================== -->
+<div class="slide-page" id="opsi-1">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">01</span>
+      <div>
+        <h3 class="slide-title">Bento Grid Interaktif (Tren SaaS 2026)</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-orange">Asimetris &middot; Modular &middot; Padat Informasi</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Hero Card 2x2 saldo + 4 mini kartu modular</b></span>
+    <span>Keunggulan: <b>Zero space wasted, pimpinan scan angka dalam 3 detik</b></span>
+    <span>Interaksi: <b>Draggable Bento tiles, hover MoM % delta</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #bento</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas">
+      <div class="m-header">
+        <div class="m-brand"><span class="m-badge-logo">BENTO</span> Salam Sobat, Lazismu Bantul &bull; <span style="font-weight:normal;color:#64748b">Kamis, 5 Nov 2026</span></div>
+        <div class="m-actions">
+          <span class="m-btn m-btn-ghost">📅 November 2026 ▾</span>
+          <span class="m-btn m-btn-primary">+ Himpun</span>
+          <span class="m-btn m-btn-blue">+ Salur</span>
+        </div>
+      </div>
+
+      <!-- Bento Layout -->
+      <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:6px;flex:1 1 auto">
+        <!-- Hero Bento: Saldo & Tren -->
+        <div class="m-card" style="display:flex;flex-direction:column;justify-content:space-between">
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="m-card-title">Saldo Kas &amp; Bank Tersedia</span>
+              <span style="background:#dcfce7;color:#15803d;font-size:6.5pt;font-weight:800;padding:1px 5px;border-radius:4px">▲ +12.4% MoM</span>
+            </div>
+            <div class="m-card-val" style="font-size:15pt;color:#ea580c">Rp 129.366.470,56</div>
+            <div class="m-card-sub"><span>Kas: Rp 15.000.000 &bull; BPD 510: Rp 89.412.000 &bull; BSI: Rp 24.954.470</span></div>
+          </div>
+          <!-- Mini SVG Dual Trend Line -->
+          <div style="margin-top:6px;background:#f8fafc;border:1px solid #f1f5f9;border-radius:6px;padding:4px">
+            <div style="display:flex;justify-content:space-between;font-size:6pt;color:#64748b;margin-bottom:2px">
+              <span>Arus Dana 12 Bulan</span>
+              <span><i style="color:#ea580c">■</i> Himpun &nbsp; <i style="color:#3b82f6">■</i> Salur</span>
+            </div>
+            <svg viewBox="0 0 300 45" style="width:100%;height:32px">
+              <polyline fill="none" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="2,2" points="0,40 300,40"/>
+              <polyline fill="none" stroke="#ea580c" stroke-width="2" points="0,32 30,30 60,35 90,24 120,28 150,18 180,22 210,14 240,19 270,10 300,8"/>
+              <polyline fill="none" stroke="#3b82f6" stroke-width="1.8" points="0,38 30,35 60,36 90,30 120,32 150,25 180,27 210,20 240,24 270,18 300,16"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Middle Column Bento -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="m-card" style="flex:1">
+            <span class="m-card-title">Capaian Target RAPB 2026</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+              <div style="width:38px;height:38px;border-radius:50%;border:4px solid #ea580c;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:8pt">78%</div>
+              <div>
+                <div style="font-weight:700;font-size:7.5pt">Rp 1.87 Miliar</div>
+                <div style="font-size:6.5pt;color:#64748b">Target: Rp 2.40 Miliar</div>
+              </div>
+            </div>
+          </div>
+          <div class="m-card" style="flex:1">
+            <span class="m-card-title">Donatur &amp; Mustahik</span>
+            <div class="m-card-val" style="font-size:10pt">418 <span style="font-size:7pt;font-weight:normal;color:#64748b">Donatur</span> &bull; 84 <span style="font-size:7pt;font-weight:normal;color:#64748b">Mustahik</span></div>
+            <div class="bar-rail"><div class="bar-fill bg-green" style="width:72%"></div></div>
+          </div>
+        </div>
+
+        <!-- Right Column Bento -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="m-card" style="flex:1">
+            <span class="m-card-title">Pilar Terbesar (Infak Terikat)</span>
+            <div style="font-size:7pt;margin-top:2px">
+              <div style="display:flex;justify-content:space-between"><span>Sosial Kemanusiaan</span><b>Rp 34.8M</b></div>
+              <div class="bar-rail"><div class="bar-fill bg-orange" style="width:48%"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-top:3px"><span>Pendidikan</span><b>Rp 28.1M</b></div>
+              <div class="bar-rail"><div class="bar-fill bg-blue" style="width:36%"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-top:3px"><span>Keagamaan</span><b>Rp 14.9M</b></div>
+              <div class="bar-rail"><div class="bar-fill bg-purple" style="width:20%"></div></div>
+            </div>
+          </div>
+          <div class="m-card" style="flex:1">
+            <span class="m-card-title">Live Action Feed</span>
+            <div style="font-size:6.8pt;color:#334155;line-height:1.35;margin-top:2px">
+              <div>🟢 <b>KLL Bantul Kota</b>: Rp 56.269.400</div>
+              <div>⚡ <b>One-Click Salur</b>: Rp 1.500.000</div>
+              <div>💳 <b>Bagi Hasil BPD</b>: Rp 813.096</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #01 &bull; LAZDigital System Architecture</span>
+    <span>Kompatibilitas Teknis: <b>100% Siap (CSS Grid &amp; Vanilla JS)</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 2: CLEAN FINTECH MINIMALIST (STRIPE)
+     ========================================== -->
+<div class="slide-page" id="opsi-2">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">02</span>
+      <div>
+        <h3 class="slide-title">Clean Fintech Minimalist (Gaya Stripe / Mercury)</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-blue">Presisi Moneter &middot; Ultra Clean &middot; Garis Hairline</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Fokus ke kas bersih, ledger buku kas transparan, font tabular-nums</b></span>
+    <span>Keunggulan: <b>Sangat nyaman untuk bagian bendahara &amp; audit laporan keuangan</b></span>
+    <span>Interaksi: <b>Segmented pill time range (1H, 1M, 1B, YTD), quick ledger filter</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #fintech</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas" style="background:#ffffff">
+      <!-- Top Ledger Stat -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid #f1f5f9;padding-bottom:8px">
+        <div>
+          <div style="font-size:7.5pt;color:#64748b;font-weight:600">TOTAL NET AVAILABLE ASSETS</div>
+          <div style="font-size:18pt;font-weight:800;color:#09090b;letter-spacing:-0.03em">Rp 129.366.470<span style="font-size:11pt;color:#71717a">,56</span></div>
+        </div>
+        <div style="display:flex;gap:3px;background:#f4f4f5;padding:2px;border-radius:6px;font-size:7pt">
+          <span style="padding:2px 8px;border-radius:4px;background:#fff;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,0.05)">1 Bulan</span>
+          <span style="padding:2px 8px;border-radius:4px;color:#71717a">1 Pekan</span>
+          <span style="padding:2px 8px;border-radius:4px;color:#71717a">YTD 2026</span>
+          <span style="padding:2px 8px;border-radius:4px;color:#71717a">Kustom</span>
+        </div>
+      </div>
+
+      <!-- Inflow / Outflow / Surplus Cards -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px">
+        <div style="border:1px solid #e4e4e7;border-radius:8px;padding:8px">
+          <div style="font-size:6.8pt;color:#16a34a;font-weight:700">↓ INFLOW (PENGHIMPUNAN)</div>
+          <div style="font-size:12pt;font-weight:800;color:#09090b;margin-top:2px">Rp 129.366.470</div>
+          <div style="font-size:6.5pt;color:#71717a;margin-top:2px">503 Transaksi masuk &bull; 92% Non-Tunai</div>
+        </div>
+        <div style="border:1px solid #e4e4e7;border-radius:8px;padding:8px">
+          <div style="font-size:6.8pt;color:#dc2626;font-weight:700">↑ OUTFLOW (PENTASYARUFAN)</div>
+          <div style="font-size:12pt;font-weight:800;color:#09090b;margin-top:2px">Rp 85.420.000</div>
+          <div style="font-size:6.5pt;color:#71717a;margin-top:2px">84 Mustahik &bull; 100% Tasyaruf Pas</div>
+        </div>
+        <div style="border:1px solid #e4e4e7;border-radius:8px;padding:8px;background:#f8fafc">
+          <div style="font-size:6.8pt;color:#2563eb;font-weight:700">⎘ SURPLUS BERSIH (NET)</div>
+          <div style="font-size:12pt;font-weight:800;color:#2563eb;margin-top:2px">+Rp 43.946.470</div>
+          <div style="font-size:6.5pt;color:#71717a;margin-top:2px">Rasio Likuiditas Dana Siap Salur: 34%</div>
+        </div>
+      </div>
+
+      <!-- Account Ledger Strip -->
+      <div style="border:1px solid #e4e4e7;border-radius:8px;padding:8px;margin-top:6px">
+        <div style="font-size:7.5pt;font-weight:700;color:#09090b;margin-bottom:4px">SALDO PER AKUN REKENING &amp; KAS</div>
+        <table style="width:100%;font-size:7pt;border-collapse:collapse">
+          <thead><tr style="color:#71717a;text-align:left;border-bottom:1px solid #f1f5f9"><th style="padding:2px 0">Nama Rekening</th><th>Atas Nama</th><th>Jenis Dana</th><th style="text-align:right">Saldo Berjalan</th></tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #f8fafc"><td style="padding:3px 0"><b>BPD DIY Syariah - 803211000510</b></td><td>Lazismu Bantul</td><td>Infak / Operasional</td><td style="text-align:right;font-weight:700">Rp 89.412.000,00</td></tr>
+            <tr style="border-bottom:1px solid #f8fafc"><td style="padding:3px 0"><b>Bank Syariah Indonesia - 1011959004</b></td><td>Lazismu Bantul</td><td>Zakat Mal</td><td style="text-align:right;font-weight:700">Rp 24.954.470,56</td></tr>
+            <tr><td style="padding:3px 0"><b>Kas Tunai Kantor Daerah</b></td><td>Brankas Teller</td><td>Kas Operasional</td><td style="text-align:right;font-weight:700">Rp 15.000.000,00</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #02 &bull; Standar Perbankan Modern</span>
+    <span>Kesesuaian: <b>Sangat Disukai Staf Keuangan &amp; Akuntansi</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 3: COMMAND CENTER (LINEAR STYLE)
+     ========================================== -->
+<div class="slide-page" id="opsi-3">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">03</span>
+      <div>
+        <h3 class="slide-title">Executive Command Center (Dark Mode Linear Style)</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-dark">Zinc-950 &middot; Sleek &middot; Glowing Accents</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Palet gelap pekat dengan glow border jingga Lazismu dan realtime stream</b></span>
+    <span>Keunggulan: <b>Bebas silau saat operasional malam, visual sangat futuristik</b></span>
+    <span>Interaksi: <b>Command palette (⌘K), live status indicator, expandable logs</b></span>
+  </div>
+
+  <div class="mockup-frame dark-canvas">
+    <div class="mockup-browser-bar" style="background:#18181b;border-color:#27272a;color:#a1a1aa">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url" style="background:#09090b;border-color:#27272a;color:#e4e4e7">https://lazdigital.my.id/dashboard [DARK-PRO]</span>
+      <span style="margin-left:auto;color:#ea580c;font-weight:700">● LIVE COMMAND</span>
+    </div>
+    <div class="mockup-canvas dark-canvas">
+      <!-- Dark Top Bar -->
+      <div class="m-header" style="border-color:#ea580c33 !important;box-shadow:0 0 15px rgba(234,88,12,0.1)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="background:#ea580c;color:#fff;padding:2px 6px;border-radius:4px;font-size:7pt;font-weight:800">⌘K</span>
+          <span style="font-size:7.5pt;color:#a1a1aa">Cari transaksi, donatur, atau buka menu...</span>
+        </div>
+        <div style="font-size:7pt;color:#34d399;font-weight:700">● DATABASE POSTGRES CONNECTED</div>
+      </div>
+
+      <!-- 4 Glowing Dark KPIs -->
+      <div class="m-kpi-row" style="margin-top:6px">
+        <div class="m-card" style="border-left:3px solid #ea580c !important">
+          <div class="m-card-title">TOTAL HIMPUNAN BULAN INI</div>
+          <div class="m-card-val" style="color:#ea580c">Rp 129.366.470</div>
+          <div class="m-card-sub"><span>503 Transaksi Sukses</span><span class="m-up">▲ 18%</span></div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #3b82f6 !important">
+          <div class="m-card-title">PENTASYARUFAN AMANAH</div>
+          <div class="m-card-val" style="color:#60a5fa">Rp 85.420.000</div>
+          <div class="m-card-sub"><span>84 Berkas Mustahik</span><span>Tersalur</span></div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #10b981 !important">
+          <div class="m-card-title">SALDO TOTAL KAS/BANK</div>
+          <div class="m-card-val" style="color:#34d399">Rp 129.366.470</div>
+          <div class="m-card-sub"><span>Kas + 2 Rekening</span><span>Aman</span></div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #8b5cf6 !important">
+          <div class="m-card-title">TARGET RAPB KONSOLIDASI</div>
+          <div class="m-card-val" style="color:#c084fc">78.2%</div>
+          <div class="m-card-sub"><span>Rp 1.87M / Rp 2.4M</span><span class="m-up">On Track</span></div>
+        </div>
+      </div>
+
+      <!-- Dark Terminal & Stream -->
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:6px;flex:1 1 auto;margin-top:4px">
+        <div class="m-card">
+          <div style="font-size:7pt;color:#ea580c;font-weight:700;margin-bottom:4px">⚡ LIVE TRANSACTION FEED</div>
+          <div style="font-family:monospace;font-size:6.5pt;color:#d4d4d8;line-height:1.4">
+            <div><span style="color:#71717a">14:22</span> <span style="color:#34d399">INFLOW</span> [BPD] KLL Bantul Kota &bull; Rp 56.269.400</div>
+            <div><span style="color:#71717a">13:45</span> <span style="color:#60a5fa">OUTFLOW</span> [BPT/202611/04] Sembako Mustahik &bull; Rp 1.500.000</div>
+            <div><span style="color:#71717a">11:10</span> <span style="color:#34d399">INFLOW</span> [QRIS] Donasi Hamba Allah &bull; Rp 148.600</div>
+            <div><span style="color:#71717a">09:30</span> <span style="color:#fbbf24">MUTASI</span> Setor Tunai KLL Imogiri &bull; Rp 2.242.000</div>
+          </div>
+        </div>
+        <div class="m-card">
+          <div style="font-size:7pt;color:#38bdf8;font-weight:700;margin-bottom:4px">⚡ KANTOR LAYANAN LPJ RADAR</div>
+          <div style="font-size:6.8pt;color:#d4d4d8;line-height:1.4">
+            <div style="display:flex;justify-content:space-between"><span>KLL Bantul Kota</span><span style="color:#34d399">LPJ LUNAS ✓</span></div>
+            <div style="display:flex;justify-content:space-between"><span>KLL Pandak Barat</span><span style="color:#f87171">UMP Rp 500k ⚠️</span></div>
+            <div style="display:flex;justify-content:space-between"><span>KLL Sedayu</span><span style="color:#34d399">LPJ LUNAS ✓</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #03 &bull; Dark Executive Experience</span>
+    <span>Target Pengguna: <b>Manajer IT &amp; Administrator Inti</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 4: RAPB TARGET TRACKER & BAROMETER
+     ========================================== -->
+<div class="slide-page" id="opsi-4">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">04</span>
+      <div>
+        <h3 class="slide-title">RAPB Target Tracker &amp; Progress Barometer</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-green">Goal Driven &middot; Evaluasi Pimpinan &middot; Barometer</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Menempatkan target tahunan RAPB sebagai pusat gravitasi dashboard</b></span>
+    <span>Keunggulan: <b>Memastikan dana terserap ke pilar program sesuai amanah anggaran</b></span>
+    <span>Interaksi: <b>Filter target bulanan vs tahunan, proyeksi run-rate otomatis</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #rapb</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas">
+      <!-- Top Radial Gauge Card -->
+      <div class="m-card" style="display:flex;justify-content:space-between;align-items:center;background:#f0fdf4;border-color:#bbf7d0">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:48px;height:48px;border-radius:50%;border:5px solid #16a34a;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff">
+            <span style="font-size:10pt;font-weight:800;color:#16a34a">78%</span>
+          </div>
+          <div>
+            <div style="font-size:7pt;color:#15803d;font-weight:700">REALISASI RAPB 2026 KONSOLIDASI</div>
+            <div style="font-size:13pt;font-weight:800;color:#0f172a">Rp 1.876.540.000 <span style="font-size:8pt;color:#64748b">/ Rp 2.400.000.000 Target</span></div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <span style="background:#16a34a;color:#fff;font-size:7pt;font-weight:700;padding:3px 8px;border-radius:4px">STATUS: SANGAT BAIK</span>
+          <div style="font-size:6.5pt;color:#64748b;margin-top:2px">Proyeksi Capaian Akhir Tahun: 104%</div>
+        </div>
+      </div>
+
+      <!-- Pilar Target Progress Bars -->
+      <div class="m-card" style="margin-top:4px">
+        <div style="font-size:7.5pt;font-weight:700;color:#0f172a;margin-bottom:6px">PENCAPAIAN PROGRAM PER PILAR TERHADAP TARGET ANGGARAN</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:7pt">
+          <div>
+            <div style="display:flex;justify-content:space-between"><span>Pendidikan (Target Rp 650M)</span><b style="color:#16a34a">89% &bull; Rp 580.000.000</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-green" style="width:89%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span>Kesehatan (Target Rp 350M)</span><b style="color:#16a34a">91% &bull; Rp 320.000.000</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-green" style="width:91%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span>Sosial Kemanusiaan (Target Rp 400M)</span><b style="color:#2563eb">112% &bull; Rp 450.000.000 (Melampaui)</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-blue" style="width:100%"></div></div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between"><span>Ekonomi &amp; Pemberdayaan (Target Rp 300M)</span><b style="color:#d97706">80% &bull; Rp 240.000.000</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-amber" style="width:80%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span>Keagamaan &amp; Dakwah (Target Rp 400M)</span><b style="color:#dc2626">45% &bull; Rp 180.000.000 (⚠️ Perlu Digenjot)</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-orange" style="width:45%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px"><span>Lingkungan (Target Rp 200M)</span><b style="color:#16a34a">53% &bull; Rp 106.000.000</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-green" style="width:53%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #04 &bull; Ketercapaian Rencana Strategis</span>
+    <span>Fokus: <b>Monitoring Realisasi Rapat Pleno Bulanan</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 5: SPLIT LEDGER & CASHFLOW BALANCER
+     ========================================== -->
+<div class="slide-page" id="opsi-5">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">05</span>
+      <div>
+        <h3 class="slide-title">Split Ledger &amp; Cashflow Balancer (Debet / Kredit)</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-orange">Simetris &middot; Keseimbangan Kas &middot; Inflow / Outflow</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Membagi layar secara simetris: Inflow (Oranye) vs Outflow (Biru)</b></span>
+    <span>Keunggulan: <b>Keseimbangan kas langsung terlihat berdampingan tanpa salah tafsir</b></span>
+    <span>Interaksi: <b>Tombol catat melekat di kepala tiap sisi penerimaan &amp; pengeluaran</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #split</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas">
+      <!-- Split Two Column View -->
+      <div style="display:grid;grid-template-columns:1fr 120px 1fr;gap:6px;flex:1 1 auto">
+        <!-- Inflow Side -->
+        <div class="m-card" style="border-top:3px solid #ea580c">
+          <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;padding-bottom:4px">
+            <span style="font-weight:800;font-size:7.5pt;color:#c2410c">PENGHIMPUNAN (MASUK)</span>
+            <span class="m-btn m-btn-primary">+ Himpun</span>
+          </div>
+          <div style="font-size:14pt;font-weight:800;color:#ea580c;margin:4px 0">Rp 129.366.470</div>
+          <div style="font-size:6.8pt;color:#334155;line-height:1.4">
+            <div style="display:flex;justify-content:space-between"><span>Infak Terikat</span><b>Rp 77.846.520</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Infak Umum</span><b>Rp 39.374.002</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Zakat Mal</span><b>Rp 11.242.530</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Bagi Hasil Bank</span><b>Rp 813.096</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Lainnya / Admin</span><b>Rp 90.322</b></div>
+          </div>
+        </div>
+
+        <!-- Center Balancer -->
+        <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:6px;text-align:center">
+          <span style="font-size:6.5pt;font-weight:700;color:#64748b">SURPLUS KAS</span>
+          <div style="font-size:11pt;font-weight:800;color:#16a34a;margin:2px 0">+43.9M</div>
+          <span style="background:#dcfce7;color:#15803d;font-size:6pt;font-weight:800;padding:1px 4px;border-radius:3px">SURPLUS 34%</span>
+          <div style="font-size:6pt;color:#94a3b8;margin-top:4px">Rasio Sehat ZISWAF</div>
+        </div>
+
+        <!-- Outflow Side -->
+        <div class="m-card" style="border-top:3px solid #2563eb">
+          <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;padding-bottom:4px">
+            <span style="font-weight:800;font-size:7.5pt;color:#1d4ed8">PENTASYARUFAN (SALUR)</span>
+            <span class="m-btn m-btn-blue">+ Salur</span>
+          </div>
+          <div style="font-size:14pt;font-weight:800;color:#2563eb;margin:4px 0">Rp 85.420.000</div>
+          <div style="font-size:6.8pt;color:#334155;line-height:1.4">
+            <div style="display:flex;justify-content:space-between"><span>Fakir Miskin</span><b>Rp 42.100.000</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Fi Sabilillah</span><b>Rp 34.920.000</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Amil Hak Lembaga</span><b>Rp 8.400.000</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Ibnu Sabil</span><b>Rp 0</b></div>
+            <div style="display:flex;justify-content:space-between"><span>Gharimin</span><b>Rp 0</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #05 &bull; Dual-Column Balancer</span>
+    <span>Orientasi: <b>Keseimbangan Arus Kas Lembaga</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 6: REGIONAL KLL & NETWORK MATRIX
+     ========================================== -->
+<div class="slide-page" id="opsi-6">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">06</span>
+      <div>
+        <h3 class="slide-title">Regional KLL &amp; Network Matrix (Bantul Area)</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-purple">Jaringan Kantor &middot; Monitoring LPJ Cabang</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Menempatkan performa kantor cabang KLL &amp; ULL di baris utama</b></span>
+    <span>Keunggulan: <b>Memantau setoran dan mendeteksi kekurangan LPJ UMP cabang seketika</b></span>
+    <span>Interaksi: <b>Klik kartu kantor langsung memfilter seluruh transaksi ke cabang itu</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #kll-matrix</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas">
+      <!-- 6 KLL Network Cards -->
+      <div style="font-size:7.5pt;font-weight:700;color:#0f172a;display:flex;justify-content:space-between">
+        <span>STATUS JARINGAN 18 KANTOR LAYANAN (KLL &amp; ULL)</span>
+        <span style="color:#2563eb">Bulan: Oktober 2026 ▾</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;margin-top:2px">
+        <div class="m-card" style="border-left:3px solid #16a34a">
+          <div style="display:flex;justify-content:space-between"><b>KLL Bantul Kota</b><span style="color:#16a34a;font-size:6.5pt;font-weight:700">LPJ LUNAS ✓</span></div>
+          <div style="font-size:10pt;font-weight:800;color:#09090b">Rp 56.269.400</div>
+          <div style="font-size:6.5pt;color:#64748b">UMP Keluar: Rp 0 &bull; Sisa Saldo: Rp 49.2M</div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #dc2626">
+          <div style="display:flex;justify-content:space-between"><b>KLL Pandak Barat</b><span style="color:#dc2626;font-size:6.5pt;font-weight:700">BELUM LPJ (!)</span></div>
+          <div style="font-size:10pt;font-weight:800;color:#09090b">Rp 21.229.600</div>
+          <div style="font-size:6.5pt;color:#dc2626">UMP: Rp 1.5M &bull; Belum LPJ: Rp 500.000</div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #16a34a">
+          <div style="display:flex;justify-content:space-between"><b>KLL Sedayu</b><span style="color:#16a34a;font-size:6.5pt;font-weight:700">LPJ LUNAS ✓</span></div>
+          <div style="font-size:10pt;font-weight:800;color:#09090b">Rp 18.475.400</div>
+          <div style="font-size:6.5pt;color:#64748b">Setoran ZISWAF Lengkap &bull; Saldo OK</div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #16a34a">
+          <div style="display:flex;justify-content:space-between"><b>KLL Pajangan</b><span style="color:#16a34a;font-size:6.5pt;font-weight:700">LPJ LUNAS ✓</span></div>
+          <div style="font-size:10pt;font-weight:800;color:#09090b">Rp 15.000.000</div>
+          <div style="font-size:6.5pt;color:#64748b">Bencana &amp; Infak Umum Tersinkron</div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #16a34a">
+          <div style="display:flex;justify-content:space-between"><b>KLL Imogiri</b><span style="color:#16a34a;font-size:6.5pt;font-weight:700">LPJ LUNAS ✓</span></div>
+          <div style="font-size:10pt;font-weight:800;color:#09090b">Rp 11.500.000</div>
+          <div style="font-size:6.5pt;color:#64748b">Setor Tunai Kas &amp; Bank Cocok</div>
+        </div>
+        <div class="m-card" style="border-left:3px solid #16a34a">
+          <div style="display:flex;justify-content:space-between"><b>KLL Srandakan</b><span style="color:#16a34a;font-size:6.5pt;font-weight:700">LPJ LUNAS ✓</span></div>
+          <div style="font-size:10pt;font-weight:800;color:#09090b">Rp 9.800.000</div>
+          <div style="font-size:6.5pt;color:#64748b">Perbaikan Tembok &amp; Umum</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #06 &bull; Network &amp; Branch Matrix</span>
+    <span>Penggunaan Utama: <b>Pengawasan Kantor Layanan Daerah Bantul</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 7: INTERACTIVE TIMELINE & ACTIVITY STREAM
+     ========================================== -->
+<div class="slide-page" id="opsi-7">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">07</span>
+      <div>
+        <h3 class="slide-title">Interactive Timeline &amp; Activity Stream</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-blue">Kronologis &middot; Transparan &middot; Live Audit</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Menata aktivitas harian seperti feed media sosial yang terverifikasi</b></span>
+    <span>Keunggulan: <b>Admin mengetahui alur dana detik per detik tanpa membuka menu lain</b></span>
+    <span>Interaksi: <b>Klik baris feed langsung membuka kuitansi atau bukti BPT</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #stream</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas">
+      <div style="display:grid;grid-template-columns:220px 1fr;gap:8px;flex:1 1 auto">
+        <div class="m-card">
+          <span class="m-card-title">STATISTIK AKTIVITAS HARI INI</span>
+          <div class="m-card-val" style="font-size:13pt;color:#ea580c">Rp 14.850.000</div>
+          <div style="font-size:6.8pt;color:#64748b;margin:4px 0 8px">24 Transaksi diproses hari ini</div>
+          <div style="border-top:1px solid #f1f5f9;padding-top:6px;font-size:6.8pt">
+            <div>🟢 Penerimaan: 21 tx</div>
+            <div>⚡ Penyaluran: 2 tx</div>
+            <div>🔄 Setor Kas: 1 tx</div>
+          </div>
+        </div>
+
+        <div class="m-card" style="display:flex;flex-direction:column">
+          <div style="font-size:7.5pt;font-weight:700;color:#0f172a;margin-bottom:6px">LIVE AUDIT ACTIVITY STREAM</div>
+          <div style="font-size:6.8pt;display:flex;flex-direction:column;gap:5px;flex:1">
+            <div style="display:flex;gap:6px;align-items:flex-start">
+              <span style="color:#16a34a;font-weight:800;font-size:8pt">●</span>
+              <div style="flex:1"><b>14:15 WIB &bull; Penerimaan Zakat Mal</b> &bull; Abdul Hakim (Rp 3.548.500) <span style="background:#e0f2fe;color:#0369a1;padding:0 4px;border-radius:3px">BPD Syariah</span></div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:flex-start">
+              <span style="color:#2563eb;font-weight:800;font-size:8pt">●</span>
+              <div style="flex:1"><b>13:30 WIB &bull; One-Click Disburse</b> &bull; Ibu Nurhayati (Bantuan Sembako) <span style="background:#fef3c7;color:#b45309;padding:0 4px;border-radius:3px">No BPT: 004</span></div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:flex-start">
+              <span style="color:#16a34a;font-weight:800;font-size:8pt">●</span>
+              <div style="flex:1"><b>11:20 WIB &bull; Donasi QRIS Masuk</b> &bull; NN (Infak Umum) &bull; Rp 148.600 [Auto Verified ✓]</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:flex-start">
+              <span style="color:#d97706;font-weight:800;font-size:8pt">●</span>
+              <div style="flex:1"><b>09:05 WIB &bull; Setor Tunai Bank</b> &bull; KLL Imogiri (Rp 2.242.000) ke Rekening BPD 510</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #07 &bull; Real-time Activity Stream</span>
+    <span>Keunggulan: <b>Transparansi Penuh Aktivitas Harian</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 8: FUNDRAISING GAMIFICATION
+     ========================================== -->
+<div class="slide-page" id="opsi-8">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">08</span>
+      <div>
+        <h3 class="slide-title">Fundraising Gamification &amp; Leaderboard Hub</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-purple">Motivatif &middot; Kompetitif Sehat &middot; Retensi</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Menampilkan leaderboard perolehan amil, donatur loyal, dan kanal digital</b></span>
+    <span>Keunggulan: <b>Mendorong semangat tim penggalangan lapangan &amp; digital</b></span>
+    <span>Interaksi: <b>Drilldown donatur per fundraiser, evaluasi kanal QRIS/Transfer</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #leaderboard</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas">
+      <!-- Top Podium -->
+      <div style="display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:6px;text-align:center">
+        <div class="m-card" style="background:#faf5ff">
+          <div style="font-size:14pt">🥈</div>
+          <div style="font-weight:800;font-size:8.5pt">Ariya</div>
+          <div style="font-size:10pt;font-weight:800;color:#7e22ce">Rp 26.150.000</div>
+          <div style="font-size:6.5pt;color:#64748b">84 Donatur &bull; Lapangan</div>
+        </div>
+        <div class="m-card" style="background:#fff7ed;border-color:#ffedd5;transform:scale(1.02)">
+          <div style="font-size:16pt">🥇</div>
+          <div style="font-weight:800;font-size:9.5pt;color:#c2410c">Sherli Monicawati</div>
+          <div style="font-size:12pt;font-weight:800;color:#ea580c">Rp 38.400.000</div>
+          <div style="font-size:6.8pt;color:#9a3412">112 Donatur &bull; Top Performer</div>
+        </div>
+        <div class="m-card" style="background:#faf5ff">
+          <div style="font-size:14pt">🥉</div>
+          <div style="font-weight:800;font-size:8.5pt">Renata</div>
+          <div style="font-size:10pt;font-weight:800;color:#7e22ce">Rp 19.800.000</div>
+          <div style="font-size:6.5pt;color:#64748b">65 Donatur &bull; Digital &amp; Mitra</div>
+        </div>
+      </div>
+
+      <!-- Channel & Retention Breakdown -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+        <div class="m-card">
+          <span class="m-card-title">Kanal Penghimpunan Efektif</span>
+          <div style="font-size:7pt;margin-top:2px">
+            <div style="display:flex;justify-content:space-between"><span>Transfer Bank Syariah (62%)</span><b>Rp 80.2M</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-blue" style="width:62%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:3px"><span>QRIS Digital Dinamis (24%)</span><b>Rp 31.0M</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-green" style="width:24%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:3px"><span>Jemput Donasi Tunai (14%)</span><b>Rp 18.1M</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-orange" style="width:14%"></div></div>
+          </div>
+        </div>
+        <div class="m-card">
+          <span class="m-card-title">Retensi &amp; Loyalitas Donatur</span>
+          <div style="font-size:7pt;margin-top:2px">
+            <div style="display:flex;justify-content:space-between"><span>Donatur Rutin / Loyal (68%)</span><b>284 Orang</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-purple" style="width:68%"></div></div>
+            <div style="display:flex;justify-content:space-between;margin-top:3px"><span>Donatur Baru Bulan Ini (32%)</span><b>134 Orang</b></div>
+            <div class="bar-rail"><div class="bar-fill bg-amber" style="width:32%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #08 &bull; Gamified Amil Hub</span>
+    <span>Fokus: <b>Pemberdayaan Tim Penggalang &amp; Retensi Donatur</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 9: GLASSMORPHISM MODERN WIDGETIZED
+     ========================================== -->
+<div class="slide-page" id="opsi-9">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num">09</span>
+      <div>
+        <h3 class="slide-title">Glassmorphism Modern Widgetized</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-orange">Translucent &middot; Rounded-2xl &middot; Soft Ambient</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Kartu kaca buram (backdrop blur) dengan pastel tag yang sangat estetik</b></span>
+    <span>Keunggulan: <b>Tampilan web paling segar, premium, mirip antarmuka iOS/macOS modern</b></span>
+    <span>Interaksi: <b>Smooth hover float, wave transition saat ganti mode gelap/terang</b></span>
+  </div>
+
+  <div class="mockup-frame glass-canvas">
+    <div class="mockup-browser-bar" style="background:rgba(255,255,255,0.6)">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #glass</span>
+      <span style="margin-left:auto;font-weight:700">LAZISMU BANTUL</span>
+    </div>
+    <div class="mockup-canvas glass-canvas">
+      <!-- Glass Hero Header -->
+      <div class="m-header">
+        <div class="m-brand">✨ Dashboard Amanah ZISWAF &bull; Lazismu Bantul</div>
+        <div class="m-actions">
+          <span class="m-btn m-btn-primary" style="backdrop-filter:blur(8px)">✦ Link Harian</span>
+          <span class="m-btn m-btn-ghost">Mode Terang ☀️</span>
+        </div>
+      </div>
+
+      <!-- Glass Cards 4 Cols -->
+      <div class="m-kpi-row">
+        <div class="m-card">
+          <div class="m-card-title">🌸 PENDIDIKAN</div>
+          <div class="m-card-val" style="color:#b45309">Rp 45.200.000</div>
+          <div class="m-card-sub"><span>Beasiswa &amp; Guru</span><span>120 Jiwa</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">🌿 KESEHATAN</div>
+          <div class="m-card-val" style="color:#15803d">Rp 28.150.000</div>
+          <div class="m-card-sub"><span>Ambulans &amp; Pasien</span><span>45 Jiwa</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">☀️ KEMANUSIAAN</div>
+          <div class="m-card-val" style="color:#c2410c">Rp 34.800.000</div>
+          <div class="m-card-sub"><span>Bencana &amp; Air</span><span>210 Jiwa</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">🕌 KEAGAMAAN</div>
+          <div class="m-card-val" style="color:#7e22ce">Rp 14.900.000</div>
+          <div class="m-card-sub"><span>Masjid &amp; Quran</span><span>18 Program</span></div>
+        </div>
+      </div>
+
+      <!-- Glass Chart & Ledger -->
+      <div class="m-card" style="flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:7.5pt;font-weight:700">
+          <span>RINGKASAN KAS SIAP SALUR</span>
+          <span style="color:#ea580c">Total Likuid: Rp 129.366.470,56</span>
+        </div>
+        <div style="font-size:6.8pt;color:#475569;margin-top:4px">
+          Semua dana terhimpun disalurkan tepat sasaran sesuai syariah melalui pemantauan berbasis AI &amp; akuntansi transparan.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #09 &bull; Glassmorphism Aesthetic</span>
+    <span>Nilai Estetika: <b>Tertinggi &middot; Modern Glass &amp; Soft Ambient Glow</b></span>
+  </div>
+</div>
+
+<!-- ==========================================
+     OPSI 10: HYBRID OPERATIONAL DASHBOARD (REKOMENDASI TERBAIK)
+     ========================================== -->
+<div class="slide-page" id="opsi-10">
+  <div class="slide-head">
+    <div class="slide-title-wrap">
+      <span class="slide-num" style="background:#b91c1c">10</span>
+      <div>
+        <h3 class="slide-title">Hybrid Operational Dashboard (Rekomendasi Terbaik)</h3>
+      </div>
+    </div>
+    <span class="slide-badge badge-orange" style="background:#fef2f2;color:#b91c1c;border-color:#fecaca">Solusi Terlengkap &middot; All-in-One Hub</span>
+  </div>
+  <div class="slide-meta">
+    <span>Konsep: <b>Menggabungkan kelebihan Bento Grid, Kecepatan Finansial, dan Radar Cabang KLL</b></span>
+    <span>Keunggulan: <b>100% cocok dengan mesin data saat ini, mengakomodasi pimpinan hingga staf</b></span>
+    <span>Interaksi: <b>Drilldown saldo, tombol eksekusi cepat, tab visual responsive</b></span>
+  </div>
+
+  <div class="mockup-frame">
+    <div class="mockup-browser-bar">
+      <span class="mockup-dot dot-red"></span><span class="mockup-dot dot-yellow"></span><span class="mockup-dot dot-green"></span>
+      <span class="mockup-url">https://lazdigital.my.id/dashboard #hybrid-core</span>
+      <span style="margin-left:auto;font-weight:700;color:#b91c1c">★ REKOMENDASI UTAMA</span>
+    </div>
+    <div class="mockup-canvas">
+      <!-- Hybrid Header -->
+      <div class="m-header">
+        <div class="m-brand">
+          <span class="m-badge-logo" style="background:#b91c1c">HYBRID</span>
+          <b>LAZDIGITAL CORE</b> &bull; <span style="font-size:7pt;color:#64748b">Ringkasan Amanah ZISWAF</span>
+        </div>
+        <div class="m-actions">
+          <span class="m-btn m-btn-ghost">📅 November 2026 ▾</span>
+          <span class="m-btn m-btn-primary">+ Himpun</span>
+          <span class="m-btn m-btn-green">+ Salur</span>
+          <span class="m-btn m-btn-ghost">🔗 Link Harian</span>
+        </div>
+      </div>
+
+      <!-- 5 KPI Chips Row -->
+      <div class="m-kpi-row m-kpi-5">
+        <div class="m-card">
+          <div class="m-card-title">PENGHIMPUNAN</div>
+          <div class="m-card-val" style="font-size:9.5pt;color:#ea580c">Rp 129.3M</div>
+          <div class="m-card-sub"><span>503 Transaksi</span><span class="m-up">▲ 18%</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">PENTASYARUFAN</div>
+          <div class="m-card-val" style="font-size:9.5pt;color:#2563eb">Rp 85.4M</div>
+          <div class="m-card-sub"><span>84 Mustahik</span><span>Tersalur</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">SALDO KAS &amp; BANK</div>
+          <div class="m-card-val" style="font-size:9.5pt;color:#16a34a">Rp 129.3M</div>
+          <div class="m-card-sub"><span>Likuid</span><span>Aman</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">DONATUR &amp; MUSTAHIK</div>
+          <div class="m-card-val" style="font-size:9.5pt">418 / 84</div>
+          <div class="m-card-sub"><span>Rasio 5:1</span><span>Optimal</span></div>
+        </div>
+        <div class="m-card">
+          <div class="m-card-title">TARGET RAPB 2026</div>
+          <div class="m-card-val" style="font-size:9.5pt;color:#9333ea">78.2%</div>
+          <div class="m-card-sub"><span>Rp 1.87M / 2.4M</span><span class="m-up">On Track</span></div>
+        </div>
+      </div>
+
+      <!-- Main Operational Split -->
+      <div style="display:grid;grid-template-columns:1.5fr 1.2fr;gap:6px;flex:1 1 auto">
+        <!-- Left: Arus Kas & Pilar -->
+        <div class="m-card" style="display:flex;flex-direction:column;justify-content:space-between">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:7pt;font-weight:700">
+              <span>TREN ARUS KAS 12 BULAN</span>
+              <span style="color:#64748b">Surplus: +Rp 43.9 Juta</span>
+            </div>
+            <svg viewBox="0 0 300 35" style="width:100%;height:28px;margin-top:2px">
+              <polyline fill="none" stroke="#ea580c" stroke-width="2" points="0,28 30,26 60,30 90,20 120,24 150,14 180,18 210,10 240,15 270,8 300,6"/>
+              <polyline fill="none" stroke="#2563eb" stroke-width="1.8" points="0,32 30,30 60,31 90,26 120,28 150,22 180,24 210,18 240,21 270,15 300,14"/>
+            </svg>
+          </div>
+          <div style="border-top:1px solid #f1f5f9;padding-top:4px">
+            <div style="font-size:6.8pt;font-weight:700;color:#0f172a;margin-bottom:2px">KOMPOSISI PILAR TERBESAR</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:6.5pt">
+              <div>Kemanusiaan: <b>Rp 34.8M</b> (48%)</div>
+              <div>Pendidikan: <b>Rp 28.1M</b> (36%)</div>
+              <div>Kesehatan: <b>Rp 21.2M</b> (28%)</div>
+              <div>Keagamaan: <b>Rp 14.9M</b> (18%)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: KLL Radar & Transaksi -->
+        <div class="m-card" style="display:flex;flex-direction:column;justify-content:space-between">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:7pt;font-weight:700">
+              <span>MONITORING KLL &amp; ALERT LPJ</span>
+              <a href="#" style="color:#2563eb;text-decoration:none;font-size:6.5pt">Selengkapnya &rsaquo;</a>
+            </div>
+            <div style="font-size:6.8pt;margin-top:3px">
+              <div style="display:flex;justify-content:space-between"><span>KLL Bantul Kota</span><b style="color:#16a34a">Setor Rp 56.2M (LPJ ✓)</b></div>
+              <div style="display:flex;justify-content:space-between;margin-top:2px"><span>KLL Pandak Barat</span><b style="color:#dc2626">Belum LPJ Rp 500k ⚠️</b></div>
+              <div style="display:flex;justify-content:space-between;margin-top:2px"><span>KLL Sedayu</span><b style="color:#16a34a">Setor Rp 18.4M (LPJ ✓)</b></div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #f1f5f9;padding-top:4px;font-size:6.5pt;color:#64748b">
+            Rekening BPD 510: <b>Rp 89.4M</b> &bull; BSI 004: <b>Rp 24.9M</b> &bull; Kas: <b>Rp 15M</b>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide-foot">
+    <span>Rekomendasi Desain #10 &bull; All-in-One Hybrid Operational Hub</span>
+    <span>Status Rekomendasi: <b>Sangat Disarankan untuk Implementasi Tahap Berikutnya</b></span>
+  </div>
+</div>
+
+</div>
+
+
+<script>
+  function bukaTab(n) {
+    document.querySelectorAll('.slide-page').forEach((el, idx) => {
+      el.style.display = (idx + 1 === n) ? 'flex' : 'none';
+    });
+    document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
+      btn.classList.toggle('on', idx + 1 === n);
+    });
+  }
+  // Bawaan buka opsi 1
+  bukaTab(1);
+</script>
+
+
+</body>
+</html>

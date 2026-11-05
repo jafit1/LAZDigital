@@ -605,6 +605,9 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_media_fitur.js`, `test_media_ui.js` | modul media |
 | `test_asesmen_mustahik.js` | tindakan baru `surat.asesmenMustahik.*` lewat `/api/media`: izin ubah wajib, form tunggal `F.Survei`, tepat 31 butir, opsi hanya dari katalog, jawaban lengkap, tanggal sah, identitas petugas dari sesi, sanitasi teks, validasi hasil dan skor minimum 32/maksimum 155 (sesuai skala tiap butir; 31 butir tidak berarti minimum 31 karena ada butir dengan skor minimum 2 dan 4), hasil 32–63 Belum Layak, 64–88 Layak, 89–155 Sangat Layak (sesuai keputusan pemilik), simpan/list/hapus di `surat:asesmen-mustahik:*`, asesmen hanya terlihat pencatat atau superadmin |
 | `test_surat_fitur.js`, `test_surat_ui.js` | modul Surat & Pengajuan: izin per centang, nomor agenda, langkah tidak bisa dilompati (juga di papan), data wajib tiap langkah, disposisi (penerima izin lihat bisa menyelesaikan miliknya), lampiran (2 MB, jenis dari isi berkas, 6 per surat, kuota, Drive, tautan), foto dikompres di peramban, PDF besar ditawari kompres atau tautan, kompres PDF berhasil (pdf.js lokal, 3 halaman) dan percobaan ulang setelah gagal unduh, surat rahasia, lacak publik tanpa catatan internal dan dibatasi 30 kali per 10 menit; UI juga menjaga menu/rute asesmen dan tidak mengganggu alur lama |
+| `test_pengajuan.js` | modul Pengajuan mandiri (`/pengajuan.html`): skema 9 kolom, RPC `pengajuan.*`, unggah proposal Drive, integrasi Asesmen Mustahik F.Survei, one-click disburse ke Pentasyarufan, impor spreadsheet lewati duplikat otomatis |
+| `test_closing_bagi_hasil.js` | closing bulanan memasukkan Bagi Hasil Bank ke kas daerah, kartu ringkasan eksekutif closing, dan sortir bulanan serta ekspor PDF Saldo KLL |
+| `test_a1_a2_a3_rentang.js` | Formulir A1 (blangko kosong), A2 (kasir rentang tanggal A5), A3 (tutup hari 3 tanda tangan berjenjang), popover kalender satu tombol `rentangHTML`, dan hitungan 1 lembar kuitansi untuk multi-pilar KLL di hari yang sama |
 | `test_kwitansi_massal.js` | data kwitansi per rentang (izin ganda, batas 400 hari dan 300 kwitansi), tab Cetak Kwitansi, PDF hasil unduhan 5 halaman A5 mendatar dan bisa dirender |
 | `test_denominasi.js` | denominasi A2 acak: jumlah selalu pas, tidak negatif, ratusan berkoin 200/100, kelipatan 1.000 berkoin 500/1.000, variasi dan nominal kosong, hasil diingat di layar |
 | `test_ingatan_hasil.js` | hasil bacaan buku besar yang diingat (`lib/laz-pg.js`): bacaan kedua tidak memuat tabel transaksi, sama persis dengan hitung ulang, gugur saat ada penulisan (juga dari penulis tanpa penanda), token kedaluwarsa dan izin dicabut tidak dilayani dari ingatan, catatan akses tetap tertulis tanpa menggugurkan ingatan, penanda isi acak, jawaban mentah lewat `api/rpc.js` |
@@ -885,17 +888,33 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
   Salin, Kirim lewat WhatsApp, dan Buka. Kunci JSON jawabannya tetap `pengajuan` (kompatibel).
 - **Bidang tim media dibekukan saat permohonan diajukan**, supaya memindahkan
   jenis media suatu hari tidak memindahkan ratusan pekerjaan lama secara surut.
+- **Pemisahan Modul Pengajuan Mandiri & Surat** (5 November 2026; `src/public/pengajuan.html`, `src/public/js/lz-pengajuan.js`, `lib/pengajuan/`):
+  Modul Pengajuan dipisah menjadi modul tersendiri dengan skema 9 kolom (Hari, Tanggal, Pemohon, Alamat, Keperluan, Hasil Asesment, Status, Tanggal Pentasyarufan, Jenis Bantuan). Dilengkapi kalender detail, rekapan admin, unggah proposal ke Google Drive, integrasi langsung dengan Asesmen Mustahik F.Survei, impor Google Spreadsheet dengan pencegahan duplikat otomatis, dan otomasi One-Click Disburse langsung ke pembukuan utama Pentasyarufan tanpa ketik ulang. Modul Surat (`/surat.html`) dimurnikan khusus korespondensi kedinasan (Surat Masuk, Surat Keluar, Disposisi). Akses Pengajuan dijembatani melalui `MODUL_ASAL: { pengajuan: 'surat' }`.
+- **Formulir Laporan A1, A2, A3 Cetak A5 Landscape & Kuitansi KLL Multi-Pilar** (5 November 2026; `src/public/app.js`):
+  Ekspor/cetak Formulir A1 (blangko kosong), A2 (serah terima kasir harian/rentang tanggal), dan A3 (laporan tutup hari 3 tanda tangan berjenjang: Penyusun/Manager Fundraising, Diperiksa/Keuangan, Menyetujui/Direktur) dengan ukuran kertas cetak A5 mendatar. Pemilih rentang tanggal memakai popover kalender tunggal (`rentangHTML`). Transaksi multi-pilar KLL/ULL pada hari yang sama dihitung sebagai 1 lembar kuitansi dengan pengelompokan `tanggal + '|' + layanan`.
+- **Closing Bulanan Bagi Hasil Bank & Saldo KLL Bulanan** (5 November 2026; `api/_engine.js`, `src/public/app.js`):
+  Pendapatan bagi hasil bank dimasukkan ke closing kas daerah, kartu ringkasan eksekutif closing ditambahkan, saldo KLL dilengkapi filter bulanan dan ekspor PDF saldo per bulan.
+- **Rekomendasi Desain Dashboard 2026 Visual Interaktif** (5 November 2026; `src/public/rekomendasi-dashboard.html`, `src/public/10_Rekomendasi_Desain_Dashboard_LAZDigital.pdf`, `tools/buat_pdf_rekomendasi_dashboard.js`):
+  10 rekomendasi desain dashboard disajikan dalam bentuk antarmuka web interaktif dengan pratinjau rendered visual/CSS asli tiap mockup, serta dokumen PDF A4 landscape resolusi tinggi 10 slide. Opsi meliputi: (1) Bento Grid Interaktif, (2) Clean Fintech Minimalist, (3) Executive Command Center, (4) RAPB Target Tracker & Barometer, (5) Split Ledger & Cashflow Balancer, (6) Regional KLL & Network Matrix, (7) Interactive Timeline & Stream, (8) Fundraising Gamification, (9) Glassmorphism Modern Widgetized, dan (10) Hybrid Operational Hub (Rekomendasi Utama).
 
 ---
 
 ## 10. Keadaan sekarang dan pekerjaan tertunda
 
-Per 29 September 2026, dengan tambahan 3 Oktober 2026 di bawah.
+Per 29 September 2026, dengan tambahan 3 Oktober dan 5 November 2026 di bawah.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
-mustahik F.Survei (28 Oktober 2026), dan pembuat jurnal rekening koran BPD dan BSI (29 Oktober 2026).
+mustahik F.Survei (28 Oktober 2026), pembuat jurnal rekening koran BPD dan BSI (29 Oktober 2026), pemisahan modul Pengajuan mandiri terintegrasi Google Drive dan one-click disburse, Formulir A1/A2/A3 rentang tanggal cetak A5 landscape, Bagi Hasil Bank pada closing daerah, serta perombakan rekomendasi desain dashboard visual interaktif (5 November 2026).
+
+**Ditambahkan 5 November 2026:**
+1. Modul Pengajuan mandiri (`/pengajuan.html`) dengan kalender, rekapan, impor spreadsheet, dan one-click disburse ke pembukuan Pentasyarufan.
+2. Modul Surat dikhususkan untuk surat masuk, keluar, dan disposisi.
+3. Formulir A1, A2, A3 dengan popover kalender rentang tanggal satu tombol, format A5 landscape, dan penghitungan 1 lembar kuitansi untuk setoran multi-pilar KLL/ULL harian.
+4. Closing bulanan mencatat bagi hasil bank ke kas daerah dan kartu ringkasan eksekutif.
+5. Saldo KLL mendukung sortir bulanan dan ekspor PDF saldo per bulan.
+6. Pratinjau rekomendasi desain dashboard 10 opsi tersedia dalam format web interaktif (`/rekomendasi-dashboard.html`) dan PDF resolusi tinggi 10 halaman (`/10_Rekomendasi_Desain_Dashboard_LAZDigital.pdf`).
 
 **Ditambahkan 13 Oktober 2026:** daftar "Salinan cepat" di Pengaturan, Perawatan, Cadangan Otomatis hanya menampilkan sekitar 4 baris dan sisanya bisa di-scroll (`max-height` di `src/public/app.js`). Belum diuji di peramban.
 
