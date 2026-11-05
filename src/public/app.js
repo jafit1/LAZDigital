@@ -1879,7 +1879,7 @@ function renderLapRekap(mode){
 
 function renderLaporanShell(){
   var tabs=[['himpun','Detail Penghimpunan'],['salur','Detail Pentasyarufan'],
-            ['harian','Cetak Harian'],['kwitansi','Cetak Kwitansi'],['a2','Formulir A2'],
+            ['harian','Cetak Harian'],['kwitansi','Cetak Kwitansi'],['a2','Formulir'],
             ['jurnal','Jurnal Penerimaan'],['closing','Closing Bulanan'],['broadcast','Broadcast WhatsApp']];
   var h='<div class="page-head"><div><h2>Laporan</h2><div class="desc">Rekap per kantor layanan, jurnal, dan broadcast</div></div></div>';
   h+='<div class="lap-tabs">'+tabs.map(function(t){
@@ -11066,15 +11066,14 @@ function a2Panel(){
   return h;
 }
 
-/* ---------------- tab Formulir A2 ---------------- */
+/* ---------------- tab Formulir ---------------- */
 
 function renderA2Form(){
   var tglAwal = A2_DATA ? A2_DATA.tanggal : today();
-  var tglAkhir = (A2_DATA && A2_DATA.tanggalSampai) ? A2_DATA.tanggalSampai : '';
+  var tglAkhir = (A2_DATA && A2_DATA.tanggalSampai) ? A2_DATA.tanggalSampai : tglAwal;
   var form = '<div class="fgrid">'
-    + fld(3,'Tanggal Mulai *','<input type="date" id="a2_tanggal" value="'+esc(tglAwal)+'">')
-    + fld(3,'Tanggal Sampai (Opsional Rentang)','<input type="date" id="a2_tanggal_sampai" value="'+esc(tglAkhir)+'" placeholder="Kosongkan jika 1 hari">')
-    + fld(6,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Cetak Formulir A1 (kosong), A2 (kasir harian/rentang), atau A3 (tutup hari berjenjang) format A5.</div>')
+    + fld(6,'Rentang Tanggal', rentangHTML('a2_rt', tglAwal, tglAkhir, { kosong: 'Pilih rentang tanggal' }))
+    + fld(6,'','<div class="muted" style="font-size:12.5px;padding-top:22px">Klik pertama untuk tanggal awal, klik kedua untuk tanggal akhir. Cetak Formulir A1 (kosong), A2, atau A3 (A5).</div>')
     + '</div>';
   var acts = '<button class="btn" onclick="a2Geser(-1)">&laquo; Hari sebelumnya</button>'
     + '<button class="btn" onclick="a2Geser(1)">Hari berikutnya &raquo;</button>'
@@ -11084,25 +11083,37 @@ function renderA2Form(){
       'Format resmi A5 standar Lazismu. A1 untuk form fisik kosong, A2 untuk serah terima kasir harian/rentang tanggal, dan A3 untuk laporan tutup hari dengan pengesahan berjenjang.',
       form, acts)
     + '<div id="a2Host" class="lap-result"></div>';
+
+  rentangPasang('a2_rt', {
+    dari: tglAwal,
+    sampai: tglAkhir,
+    onTerap: function(dari, sampai){
+      loadA2(dari, sampai);
+    }
+  });
+
   if (A2_DATA) el('a2Host').innerHTML = a2Panel();
 }
 
 function a2Geser(hari){
-  var inp = el('a2_tanggal'); if (!inp) return;
-  var d = new Date((inp.value || today()) + 'T00:00:00');
+  var rn = rentangNilai('a2_rt');
+  var refTgl = rn.dari || today();
+  var d = new Date(refTgl + 'T00:00:00');
   d.setDate(d.getDate() + hari);
   var p2 = function(n){ return ('0'+n).slice(-2); };
-  inp.value = d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
-  var inpSampai = el('a2_tanggal_sampai');
-  if (inpSampai) inpSampai.value = '';
-  var btn = document.querySelector('.datepicker-enhanced-btn span');
-  if (btn && typeof formatIndoDate === 'function') btn.textContent = formatIndoDate(inp.value);
-  loadA2();
+  var tglBaru = d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate());
+  rentangPasang('a2_rt', {
+    dari: tglBaru,
+    sampai: tglBaru,
+    onTerap: function(dari, sampai){ loadA2(dari, sampai); }
+  });
+  loadA2(tglBaru, tglBaru);
 }
 
-function loadA2(){
-  var tgl = el('a2_tanggal').value;
-  var tglSampai = (el('a2_tanggal_sampai')||{}).value || '';
+function loadA2(dariExplicit, sampaiExplicit){
+  var rn = rentangNilai('a2_rt');
+  var tgl = dariExplicit || rn.dari || (A2_DATA && A2_DATA.tanggal) || today();
+  var tglSampai = sampaiExplicit || rn.sampai || tgl;
   if (!tgl) { toast('Pilih tanggal dulu', true); return; }
   el('a2Host').innerHTML = BOXES_SPINNER;
   gas('apiLaporanHarian')(TOKEN, tgl, tglSampai).then(function(d){
