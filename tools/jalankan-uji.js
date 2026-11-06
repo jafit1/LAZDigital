@@ -58,6 +58,7 @@ const DAFTAR = [
   { label: 'Anomali tanggal sertakan nomor baris Excel', berkas: 'test_anomali_tgl_baris.js' },
   { label: 'tglIndo tidak tampilkan "Invalid Date"', berkas: 'test_tglindo_rusak.js' },
   { label: 'Laporan harian: detail pilar infak terikat', berkas: 'test_harian_pilar.js' },
+  { label: 'Cetak harian: KLL multi-pilar & transfer teratas', berkas: 'test_harian_kll_multipilar.js' },
   { label: 'PDF harian: tanpa teks dobel dan tabel belang', berkas: 'test_harian_pdf.js' },
   { label: 'Fundraising melekat ke akun', berkas: 'test_fr_akun.js' },
   { label: 'Scrollbar jurnal penerimaan terlihat', berkas: 'test_scroll_jurnal.js' },

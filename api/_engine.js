@@ -8423,6 +8423,9 @@ function apiLaporanHarian(t, tanggal, tanggalSampai){
       };
     })
     .sort(function(a,b){
+      var trA = /transfer|qris|wallet|debit|bank/i.test(a.metode) ? 1 : 2;
+      var trB = /transfer|qris|wallet|debit|bank/i.test(b.metode) ? 1 : 2;
+      if (trA !== trB) return trA - trB;
       var tA = a.tanggal, tB = b.tanggal;
       if (tA !== tB) return tA.localeCompare(tB);
       return String(a.noKwitansi).localeCompare(String(b.noKwitansi));

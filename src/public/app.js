@@ -10043,6 +10043,157 @@ function jamIndo(){
   catch(e){ return ''; }
 }
 
+/* ============================================================
+   SUSUN PENGHIMPUNAN CETAK HARIAN (KLL Multi-Pilar & Urutan Transfer)
+   1. Multi-pilar KLL/ULL di tanggal dan kanal bayar yang sama dijadikan satu
+      entri kuitansi agar mudah dibaca admin.
+   2. Urutan rincian jenis dana: Zakat -> Infak Umum -> Infak Terikat.
+   3. Urutan baris: Transfer Bank (non-tunai) di bagian teratas, Tunai di bawahnya.
+   ============================================================ */
+function isKantorKll(x){
+  var lay = String((x && x.layanan) || '').trim();
+  var don = String((x && x.namaDonatur) || '').trim();
+  var tip = String((x && x.tipeDonatur) || '').trim();
+  return (lay && lay !== 'Penghimpunan Daerah')
+    || /^(kll|ull)\b/i.test(don)
+    || /^(kll|ull)\b/i.test(lay)
+    || /kantor layanan|unit layanan/i.test(tip);
+}
+
+function prioritasJenisHarian(x){
+  var j = String((x && x.jenisDana) || '').toLowerCase();
+  var sub = String((x && x.subJenis) || '').toLowerCase();
+  var pil = String((x && (x.pilar || x.program)) || '').toLowerCase();
+  if (j.indexOf('zakat') >= 0 || sub.indexOf('zakat') >= 0) return 1;
+  if (j.indexOf('infak') >= 0 || j.indexOf('infaq') >= 0 || j.indexOf('sedekah') >= 0) {
+    if (sub.indexOf('terikat') >= 0 || pil) return 3;
+    return 2;
+  }
+  if (sub.indexOf('terikat') >= 0 || pil) return 3;
+  return 4;
+}
+
+function labelPilarHarian(x){
+  var pil = String((x && (x.pilar || x.program)) || '').trim();
+  var sub = String((x && x.subJenis) || '').trim();
+  var jd = String((x && x.jenisDana) || '').trim();
+  var pr = prioritasJenisHarian(x);
+  if (pr === 1) {
+    return (sub && sub.toLowerCase().indexOf('zakat') >= 0) ? sub : (jd || 'Zakat');
+  }
+  if (pr === 2) {
+    return (sub && sub.toLowerCase().indexOf('infak') >= 0) ? sub : 'Infak Umum';
+  }
+  if (pr === 3) {
+    if (pil) {
+      if (sub && sub.toLowerCase().indexOf('terikat') >= 0) return sub + ' (' + pil + ')';
+      return 'Infak Terikat (' + pil + ')';
+    }
+    return sub || jd || 'Infak Terikat';
+  }
+  return (sub && sub !== jd ? sub : jd) + (pil ? ' (' + pil + ')' : '');
+}
+
+function lhSusunHimpun(daftar){
+  var kllGrup = {};
+  var nonKll = [];
+
+  (daftar || []).forEach(function(x){
+    if (isKantorKll(x)) {
+      var namaKantor = (x.layanan && x.layanan !== 'Penghimpunan Daerah') ? x.layanan : x.namaDonatur;
+      namaKantor = String(namaKantor || '').trim();
+      var tgl = String(x.tanggal || '').slice(0, 10);
+      var isTr = isTransferMethod(x.metode);
+      var k = tgl + '|' + namaKantor.toLowerCase() + '|' + (isTr ? 'transfer' : 'tunai');
+      if (!kllGrup[k]) {
+        kllGrup[k] = {
+          tanggal: tgl,
+          namaDonatur: namaKantor,
+          layanan: namaKantor,
+          metode: x.metode,
+          bank: x.bank,
+          fundraising: x.fundraising,
+          petugas: x.petugas,
+          isTransfer: isTr,
+          rawList: []
+        };
+      }
+      kllGrup[k].rawList.push(x);
+      if (!kllGrup[k].bank && x.bank) kllGrup[k].bank = x.bank;
+    } else {
+      nonKll.push(Object.assign({}, x, { isTransfer: isTransferMethod(x.metode) }));
+    }
+  });
+
+  var out = [];
+
+  Object.keys(kllGrup).forEach(function(k){
+    var g = kllGrup[k];
+    if (g.rawList.length === 1) {
+      out.push(Object.assign({}, g.rawList[0], { isTransfer: g.isTransfer }));
+      return;
+    }
+
+    var totalJumlah = 0;
+    var kwList = [];
+    var rinciMap = {};
+    var rinciUrut = [];
+
+    g.rawList.forEach(function(it){
+      totalJumlah += (Number(it.jumlah) || 0);
+      var kw = String(it.noKwitansi || '').trim();
+      if (kw && kw !== '-' && kwList.indexOf(kw) < 0) kwList.push(kw);
+
+      var lbl = labelPilarHarian(it);
+      var pr = prioritasJenisHarian(it);
+      if (!rinciMap[lbl]) {
+        rinciMap[lbl] = { label: lbl, jumlah: 0, prioritas: pr, pilar: it.pilar, program: it.program };
+        rinciUrut.push(rinciMap[lbl]);
+      }
+      rinciMap[lbl].jumlah += (Number(it.jumlah) || 0);
+    });
+
+    rinciUrut.sort(function(a, b){
+      if (a.prioritas !== b.prioritas) return a.prioritas - b.prioritas;
+      return a.label.localeCompare(b.label);
+    });
+
+    out.push({
+      tanggal: g.tanggal,
+      noKwitansi: kwList.length ? kwList.join(', ') : (g.rawList[0].noKwitansi || '-'),
+      namaDonatur: g.namaDonatur,
+      layanan: g.layanan,
+      metode: g.metode,
+      bank: g.bank,
+      fundraising: g.fundraising,
+      petugas: g.petugas,
+      jumlah: totalJumlah,
+      isTransfer: g.isTransfer,
+      rincian: rinciUrut,
+      jenisDana: g.rawList[0].jenisDana,
+      subJenis: g.rawList[0].subJenis,
+      pilar: g.rawList[0].pilar,
+      program: g.rawList[0].program
+    });
+  });
+
+  nonKll.forEach(function(x){
+    out.push(x);
+  });
+
+  // Transfer teratas, tunai di bawahnya
+  out.sort(function(a, b){
+    var trA = a.isTransfer ? 1 : 2;
+    var trB = b.isTransfer ? 1 : 2;
+    if (trA !== trB) return trA - trB;
+    var tA = a.tanggal || '', tB = b.tanggal || '';
+    if (tA !== tB) return tA.localeCompare(tB);
+    return String(a.noKwitansi || '').localeCompare(String(b.noKwitansi || ''));
+  });
+
+  return out;
+}
+
 function renderHarianForm(){
   var hariIni = today();
   var form = '<div class="fgrid">'
@@ -10130,16 +10281,22 @@ function renderHarianPreview(d){
   }
 
   if (d.himpun.length) {
-    h += '<h4 class="lh-judul">Penghimpunan <span class="muted">('+d.himpun.length+' transaksi)</span></h4>'
+    var listHimpun = lhSusunHimpun(d.himpun);
+    h += '<h4 class="lh-judul">Penghimpunan <span class="muted">('+d.himpun.length+' transaksi'+(listHimpun.length !== d.himpun.length ? ' &middot; '+listHimpun.length+' entri' : '')+')</span></h4>'
       + '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
       + '<th>No. Kwitansi</th><th>Donatur</th><th>Rekap</th><th>Jenis Dana</th><th>Metode</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
       + '</tr></thead><tbody>';
-    d.himpun.forEach(function(x){
+    listHimpun.forEach(function(x){
       var rek = lhPisahRekening(x.bank);
+      var tdJenis = (x.rincian && x.rincian.length > 1)
+        ? '<div class="lh-multi-pilar" style="line-height:1.45">' + x.rincian.map(function(r){
+            return '<div style="font-size:12px">&bull; ' + esc(r.label) + ': <b>' + rp(r.jumlah) + '</b></div>';
+          }).join('') + '</div>'
+        : esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')
+          +(x.pilar||x.program?' <span class="muted">'+esc(x.pilar||x.program)+'</span>':'');
       h += '<tr><td>'+esc(x.noKwitansi)+'</td><td><b>'+esc(x.namaDonatur)+'</b></td>'
         + '<td class="muted">'+(x.layanan && x.layanan !== x.namaDonatur ? esc(x.layanan) : '')+'</td>'
-        + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')
-          +(x.pilar||x.program?' <span class="muted">'+esc(x.pilar||x.program)+'</span>':'')+'</td>'
+        + '<td>'+tdJenis+'</td>'
         + '<td>'+esc(x.metode)+(rek.nama?'<div class="muted" style="font-size:11px">'+esc(rek.nama)+'</div>':'')
           +(rek.nomor?'<div class="muted" style="font-size:11px">Rek. '+esc(rek.nomor)+'</div>':'')+'</td>'
         + '<td class="muted">'+esc(x.petugas)+'</td>'
@@ -10716,7 +10873,8 @@ function buildHarianHTML(d){
   var logo = (s.logoData || s.logoUrl) ? '<img class="logo" src="'+esc(s.logoData||s.logoUrl)+'">' : '';
   var kontak = [s.alamat, s.telepon, s.email, s.website].filter(Boolean).map(esc).join(' &middot; ');
 
-  var barisHimpun = d.himpun.map(function(x){
+  var listHimpun = lhSusunHimpun(d.himpun);
+  var barisHimpun = listHimpun.map(function(x){
     /* Nama KLL/ULL memang sudah mengandung nama layanannya ("KLL Sanden"),
        jadi sub-layanan hanya ditampilkan bila beda dari nama donaturnya,
        supaya nama tidak muncul dua kali (seperti di PDF sebelumnya).
@@ -10726,11 +10884,16 @@ function buildHarianHTML(d){
     var subLay = (x.layanan && x.layanan !== 'Penghimpunan Daerah' && x.layanan !== x.namaDonatur)
       ? '<div class="sub">'+esc(x.layanan)+'</div>' : '';
     var rek = lhPisahRekening(x.bank);
+    var tdJenis = (x.rincian && x.rincian.length > 1)
+      ? x.rincian.map(function(r){
+          return '<div class="sub-pilar">&bull; ' + esc(r.label) + ': <b>' + rpCetak(r.jumlah) + '</b></div>';
+        }).join('')
+      : esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : '')
+        + (x.pilar||x.program ? '<div class="sub">'+esc(x.pilar||x.program)+'</div>' : '');
     return [
       esc(x.noKwitansi),
       '<b>'+esc(x.namaDonatur)+'</b>' + subLay,
-      esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : '')
-        + (x.pilar||x.program ? '<div class="sub">'+esc(x.pilar||x.program)+'</div>' : ''),
+      tdJenis,
       esc(x.metode) + (rek.nama ? '<div class="sub">'+esc(rek.nama)+'</div>' : '')
         + (rek.nomor ? '<div class="sub">Rek. '+esc(rek.nomor)+'</div>' : ''),
       esc(x.fundraising||'-'),
@@ -10851,6 +11014,7 @@ function buildHarianHTML(d){
     + 'table.tbl .kanan{text-align:right}'
     + 'table.tbl .nom{font-variant-numeric:tabular-nums;white-space:nowrap}'
     + 'table.tbl .sub{font-size:7.8pt;color:#6b7480;margin-top:1px}'
+    + 'table.tbl .sub-pilar{font-size:8pt;color:#1b1f24;line-height:1.35;margin-top:2px}'
     + 'table.tbl tfoot td{border-top:1.2pt solid #1b1f24;padding:7px;font-weight:800;font-size:10pt}'
     + 'table.tbl thead{display:table-header-group;break-after:avoid}'
     /* tfoot bawaannya diulang di tiap halaman; dijadikan baris biasa agar
