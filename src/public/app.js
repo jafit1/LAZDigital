@@ -529,8 +529,13 @@ function applyBranding(){
   }
   if(tb) tb.innerHTML = logo ? '<img src="'+logo+'" alt="logo">' : esc(nm);
 }
-function toggleSidebar(){el('sidebar').classList.toggle('open');el('scrim').classList.toggle('show');}
-function closeSidebar(){var s=el('sidebar');if(s)s.classList.remove('open');var sc=el('scrim');if(sc)sc.classList.remove('show');}
+function closeSidebar(){
+  var app=el('appView')||document.querySelector('.app');
+  if(app) app.classList.remove('menu-open');
+  document.body.classList.remove('menu-open');
+  var sc=document.getElementById('navScrim');
+  if(sc) sc.classList.remove('show');
+}
 var PROF_FOTO=null;
 function openProfile(){
   var foto=SETTINGS['uf_'+ME.id]||'';PROF_FOTO=null;
@@ -8321,9 +8326,17 @@ function simpanSisiNanti(ciut) {
 function toggleSidebar() {
   var app = el('appView');
   if (app) {
-    markNavAnim();
-    app.classList.toggle('collapsed');
-    simpanSisiNanti(app.classList.contains('collapsed'));
+    if (window.innerWidth < 1024) {
+      var buka = !app.classList.contains('menu-open');
+      app.classList.toggle('menu-open', buka);
+      document.body.classList.toggle('menu-open', buka);
+      var scrim = document.getElementById('navScrim');
+      if (scrim) scrim.classList.toggle('show', buka);
+    } else {
+      markNavAnim();
+      app.classList.toggle('collapsed');
+      simpanSisiNanti(app.classList.contains('collapsed'));
+    }
   }
 }
 

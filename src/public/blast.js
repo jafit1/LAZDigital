@@ -3324,14 +3324,31 @@ halaman.setelan = {
    pilihannya diingat antar halaman lewat kunci localStorage yang sama —
    jadi menyempitkan menu di halaman utama ikut berlaku di sini. */
 function toggleSidebar() {
-  const app = $('#appView');
+  const app = $('#appView') || document.querySelector('.app');
   if (!app) return;
-  app.classList.toggle('collapsed');
-  try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed')); } catch (_) { /* mode privat */ }
+  if (window.innerWidth < 1024) {
+    const buka = !app.classList.contains('menu-open');
+    app.classList.toggle('menu-open', buka);
+    document.body.classList.toggle('menu-open', buka);
+    const scrim = document.getElementById('navScrim');
+    if (scrim) scrim.classList.toggle('show', buka);
+  } else {
+    app.classList.toggle('collapsed');
+    try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed')); } catch (_) { /* mode privat */ }
+  }
 }
 window.toggleSidebar = toggleSidebar;
+function closeSidebar() {
+  const app = $('#appView') || document.querySelector('.app');
+  if (app) app.classList.remove('menu-open');
+  document.body.classList.remove('menu-open');
+  const scrim = document.getElementById('navScrim');
+  if (scrim) scrim.classList.remove('show');
+}
+window.closeSidebar = closeSidebar;
 
 async function buka(kode) {
+  closeSidebar();
   /* Halaman yang menunya disembunyikan tetap bisa dicapai dengan mengetik
      #webhook di bilah alamat. Di sini ia dijawab dengan penjelasan, bukan
      halaman kosong — dan servernya toh menolak datanya. */

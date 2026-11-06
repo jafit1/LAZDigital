@@ -923,11 +923,28 @@ function terapkanTema(gelap) {
 function temaGelap() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
 
 function toggleSidebar() {
-  const app = $('#appView');
-  app.classList.toggle('collapsed');
-  try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed') ? 'true' : 'false'); } catch (_) {}
+  const app = $('#appView') || document.querySelector('.app');
+  if (!app) return;
+  if (window.innerWidth < 1024) {
+    const buka = !app.classList.contains('menu-open');
+    app.classList.toggle('menu-open', buka);
+    document.body.classList.toggle('menu-open', buka);
+    const scrim = document.getElementById('navScrim');
+    if (scrim) scrim.classList.toggle('show', buka);
+  } else {
+    app.classList.toggle('collapsed');
+    try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed') ? 'true' : 'false'); } catch (_) {}
+  }
 }
 window.toggleSidebar = toggleSidebar;
+function closeSidebar() {
+  const app = $('#appView') || document.querySelector('.app');
+  if (app) app.classList.remove('menu-open');
+  document.body.classList.remove('menu-open');
+  const scrim = document.getElementById('navScrim');
+  if (scrim) scrim.classList.remove('show');
+}
+window.closeSidebar = closeSidebar;
 
 function selesaiMemuat() {
   const boot = $('#boot');
@@ -942,6 +959,7 @@ function mulaiSibuk() { clearTimeout(jamSibuk); jamSibuk = setTimeout(() => { co
 function selesaiSibuk() { clearTimeout(jamSibuk); const el = $('#sibuk'); if (el) el.classList.remove('tampil'); }
 
 async function buka(rute) {
+  closeSidebar();
   /* Rute #p/<id> membuka satu permohonan. Ditaruh di alamat, bukan disimpan di
      variabel, supaya tautannya bisa disalin ke WhatsApp dan langsung membuka
      permohonan yang dimaksud, bukan halaman depan. */

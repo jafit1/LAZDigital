@@ -937,11 +937,28 @@ function terapkanTema(gelap) {
   try { localStorage.setItem('laz_theme', gelap ? 'dark' : 'light'); } catch (_) {}
 }
 function toggleSidebar() {
-  const app = $('#appView');
-  app.classList.toggle('collapsed');
-  try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed') ? 'true' : 'false'); } catch (_) {}
+  const app = $('#appView') || document.querySelector('.app');
+  if (!app) return;
+  if (window.innerWidth < 1024) {
+    const buka = !app.classList.contains('menu-open');
+    app.classList.toggle('menu-open', buka);
+    document.body.classList.toggle('menu-open', buka);
+    const scrim = document.getElementById('navScrim');
+    if (scrim) scrim.classList.toggle('show', buka);
+  } else {
+    app.classList.toggle('collapsed');
+    try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed') ? 'true' : 'false'); } catch (_) {}
+  }
 }
 window.toggleSidebar = toggleSidebar;
+function closeSidebar() {
+  const app = $('#appView') || document.querySelector('.app');
+  if (app) app.classList.remove('menu-open');
+  document.body.classList.remove('menu-open');
+  const scrim = document.getElementById('navScrim');
+  if (scrim) scrim.classList.remove('show');
+}
+window.closeSidebar = closeSidebar;
 function selesaiMemuat() {
   $('#appView').classList.remove('hidden');
   const boot = $('#boot');
@@ -953,6 +970,7 @@ const selesaiSibuk = () => { clearTimeout(jamSibuk); const e = $('#sibuk'); if (
 
 let RUTE_SEBELUM = '';
 async function buka(rute) {
+  closeSidebar();
   document.body.removeAttribute('data-halaman-siap');
   let h, judul, aksi = '';
   if (rute.startsWith('s/')) {

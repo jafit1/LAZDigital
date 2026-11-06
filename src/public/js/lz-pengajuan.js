@@ -134,17 +134,43 @@
     }
   }
 
+  function toggleSidebar() {
+    const app = el('appView') || document.querySelector('.app');
+    if (!app) return;
+    if (window.innerWidth < 1024) {
+      const buka = !app.classList.contains('menu-open');
+      app.classList.toggle('menu-open', buka);
+      document.body.classList.toggle('menu-open', buka);
+      const scrim = el('navScrim');
+      if (scrim) scrim.classList.toggle('show', buka);
+    } else {
+      app.classList.toggle('collapsed');
+      try { localStorage.setItem('sidebar_collapsed', app.classList.contains('collapsed') ? 'true' : 'false'); } catch (_) {}
+    }
+  }
+  window.toggleSidebar = toggleSidebar;
+
+  function closeSidebar() {
+    const app = el('appView') || document.querySelector('.app');
+    if (app) app.classList.remove('menu-open');
+    document.body.classList.remove('menu-open');
+    const scrim = el('navScrim');
+    if (scrim) scrim.classList.remove('show');
+  }
+  window.closeSidebar = closeSidebar;
+
   function pasangMenu() {
     const menu = [
       { kode: 'daftar', label: 'Daftar Pengajuan', ikon: IKON.daftar },
       { kode: 'kalender', label: 'Kalender Detail', ikon: IKON.kalender },
       { kode: 'rekapan', label: 'Rekapan Admin', ikon: IKON.rekapan },
       { kode: 'asesmen', label: 'Asesmen Mustahik (F.Survei)', ikon: IKON.asesmen },
+      { kode: 'kembali_main', label: 'Kembali ke LAZDigital', ikon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19 3.5 12 10 5"/><path d="M3.5 12H20"/></svg>', url: '/' }
     ];
 
     const nav = el('nav');
     nav.innerHTML = menu.map((m) => `
-      <button class="tn-item" id="nav_${m.kode}" type="button" title="${esc(m.label)}" aria-label="${esc(m.label)}" onclick="location.hash='#${m.kode}'">
+      <button class="tn-item" id="nav_${m.kode}" type="button" title="${esc(m.label)}" aria-label="${esc(m.label)}" onclick="${m.url ? `location.href='${m.url}'` : `location.hash='#${m.kode}'; closeSidebar();`}">
         <span class="ic">${m.ikon}</span>
         <span class="tn-tip">${esc(m.label)}</span>
       </button>
@@ -157,6 +183,7 @@
   }
 
   function tanganiHash() {
+    closeSidebar();
     const h = (location.hash || '#daftar').replace(/^#/, '');
     const rute = ['daftar', 'kalender', 'rekapan', 'asesmen'].includes(h) ? h : 'daftar';
     STATE.rute = rute;
@@ -477,9 +504,9 @@
         <div class="muted" style="font-size:12px">Pantau permohonan masuk dan jadwal pentasyarufan per hari</div>
       </div>
       <div class="page-head-aksi">
-        <button class="btn btn-ghost btn-sm" id="btnKalPrev">&larr; Bulan Sebelumnya</button>
+        <button class="btn btn-ghost btn-sm" id="btnKalPrev">&larr; <span class="kal-btn-label">Bulan Sebelumnya</span></button>
         <button class="btn btn-ghost btn-sm" id="btnKalKini">Bulan Ini</button>
-        <button class="btn btn-ghost btn-sm" id="btnKalNext">Bulan Berikutnya &rarr;</button>
+        <button class="btn btn-ghost btn-sm" id="btnKalNext"><span class="kal-btn-label">Bulan Berikutnya</span> &rarr;</button>
       </div>
     </div>`;
 
@@ -523,8 +550,8 @@
           ${isHariIni ? '<span class="badge amber" style="font-size:9px;padding:1px 4px">Hari Ini</span>' : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
-          ${listM.length ? `<span class="badge blue" style="font-size:9.5px;padding:1px 4px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${listM.length} Masuk</span>` : ''}
-          ${listS.length ? `<span class="badge green" style="font-size:9.5px;padding:1px 4px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${listS.length} Salur</span>` : ''}
+          ${listM.length ? `<span class="badge blue" style="font-size:9.5px;padding:1px 4px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="kal-tx-full">${listM.length} Masuk</span><span class="kal-tx-mini">● ${listM.length}</span></span>` : ''}
+          ${listS.length ? `<span class="badge green" style="font-size:9.5px;padding:1px 4px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="kal-tx-full">${listS.length} Salur</span><span class="kal-tx-mini">● ${listS.length}</span></span>` : ''}
         </div>
       </div>`;
     }
@@ -760,7 +787,7 @@
       <input type="hidden" id="pjInpAsesmenId" value="${esc(item.asesmenId || '')}">
       <input type="hidden" id="pjInpAsesmenSkor" value="${item.asesmenSkor || 0}">
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-fgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Tanggal Pengajuan *</label>
           <input type="date" id="pjInpTanggal" class="input" value="${esc(item.tanggal)}" required style="width:100%">
@@ -771,7 +798,7 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-fgrid" style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-bottom:12px">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nama Pemohon *</label>
           <input type="text" id="pjInpPemohon" class="input" placeholder="Nama individu / keluarga / lembaga" value="${esc(item.pemohon)}" required style="width:100%">
@@ -792,7 +819,7 @@
         <textarea id="pjInpKeperluan" class="input" rows="2" placeholder="Rincian kebutuhan bantuan yang diajukan..." required style="width:100%">${esc(item.keperluan)}</textarea>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-fgrid" style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Jenis Bantuan / Program *</label>
           <select id="pjInpJenis" class="input" style="width:100%">
@@ -814,7 +841,7 @@
           <button type="button" class="btn btn-xs btn-primary" onclick="LZPengajuan.bukaAsesmenUntukForm()">+ Isi Asesmen Baru</button>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="pj-fgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="field" style="margin:0">
             <select id="pjPilihAsesmenTersimpan" class="input" style="width:100%;font-size:11.5px">
               <option value="">-- Hubungkan dari Riwayat Asesmen --</option>
@@ -831,7 +858,7 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-fgrid" style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Status Pengajuan</label>
           <select id="pjInpStatus" class="input" style="width:100%">

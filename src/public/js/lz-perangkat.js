@@ -89,4 +89,107 @@
     sentuh: jenisSentuh,
     TITIK: TITIK,
   };
+
+  /* Inisialisasi navigasi drawer mobile untuk seluruh halaman */
+  function inisialisasiDrawerMobile() {
+    var topnav = document.querySelector('.topnav');
+    if (!topnav) return;
+
+    /* 1. Pastikan backdrop scrim ada */
+    var scrim = document.getElementById('navScrim');
+    if (!scrim) {
+      scrim = document.createElement('div');
+      scrim.id = 'navScrim';
+      scrim.className = 'tn-nav-scrim';
+      scrim.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(scrim);
+    }
+    scrim.onclick = function () {
+      tutupDrawer();
+    };
+
+    /* 2. Pastikan tombol hamburger ada di awal .topnav sebelum brand */
+    var adaHam = topnav.querySelector('.btn-hamburger');
+    if (!adaHam) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-hamburger';
+      btn.id = 'btnMenuMobile';
+      btn.setAttribute('aria-label', 'Buka menu navigasi');
+      btn.title = 'Menu Navigasi';
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>';
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        toggleSidebar();
+      };
+      var brand = topnav.querySelector('.tn-brand');
+      if (brand) {
+        topnav.insertBefore(btn, brand);
+      } else {
+        topnav.insertBefore(btn, topnav.firstChild);
+      }
+    }
+
+    /* 3. Tutup drawer saat klik tombol menu di HP */
+    var nav = topnav.querySelector('.tn-nav');
+    if (nav && !nav.__lzNavBound) {
+      nav.__lzNavBound = true;
+      nav.addEventListener('click', function (e) {
+        if (window.innerWidth < 1024 && e.target.closest('.tn-item, .tn-drawer-close')) {
+          tutupDrawer();
+        }
+      });
+    }
+
+    /* 4. Tutup drawer dengan tombol Esc */
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.body.classList.contains('menu-open')) {
+        tutupDrawer();
+      }
+    });
+  }
+
+  function bukaDrawer() {
+    var app = document.getElementById('appView') || document.querySelector('.app');
+    if (app) app.classList.add('menu-open');
+    document.body.classList.add('menu-open');
+    var s = document.getElementById('navScrim');
+    if (s) s.classList.add('show');
+  }
+
+  function tutupDrawer() {
+    var app = document.getElementById('appView') || document.querySelector('.app');
+    if (app) app.classList.remove('menu-open');
+    document.body.classList.remove('menu-open');
+    var s = document.getElementById('navScrim');
+    if (s) s.classList.remove('show');
+  }
+
+  function toggleDrawer() {
+    var app = document.getElementById('appView') || document.querySelector('.app');
+    var buka = !(app && app.classList.contains('menu-open'));
+    if (buka) bukaDrawer();
+    else tutupDrawer();
+  }
+
+  /* Universal toggleSidebar untuk layar sentuh / mobile vs desktop */
+  var toggleLama = window.toggleSidebar;
+  window.toggleSidebar = function () {
+    if (window.innerWidth < 1024) {
+      toggleDrawer();
+    } else {
+      if (typeof toggleLama === 'function' && toggleLama !== window.toggleSidebar) {
+        toggleLama();
+      } else {
+        var app = document.getElementById('appView') || document.querySelector('.app');
+        if (app) app.classList.toggle('collapsed');
+      }
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', inisialisasiDrawerMobile);
+  } else {
+    inisialisasiDrawerMobile();
+  }
 })();

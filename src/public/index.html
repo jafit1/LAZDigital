@@ -83,6 +83,7 @@
   <!-- ============ APP ============ -->
   <div id="appView" class="app hidden">
     <header class="topnav" id="topnav">
+      <button class="btn-hamburger" id="btnMenuMobile" type="button" onclick="toggleSidebar()" aria-label="Buka menu navigasi" title="Menu Navigasi"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
       <div class="tn-brand" id="brandBox"><button class="tn-brand-id" type="button" onclick="toggleSidebar()" title="Klik untuk membuka / menutup menu" aria-label="Buka atau tutup menu"><span class="logo-img lz-logo-svg lz-logo-tunggu" data-lz-logo role="img" aria-label="Lazismu Bantul"></span></button></div>
       <nav class="tn-nav" id="nav"></nav>
       <div class="tn-right">
@@ -99,6 +100,7 @@
         </button>
       </div>
     </header>
+    <div class="tn-nav-scrim" id="navScrim" onclick="toggleSidebar()"></div>
     <main class="main"><div id="content"></div></main>
   </div>
 

@@ -908,6 +908,10 @@ kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
 mustahik F.Survei (28 Oktober 2026), pembuat jurnal rekening koran BPD dan BSI (29 Oktober 2026), pemisahan modul Pengajuan mandiri terintegrasi Google Drive dan one-click disburse, Formulir A1/A2/A3 rentang tanggal cetak A5 landscape, Bagi Hasil Bank pada closing daerah, serta perombakan rekomendasi desain dashboard visual interaktif (5 November 2026).
 
+**Ditambahkan 6 November 2026: Perbaikan Tata Letak Mobile & Navigasi Drawer Seluruh Web.**
+- Navigasi mobile (< 1024px) di seluruh halaman (web utama, Pengajuan, Surat, Fundraising, Broadcast, Media, AI) dilengkapi tombol hamburger (☰) dan drawer samping (`.tn-nav`) dengan backdrop scrim (`.tn-nav-scrim`). Seluruh menu terlihat penuh, berikon, dan berlabel lengkap tanpa terpotong atau tersembunyi di bilah horizontal sempit. Menutup otomatis saat butir menu atau scrim diklik, atau tombol Escape ditekan.
+- Perbaikan layout mobile: kepala halaman (`.page-head`) dan aksi (`.page-head-aksi`) tersusun rapi tanpa tumpang tindih; bilah filter (`.toolbar`) dan pencarian responsif penuh; tabel (`.table-wrap`) memiliki wadah geser mandiri; modal dan formulir dua kolom responsif menjadi satu kolom di layar sempit; kalender pengajuan menyesuaikan badge dan navigasi ringkas di layar HP.
+
 **Ditambahkan 5 November 2026:**
 1. Modul Pengajuan mandiri (`/pengajuan.html`) dengan kalender, rekapan, impor spreadsheet, dan one-click disburse ke pembukuan Pentasyarufan.
 2. Modul Surat dikhususkan untuk surat masuk, keluar, dan disposisi.

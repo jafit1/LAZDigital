@@ -207,9 +207,55 @@ async function hapusSesiWhatsApp() {
 
 function mulaiHttp() {
   const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/') {
+    if (req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, status, perangkatId: PERANGKAT }));
+    }
+    if (req.url === '/qr.png') {
+      if (fs.existsSync(fileQr)) {
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        return res.end(fs.readFileSync(fileQr));
+      }
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('QR not ready');
+    }
+    if (req.url === '/' || req.url === '/index.html') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Gateway — LAZDigital</title>
+  <style>
+    body { background:#0b0f19; color:#e2e8f0; font-family:-apple-system,sans-serif; text-align:center; padding:30px 16px; margin:0; }
+    .box { max-width:400px; margin:0 auto; background:#111827; border:1px solid #1f293d; border-radius:12px; padding:24px; }
+    h1 { font-size:1.3rem; margin-bottom:8px; color:#25d366; }
+    p { font-size:0.9rem; color:#94a3b8; line-height:1.5; }
+    .qr-wrap { margin:20px 0; background:#fff; padding:12px; border-radius:8px; display:inline-block; }
+    img { width:240px; height:240px; display:block; object-fit:contain; }
+    .status { font-weight:600; font-size:0.85rem; padding:6px 12px; border-radius:20px; background:rgba(37,211,102,0.15); color:#25d366; display:inline-block; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>📱 WhatsApp Gateway</h1>
+    <p>Buka WhatsApp &gt; Perangkat Tertaut &gt; Tautkan Perangkat</p>
+    <div class="qr-wrap">
+      <img src="/qr.png" id="qr" alt="QR Code" onerror="this.alt='QR Belum Tersedia / Sesi Tersambung'">
+    </div>
+    <div id="stat" class="status">Status: Menunggu Scan...</div>
+  </div>
+  <script>
+    setInterval(() => {
+      document.getElementById('qr').src = '/qr.png?t=' + Date.now();
+      fetch('/health').then(r=>r.json()).then(d=>{
+        document.getElementById('stat').innerText = 'Status: ' + d.status.toUpperCase();
+      }).catch(()=>{});
+    }, 4000);
+  </script>
+</body>
+</html>`);
     }
     res.writeHead(404);
     return res.end('Not found');
