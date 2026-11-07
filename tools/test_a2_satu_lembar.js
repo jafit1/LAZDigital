@@ -1,4 +1,5 @@
-/* Uji: Formulir A2 selalu tercetak SATU lembar A5 mendatar, apa pun isinya.
+/* Uji: Formulir A2 satu tanggal selalu satu lembar A5 mendatar. Cetak rentang
+ * tetap satu PDF, dengan tepat satu halaman untuk setiap tanggal.
  *
  * Bug (21 Oktober 2026): dicetak atau disimpan PDF, formulir pecah jadi dua
  * lembar. Isi tabel tumbuh mengikuti data (sampai enam jenis dana, dua kali:
@@ -55,7 +56,7 @@ const srv = http.createServer(async (req, res) => {
 
 const SKENARIO = {
   biasa:    { tgl: geser(hari, 0), jenis: ['Zakat', 'Infak', 'Wakaf'],                                  nama: ['Tim'] },
-  terburuk: { tgl: geser(hari, 1), jenis: ['Zakat', 'Infak', 'Wakaf', 'Kurban', 'Fidyah', 'Amil'],     nama: ['Tim Relawan Bantul Kota', 'Tim Relawan Sewon', 'Tim Relawan Pundong'] },
+  terburuk: { tgl: geser(hari, 2), jenis: ['Zakat', 'Infak', 'Wakaf', 'Kurban', 'Fidyah', 'Amil'],     nama: ['Tim Relawan Bantul Kota', 'Tim Relawan Sewon', 'Tim Relawan Pundong'] },
 };
 
 (async () => {
@@ -151,6 +152,25 @@ const SKENARIO = {
       }
       await p2.close();
     }
+
+    console.log('\n=== RENTANG 3 HARI, TERMASUK 1 HARI KOSONG ===');
+    const htmlRentang = await p.evaluate(async ({ dari, sampai }) => {
+      const d = await gas('apiLaporanHarian')(TOKEN, dari, sampai);
+      A2_DATA = d;
+      return buildA2HTML(d, { tipe: 'A2', kota: 'Bantul', kasir: 'Nama Kasir Lengkap', keuangan: 'Nama Bagian Keuangan' });
+    }, { dari: SKENARIO.terburuk.tgl, sampai: SKENARIO.biasa.tgl });
+    const pr = await ctx.newPage();
+    await pr.setContent(htmlRentang, { waitUntil: 'load' });
+    await pr.waitForTimeout(150);
+    const pdfRentang = path.join(os.tmpdir(), 'a2-uji-rentang.pdf');
+    await pr.pdf({ path: pdfRentang, preferCSSPageSize: true, printBackground: true });
+    const bufRentang = fs.readFileSync(pdfRentang).toString('latin1');
+    const halamanRentang = (bufRentang.match(/\/Type\s*\/Page[^s]/g) || []).length;
+    const lembarRentang = await pr.locator('.lembar').count();
+    cek('rentang tetap satu dokumen dengan 3 lembar HTML', lembarRentang === 3, { lembarRentang });
+    cek('PDF rentang tepat 3 halaman A5', halamanRentang === 3, { halamanRentang });
+    cek('hari tanpa transaksi tetap mendapat halaman', /Tidak ada/.test(await pr.locator('.lembar').nth(1).innerText()) || /JUMLAH\s*0/.test(await pr.locator('.lembar').nth(1).innerText()));
+    await pr.close();
   } finally {
     await browser.close();
     srv.close();

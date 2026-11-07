@@ -84,16 +84,30 @@ async function rpcLaz(fn, args) {
   const vm = require('vm');
   const sandbox = {
     esc: (s) => String(s || ''),
-    tglIndo: (t) => t ? 'Rabu, 4 November 2026' : '',
+    tglIndo: (t) => ({
+      '2026-11-01': 'Minggu, 1 November 2026',
+      '2026-11-02': 'Senin, 2 November 2026',
+      '2026-11-03': 'Selasa, 3 November 2026',
+      '2026-11-04': 'Rabu, 4 November 2026'
+    })[t] || '',
     A2_MODE: 'otomatis',
     A2_MANUAL: {},
     A2_PECAHAN: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
     A2_KOIN: [1000, 500, 200, 100],
     A2_URUT: ['Zakat', 'Infak', 'Wakaf'],
+    A2_PETUGAS: 'Lazismu Daerah Bantul',
     a2Kunci: (p, k) => (k ? 'k_' : 'p_') + p,
     a2Label: (j) => j || 'Infak',
     isTransferMethod: (m) => /transfer|bank/i.test(m),
-    a2Kelompok: (rows) => ({ tunai: [{ label: 'Infak', jumlah: 100000, petugas: 'Lazismu' }], bank: [{ label: 'Zakat', jumlah: 200000, petugas: 'Lazismu' }], totalTunai: 100000, totalBank: 200000, total: 300000 }),
+    a2Kelompok: (rows) => {
+      const tunaiTotal = (rows || []).filter(x => !/transfer|bank/i.test(x.metode || '')).reduce((n, x) => n + Number(x.jumlah || 0), 0);
+      const bankTotal = (rows || []).filter(x => /transfer|bank/i.test(x.metode || '')).reduce((n, x) => n + Number(x.jumlah || 0), 0);
+      return {
+        tunai: tunaiTotal ? [{ label: 'Infak', jumlah: tunaiTotal, petugas: 'Lazismu' }] : [],
+        bank: bankTotal ? [{ label: 'Zakat', jumlah: bankTotal, petugas: 'Lazismu' }] : [],
+        totalTunai: tunaiTotal, totalBank: bankTotal, total: tunaiTotal + bankTotal
+      };
+    },
     a2Nilai: () => ({ p_100000: 1 }),
     SETTINGS: { formA2Kota: 'Kabupaten Bantul', formA2Kasir: 'Jafit', formA2Keuangan: 'Laila Nurkhasanah', formA3Penyusun: 'Serli Monicawati', formA3Menyetujui: 'Zainal Arifin' }
   };
@@ -109,9 +123,20 @@ async function rpcLaz(fn, args) {
   cek('Formulir A1 tabel kosong tanpa angka data', !/300000|200000/.test(htmlA1));
 
   // Uji A2 Single Day & Rentang
-  const htmlA2Rentang = sandbox.buildA2HTML({ tanggal: '2026-11-01', tanggalSampai: '2026-11-03' }, { tipe: 'A2', kota: 'Kabupaten Bantul', kasir: 'Kasir Utama', keuangan: 'Laila Keuangan' });
+  const htmlA2Rentang = sandbox.buildA2HTML({
+    tanggal: '2026-11-01', tanggalSampai: '2026-11-03',
+    himpun: [
+      { tanggal: '2026-11-01', namaDonatur: 'Donatur 1', jumlah: 100000, metode: 'Cash/Tunai' },
+      { tanggal: '2026-11-02', namaDonatur: 'Donatur 2', jumlah: 200000, metode: 'Transfer Bank' },
+      { tanggal: '2026-11-03', namaDonatur: 'KLL Pandak Barat', layanan: 'KLL Pandak Barat', jumlah: 300000, metode: 'Transfer Bank' },
+      { tanggal: '2026-11-03', namaDonatur: 'KLL Pandak Barat', layanan: 'KLL Pandak Barat', jumlah: 400000, metode: 'Transfer Bank' }
+    ]
+  }, { tipe: 'A2', kota: 'Kabupaten Bantul', kasir: 'Kasir Utama', keuangan: 'Laila Keuangan' });
   cek('Formulir A2 memuat judul "Formulir A 2"', /Formulir A 2/.test(htmlA2Rentang));
-  cek('Formulir A2 rentang tanggal menyebutkan Periode tanggal awal s/d akhir', /Periode.*s\/d/i.test(htmlA2Rentang));
+  cek('Formulir A2 rentang menjadi satu lembar per tanggal dalam satu dokumen', (htmlA2Rentang.match(/class="lembar(?: halaman-akhir)?"/g) || []).length === 3);
+  cek('Formulir A2 rentang mencetak tanggal harian, bukan periode agregat', /Minggu, 1 November 2026/.test(htmlA2Rentang) && /Senin, 2 November 2026/.test(htmlA2Rentang) && /Selasa, 3 November 2026/.test(htmlA2Rentang) && !/Periode.*s\/d/i.test(htmlA2Rentang));
+  cek('Formulir A2 rentang memisahkan jumlah per hari', /100\.000/.test(htmlA2Rentang) && /200\.000/.test(htmlA2Rentang) && /700\.000/.test(htmlA2Rentang));
+  cek('Formulir A2 rentang menghitung kuitansi tiap halaman, termasuk KLL multi-pilar satu lembar', /Dokumen Kuitansi Penerimaan : 1 lembar/.test(htmlA2Rentang));
   cek('Formulir A2 bertanda tangan Kasir dan Keuangan', /Kasir Utama/.test(htmlA2Rentang) && /Laila Keuangan/.test(htmlA2Rentang));
 
   // Uji A3 Tutup Hari

@@ -11396,10 +11396,68 @@ function buildA2HTML(d, opt){
   var isA3 = (tipeForm === 'A3');
   var isKosong = !!opt.kosong || isA1;
 
+  /* Rentang tetap dibuka sebagai satu dokumen, tetapi setiap tanggal menjadi
+     satu lembar A5. Data, denominasi, tanggal tanda tangan, dan jumlah kuitansi
+     dihitung ulang per hari, bukan memakai angka agregat rentang. */
+  if (!opt._satuTanggal && !isA1 && d.tanggalSampai && d.tanggalSampai !== d.tanggal) {
+    var mulai = new Date(d.tanggal + 'T00:00:00');
+    var selesai = new Date(d.tanggalSampai + 'T00:00:00');
+    var hari = [];
+    for (var cur = mulai; cur <= selesai; cur.setDate(cur.getDate() + 1)) {
+      var p2 = function(n){ return ('0' + n).slice(-2); };
+      hari.push(cur.getFullYear() + '-' + p2(cur.getMonth() + 1) + '-' + p2(cur.getDate()));
+    }
+
+    function jumlahKuitansi(rows){
+      var kantor = {}, total = 0;
+      (rows || []).forEach(function(r){
+        var layanan = String(r.layanan || '').trim();
+        var isKantor = (layanan && layanan !== A2_PETUGAS)
+          || /^(kll|ull)\b/i.test(r.namaDonatur || '')
+          || /kantor layanan|unit layanan/i.test(r.tipeDonatur || '');
+        if (!isKantor) { total++; return; }
+        var k = String(r.tanggal || '').slice(0, 10) + '|' + (layanan || r.namaDonatur || '').toLowerCase();
+        if (!kantor[k]) { kantor[k] = true; total++; }
+      });
+      return total;
+    }
+
+    var halaman = hari.map(function(tanggal, i){
+      var himpunHari = (d.himpun || []).filter(function(r){ return String(r.tanggal || '').slice(0, 10) === tanggal; });
+      var optHari = {};
+      Object.keys(opt).forEach(function(k){ optHari[k] = opt[k]; });
+      optHari._satuTanggal = true;
+      optHari.lembar = jumlahKuitansi(himpunHari);
+      if (A2_MODE === 'otomatis' && typeof window !== 'undefined' && window.LZDenominasi) {
+        optHari.nilai = window.LZDenominasi.acak(a2Kelompok(himpunHari).totalTunai);
+      } else if (A2_MODE === 'manual') {
+        optHari.nilai = {};
+        optHari.manualKosong = true;
+      }
+      var dataHari = { tanggal: tanggal, tanggalSampai: '', himpun: himpunHari, settings: d.settings };
+      var htmlHari = buildA2HTML(dataHari, optHari);
+      var isiHari = (htmlHari.match(/<body>([\s\S]*?)<div class="bar">/) || [,''])[1];
+      if (i === hari.length - 1) isiHari = isiHari.replace('class="lembar"', 'class="lembar halaman-akhir"');
+      return isiHari;
+    }).join('');
+
+    var dasar = buildA2HTML({ tanggal: d.tanggal, himpun: [], settings: d.settings }, {
+      tipe: tipeForm, _satuTanggal: true, kota: opt.kota, kasir: opt.kasir,
+      keuangan: opt.keuangan, penyusun: opt.penyusun, menyetujui: opt.menyetujui,
+      lembar: 0, nilai: {}, manualKosong: true
+    });
+    dasar = dasar.replace(/<title>[\s\S]*?<\/title>/, '<title>Formulir ' + tipeForm + ' ' + esc(d.tanggal) + ' s.d. ' + esc(d.tanggalSampai) + '</title>');
+    return dasar.replace(/<body>[\s\S]*<\/body>/,
+      '<body>' + halaman
+      + '<div class="bar"><button onclick="window.print()">Cetak / Simpan PDF (' + tipeForm + ' - ' + hari.length + ' halaman A5)</button></div>'
+      + '<script>(function(){var mm=96/25.4,MAKS=130*mm;document.querySelectorAll(".konten").forEach(function(k){var w=k.style.width;k.style.width=(196*mm)+"px";var h=k.offsetHeight;k.style.width=w;k.style.setProperty("--skala",h>MAKS?(MAKS/h).toFixed(4):"1");});})();<\/script>'
+      + '</body>');
+  }
+
   var s = d.settings || (typeof SETTINGS === 'object' && SETTINGS) || {};
   var g = isKosong ? { tunai: [], bank: [], totalTunai: 0, totalBank: 0, total: 0 } : a2Kelompok(d.himpun);
-  var nilai = isKosong ? {} : a2Nilai();
-  var manualKosong = isKosong || (A2_MODE === 'manual' && !Object.keys(A2_MANUAL).length);
+  var nilai = isKosong ? {} : (opt.nilai || a2Nilai());
+  var manualKosong = isKosong || !!opt.manualKosong || (A2_MODE === 'manual' && !Object.keys(A2_MANUAL).length);
 
   var isRentang = !isKosong && d.tanggalSampai && d.tanggalSampai !== d.tanggal;
   var tglPanjangAwal = tglIndo(d.tanggal);
@@ -11546,7 +11604,7 @@ function buildA2HTML(d, opt){
 
     + '.bar{text-align:center;margin:10px 0 22px}'
     + '.bar button{font:inherit;font-size:9pt;font-weight:700;background:#16161d;color:#fff;border:none;padding:8px 20px;border-radius:999px;cursor:pointer}'
-    + '@media print{html,body{height:auto;background:#fff}.lembar{width:auto;height:132mm;min-height:0;margin:0;padding:0;box-shadow:none;overflow:hidden;break-after:avoid;page-break-after:avoid}.konten{transform:scale(var(--skala,1));transform-origin:top left;width:calc(100% / var(--skala,1))}.bar{display:none}}'
+    + '@media print{html,body{height:auto;background:#fff}.lembar{width:auto;height:132mm;min-height:0;margin:0;padding:0;box-shadow:none;overflow:hidden;break-after:page;page-break-after:always}.lembar.halaman-akhir{break-after:auto;page-break-after:auto}.konten{transform:scale(var(--skala,1));transform-origin:top left;width:calc(100% / var(--skala,1))}.bar{display:none}}'
     + '</style></head><body>'
 
     + '<div class="lembar"><div class="konten">'
