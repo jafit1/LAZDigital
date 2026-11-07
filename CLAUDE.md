@@ -579,6 +579,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_harian_pdf.js` | PDF harian tanpa teks dobel (nama KLL, info bank), tanpa baris belang dan header abu |
 | `test_harian_pilar.js` | kolom jenis dana laporan harian (layar dan PDF) memuat pilar/program infak terikat, bukan cuma "Infak — Infak Terikat" |
 | `test_harian_kll_multipilar.js` | cetak harian menggabungkan multi-pilar KLL/ULL jadi 1 baris entri (urutan Zakat -> Infak Umum -> Infak Terikat) dan menampilkan transfer di bagian teratas baru tunai di bawahnya |
+| `test_harian_no_kwitansi_bagi_hasil.js` | cetak harian (layar dan PDF) tidak menampilkan kolom No. Kwitansi pada tabel penghimpunan, dan transaksi Bagi Hasil Bank dipisahkan ke bagian tersendiri (tidak masuk di penghimpunan) |
 | `test_tglindo_rusak.js` | tglIndo tidak menampilkan "Invalid Date" (bahasa Inggris) untuk tanggal yang gagal dibaca |
 | `test_scrollbar_impor.js` | panel pratinjau impor (#importPreview) punya scrollbar terlihat, tidak ikut aturan global yang menyembunyikan semua scrollbar |
 | `test_tanggal_tak_terbaca.js` | tanggal yang gagal dibaca (mis. "206-10-11") ditandai sejak analisis, tidak dibulatkan jadi tanggal yang tampak sah dan tidak sampai memicu galat database mentah |
@@ -912,6 +913,7 @@ mustahik F.Survei (28 Oktober 2026), pembuat jurnal rekening koran BPD dan BSI (
 **Ditambahkan 6 November 2026: Cetak Harian KLL Multi-Pilar & Urutan Transfer Teratas.**
 - Pada menu Laporan tab Cetak Harian (layar pratinjau `renderHarianPreview` dan dokumen cetak/PDF `buildHarianHTML`), transaksi setoran KLL/ULL yang memiliki banyak pilar di tanggal dan metode yang sama digabungkan menjadi satu baris kuitansi/entri dengan total nominal terakumulasi, rincian pilar disusun rapi dengan urutan baku: Zakat -> Infak Umum -> Infak Terikat (berdasarkan pilar).
 - Urutan tampilan tabel penghimpunan harian disusun dengan metode Transfer Bank (non-tunai) di bagian teratas, baru kemudian tunai/cash di bawahnya. Dijaga `test_harian_kll_multipilar.js`.
+- Kolom No. Kwitansi ditiadakan dari tampilan tabel Penghimpunan harian (layar dan dokumen PDF). Transaksi Bagi Hasil Bank dikeluarkan dari total dan tabel Penghimpunan, dan ditampilkan di bagian tersendiri (Bagi Hasil Bank) lengkap dengan nama rekening tujuan dan nominalnya. Dijaga `test_harian_no_kwitansi_bagi_hasil.js`.
 
 **Ditambahkan 6 November 2026: Perbaikan Tata Letak Mobile & Navigasi Drawer Seluruh Web.**
 - Navigasi mobile (< 1024px) di seluruh halaman (web utama, Pengajuan, Surat, Fundraising, Broadcast, Media, AI) dilengkapi tombol hamburger (☰) dan drawer samping (`.tn-nav`) dengan backdrop scrim (`.tn-nav-scrim`). Seluruh menu terlihat penuh, berikon, dan berlabel lengkap tanpa terpotong atau tersembunyi di bilah horizontal sempit. Menutup otomatis saat butir menu atau scrim diklik, atau tombol Escape ditekan.

@@ -59,6 +59,7 @@ const DAFTAR = [
   { label: 'tglIndo tidak tampilkan "Invalid Date"', berkas: 'test_tglindo_rusak.js' },
   { label: 'Laporan harian: detail pilar infak terikat', berkas: 'test_harian_pilar.js' },
   { label: 'Cetak harian: KLL multi-pilar & transfer teratas', berkas: 'test_harian_kll_multipilar.js' },
+  { label: 'Cetak harian: tanpa no kwitansi & bagi hasil dipisah', berkas: 'test_harian_no_kwitansi_bagi_hasil.js' },
   { label: 'PDF harian: tanpa teks dobel dan tabel belang', berkas: 'test_harian_pdf.js' },
   { label: 'Fundraising melekat ke akun', berkas: 'test_fr_akun.js' },
   { label: 'Scrollbar jurnal penerimaan terlihat', berkas: 'test_scroll_jurnal.js' },

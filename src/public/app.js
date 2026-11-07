@@ -10049,7 +10049,16 @@ function jamIndo(){
       entri kuitansi agar mudah dibaca admin.
    2. Urutan rincian jenis dana: Zakat -> Infak Umum -> Infak Terikat.
    3. Urutan baris: Transfer Bank (non-tunai) di bagian teratas, Tunai di bawahnya.
+   4. Bagi Hasil Bank dipisah ke bagian tersendiri (bukan di penghimpunan).
    ============================================================ */
+function isBagiHasil(x){
+  return /bagi hasil/i.test(String((x && x.subJenis) || ''))
+    || /bagi hasil/i.test(String((x && x.jenisDana) || ''))
+    || /bagi hasil/i.test(String((x && x.namaDonatur) || ''))
+    || /bagi hasil/i.test(String((x && x.keterangan) || ''))
+    || /bagi hasil/i.test(String((x && x.program) || ''));
+}
+
 function isKantorKll(x){
   var lay = String((x && x.layanan) || '').trim();
   var don = String((x && x.namaDonatur) || '').trim();
@@ -10099,6 +10108,7 @@ function lhSusunHimpun(daftar){
   var nonKll = [];
 
   (daftar || []).forEach(function(x){
+    if (isBagiHasil(x)) return;
     if (isKantorKll(x)) {
       var namaKantor = (x.layanan && x.layanan !== 'Penghimpunan Daerah') ? x.layanan : x.namaDonatur;
       namaKantor = String(namaKantor || '').trim();
@@ -10253,38 +10263,60 @@ function lhRekapMini(judul, obj, warna){
    bukan dasbor. Kartu stat-card di atasnya membuat bagian yang penting
    (daftar transaksinya) turun ke bawah. */
 function lhRingkas(d){
-  var r = d.ringkas;
+  var r = d.ringkas || {};
+  var bhTotal = r.bagiHasilTotal || 0;
+  var bhCount = r.bagiHasilCount || 0;
   var b = function(l, v, n, warna){
     return '<div class="lh-angka"><div class="lh-angka-l">'+l+'</div>'
       + '<div class="lh-angka-v" style="color:'+warna+'">'+v+'</div>'
       + '<div class="lh-angka-s">'+n+'</div></div>';
   };
   return '<div class="lh-strip">'
-    + b('Penghimpunan', rp(r.himpunTotal), r.himpunCount+' transaksi', 'var(--green)')
-    + b('Pentasyarufan', rp(r.salurTotal), r.salurCount+' transaksi', 'var(--red)')
-    + b('Selisih Hari Ini', rp(r.selisih), 'masuk dikurangi keluar', r.selisih>=0?'var(--green)':'var(--red)')
+    + b('Penghimpunan', rp(r.himpunTotal), (r.himpunCount||0)+' transaksi', 'var(--green)')
+    + (bhTotal ? b('Bagi Hasil Bank', rp(bhTotal), bhCount+' transaksi', 'var(--green)') : '')
+    + b('Pentasyarufan', rp(r.salurTotal), (r.salurCount||0)+' transaksi', 'var(--red)')
+    + b('Selisih Hari Ini', rp(r.selisih), 'masuk dikurangi keluar', (r.selisih||0)>=0?'var(--green)':'var(--red)')
     + '</div>';
 }
 
 function renderHarianPreview(d){
-  var r = d.ringkas;
+  var r = d.ringkas || {};
+  var listHimpun = lhSusunHimpun(d.himpun);
+  var listBh = (d.bagiHasil && d.bagiHasil.length) ? d.bagiHasil : (d.himpun || []).filter(isBagiHasil);
+  var totalHimpun = listHimpun.reduce(function(a, b){ return a + (Number(b.jumlah)||0); }, 0);
+  var totalBh = listBh.reduce(function(a, b){ return a + (Number(b.jumlah)||0); }, 0);
+  var totalMasuk = totalHimpun + totalBh;
+  var selisih = totalMasuk - (r.salurTotal || 0);
+
+  var b = function(l, v, n, warna){
+    return '<div class="lh-angka"><div class="lh-angka-l">'+l+'</div>'
+      + '<div class="lh-angka-v" style="color:'+warna+'">'+v+'</div>'
+      + '<div class="lh-angka-s">'+n+'</div></div>';
+  };
+
+  var stripHTML = '<div class="lh-strip">'
+    + b('Penghimpunan', rp(totalHimpun), listHimpun.length+' transaksi', 'var(--green)')
+    + (totalBh ? b('Bagi Hasil Bank', rp(totalBh), listBh.length+' transaksi', 'var(--green)') : '')
+    + b('Pentasyarufan', rp(r.salurTotal), (r.salurCount||(d.salur&&d.salur.length)||0)+' transaksi', 'var(--red)')
+    + b('Selisih Hari Ini', rp(selisih), 'masuk dikurangi keluar', selisih>=0?'var(--green)':'var(--red)')
+    + '</div>';
+
   var h = '<div class="card"><div class="lh-atas">'
     + '<div><h3>Laporan Harian</h3><div class="muted" style="font-size:13px">'+esc(tglIndo(d.tanggal))+'</div></div>'
     + '<button class="btn btn-primary btn-sm" onclick="cetakHarian()">'+SVG_ICONS.cetak+' Cetak / Simpan PDF</button>'
     + '</div>'
-    + lhRingkas(d);
+    + stripHTML;
 
-  if (!d.himpun.length && !d.salur.length) {
+  if (!listHimpun.length && !listBh.length && !(d.salur && d.salur.length)) {
     h += '<div class="empty" style="padding:30px"><div class="big">'+SVG_ICONS.bsrDokumen+'</div>Tidak ada transaksi pada tanggal ini.</div></div>';
     el('lhPreview').innerHTML = h;
     return;
   }
 
-  if (d.himpun.length) {
-    var listHimpun = lhSusunHimpun(d.himpun);
-    h += '<h4 class="lh-judul">Penghimpunan <span class="muted">('+d.himpun.length+' transaksi'+(listHimpun.length !== d.himpun.length ? ' &middot; '+listHimpun.length+' entri' : '')+')</span></h4>'
+  if (listHimpun.length) {
+    h += '<h4 class="lh-judul">Penghimpunan <span class="muted">('+listHimpun.length+' transaksi)</span></h4>'
       + '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
-      + '<th>No. Kwitansi</th><th>Donatur</th><th>Rekap</th><th>Jenis Dana</th><th>Metode</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
+      + '<th>Donatur</th><th>Rekap</th><th>Jenis Dana</th><th>Metode</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
       + '</tr></thead><tbody>';
     listHimpun.forEach(function(x){
       var rek = lhPisahRekening(x.bank);
@@ -10294,7 +10326,7 @@ function renderHarianPreview(d){
           }).join('') + '</div>'
         : esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')
           +(x.pilar||x.program?' <span class="muted">'+esc(x.pilar||x.program)+'</span>':'');
-      h += '<tr><td>'+esc(x.noKwitansi)+'</td><td><b>'+esc(x.namaDonatur)+'</b></td>'
+      h += '<tr><td><b>'+esc(x.namaDonatur)+'</b></td>'
         + '<td class="muted">'+(x.layanan && x.layanan !== x.namaDonatur ? esc(x.layanan) : '')+'</td>'
         + '<td>'+tdJenis+'</td>'
         + '<td>'+esc(x.metode)+(rek.nama?'<div class="muted" style="font-size:11px">'+esc(rek.nama)+'</div>':'')
@@ -10309,6 +10341,26 @@ function renderHarianPreview(d){
       + lhRekapMini('Per Kantor / Unit Layanan', r.perLayanan, 'var(--green)')
       + lhRekapMini('Per Fundraising', r.perFundraising, 'var(--green)')
       + '</div>';
+  }
+
+  if (listBh.length) {
+    h += '<h4 class="lh-judul" style="margin-top:20px">Bagi Hasil Bank <span class="muted">('+listBh.length+' transaksi)</span></h4>'
+      + '<div class="table-wrap"><div style="overflow:auto"><table class="log-tabel"><thead><tr>'
+      + '<th>Keterangan / Rekening</th><th>Jenis Dana</th><th>Bank / Rekening</th><th>Petugas</th><th style="text-align:right">Jumlah</th>'
+      + '</tr></thead><tbody>';
+    listBh.forEach(function(x){
+      var rek = lhPisahRekening(x.bank);
+      h += '<tr><td><b>'+esc(x.namaDonatur || x.keterangan || 'Bagi Hasil Bank')+'</b>'
+        + (x.keterangan && x.keterangan !== x.namaDonatur ? '<div class="muted" style="font-size:11px">'+esc(x.keterangan)+'</div>' : '')+'</td>'
+        + '<td>'+esc(x.jenisDana)+(x.subJenis&&x.subJenis!==x.jenisDana?' <span class="muted">'+esc(x.subJenis)+'</span>':'')+'</td>'
+        + '<td>'+esc(x.metode)+(rek.nama?'<div class="muted" style="font-size:11px">'+esc(rek.nama)+'</div>':'')
+          +(rek.nomor?'<div class="muted" style="font-size:11px">Rek. '+esc(rek.nomor)+'</div>':'')+'</td>'
+        + '<td class="muted">'+esc(x.petugas)+'</td>'
+        + '<td style="text-align:right;font-weight:700;white-space:nowrap;color:var(--green)">'+rp(x.jumlah)+'</td></tr>';
+    });
+    h += '</tbody><tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Total Bagi Hasil</td>'
+      + '<td style="text-align:right;font-weight:800;color:var(--green)">'+rp(totalBh)+'</td></tr></tfoot>'
+      + '</table></div></div>';
   }
 
   if (d.salur.length) {
@@ -10869,11 +10921,17 @@ function lhRekapCetak(judul, obj){
 
 function buildHarianHTML(d){
   var s = d.settings || {};
-  var r = d.ringkas;
+  var r = d.ringkas || {};
   var logo = (s.logoData || s.logoUrl) ? '<img class="logo" src="'+esc(s.logoData||s.logoUrl)+'">' : '';
   var kontak = [s.alamat, s.telepon, s.email, s.website].filter(Boolean).map(esc).join(' &middot; ');
 
   var listHimpun = lhSusunHimpun(d.himpun);
+  var listBh = (d.bagiHasil && d.bagiHasil.length) ? d.bagiHasil : (d.himpun || []).filter(isBagiHasil);
+  var totalHimpun = listHimpun.reduce(function(a, b){ return a + (Number(b.jumlah)||0); }, 0);
+  var totalBh = listBh.reduce(function(a, b){ return a + (Number(b.jumlah)||0); }, 0);
+  var totalMasuk = totalHimpun + totalBh;
+  var selisih = totalMasuk - (r.salurTotal || 0);
+
   var barisHimpun = listHimpun.map(function(x){
     /* Nama KLL/ULL memang sudah mengandung nama layanannya ("KLL Sanden"),
        jadi sub-layanan hanya ditampilkan bila beda dari nama donaturnya,
@@ -10891,7 +10949,6 @@ function buildHarianHTML(d){
       : esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : '')
         + (x.pilar||x.program ? '<div class="sub">'+esc(x.pilar||x.program)+'</div>' : '');
     return [
-      esc(x.noKwitansi),
       '<b>'+esc(x.namaDonatur)+'</b>' + subLay,
       tdJenis,
       esc(x.metode) + (rek.nama ? '<div class="sub">'+esc(rek.nama)+'</div>' : '')
@@ -10901,7 +10958,20 @@ function buildHarianHTML(d){
     ];
   });
 
-  var barisSalur = d.salur.map(function(x){
+  var barisBh = listBh.map(function(x){
+    var rek = lhPisahRekening(x.bank);
+    return [
+      '<b>'+esc(x.namaDonatur || x.keterangan || 'Bagi Hasil Bank')+'</b>'
+        + (x.keterangan && x.keterangan !== x.namaDonatur ? '<div class="sub">'+esc(x.keterangan)+'</div>' : ''),
+      esc(x.jenisDana) + (x.subJenis && x.subJenis !== x.jenisDana ? '<div class="sub">'+esc(x.subJenis)+'</div>' : ''),
+      esc(x.metode) + (rek.nama ? '<div class="sub">'+esc(rek.nama)+'</div>' : '')
+        + (rek.nomor ? '<div class="sub">Rek. '+esc(rek.nomor)+'</div>' : ''),
+      esc(x.fundraising||'-'),
+      rpCetak(x.jumlah)
+    ];
+  });
+
+  var barisSalur = (d.salur || []).map(function(x){
     var rekS = lhPisahRekening(x.bank);
     return [
       esc(x.noBukti),
@@ -10929,25 +10999,31 @@ function buildHarianHTML(d){
     + '</div>'
 
     + '<div class="ring">'
-      + '<div class="ring-k"><div class="ring-l">Total Penghimpunan</div><div class="ring-v hijau">'+rpCetak(r.himpunTotal)+'</div><div class="ring-s">'+r.himpunCount+' transaksi</div></div>'
-      + '<div class="ring-k"><div class="ring-l">Total Pentasyarufan</div><div class="ring-v merah">'+rpCetak(r.salurTotal)+'</div><div class="ring-s">'+r.salurCount+' transaksi</div></div>'
-      + '<div class="ring-k"><div class="ring-l">Selisih Hari Ini</div><div class="ring-v '+(r.selisih>=0?'hijau':'merah')+'">'+rpCetak(r.selisih)+'</div><div class="ring-s">penerimaan &minus; penyaluran</div></div>'
+      + '<div class="ring-k"><div class="ring-l">Total Penghimpunan</div><div class="ring-v hijau">'+rpCetak(totalHimpun)+'</div><div class="ring-s">'+listHimpun.length+' transaksi</div></div>'
+      + (totalBh ? '<div class="ring-k"><div class="ring-l">Bagi Hasil Bank</div><div class="ring-v hijau">'+rpCetak(totalBh)+'</div><div class="ring-s">'+listBh.length+' transaksi</div></div>' : '')
+      + '<div class="ring-k"><div class="ring-l">Total Pentasyarufan</div><div class="ring-v merah">'+rpCetak(r.salurTotal)+'</div><div class="ring-s">'+(r.salurCount||(d.salur&&d.salur.length)||0)+' transaksi</div></div>'
+      + '<div class="ring-k"><div class="ring-l">Selisih Hari Ini</div><div class="ring-v '+(selisih>=0?'hijau':'merah')+'">'+rpCetak(selisih)+'</div><div class="ring-s">penerimaan &minus; penyaluran</div></div>'
     + '</div>'
 
-    + '<div class="terbilang"><span>Terbilang penerimaan:</span> <i>'+esc(terbilang(r.himpunTotal))+' rupiah</i></div>'
+    + '<div class="terbilang"><span>Terbilang penerimaan:</span> <i>'+esc(terbilang(totalMasuk))+' rupiah</i></div>'
 
     + lhTabelCetak('A. PENGHIMPUNAN',
-        [{t:'No. Kwitansi',lebar:'17%'},{t:'Donatur',lebar:'24%'},{t:'Jenis Dana',lebar:'15%'},
-         {t:'Metode',lebar:'14%'},{t:'Fundraising',lebar:'15%'},{t:'Jumlah (Rp)',kanan:true,lebar:'14%'}],
-        barisHimpun, r.himpunTotal, '#127a4b')
+        [{t:'Donatur',lebar:'28%'},{t:'Jenis Dana',lebar:'20%'},
+         {t:'Metode',lebar:'18%'},{t:'Fundraising',lebar:'18%'},{t:'Jumlah (Rp)',kanan:true,lebar:'16%'}],
+        barisHimpun, totalHimpun, '#127a4b')
 
-    + (d.himpun.length ? '<div class="rk-grid">'
+    + (barisBh.length ? lhTabelCetak('B. BAGI HASIL BANK',
+        [{t:'Keterangan / Rekening',lebar:'28%'},{t:'Jenis Dana',lebar:'20%'},
+         {t:'Bank / Rekening',lebar:'18%'},{t:'Fundraising',lebar:'18%'},{t:'Jumlah (Rp)',kanan:true,lebar:'16%'}],
+        barisBh, totalBh, '#127a4b') : '')
+
+    + (listHimpun.length ? '<div class="rk-grid">'
         + lhRekapCetak('Rekap per Jenis Dana', r.perJenis)
         + lhRekapCetak('Rekap per Metode', r.perMetode)
         + lhRekapCetak('Rekap per Kantor / Unit Layanan', r.perLayanan)
       + '</div>' : '')
 
-    + lhTabelCetak('B. PENTASYARUFAN',
+    + lhTabelCetak((barisBh.length ? 'C' : 'B') + '. PENTASYARUFAN',
         [{t:'No. Bukti',lebar:'17%'},{t:'Penerima',lebar:'24%'},{t:'Ashnaf',lebar:'13%'},
          {t:'Program',lebar:'17%'},{t:'Sumber Dana',lebar:'14%'},{t:'Jumlah (Rp)',kanan:true,lebar:'14%'}],
         barisSalur, r.salurTotal, '#b3282d')

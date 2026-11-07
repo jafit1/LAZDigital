@@ -8394,17 +8394,29 @@ function apiLaporanHarian(t, tanggal, tanggalSampai){
     return s >= tglAwal && s <= tglAkhir;
   }
 
+  function _lhIsBagiHasil(r){
+    return /bagi hasil/i.test(String(r.subJenis || '')) ||
+           /bagi hasil/i.test(String(r.jenisDana || '')) ||
+           /bagi hasil/i.test(String(r.akunKredit || '')) ||
+           /bagi hasil/i.test(String(r.namaDonatur || '')) ||
+           /bagi hasil/i.test(String(r.keterangan || '')) ||
+           /bagi hasil/i.test(String(r.program || ''));
+  }
+
   var rawHimpun = readAll(SHEETS.PENGHIMPUNAN) || [];
-  var himpun = rawHimpun
+  var himpun = [];
+  var bagiHasil = [];
+
+  rawHimpun
     .filter(function(r){ return _dalamRentangTgl(r.tanggal); })
-    .map(function(r){
+    .forEach(function(r){
       /* Transaksi KLL/ULL dicatat atas nama layanannya, bukan petugas
          fundraising — aturan yang sama dipakai di rekap dan impor.
          cleanFundraisingName() akan memaksa nama di luar daftar petugas
          menjadi "Lazismu Daerah Bantul", jadi jangan dipakai di sini. */
       var _lay = resolveLayananName(r, layList, layMap);
       var _fr = (_lay !== LAYANAN_DAERAH) ? _lay : cleanFundraisingName(r.fundraising);
-      return {
+      var item = {
         tanggal: String(r.tanggal || '').slice(0, 10),
         noKwitansi: r.noKwitansi || '-',
         namaDonatur: r.namaDonatur || '-',
@@ -8421,15 +8433,24 @@ function apiLaporanHarian(t, tanggal, tanggalSampai){
         keterangan: r.keterangan || '',
         jumlah: Number(r.jumlah) || 0
       };
-    })
-    .sort(function(a,b){
-      var trA = /transfer|qris|wallet|debit|bank/i.test(a.metode) ? 1 : 2;
-      var trB = /transfer|qris|wallet|debit|bank/i.test(b.metode) ? 1 : 2;
-      if (trA !== trB) return trA - trB;
-      var tA = a.tanggal, tB = b.tanggal;
-      if (tA !== tB) return tA.localeCompare(tB);
-      return String(a.noKwitansi).localeCompare(String(b.noKwitansi));
+      if (_lhIsBagiHasil(r)) {
+        bagiHasil.push(item);
+      } else {
+        himpun.push(item);
+      }
     });
+
+  var _lhSort = function(a,b){
+    var trA = /transfer|qris|wallet|debit|bank/i.test(a.metode) ? 1 : 2;
+    var trB = /transfer|qris|wallet|debit|bank/i.test(b.metode) ? 1 : 2;
+    if (trA !== trB) return trA - trB;
+    var tA = a.tanggal, tB = b.tanggal;
+    if (tA !== tB) return tA.localeCompare(tB);
+    return String(a.noKwitansi).localeCompare(String(b.noKwitansi));
+  };
+
+  himpun.sort(_lhSort);
+  bagiHasil.sort(_lhSort);
 
   var salur = (readAll(SHEETS.PENTASYARUFAN) || [])
     .filter(function(r){ return _dalamRentangTgl(r.tanggal); })
@@ -8497,16 +8518,23 @@ function apiLaporanHarian(t, tanggal, tanggalSampai){
     _lhJumlah(rk.petugasSalur, r.petugas, r.jumlah);
   });
 
+  var bagiHasilTotal = 0;
+  bagiHasil.forEach(function(r){
+    bagiHasilTotal += r.jumlah;
+  });
+
   return {
     tanggal: tglAwal,
     tanggalSampai: (tglAkhir !== tglAwal ? tglAkhir : ''),
     himpun: himpun,
+    bagiHasil: bagiHasil,
     salur: salur,
     ringkas: {
       himpunTotal: rk.himpunTotal, himpunCount: himpun.length,
       kuitansiCount: totalKuitansiHitung,
+      bagiHasilTotal: bagiHasilTotal, bagiHasilCount: bagiHasil.length,
       salurTotal: rk.salurTotal, salurCount: salur.length,
-      selisih: rk.himpunTotal - rk.salurTotal,
+      selisih: (rk.himpunTotal + bagiHasilTotal) - rk.salurTotal,
       perJenis: rk.perJenis, perMetode: rk.perMetode, perLayanan: rk.perLayanan,
       perFundraising: rk.perFundraising, perAshnaf: rk.perAshnaf,
       perProgram: rk.perProgram, perSumber: rk.perSumber,

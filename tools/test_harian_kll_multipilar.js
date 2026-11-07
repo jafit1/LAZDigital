@@ -35,6 +35,7 @@ const sandbox = {
 // Ambil definisi fungsi dari app.js
 const fnIsTransfer = (appJs.match(/function isTransferMethod\([^)]*\)\s*\{[\s\S]*?\n\}/) || [''])[0];
 const fnPisah = (appJs.match(/function lhPisahRekening\([^)]*\)\s*\{[\s\S]*?\n\}/) || [''])[0];
+const fnIsBagiHasil = (appJs.match(/function isBagiHasil\([^)]*\)\s*\{[\s\S]*?\n\}/) || [''])[0];
 const fnIsKantor = (appJs.match(/function isKantorKll\([^)]*\)\s*\{[\s\S]*?\n\}/) || [''])[0];
 const fnPrioritas = (appJs.match(/function prioritasJenisHarian\([^)]*\)\s*\{[\s\S]*?\n\}/) || [''])[0];
 const fnLabelPilar = (appJs.match(/function labelPilarHarian\([^)]*\)\s*\{[\s\S]*?\n\}/) || [''])[0];
@@ -42,16 +43,17 @@ const fnSusun = (appJs.match(/function lhSusunHimpun\([^)]*\)\s*\{[\s\S]*?\n\}/)
 
 cek('fungsi isTransferMethod ditemukan', !!fnIsTransfer);
 cek('fungsi lhPisahRekening ditemukan', !!fnPisah);
+cek('fungsi isBagiHasil ditemukan', !!fnIsBagiHasil);
 cek('fungsi isKantorKll ditemukan', !!fnIsKantor);
 cek('fungsi prioritasJenisHarian ditemukan', !!fnPrioritas);
 cek('fungsi labelPilarHarian ditemukan', !!fnLabelPilar);
 cek('fungsi lhSusunHimpun ditemukan', !!fnSusun);
 
 // Evaluasi bersama agar saling mengenali
-const kodeGabung = [fnIsTransfer, fnPisah, fnIsKantor, fnPrioritas, fnLabelPilar, fnSusun].join('\n;\n');
+const kodeGabung = [fnIsTransfer, fnPisah, fnIsBagiHasil, fnIsKantor, fnPrioritas, fnLabelPilar, fnSusun].join('\n;\n');
 const funcs = eval(`(() => {
   ${kodeGabung}
-  return { isTransferMethod, lhPisahRekening, isKantorKll, prioritasJenisHarian, labelPilarHarian, lhSusunHimpun };
+  return { isTransferMethod, lhPisahRekening, isBagiHasil, isKantorKll, prioritasJenisHarian, labelPilarHarian, lhSusunHimpun };
 })()`);
 
 Object.assign(sandbox, funcs);
