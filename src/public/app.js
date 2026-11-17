@@ -5599,12 +5599,13 @@ function imporGambarJurnal(res) {
     res.himpunValid.forEach(function(r, idx) {
       if (r._batal) return;
       var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="himpun" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada, centang bila tetap ingin disimpan</label></div>' : '';
-      var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
+      var frWarn = r._frBerubah ? '<div style="margin-top:4px;font-size:10.5px;color:var(--blue);font-weight:700">FR berubah: ' + esc(cleanFR(r._frLama)) + ' → ' + esc(cleanFR(r.fundraising)) + ' (baris lama diperbarui)</div>' : '';
+      var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : (r._frBerubah ? ' style="background:rgba(59,130,246,0.08)"' : '');
       var bedaWarn = r.bedaDana ? '<div style="margin-top:3px;font-size:10.5px;color:var(--amber);font-weight:700">Uraian menyebut jenis dana lain, mengikuti akun kredit</div>' : '';
       if (r._lewati) { rowBg = ' style="opacity:.45"'; bedaWarn += '<div style="margin-top:3px;font-size:10.5px;font-weight:700">Dilewati, tidak ikut disimpan</div>'; }
       h += '<tr' + rowBg + '>' +
         '<td>' + esc(r.tanggal) + '</td>' +
-        '<td><b>' + esc(r.namaDonatur) + '</b>' + dupWarn + bedaWarn + '</td>' +
+        '<td><b>' + esc(r.namaDonatur) + '</b>' + dupWarn + frWarn + bedaWarn + '</td>' +
         '<td>' + esc(r.subJenis + (r.pilar ? ' / ' + r.pilar : '') + (r.program ? ' · ' + r.program : '')) + '</td>' +
         '<td class="muted">' + esc(r.akunKredit || '-') + '</td>' +
         '<td class="muted">' + esc(r.bank || '-') + '</td>' +
@@ -5626,11 +5627,12 @@ function imporGambarJurnal(res) {
     res.salurValid.forEach(function(r, idx) {
       if (r._batal) return;
       var dupWarn = r.isDuplicate ? '<div style="margin-top:4px"><label style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--red);cursor:pointer;font-weight:700"><input type="checkbox" class="import-dup-chk" data-type="salur" data-idx="' + idx + '" style="width:14px;height:14px;cursor:pointer;accent-color:var(--red)"> Transaksi serupa sudah ada, centang bila tetap ingin disimpan</label></div>' : '';
-      var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : '';
+      var frWarn = r._frBerubah ? '<div style="margin-top:4px;font-size:10.5px;color:var(--blue);font-weight:700">FR berubah: ' + esc(cleanFR(r._frLama)) + ' → ' + esc(cleanFR(r.fundraising)) + ' (baris lama diperbarui)</div>' : '';
+      var rowBg = r.isDuplicate ? ' style="background:rgba(239,68,68,0.08);color:var(--red)"' : (r._frBerubah ? ' style="background:rgba(59,130,246,0.08)"' : '');
       if (r._lewati) { rowBg = ' style="opacity:.45"'; dupWarn += '<div style="margin-top:3px;font-size:10.5px;font-weight:700">Dilewati, tidak ikut disimpan</div>'; }
       h += '<tr' + rowBg + '>' +
         '<td>' + esc(r.tanggal) + '</td>' +
-        '<td><b>' + esc(r.namaPenerima) + '</b>' + dupWarn + '</td>' +
+        '<td><b>' + esc(r.namaPenerima) + '</b>' + dupWarn + frWarn + '</td>' +
         '<td>' + esc(r.program) + '</td>' +
         '<td style="font-weight:600;color:' + (r.isDuplicate ? 'var(--red)' : 'var(--amber)') + '">' + rp(r.jumlah) + '</td>' +
         '<td>' + esc(r.metode) + '</td>' +
@@ -5679,7 +5681,10 @@ function imporPasangKantor(r, kumpulan, u) {
     r.layananId = u.layananId;
     r.namaDonatur = label;
     r.tipeDonatur = u.tipe === 'ULL' ? 'Unit Layanan (ULL)' : 'Kantor Layanan (KLL)';
-    r.fundraising = label;
+    /* Fundraising dibaca dari kolom F jurnal. Nama kantor BUKAN fundraising,
+       jadi tidak boleh menimpa nilai yang sudah ada (termasuk "Kantor" yang
+       berarti Lazismu Daerah). */
+    if (!r.fundraising) r.fundraising = label;
   } else if (kumpulan === 'salur') {
     if (!r.fundraising || r.fundraising === r.namaPenerima || /^(KLL|ULL)\s/i.test(r.fundraising)) r.fundraising = label;
     r.namaPenerima = label;
@@ -5695,7 +5700,7 @@ function imporJadikanDaerah(r, kumpulan) {
     r.layananId = '';
     r.tipeDonatur = 'Perorangan';
     r.namaDonatur = buang(r.namaDonatur);
-    r.fundraising = r.namaDonatur;
+    if (!r.fundraising) r.fundraising = r.namaDonatur;
   } else if (kumpulan === 'salur') {
     r.namaPenerima = buang(r.namaPenerima) || 'Lazismu Daerah Bantul';
     if (/^(KLL|ULL)\s/i.test(String(r.fundraising || ''))) r.fundraising = '';
@@ -6659,7 +6664,7 @@ function simpanImportData() {
   
   if (rowsHimpun && rowsHimpun.length) {
     rowsHimpun.forEach(function(r) {
-      if (defaultFR && !r.fundraising) r.fundraising = defaultFR;
+      if (defaultFR && !r.fundraising && !r._frUpdateId) r.fundraising = defaultFR;
       if (defaultMetode) r.metode = defaultMetode;
       if (defaultRekeningId && CACHE.rekening) {
         var rObj = CACHE.rekening.find(function(x) { return x.id === defaultRekeningId; });
@@ -6673,7 +6678,7 @@ function simpanImportData() {
   
   if (rowsSalur && rowsSalur.length) {
     rowsSalur.forEach(function(r) {
-      if (defaultFR && !r.fundraising) r.fundraising = defaultFR;
+      if (defaultFR && !r.fundraising && !r._frUpdateId) r.fundraising = defaultFR;
       if (defaultMetode) r.metode = defaultMetode;
       if (defaultRekeningId && CACHE.rekening) {
         var rObj = CACHE.rekening.find(function(x) { return x.id === defaultRekeningId; });

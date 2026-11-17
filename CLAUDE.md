@@ -266,6 +266,17 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
 - **Impor lewat URL** hanya https, dan setiap alamat IP hasil DNS harus
   publik, termasuk sesudah pengalihan (`_periksaUrlImpor`, `_ambilUrlImpor`,
   `redirect: 'manual'`). Batas unduhan 20 MB.
+- **Kolom F jurnal bank = fundraising** (17 November 2026). `fundraisingDariBarisJurnal`
+  membaca kolom ke-6 (index 5) untuk baris penghimpunan **dan** pentasyarufan.
+  Isi "Kantor" diterjemahkan `cleanFundraisingName` menjadi
+  "Lazismu Daerah Bantul", bukan nama petugas; nama orang (Renata, Sherli)
+  dipertahankan. Baris pasangan kredit sengaja kosong di kolom F, jangan pernah
+  mewariskan nilainya dari baris sebelumnya. Kalau transaksi sudah ada dan hanya
+  FR yang diganti, `markDuplicates` menandai `_frUpdateId` / `_frBerubah`,
+  BUKAN `isDuplicate`, lalu `apiSaveImportedData` memperbarui baris lama lewat
+  `updateRowById` tanpa menyisipkan baris baru. Dulu perubahan nama itu hilang
+  karena barisnya tersaring sebagai duplikat di pratinjau. Uji:
+  `test_impor_fr_kolom_f.js` (22 butir).
 - **Log aktivitas** hanya bisa dibersihkan superadmin.
 - **Verifikasi kwitansi publik** hanya mengirim nominal kalau kode acak di QR
   (10 huruf pertama `id`) ikut cocok. Nomor saja cuma menyatakan sah.
@@ -564,6 +575,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_agen.js` | sambungan ke gateway WhatsApp, centang, lampiran |
 | `test_impor_jurnal.js` | impor jurnal, tidak ada baris hilang diam-diam |
 | `test_impor_jurnal_bank.js` | unggah Excel di zona WIB tidak memundurkan tanggal, akun "Penerimaan ..." di seksi mana pun (PERSEDIAAN, TRANSAKSI BANK) terhitung penghimpunan |
+| `test_impor_fr_kolom_f.js` | kolom F jurnal dibaca sebagai FR penghimpunan dan pentasyarufan ("Kantor" jadi Lazismu Daerah Bantul, nama orang apa adanya); ganti nama FR saja memperbarui baris lama tanpa duplikat, FR sama tetap dilewati sebagai duplikat |
 | `test_impor_berkas.js`, `test_impor_berkas_ui.js` | aturan kantor (KL/UL, tulisan lengkap, nama lain), temuan sebelum simpan, perbaikan di layar ikut tersimpan, baris dilewati tidak tersimpan, jenis berkas terbaca dari isinya, bagian atas jendela ringkas, pilihan massal rekap/jurnal yang mempertahankan pilihan sendiri, tombol Ubah, tombol bawah sama tinggi dan sejajar (Batal berbingkai di kiri, satu tombol utama), tombol temuan berbingkai, kotak Telusuri sejajar dengan pilihan di sampingnya, fokus tanpa rekap (tanggal dan nama KLL/ULL di depan, sisanya dilipat), fokus dengan rekap (tabel jurnal lawan rekap yang jadi "Sama" setelah disamakan), baris status di kaki jendela, kaki tidak terpotong di lebar 390 |
 | `test_jurnal_bank.js` | pembuat jurnal dari rekening koran BPD dan BSI: deteksi nomor rekening di awal, pencocokan ke master rekening, parsing mutasi debet/kredit PDF lokal, ekstraksi cerdas nama dan detail (nama di depan/tengah/belakang dipisahkan, QRIS otomatis bernama NN dan detail Qris), pembersihan kode teknis/ID/nomor panjang, deteksi setor tunai dan KLL/ULL, pemilihan pilar, input detail jurnal per baris, format keterangan jurnal tanpa tanda strip (-), pecah rincian UMP dengan modal terpisah yang stabil dan validasi selisih nominal, format TSV/Excel standar LAZDigital yang lolos uji impor sistem, dan alur antarmuka peramban Playwright |
 | `test_samakan_rekap.js` | rekap bulanan jadi patokan: angka jurnal sama dengan rekap setelah disamakan, angka rekap untuk tabel perbandingan cocok dengan itu, biaya admin bank tidak dilewati, LPJ dan label rekap yang bentrok tidak dipindah diam-diam, Closing menghitung gaji KLL yang dibayar Daerah sebagai Daerah |

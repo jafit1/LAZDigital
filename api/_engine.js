@@ -3532,23 +3532,38 @@ function fuzzyMatch(val, options, defaultVal) {
 }
 
 /* Nama fundraiser. Sebelumnya SEMUA nama di luar 6 nama baku dipaksa jadi
-   "Lazismu Daerah Bantul" — itu menghapus rincian sumber (Kantor, Qris,
-   Muh Ariyanto, dll) yang dibutuhkan Closing Bulanan. Sekarang nama apa pun
-   dipertahankan apa adanya; hanya yang KOSONG yang default ke daerah, dan
-   beberapa alias baku dirapikan kapitalnya agar tidak terpecah. */
+   "Lazismu Daerah Bantul" - itu menghapus rincian sumber (Qris, Muh Ariyanto,
+   dll) yang dibutuhkan Closing Bulanan. Sekarang nama apa pun dipertahankan
+   apa adanya; hanya yang KOSONG yang default ke daerah, dan beberapa alias
+   baku dirapikan kapitalnya agar tidak terpecah.
+
+   Pemilik menegaskan 17 November 2026: tulisan "Kantor" di kolom F jurnal
+   BUKAN nama petugas, melainkan penanda transaksi langsung Lazismu Daerah.
+   Karena itu "Kantor" diterjemahkan ke "Lazismu Daerah Bantul", sedangkan
+   nama orang (Renata, Sherli, dll) dipakai apa adanya. */
 function cleanFundraisingName(name) {
   var s = String(name == null ? '' : name).replace(/\s+/g, ' ').trim();
   if (!s) return 'Lazismu Daerah Bantul';
   var alias = {
     'lazismu daerah bantul': 'Lazismu Daerah Bantul',
     'daerah': 'Lazismu Daerah Bantul',
-    'kantor': 'Kantor',
+    'kantor': 'Lazismu Daerah Bantul',
+    'kantor layanan': 'Lazismu Daerah Bantul',
     'sherli': 'Sherli', 'renata': 'Renata', 'ariya': 'Ariya',
     'nur yulianto': 'Nur Yulianto', 'muzakki': 'Muzakki'
   };
   var low = s.toLowerCase();
   if (alias[low]) return alias[low];
   return s;
+}
+
+/* Kolom F jurnal bank (index 5) adalah sumber fundraising untuk baris
+   penerimaan maupun penyaluran. Baris pasangan (kredit) sengaja KOSONG di
+   kolom F, jadi jangan pernah mengambilnya dari baris sebelumnya: itu akan
+   menempelkan nama fundraiser ke transaksi lain. */
+function fundraisingDariBarisJurnal(baris) {
+  if (!baris || baris.length < 6) return '';
+  return cleanFundraisingName(baris[5]);
 }
 
 /* Nama petugas fundraising TIDAK ditulis di jurnal — yang tertulis di uraian
@@ -4719,11 +4734,11 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             bank: bankLabel,
             statusBayar: 'Lunas',
             keterangan: uraian,
-            /* Fundraising hanya berlaku tingkat daerah. Transaksi KLL/ULL
+            /* Sumber fundraising: kolom F jurnal bila diisi. Transaksi KLL/ULL
                TIDAK dicatat atas nama layanannya di kolom FR (itu salah,
-               layanan bukan fundraising); tetap pakai nama fundraising
-               asli dari uraian bila disebut ("via Sherli"), atau default. */
-            fundraising: cleanFundraisingName(extractFundraisingFromText(uraian)),
+               layanan bukan fundraising). Kalau kolom F kosong, baru kembali
+               ke nama yang disebut di uraian ("via Sherli") atau default. */
+            fundraising: fundraisingDariBarisJurnal(r) || cleanFundraisingName(extractFundraisingFromText(uraian)),
             akunKredit: _akunKredit,
             bedaDana: _bedaDana,
             tglBeda: _tglBeda
@@ -4829,7 +4844,7 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             metode: metode,
             statusSalur: 'Tersalur',
             keterangan: uraian,
-            fundraising: cleanFundraisingName(extractFundraisingFromText(uraian)),
+            fundraising: fundraisingDariBarisJurnal(r) || cleanFundraisingName(extractFundraisingFromText(uraian)),
             rekeningId: rekId,
             bank: bankLabel,
             /* Seksi asal disimpan agar jurnal dapat dikelompokkan persis
@@ -4898,35 +4913,58 @@ function markDuplicates(himpunList, salurList) {
   var dbHimpun = readAll(SHEETS.PENGHIMPUNAN) || [];
   var dbSalur = readAll(SHEETS.PENTASYARUFAN) || [];
   
-  if (himpunList && himpunList.length) {
-    himpunList.forEach(function(r) {
-      var isDup = dbHimpun.some(function(x) {
-        var tglMatch = (x.tanggal === r.tanggal);
-        var nameMatch = (String(x.namaDonatur || '').toLowerCase().trim() === String(r.namaDonatur || '').toLowerCase().trim());
-        var amtMatch = (Math.abs((Number(x.jumlah) || 0) - (Number(r.jumlah) || 0)) < 0.01);
-        var progMatch = !r.program || !x.program || (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
-        return tglMatch && nameMatch && amtMatch && progMatch;
-      });
-      if (isDup) {
-        r.isDuplicate = true;
-      }
+  /* Transaksi yang sudah masuk TAPI nama fundraising-nya diganti di berkas
+     baru tidak boleh dianggap duplikat biasa. Kalau ditandai isDuplicate,
+     barisnya tersaring di layar dan tidak pernah sampai ke penyimpan, sehingga
+     perubahan nama itu hilang diam-diam. Karena itu kecocokan lama dipakai
+     untuk mencari barisnya, lalu dibandingkan kolom fundraising-nya: beda =
+     diperbarui (update), sama = benar-benar duplikat (dilewati). */
+  function _tandaiHimpun(r) {
+    var lama = null;
+    var isDup = dbHimpun.some(function(x) {
+      var tglMatch = (x.tanggal === r.tanggal);
+      var nameMatch = (String(x.namaDonatur || '').toLowerCase().trim() === String(r.namaDonatur || '').toLowerCase().trim());
+      var amtMatch = (Math.abs((Number(x.jumlah) || 0) - (Number(r.jumlah) || 0)) < 0.01);
+      var progMatch = !r.program || !x.program || (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
+      if (tglMatch && nameMatch && amtMatch && progMatch) { lama = x; return true; }
+      return false;
     });
+    if (!isDup) return;
+    var frBaru = cleanFundraisingName(r.fundraising);
+    var frLama = cleanFundraisingName(lama.fundraising);
+    if (frBaru.toLowerCase() !== frLama.toLowerCase()) {
+      r._frUpdateId = lama.id;
+      r._frLama = frLama;
+      r._frBerubah = true;
+    } else {
+      r.isDuplicate = true;
+    }
   }
-  
-  if (salurList && salurList.length) {
-    salurList.forEach(function(r) {
-      var isDup = dbSalur.some(function(x) {
-        var tglMatch = (x.tanggal === r.tanggal);
-        var nameMatch = (String(x.namaPenerima || '').toLowerCase().trim() === String(r.namaPenerima || '').toLowerCase().trim());
-        var amtMatch = (Math.abs((Number(x.jumlah) || 0) - (Number(r.jumlah) || 0)) < 0.01);
-        var progMatch = !r.program || !x.program || (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
-        return tglMatch && nameMatch && amtMatch && progMatch;
-      });
-      if (isDup) {
-        r.isDuplicate = true;
-      }
+
+  function _tandaiSalur(r) {
+    var lama = null;
+    var isDup = dbSalur.some(function(x) {
+      var tglMatch = (x.tanggal === r.tanggal);
+      var nameMatch = (String(x.namaPenerima || '').toLowerCase().trim() === String(r.namaPenerima || '').toLowerCase().trim());
+      var amtMatch = (Math.abs((Number(x.jumlah) || 0) - (Number(r.jumlah) || 0)) < 0.01);
+      var progMatch = !r.program || !x.program || (String(x.program || '').toLowerCase().trim() === String(r.program || '').toLowerCase().trim());
+      if (tglMatch && nameMatch && amtMatch && progMatch) { lama = x; return true; }
+      return false;
     });
+    if (!isDup) return;
+    var frBaru = cleanFundraisingName(r.fundraising);
+    var frLama = cleanFundraisingName(lama.fundraising);
+    if (frBaru.toLowerCase() !== frLama.toLowerCase()) {
+      r._frUpdateId = lama.id;
+      r._frLama = frLama;
+      r._frBerubah = true;
+    } else {
+      r.isDuplicate = true;
+    }
   }
+
+  (himpunList || []).forEach(_tandaiHimpun);
+  (salurList || []).forEach(_tandaiSalur);
 }
 
 async function apiParseImportUrl(t, url, type, opsi) {
@@ -6393,6 +6431,7 @@ async function apiSaveImportedData(t, rows, type) {
   
   var currentRows = readAll(sheetName) || [];
   var savedCount = 0;
+  var frDiupdate = 0;
 
   var monthsToSync = {};
   var _petaImp = isHimpun ? _petaDonatur() : null;
@@ -6415,6 +6454,25 @@ async function apiSaveImportedData(t, rows, type) {
   
   rows.forEach(function(row) {
     row.fundraising = cleanFundraisingName(row.fundraising);
+
+    /* Data sudah ada, hanya nama fundraising yang diganti di berkas baru.
+       Perbarui baris lama di tempatnya: nomor kwitansi/bukti, id, petugas,
+       dan waktu dibuat tidak berubah, dan TIDAK boleh ada baris baru. */
+    if (row._frUpdateId) {
+      var lamaFR = null;
+      for (var q = 0; q < currentRows.length; q++) {
+        if (String(currentRows[q].id) === String(row._frUpdateId)) { lamaFR = currentRows[q]; break; }
+      }
+      if (lamaFR) {
+        updateRowById(sheetName, String(lamaFR.id), { fundraising: row.fundraising });
+        lamaFR.fundraising = row.fundraising;
+        frDiupdate++;
+        var mFR = getMonthFromDate(lamaFR.tanggal);
+        if (mFR) monthsToSync[mFR] = true;
+        return;
+      }
+    }
+
     row.id = makeId();
     row.petugas = u.nama;
     row.dibuat = new Date().toISOString();
@@ -6477,8 +6535,9 @@ async function apiSaveImportedData(t, rows, type) {
     await syncMonthlySpreadsheet(keys[i]);
   }
   
-  audit(u.id, u.username, 'import_' + (isHimpun ? 'penghimpunan' : 'pentasyarufan'), savedCount + ' data berhasil diimpor');
-  return { ok: true, count: savedCount };
+  audit(u.id, u.username, 'import_' + (isHimpun ? 'penghimpunan' : 'pentasyarufan'),
+    savedCount + ' data berhasil diimpor' + (frDiupdate ? ', ' + frDiupdate + ' nama fundraising diperbarui' : ''));
+  return { ok: true, count: savedCount, frDiupdate: frDiupdate };
 }
 
 async function apiDeleteByDateRange(t, type, startDate, endDate) {
