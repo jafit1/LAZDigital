@@ -633,6 +633,7 @@ function viewKodeAksesKL(){
     + '<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
     + '<button class="btn btn-primary btn-sm" onclick="buatKodeKL()">Buat / perbarui semua kode</button>'
     + '<button class="btn btn-sm" onclick="eksporKodeKL()">Unduh CSV</button>'
+    + '<button class="btn btn-sm" onclick="cetakKartuKL()">Cetak kartu akses</button>'
     + '<button class="btn btn-sm" onclick="salinLinkKL()">Salin link publik</button>'
     + '<span class="muted" id="kodeKLInfo" style="font-size:12px"></span></div>'
     + '<div id="kodeKLTabel" style="margin-top:12px"><div class="muted">Memuat kode...</div></div></div>';
@@ -641,10 +642,11 @@ function viewKodeAksesKL(){
 function muatKodeKL(){
   gas('apiDaftarKodeAksesKL')(TOKEN).then(function(d){
     var host=el('kodeKLTabel'); if(!host) return;
-    var daftar=d.daftar||[], h='<table class="tbl"><thead><tr><th>Kantor</th><th>Kode akses</th><th>Status</th></tr></thead><tbody>';
-    daftar.forEach(function(x){
+    var daftar=d.daftar||[], h='<table class="tbl"><thead><tr><th>Kantor</th><th>Kode akses</th><th>Status</th><th>Kartu</th></tr></thead><tbody>';
+    daftar.forEach(function(x,i){
       h+='<tr><td>'+esc(x.nama)+'</td><td style="font-family:monospace;font-weight:700">'+esc(x.kode)+'</td>'
-        + '<td>'+(x.aktif===false?'<span style="color:var(--red)">Nonaktif</span>':'<span style="color:var(--green)">Aktif</span>')+'</td></tr>';
+        + '<td>'+(x.aktif===false?'<span style="color:var(--red)">Nonaktif</span>':'<span style="color:var(--green)">Aktif</span>')+'</td>'
+        + '<td><button type="button" class="btn btn-xs btn-ghost" onclick="cetakKartuKL('+i+')">Cetak kartu</button></td></tr>';
     });
     h+='</tbody></table>';
     host.innerHTML=h;
@@ -660,18 +662,95 @@ function buatKodeKL(){
 function eksporKodeKL(){
   var d=(window.KODE_KL||[]).slice().sort(function(a,b){return String(a.nama).localeCompare(String(b.nama),'id');});
   if(!d.length){toast('Belum ada kode',true);return;}
-  var baris=['Nama KL,Kode akses'];
+  /* Excel berbahasa Indonesia memakai titik koma sebagai pemisah kolom.
+     Memakai koma membuat semua field masuk satu kolom, nama KL melekat
+     pada kodenya. Semua field dikutip supaya koma di dalam nama aman. */
+  function sel(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+  var link=location.origin+'/saldo-kl.html';
+  var baris=['Nama KL;Kode;Status;Link Saldo'];
   d.forEach(function(x){
-    baris.push('"'+String(x.nama).replace(/"/g,'""')+'","'+x.kode+'"');
+    baris.push([sel(String(x.nama||'').trim()),sel(x.kode||''),sel(x.aktif===false?'Nonaktif':'Aktif'),sel(link)].join(';'));
   });
   var b=new Blob(['\ufeff'+baris.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='kode-akses-kl.csv'; a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+  toast('CSV diunduh - 4 kolom terpisah');
 }
 function salinLinkKL(){
   var link=location.origin+'/saldo-kl.html';
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(function(){toast('Link tersalin');});
   else toast(link);
+}
+
+/* ===== KARTU AKSES KL UNTUK DICETAK =====
+   Memakai warna web (oranye #ea6a1e, krem #F7F4F2, tinta #241F1C) supaya
+   kartu hasil cetak terasa satu keluarga dengan laman publik. Mode gelap
+   sengaja tidak diikuti: kertas tetap dicetak terang dan terbaca. */
+function _kkQr(url,size){
+  var host=document.createElement('div');
+  if(typeof window.QRCode==='function'){
+    window.QRCode(url,{size:size,colorDark:'#ea6a1e',colorLight:'#ffffff'}).renderToElement(host);
+  }
+  var img=host.querySelector('img');
+  return img?img.outerHTML:'<span class="kk-qr-teks">'+esc(url)+'</span>';
+}
+function htmlKartuKL(daftar){
+  var link=location.origin+'/saldo-kl.html';
+  return (daftar||[]).map(function(x){
+    return '<article class="kk">'
+      +'<div class="kk-top"><img src="'+location.origin+'/ikon/lazismu.svg" alt="">'
+      +'<div><b>LAZISMU DAERAH BANTUL</b><span>Kartu akses saldo kantor layanan</span></div></div>'
+      +'<h3>'+esc(x.nama||'')+'</h3>'
+      +'<div class="kk-bawah"><div class="kk-kiri"><span class="kk-lb">KODE AKSES</span>'
+      +'<strong class="kk-kode">'+esc(x.kode||'')+'</strong>'
+      +'<p>Pindai QR atau buka link untuk melihat saldo, setoran, dan UMP kantor ini.</p>'
+      +'<div class="kk-link">'+esc(link)+'</div></div>'
+      +'<div class="kk-qr">'+_kkQr(link,104)+'</div></div>'
+      +'<div class="kk-foot">Kode bersifat pribadi untuk masing-masing kantor.</div></article>';
+  }).join('');
+}
+function cetakKartuKL(i){
+  var semua=window.KODE_KL||[];
+  var pilih=(i===undefined||i===null)
+    ? semua.filter(function(x){return x.aktif!==false;})
+    : [semua[Number(i)]].filter(Boolean);
+  if(!pilih.length){toast('Belum ada kartu untuk dicetak',true);return;}
+  var w=window.open('','_blank');
+  if(!w){toast('Izinkan popup untuk mencetak kartu',true);return;}
+  var css=[
+    '@page{size:A4 portrait;margin:10mm}',
+    '*{box-sizing:border-box}',
+    'body{margin:0;background:#F7F4F2;color:#241F1C;font-family:Inter,system-ui,-apple-system,sans-serif}',
+    '.bar{position:sticky;top:0;z-index:2;display:flex;gap:8px;align-items:center;padding:10px 14px;background:#241F1C;color:#F6F0EC;font-size:13px;font-weight:600}',
+    '.bar button{margin-left:auto;border:0;border-radius:8px;padding:8px 14px;background:#ea6a1e;color:#fff;font:700 12px Inter,system-ui,sans-serif;cursor:pointer}',
+    '.bar span{font-size:11px;font-weight:500;color:#D5CAC4}',
+    '.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8mm;padding:10mm}',
+    '.kk{position:relative;overflow:hidden;background:#fff;border:1px solid #E6DED9;border-radius:12px;padding:10px 11px;box-shadow:0 1px 2px rgba(0,0,0,.05);break-inside:avoid}',
+    '.kk:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,#ea6a1e,#f7931e)}',
+    '.kk-top{display:flex;align-items:center;gap:8px;padding-bottom:7px;border-bottom:1px solid #EFE8E4}',
+    '.kk-top img{width:25px;height:25px;object-fit:contain}',
+    '.kk-top b{display:block;font:800 8.5px Inter,system-ui,sans-serif;color:#ea6a1e;letter-spacing:.08em}',
+    '.kk-top span{display:block;font:600 7.5px Inter,system-ui,sans-serif;color:#968D87;margin-top:2px}',
+    '.kk h3{font:800 12.5px/1.3 "Plus Jakarta Sans",Inter,system-ui,sans-serif;margin:8px 0 7px;min-height:32px;color:#241F1C}',
+    '.kk-bawah{display:flex;gap:8px;align-items:center;justify-content:space-between}',
+    '.kk-kiri{flex:1;min-width:0}',
+    '.kk-lb{display:block;font:700 7px Inter,system-ui,sans-serif;color:#968D87;letter-spacing:.12em}',
+    '.kk-kode{display:block;font:800 13px ui-monospace,SFMono-Regular,monospace;color:#241F1C;letter-spacing:.04em;margin-top:2px}',
+    '.kk-kiri p{font:500 7.5px/1.5 Inter,system-ui,sans-serif;color:#6F645D;margin:6px 0}',
+    '.kk-link{font:600 7px ui-monospace,monospace;color:#968D87;overflow-wrap:anywhere}',
+    '.kk-qr{flex:none;width:104px;height:104px;background:#fff;border:1px solid #E6DED9;border-radius:8px;display:flex;align-items:center;justify-content:center}',
+    '.kk-qr img{width:96px!important;height:96px!important;border:0!important;border-radius:0!important;margin:0!important}',
+    '.kk-qr-teks{font:700 8px ui-monospace,monospace;color:#241F1C;overflow-wrap:anywhere}',
+    '.kk-foot{margin-top:8px;padding-top:6px;border-top:1px dashed #E6DED9;font:600 7px Inter,system-ui,sans-serif;color:#968D87}',
+    '@media print{.bar{display:none}body{background:#fff}.grid{padding:0;gap:6mm}}'
+  ].join('\n');
+  w.document.write('<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">'
+    +'<title>Kartu akses kantor layanan</title><style>'+css+'</style></head><body>'
+    +'<div class="bar">Kartu akses kantor layanan <span>'+pilih.length+' kartu - 2 kartu per halaman A4</span>'
+    +'<button type="button" onclick="print()">Cetak</button></div>'
+    +'<div class="grid">'+htmlKartuKL(pilih)+'</div></body></html>');
+  w.document.close(); w.focus();
+  setTimeout(function(){ try{w.print();}catch(e){} },700);
 }
 
 /* ============ MODAL ============ */
@@ -4652,10 +4731,12 @@ function renderDashboard(d){
   var saldoKas=d.saldo||0;
   var totalPeople=(d.jumlahDonatur||0)+' / '+(d.jumlahMustahik||0);
 
+  /* Saldo Kas & Bank sengaja tidak ditampilkan di ringkasan dasbor.
+     Angkanya tetap bisa dilihat lewat menu Saldo Kas & Bank, dan widget
+     Bank & Kas / Tunai & Non Tunai bisa dinyalakan lagi dari Atur Layout. */
   var kpis='<div class="kpis-v2">'+
     kpiCardV2('himpun','Total Penghimpunan',rp(d.totalHimpun),SVG_ICONS.arrowUp,'#ea6a1e',kpiSpark(d.series,'himpun'))+
     kpiCardV2('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),SVG_ICONS.arrowDown,'#3b82f6',kpiSpark(d.series,'tasyaruf'))+
-    kpiCardV2('saldo','Saldo Kas & Bank',_rpW(saldoKas),SVG_ICONS.wallet,'#059669','')+
     kpiCardV2('donatur','Donatur & Mustahik',totalPeople,SVG_ICONS.users,'#8b5cf6','')+
     '</div>';
 
@@ -4764,7 +4845,7 @@ function dashSempit(){ try{ return window.matchMedia('(max-width:1023px)').match
 function getDashLayout(){
   var def={
     order:['rekening','jenis','activity','pilar','bank','ashnaf','program','fundraising','rhimpun','rtasyaruf','tren','rapb'],
-    vis:{},
+    vis:{bank:false,rekening:false},
     size:{rekening:'full',tren:'full',rapb:'full',jenis:'md',activity:'lg',pilar:'md',bank:'md',ashnaf:'md',program:'md',fundraising:'md',rhimpun:'md',rtasyaruf:'md'},
     height:{rekening:'auto',tren:'auto',rapb:'auto',jenis:'auto',activity:'auto',pilar:'auto',bank:'auto',ashnaf:'auto',program:'auto',fundraising:'auto',rhimpun:'auto',rtasyaruf:'auto'},
     dimensions:{}
@@ -4801,6 +4882,7 @@ function getDashLayout(){
         def.order.forEach(function(k) {
           if (s.size[k] === undefined) s.size[k] = def.size[k] || 'md';
           if (s.height[k] === undefined) s.height[k] = def.height[k] || 'auto';
+          if (s.vis[k] === undefined && def.vis[k] !== undefined) s.vis[k] = def.vis[k];
         });
         
         return s;
