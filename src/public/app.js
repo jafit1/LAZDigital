@@ -607,11 +607,12 @@ function saldoRinciMuat(gol){
       h+='<div style="border-top:1px solid var(--line);padding:12px 0">'
         + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
         + '<div style="font-weight:700">'+esc(k.nama)+'</div><div style="font-weight:700;color:'+(k.total<0?'var(--red)':'var(--green)')+'">'+rp(k.total)+'</div></div>'
-        + '<table class="tbl" style="margin-top:8px"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Amil masuk</th><th class="n">Saldo akhir</th></tr></thead><tbody>';
+        + '<table class="tbl" style="margin-top:8px"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Amil masuk</th><th class="n">Penyeimbang</th><th class="n">Saldo akhir</th></tr></thead><tbody>';
       (k.dana||[]).forEach(function(x){
         h+='<tr><td>'+esc(x.dana.replace(/_/g,' '))+'</td><td class="n">'+rp(x.awal)+'</td><td class="n">'+rp(x.himpun)+'</td>'
           + '<td class="n">'+rp(x.amil)+'</td><td class="n">'+rp(x.salur)+'</td><td class="n">'+rp(x.sisaUmk)+'</td>'
-          + '<td class="n">'+rp(x.amilMasuk)+'</td><td class="n" style="font-weight:700;color:'+(x.akhir<0?'var(--red)':'')+'">'+rp(x.akhir)+'</td></tr>';
+          + '<td class="n">'+rp(x.amilMasuk)+'</td><td class="n" style="color:var(--muted)">'+(x.seimbang?rp(x.seimbang):'-')+'</td>'
+          + '<td class="n" style="font-weight:700;color:'+(x.akhir<0?'var(--red)':'')+'">'+rp(x.akhir)+'</td></tr>';
       });
       h+='</tbody></table></div>';
     });

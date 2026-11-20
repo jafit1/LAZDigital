@@ -2548,7 +2548,13 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
     if (sampai && String(r.tanggal) > sampai) return;
     var nama = petaLay[String(r.layananId||'')] || _namaKantorDariTeks(String(r.layanan||'')+' '+String(r.keterangan||''), layanan);
     var k = kantorBaru(nama);
-    k.umk['Infak_Umum'] = (k.umk['Infak_Umum']||0) + (String(r.jenis)==='kembali' ? -(Number(r.nominal)||0) : (Number(r.nominal)||0));
+    /* UMP Amil jangan dibebankan ke Infak Umum. Di buku ULL Masjid Aceh
+       ada UMP Operasional Rp30,6 juta yang dana asalnya Amil; memasukkannya
+       ke Infak Umum membuat pos itu minus palsu. */
+    var dUmp = /amil/i.test(String(r.dana||'')) ? 'Amil'
+      : /zakat/i.test(String(r.dana||'')) ? 'Zakat_Maal' : 'Infak_Umum';
+    var nilaiUmp = String(r.jenis)==='kembali' ? -(Number(r.nominal)||0) : (Number(r.nominal)||0);
+    k.umk[dUmp] = (k.umk[dUmp]||0) + nilaiUmp;
   });
 
   var hasil = [];
@@ -2567,8 +2573,31 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
       var akhir = awal + himpun - amil - salur - umk + amilMasuk;
       if (!awal && !himpun && !salur && !umk && !amilMasuk) return;
       danaList.push({ dana:d, awal:awal, himpun:himpun, amil:amil, salur:salur,
-        sisaUmk:umk, amilMasuk:amilMasuk, akhir:akhir });
+        sisaUmk:umk, amilMasuk:amilMasuk, akhir:akhir, seimbang:0 });
     });
+    /* UMP ditarik dari kas bersama kantor, bukan dari satu rekening pos dana.
+       Kalau satu pos jadi minus sementara pos lain masih surplus, uangnya
+       dipindah dari pos surplus ke pos minus. Ini penyeimbang kas internal:
+       total saldo kantor TIDAK berubah, dan tidak ada saldo minus palsu. */
+    var kurang = 0, lebih = 0;
+    danaList.forEach(function(x){ if (x.akhir < 0) kurang -= x.akhir; else lebih += x.akhir; });
+    if (kurang > 0 && lebih > 0) {
+      var ambil = Math.min(kurang, lebih);
+      var urut = danaList.filter(function(x){ return x.akhir > 0; }).sort(function(a,b){ return b.akhir - a.akhir; });
+      var sisaAmbil = ambil;
+      urut.forEach(function(x){
+        if (sisaAmbil <= 0) return;
+        var geser = Math.min(x.akhir, sisaAmbil);
+        x.seimbang -= geser; x.akhir -= geser; sisaAmbil -= geser;
+      });
+      urut = danaList.filter(function(x){ return x.akhir < 0; }).sort(function(a,b){ return a.akhir - b.akhir; });
+      var sisaBerikan = ambil;
+      urut.forEach(function(x){
+        if (sisaBerikan <= 0) return;
+        var butuh = -x.akhir, beri = Math.min(butuh, sisaBerikan);
+        x.seimbang += beri; x.akhir += beri; sisaBerikan -= beri;
+      });
+    }
     hasil.push({ nama:nama, tipe:k.tipe, dana:danaList,
       total: danaList.reduce(function(a,x){return a+x.akhir;},0),
       pembuka: danaList.reduce(function(a,x){return a+x.awal;},0) });
