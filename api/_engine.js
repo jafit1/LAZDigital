@@ -2643,10 +2643,13 @@ function _namaLayananPenuh(l){
 function apiBuatKodeAksesKL(t){
   var admin = _requirePerm(t,'settings','edit');
   var lama = _bacaKodeKL(), baru = {}, dipakai = {};
-  (readAll(SHEETS.LAYANAN)||[]).forEach(function(l){
-    if (!l || !l.id || !l.nama || !/^(KLL|ULL)$/i.test(String(l.tipe||''))) return;
-    var nama = _namaLayananPenuh(l);
-    if (_keDaerahSaja(nama)) return;   /* sudah masuk Daerah, tanpa kode sendiri */
+  /* Kode diterbitkan hanya untuk kantor yang benar-benar punya saldo di buku.
+     Layanan tanpa data akan menghasilkan halaman kosong, jadi tidak dikirimi. */
+  var semua = _saldoAnalisaUntuk(null, '', '', true).daftar || [];
+  semua.forEach(function(k){
+    var nama = String(k.nama||'').trim();
+    if (!/^(KLL|ULL)\s/i.test(nama)) return;   /* Daerah tidak perlu kode */
+    if (_keDaerahSaja(nama)) return;           /* sudah masuk Daerah */
     var kode = '';
     if (lama[nama] && lama[nama].kode && !dipakai[lama[nama].kode]) kode = lama[nama].kode;
     if (!kode) {
@@ -2654,7 +2657,7 @@ function apiBuatKodeAksesKL(t){
       while (dipakai[kode]);
     }
     dipakai[kode] = 1;
-    baru[nama] = { kode:kode, nama:nama, layananId:String(l.id), tipe:String(l.tipe).toUpperCase(), aktif:true };
+    baru[nama] = { kode:kode, nama:nama, tipe:k.tipe, aktif:true };
   });
   setSetting('kodeAksesKL', JSON.stringify(baru));
   audit(admin.id, admin.username, 'kode_akses_kl', 'terbitkan kode',
