@@ -2152,33 +2152,23 @@ function _bolehLihatLayanan(u, nama){
 
 function apiSaldoLayanan(t, sampai, bulan){
   var u = _requirePerm(t, 'saldokll', 'view');
-  var hasil = hitungSaldoLayanan(sampai, bulan);
-
-  /* Penghimpunan Daerah disaring DI SERVER, bukan sekadar disembunyikan di
-     tampilan — kalau hanya disembunyikan, angkanya tetap terkirim ke peramban
-     dan siapa pun bisa membacanya. */
-  hasil.bolehDaerah = can(u, 'saldodaerah', 'view');
-  if (!hasil.bolehDaerah) {
-    hasil.daftar = hasil.daftar.filter(function(s){ return s.tipe !== 'Daerah'; });
-    hasil.daerah = null;
-    hasil.total = hasil.totalKll;
-  }
-
-  var milik = _layananSaya(u);
-  if (milik) {
-    hasil.daftar = hasil.daftar.filter(function(s){ return _norm(s.layanan) === _norm(milik); });
-    var total = { himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
-    hasil.daftar.forEach(function(s){ Object.keys(total).forEach(function(f){ total[f] += s[f]; }); });
-    hasil.total = total;
-    hasil.jumlahLayanan = hasil.daftar.length;
-    hasil.totalKll = total;
-    hasil.daerah = null;
-    hasil.bolehDaerah = false;   /* pengurus satu kantor tidak melihat angka daerah */
-    hasil.dibatasi = milik;
-  }
+  /* Satu sumber angka: saldo pembuka Analisa + UMP per dana/pilar. */
+  var rinci = _saldoAnalisaUntuk(t, sampai || '', '', true);
+  var ubah = function(k){
+    var himpun=0, amil=0, ump=0, salur=0;
+    (k.dana||[]).forEach(function(d){ himpun+=Number(d.himpun)||0; amil+=Number(d.amil)||0; ump+=Number(d.sisaUmk)||0; salur+=Number(d.salur)||0; });
+    return { layanan:k.nama, tipe:k.tipe, himpun:himpun, kenaAmil:himpun, bebasAmil:0,
+      hakAmil:amil, saldoKLL:(Number(k.total)||0)+ump, umpKeluar:ump, umpKembali:0, lpj:salur,
+      sisaSaldo:Number(k.total)||0, belumLPJ:0, nHimpun:0, nUmp:0, nLpj:0 };
+  };
+  var semua=(rinci.daftar||[]).map(ubah), kosong=function(){return {himpun:0,kenaAmil:0,bebasAmil:0,hakAmil:0,saldoKLL:0,umpKeluar:0,umpKembali:0,lpj:0,sisaSaldo:0,belumLPJ:0};};
+  var hasil={tanggal:rinci.sampai,bulan:String(bulan||''),tahun:rinci.tahun,persen:_bacaHakAmil().persen,kecuali:[],daftar:semua,total:kosong(),totalKll:kosong(),daerah:null,jumlahLayanan:0,olehAnalisa:true,sumber:rinci.sumber, bolehDaerah:can(u,'saldodaerah','view')};
+  semua.forEach(function(x){Object.keys(hasil.total).forEach(function(f){hasil.total[f]+=Number(x[f])||0;});if(x.tipe!=='Daerah')Object.keys(hasil.totalKll).forEach(function(f){hasil.totalKll[f]+=Number(x[f])||0;});});
+  hasil.daerah=semua.filter(function(x){return x.tipe==='Daerah';})[0]||null;hasil.jumlahLayanan=semua.filter(function(x){return x.tipe!=='Daerah';}).length;
+  if(!hasil.bolehDaerah){hasil.daftar=semua.filter(function(x){return x.tipe!=='Daerah';});hasil.daerah=null;hasil.total=hasil.totalKll;}
+  var milik=_layananSaya(u);if(milik){hasil.daftar=hasil.daftar.filter(function(x){return _norm(x.layanan)===_norm(milik);});var z=kosong();hasil.daftar.forEach(function(x){Object.keys(z).forEach(function(f){z[f]+=Number(x[f])||0;});});hasil.total=z;hasil.totalKll=z;hasil.daerah=null;hasil.jumlahLayanan=hasil.daftar.length;hasil.dibatasi=milik;hasil.bolehDaerah=false;}
   return hasil;
 }
-
 /* Rincian satu KLL/ULL: setoran, uang muka, dan LPJ-nya baris per baris. */
 function apiDetailSaldoLayanan(t, nama, sampai, bulan){
   var u = _requirePerm(t, 'saldokll', 'view');
