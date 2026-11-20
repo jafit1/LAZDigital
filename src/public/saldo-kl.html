@@ -504,6 +504,7 @@ function isiSetoran(){
   }
   var g=r.ringkas||{}, ls=r.bulanTersedia||[], i=ls.indexOf(BULAN);
   var nSetor=(r.setoran||[]).length, nUmp=(r.ump||[]).length;
+  var belum=Number(g.belumLPJ)||0;
 
   var h='<div class="kl-card">'
     +'<div class="kl-bulanbar">'
@@ -519,10 +520,14 @@ function isiSetoran(){
     +kartu('Setoran',klRp(g.himpun),nSetor+' transaksi','')
     +kartu('Hak amil',klRp(g.hakAmil),'dipotong dari setoran','')
     +kartu('Uang muka',klRp(g.umpKeluar),(g.umpKembali>0?'kembali '+klRp(g.umpKembali):'diserahkan ke kantor'),'')
-    +kartu('Belum LPJ',klRp(g.belumLPJ),(g.belumLPJ>0?'uang muka tanpa LPJ':'tidak ada sisa'),'belum'+(g.belumLPJ<0?' minus':''))
+    +kartu('Belum LPJ',klRp(belum),(belum>0?'uang muka tanpa LPJ':(belum<0?'LPJ melebihi uang muka':'tidak ada sisa')),'belum'+(belum<0?' minus':''))
     +'</div>';
   h+='<p class="kl-note">Saldo belum LPJ = <b>uang muka</b> bulan ini − <b>LPJ</b> − uang muka yang <b>dikembalikan</b>. '
     +'Angkanya sama dengan menu Saldo KLL di kantor pusat.</p>';
+  if(belum<0){
+    h+='<p class="kl-note">Angka <b>minus</b> berarti LPJ bulan ini lebih besar daripada uang muka yang ditarik bulan ini — '
+      +'biasanya karena uang muka bulan sebelumnya baru dilaporkan sekarang.</p>';
+  }
   h+='</div>';
 
   /* setoran */
