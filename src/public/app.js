@@ -658,11 +658,12 @@ function buatKodeKL(){
   }).catch(handleErr);
 }
 function eksporKodeKL(){
-  var d=window.KODE_KL||[];
+  var d=(window.KODE_KL||[]).slice().sort(function(a,b){return String(a.nama).localeCompare(String(b.nama),'id');});
   if(!d.length){toast('Belum ada kode',true);return;}
-  var baris=['Kantor,Kode akses,Link'];
-  var link=location.origin+'/saldo-kl.html';
-  d.forEach(function(x){baris.push('"'+String(x.nama).replace(/"/g,'""')+'","'+x.kode+'","'+link+'"');});
+  var baris=['Nama KL,Kode akses'];
+  d.forEach(function(x){
+    baris.push('"'+String(x.nama).replace(/"/g,'""')+'","'+x.kode+'"');
+  });
   var b=new Blob(['\ufeff'+baris.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='kode-akses-kl.csv'; a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);},1000);

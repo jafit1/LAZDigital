@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#ea6a1e">
+<meta name="theme-color" content="#F2704F">
 <link rel="icon" href="/ikon/lazismu.svg" type="image/svg+xml">
 <meta name="robots" content="noindex,nofollow">
 <title>Saldo Kantor Layanan - LAZISMU Daerah Bantul</title>
@@ -13,100 +13,124 @@
 <link rel="stylesheet" href="/styles.css">
 <script src="/js/lz-tema.js"></script>
 <style>
-  /* === Halaman saldo kl — desain sama dengan web publik === */
-  body{padding:0;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
-  .kl-wrap{max-width:1080px;margin:0 auto;padding:22px 16px 44px;}
+  /* === halaman saldo kl — memakai token styles.css supaya tema ikut === */
+  *{box-sizing:border-box}
+  body{padding:0;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+       -webkit-text-size-adjust:100%;}
+  .kl-wrap{max-width:1040px;margin:0 auto;padding:20px 14px 40px;}
 
-  /* --- kepala publik --- */
+  /* --- kepala --- */
   .kl-head{
     position:relative;overflow:hidden;
-    background:var(--grad-accent);color:#fff;border-radius:20px;padding:22px 24px;margin-bottom:18px;
-    box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    background:var(--grad-accent);color:#fff;border-radius:18px;padding:18px 20px;
+    margin-bottom:14px;box-shadow:var(--shadow);
+    display:flex;align-items:center;gap:12px;
   }
   .kl-head::after{
-    content:"";position:absolute;right:-56px;top:-56px;width:220px;height:220px;border-radius:50%;
-    background:radial-gradient(circle,rgba(255,255,255,.24),transparent 70%);pointer-events:none;
+    content:"";position:absolute;right:-60px;top:-70px;width:210px;height:210px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.26),transparent 70%);pointer-events:none;
   }
-  .kl-id{display:flex;align-items:center;gap:12px;min-width:0;position:relative;}
   .kl-logo{
-    width:44px;height:44px;flex:none;border-radius:14px;background:rgba(255,255,255,.22);
-    border:1px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;
-    font-family:var(--head);font-weight:800;font-size:16px;letter-spacing:.02em;overflow:hidden;
+    width:42px;height:42px;flex:none;border-radius:13px;background:rgba(255,255,255,.2);
+    border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;overflow:hidden;
   }
-  .kl-logo img{width:100%;height:100%;object-fit:contain;}
-  .kl-nama{font-family:var(--head);font-size:19px;font-weight:800;line-height:1.2;letter-spacing:-.01em;}
-  .kl-sub{font-size:12.5px;opacity:.92;margin-top:3px;}
+  .kl-logo img{width:100%;height:100%;object-fit:contain}
+  .kl-nama{font-family:var(--head);font-size:clamp(16px,2.4vw,19px);font-weight:800;line-height:1.25;letter-spacing:-.01em}
+  .kl-sub{font-size:12px;opacity:.93;margin-top:2px}
+
+  /* --- kartu --- */
+  .kl-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+           padding:16px 18px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .kl-label{display:flex;align-items:center;gap:8px;font-family:var(--head);font-size:13px;
+            font-weight:700;color:var(--text);margin-bottom:10px}
+  .kl-label .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
 
   /* --- form kode --- */
-  .kl-form-card{
-    background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);
+  .kl-form{display:flex;gap:9px;flex-wrap:wrap}
+  .kl-input{
+    flex:1 1 220px;min-width:0;height:46px;border:1px solid var(--border);border-radius:12px;
+    background:var(--surface);color:var(--text);padding:0 13px;font-family:ui-monospace,monospace;
+    font-size:16px;letter-spacing:.08em;text-transform:uppercase;outline:none;
   }
-  .kl-label{display:flex;align-items:center;gap:9px;font-family:var(--head);font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:10px;}
-  .kl-label .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--accent);box-shadow:0 0 8px currentColor;}
-  .kl-form{display:flex;gap:9px;align-items:stretch;flex-wrap:wrap;margin-top:7px;}
-  .kl-input{width:100%;box-sizing:border-box;height:46px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);padding:0 13px;font-family:monospace;font-size:16px;letter-spacing:.08em;text-transform:uppercase;outline:none;}
-  .kl-input::placeholder{color:var(--muted)}
-  .kl-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(234,106,30,.12)}
-  .kl-btn{height:46px;border:0;border-radius:12px;padding:0 20px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;box-shadow:0 4px 12px rgba(234,106,30,.15);transition:.2s;}
-  .kl-btn:hover{box-shadow:0 6px 16px rgba(234,106,30,.25);opacity:.95}
-  .kl-btn:disabled{opacity:.55;cursor:default;}
-  .kl-error{margin-top:10px;color:var(--red);font-size:12.5px;font-weight:600;}
-
-  /* --- hasil --- */
-  .kl-kartuanal{
-    background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 20px;margin-bottom:16px;box-shadow:var(--shadow);
+  .kl-input::placeholder{color:var(--muted);letter-spacing:.04em}
+  .kl-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(242,112,79,.14)}
+  .kl-btn{
+    flex:0 0 auto;height:46px;border:0;border-radius:12px;padding:0 20px;
+    background:var(--grad-accent);color:#fff;font-weight:800;font-size:13px;cursor:pointer;
+    font-family:var(--sans);box-shadow:0 6px 14px -8px rgba(242,112,79,.9);transition:opacity .15s,transform .15s;
   }
-  .kl-kartuhead{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;}
-  .kl-kartuhead .kl-info{display:flex;flex-direction:column;}
-  .kl-judul{font-family:var(--head);font-size:15px;font-weight:700;color:var(--text);margin-bottom:1px;}
-  .kl-subre{font-size:11.5px;color:var(--muted);margin-top:1px;}
-  .kl-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);white-space:nowrap;}
-  .kl-total{font-family:var(--head);font-size:26px;font-weight:800;color:var(--green);line-height:1.15;margin-top:6px;}
-  .kl-meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;}
-  .kl-meta div{font-size:12px;color:var(--muted);}
-  .kl-meta b{display:block;color:var(--text);font-size:15px;margin-top:2px;}
+  .kl-btn:hover{opacity:.94}
+  .kl-btn:active{transform:translateY(1px)}
+  .kl-btn:disabled{opacity:.55;cursor:default}
+  .kl-error{margin-top:10px;color:var(--red);font-size:12.5px;font-weight:600}
 
-  /* --- tabel rincian --- */
-  table.kl-tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
-  table.kl-tbl th{text-align:left;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.05em;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap;}
-  table.kl-tbl td{padding:10px 12px;border-bottom:1px solid var(--border2);vertical-align:middle;}
-  table.kl-tbl tr:hover{background:var(--surface3);}
-  table.kl-tbl tr:last-child td{border-bottom:none;}
-  table.kl-tbl td.n,.kl-tbl th.n{text-align:right;font-variant-numeric:tabular-nums;}
-  table.kl-tbl tfoot td{font-weight:800;border-top:2px solid var(--border);}
+  /* --- ringkasan --- */
+  .kl-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+  .kl-kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+  .kl-kpi .l{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .kl-kpi .v{font-family:var(--head);font-size:clamp(15px,2.2vw,18px);font-weight:800;margin-top:4px;word-break:break-word}
+  .kl-kpi.utama .v{color:var(--green);font-size:clamp(19px,3.2vw,24px)}
+  .kl-kpi.utama .v.minus{color:var(--red)}
 
-  .kl-foot{text-align:center;color:var(--muted);font-size:12px;padding:22px 10px 4px;line-height:1.7;}
-  .kl-foot b{color:var(--text);}
-
-  @media(max-width:560px){
-    .kl-head{padding:18px;border-radius:16px;}
-    .kl-nama{font-size:17px;}
-    .kl-form{flex-direction:column;}
-    .kl-btn{width:100%;}
-    .kl-kartuanal{padding:15px 16px;border-radius:16px;}
+  /* --- tabel --- */
+  .kl-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1px solid var(--border2)}
+  table.kl-tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+  table.kl-tbl th{
+    text-align:left;color:var(--muted);font-size:10.5px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;padding:10px 12px;background:var(--surface2);
+    border-bottom:1px solid var(--border);white-space:nowrap;
   }
+  table.kl-tbl td{padding:9px 12px;border-bottom:1px solid var(--border2);white-space:nowrap}
+  table.kl-tbl tbody tr:last-child td{border-bottom:0}
+  table.kl-tbl tbody tr:hover{background:var(--surface3)}
+  table.kl-tbl th.n,table.kl-tbl td.n{text-align:right;font-variant-numeric:tabular-nums}
+  table.kl-tbl th:first-child,table.kl-tbl td:first-child{position:sticky;left:0;background:var(--surface);z-index:1}
+  table.kl-tbl th:first-child{background:var(--surface2)}
+  table.kl-tbl tbody tr:hover td:first-child{background:var(--surface3)}
+  table.kl-tbl td.pos{font-weight:600;color:var(--text2)}
+  table.kl-tbl td.akhir{font-weight:800}
+  table.kl-tbl tfoot td{font-weight:800;border-top:2px solid var(--border);background:var(--surface)}
+  table.kl-tbl tfoot td:first-child{background:var(--surface)}
 
+  .kl-note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+  .kl-foot{text-align:center;color:var(--muted);font-size:11.5px;padding:16px 8px 0;line-height:1.7}
+  .kl-foot b{color:var(--text)}
 
+  @media (max-width:600px){
+    .kl-wrap{padding:14px 10px 32px}
+    .kl-head{padding:15px 16px;border-radius:16px}
+    .kl-card{padding:14px;border-radius:14px}
+    .kl-form{gap:8px}
+    .kl-input,.kl-btn{height:44px;font-size:15px}
+    .kl-btn{flex:1 1 100%}
+    .kl-kpis{grid-template-columns:1fr 1fr;gap:8px}
+    .kl-kpi{padding:10px 12px}
+    table.kl-tbl{font-size:12px;min-width:520px}
+    table.kl-tbl th,table.kl-tbl td{padding:8px 9px}
+  }
+  @media print{
+    .kl-form,.kl-foot,.kl-head::after{display:none!important}
+    body{background:#fff}
+    .kl-card,.kl-kpi{box-shadow:none;border-color:#ccc}
+    .kl-tw{overflow:visible;border-color:#ccc}
+  }
 </style>
 </head>
 <body>
 <div class="kl-wrap">
   <div class="kl-head">
-    <div class="kl-id">
-      <div class="kl-logo">
-        <img src="/ikon/lazismu.svg" alt="LAZISMU">
-      </div>
-      <div>
-        <div class="kl-nama">Saldo Kantor Layanan</div>
-        <div class="kl-sub">LAZISMU Daerah Bantul · Data saldo real time</div>
-      </div>
+    <div class="kl-logo"><img src="/ikon/lazismu.svg" alt="LAZISMU"></div>
+    <div>
+      <div class="kl-nama">Saldo Kantor Layanan</div>
+      <div class="kl-sub">LAZISMU Daerah Bantul · posisi real time</div>
     </div>
   </div>
 
-  <div class="kl-form-card">
+  <div class="kl-card">
     <div class="kl-label"><span class="dot"></span> Kode akses Anda</div>
     <div class="kl-form">
-      <input id="klKode" class="kl-input" placeholder="KL-XXXXXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <input id="klKode" class="kl-input" placeholder="KL-XXXXXXXX" autocomplete="off"
+             autocapitalize="characters" spellcheck="false" inputmode="text">
       <button id="klBtn" class="kl-btn" onclick="klCari()">Lihat Saldo</button>
     </div>
     <div id="klError" class="kl-error" style="display:none"></div>
@@ -114,19 +138,29 @@
 
   <div id="klHasil"></div>
 
-  <div class="kl-foot">Saldo mengikuti pembukuan LAZISMU Daerah Bantul. Kode akses bersifat pribadi untuk masing-masing kantor.</div>
+  <div class="kl-foot">Saldo mengikuti pembukuan LAZISMU Daerah Bantul.<br>Kode akses bersifat pribadi untuk masing-masing kantor.</div>
 </div>
 
 <script>
 (function(){
   var input=document.getElementById('klKode');
-  var simpan=localStorage.getItem('klKode'); if(simpan) input.value=simpan;
+  var simpan=localStorage.getItem('klKode');
+  if(simpan) input.value=simpan;
   input.addEventListener('input',function(){this.value=this.value.toUpperCase();});
   input.addEventListener('keydown',function(e){if(e.key==='Enter')klCari();});
 })();
 
-function klRp(n){try{return 'Rp'+new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Number(n)||0);}catch(e){return 'Rp'+Math.round(Number(n)||0);}}
-function klTgl(s){var d=new Date(s);if(isNaN(d))return String(s||'');return new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}).format(d)+' WIB';}
+function klRp(n){
+  n=Number(n)||0;
+  var s=new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Math.abs(n));
+  return (n<0?'−Rp':'Rp')+s;
+}
+function klTgl(s){
+  var d=new Date(s);
+  if(isNaN(d)) return String(s||'');
+  return new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}).format(d)+' WIB';
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
 function klCari(){
   var kode=(document.getElementById('klKode').value||'').trim().toUpperCase();
@@ -140,35 +174,51 @@ function klCari(){
     .then(function(r){return r.json();})
     .then(function(j){
       if(j&&j.__error) throw new Error(j.__error);
-      var d=j.result;
-      var h='<div class="kl-kartuanal">'
-        +'<div class="kl-kartuhead">'
-        +'<div class="kl-info">'
-        +'<div class="kl-judul">Saldo '+d.tipe+'</div>'
-        +'<div class="kl-subre">'+esc(d.nama)+'</div>'
-        +'</div>'
-        +'<span class="kl-pill">Posisi '+esc(d.sampai||'terbaru')+'</span>'
-        +'</div>'
-        +'<div class="kl-total" style="color:'+(d.total<0?'var(--red)':'var(--green)')+'">'+klRp(d.total)+'</div>'
-        +'<div class="kl-meta">'
-        +'<div>Saldo pembuka 2026<b>'+klRp(d.pembuka)+'</b></div>'
-        +'<div>Diperbarui<b>'+klTgl(d.diperbarui)+'</b></div>'
-        +'</div></div>';
-      h+='<div class="kl-kartuanal"><div class="kl-label" style="margin-bottom:10px">Rincian per pos dana</div>'
-        +'<table class="kl-tbl"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Saldo</th></tr></thead><tbody>';
-      (d.dana||[]).forEach(function(x){
-        h+='<tr><td>'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
-          +'<td class="n">'+klRp(x.awal)+'</td><td class="n">'+klRp(x.himpun)+'</td><td class="n">'+klRp(x.amil)+'</td>'
-          +'<td class="n">'+klRp(x.salur)+'</td><td class="n">'+klRp(x.sisaUmk)+'</td>'
-          +'<td class="n" style="font-weight:800;color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
+      var d=j.result, dana=d.dana||[];
+      var salur=dana.reduce(function(a,x){return a+(Number(x.salur)||0);},0);
+
+      var h='<div class="kl-kpis">'
+        +'<div class="kl-kpi utama"><div class="l">Saldo akhir</div><div class="v'+(d.total<0?' minus':'')+'">'+klRp(d.total)+'</div></div>'
+        +'<div class="kl-kpi"><div class="l">Saldo awal 2026</div><div class="v">'+klRp(d.pembuka)+'</div></div>'
+        +'<div class="kl-kpi"><div class="l">Kantor</div><div class="v" style="font-size:13px">'+esc(d.nama)+'</div></div>'
+        +'<div class="kl-kpi"><div class="l">Diperbarui</div><div class="v" style="font-size:12px;font-weight:600">'+klTgl(d.diperbarui)+'</div></div>'
+        +'</div>';
+
+      h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Rincian per jenis dana</div>'
+        +'<div class="kl-tw"><table class="kl-tbl"><thead><tr>'
+        +'<th>Jenis dana</th><th class="n">Saldo awal 2026</th><th class="n">Penghimpunan</th>'
+        +'<th class="n">Hak amil</th><th class="n">UMP</th><th class="n">Saldo akhir</th>'
+        +'</tr></thead><tbody>';
+
+      dana.forEach(function(x){
+        h+='<tr><td class="pos">'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
+          +'<td class="n">'+klRp(x.awal)+'</td>'
+          +'<td class="n">'+klRp(x.himpun)+'</td>'
+          +'<td class="n">'+klRp(x.amil)+'</td>'
+          +'<td class="n">'+klRp(x.sisaUmk)+'</td>'
+          +'<td class="n akhir'+(x.akhir<0?' minus':'')+'" style="color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
       });
-      h+='</tbody><tfoot><tr><td colspan="6">TOTAL</td><td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot></table></div>';
+
+      h+='</tbody><tfoot><tr><td>TOTAL</td>'
+        +'<td class="n">'+klRp(d.pembuka)+'</td>'
+        +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.himpun)||0);},0))+'</td>'
+        +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.amil)||0);},0))+'</td>'
+        +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.sisaUmk)||0);},0))+'</td>'
+        +'<td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot>'
+        +'</table></div>';
+
+      if(Math.abs(salur)>0.5){
+        h+='<div class="kl-note">Penyaluran langsung (di luar uang muka): <b>'+klRp(salur)+'</b>. '
+          +'Saldo akhir = saldo awal + penghimpunan − hak amil − UMP − penyaluran langsung.</div>';
+      }else{
+        h+='<div class="kl-note">Saldo akhir = saldo awal + penghimpunan − hak amil − UMP.</div>';
+      }
+      h+='</div>';
       hasil.innerHTML=h;
     })
     .catch(function(e){err.textContent=(e&&e.message)||'Kode tidak dikenali.';err.style.display='block';})
     .then(function(){btn.disabled=false;btn.textContent='Lihat Saldo';});
 }
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 </script>
 </body>
 </html>
