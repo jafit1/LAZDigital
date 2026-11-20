@@ -89,6 +89,13 @@
   table.kl-tbl tbody tr:hover td:first-child{background:var(--surface3)}
   table.kl-tbl td.pos{font-weight:600;color:var(--text2)}
   table.kl-tbl td.akhir{font-weight:800}
+  /* Baris Amil dipisahkan garis tebal + warna lembut: tempat hak amil
+     berkumpul, bukan dana yang bisa dibelanjakan. */
+  table.kl-tbl tbody tr.amil td{background:var(--surface2);border-top:2px solid var(--border);border-bottom:2px solid var(--border);font-weight:600}
+  table.kl-tbl tbody tr.amil td:first-child{background:var(--surface2)}
+  table.kl-tbl tbody tr.amil:hover td,table.kl-tbl tbody tr.amil:hover td:first-child{background:var(--surface3)}
+  .tag-amil{display:inline-block;margin-left:5px;padding:1px 5px;border-radius:5px;background:var(--accent);color:#fff;
+            font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;vertical-align:1px}
   table.kl-tbl tfoot td{font-weight:800;border-top:2px solid var(--border);background:var(--surface)}
   table.kl-tbl tfoot td:first-child{background:var(--surface)}
 
@@ -191,12 +198,13 @@ function klCari(){
         +'</tr></thead><tbody>';
 
       dana.forEach(function(x){
-        /* Hak amil memotong tiap pos, lalu seluruhnya masuk ke pos Amil
-           kantor yang sama. Jadi di baris Amil nilainya bertanda plus. */
-        var selAmil = (String(x.dana)==='Amil')
-          ? ('+'+klRp(x.amilMasuk))
-          : ('−'+klRp(x.amil));
-        h+='<tr><td class="pos">'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
+        /* Hak amil ditulis apa adanya tanpa tanda minus: staf KL bingung
+           membaca angka bersimbul. Baris Amil diberi warna & jarak sendiri
+           supaya kelihatan bahwa di situlah potongan itu berkumpul. */
+        var isAmil = String(x.dana)==='Amil';
+        var selAmil = isAmil ? klRp(x.amilMasuk) : klRp(Math.abs(x.amil));
+        h+='<tr'+(isAmil?' class="amil"':'')+'><td class="pos">'+esc(String(x.dana||'').replace(/_/g,' '))
+          +(isAmil?' <span class="tag-amil">hak amil</span>':'')+'</td>'
           +'<td class="n">'+klRp(x.awal)+'</td>'
           +'<td class="n">'+klRp(x.himpun)+'</td>'
           +'<td class="n">'+selAmil+'</td>'
@@ -212,14 +220,17 @@ function klCari(){
         +'<td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot>'
         +'</table></div>';
 
+      var note = 'Hak amil dipotong dari tiap jenis dana, lalu seluruhnya masuk ke pos <b>Amil</b> kantor ini'
+        + ' (barisnya diberi warna berbeda). Karena hanya berpindah pos, total kolom hak amil = Rp0.'
+        + '<br>UMP = uang muka program yang sudah diserahkan ke kantor. Pemotongannya mengikuti pilar pada'
+        + ' keterangan pengajuan dan LPJ, bukan menumpuk di Infak Umum; sisa yang belum di-LPJ tetap di pos asalnya.';
       if(Math.abs(salur)>0.5){
-        h+='<div class="kl-note">Hak amil hanya berpindah pos: memotong tiap jenis dana, lalu masuk ke pos Amil kantor ini — makanya di baris Amil tandanya plus dan totalnya Rp0. '
-          +'Penyaluran langsung (di luar uang muka): <b>'+klRp(salur)+'</b>. '
-          +'Saldo akhir = saldo awal + penghimpunan ± hak amil − UMP − penyaluran langsung.</div>';
+        note += '<br>Penyaluran langsung (di luar uang muka): <b>'+klRp(salur)+'</b>. '
+          + 'Saldo akhir = saldo awal + penghimpunan - hak amil - UMP - penyaluran langsung.';
       }else{
-        h+='<div class="kl-note">Hak amil hanya berpindah pos: memotong tiap jenis dana, lalu masuk ke pos Amil kantor ini — makanya di baris Amil tandanya plus dan totalnya Rp0. '
-          +'Saldo akhir = saldo awal + penghimpunan ± hak amil − UMP.</div>';
+        note += '<br>Saldo akhir = saldo awal + penghimpunan - hak amil - UMP.';
       }
+      h+='<div class="kl-note">'+note+'</div>';
       h+='</div>';
       hasil.innerHTML=h;
     })

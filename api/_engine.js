@@ -2505,6 +2505,67 @@ function _namaKantorDariTeks(teks, daftarLayanan){
   return (String(hit.tipe||'').toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + hit.nama;
 }
 
+/* Pos dana dari kata pilar yang TEGAS saja. Dipakai untuk membaca keterangan
+   pengajuan uang muka & LPJ: "Uang Muka Program Infak" tidak menyebut pilar
+   apa pun, jadi tidak boleh ditebak (dulu semuanya jatuh ke Infak Umum dan
+   pos itu tampak minus). Kalau tidak ada kata pilar, kembalikan '' supaya
+   pemanggil memakai sebaran proporsional. */
+function _posPilarTegas(teks){
+  var s = ' ' + String(teks||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim() + ' ';
+  if (/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara\b|\bsumatera\b|\bbencana\b|\bgempa\b|\bbanjir\b|\bkemanusiaan\b|\bair bersih\b|\bsumur bor\b|\bkekeringan\b/.test(s)) return 'IT_Kemanusiaan';
+  if (/\bkesehatan\b|\bklinik\b|\bambulan\w*\b|\bberobat\b|\bdonor darah\b|\bobat\b|\basy syifa\b/.test(s)) return 'IT_Kesehatan';
+  if (/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bspp\b|\bppdb\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bguru\b|\bsdua\b|\bkuliah\b/.test(s)) return 'IT_Pendidikan';
+  if (/\bkeagamaan\b|\bmasjid\b|\bmusholl?a\b|\btakmir\b|\bmuadzin\b|\bquran\b|\bramadhan\b|\bifthar\b|\bqurban\b|\bkurban\b|\bfidyah\b/.test(s)) return 'IT_Keagamaan';
+  if (/\bekonomi\b|\bumkm\b|\bmodal usaha\b/.test(s)) return 'IT_Ekonomi';
+  if (/\blingkungan\b|\bsampah\b/.test(s)) return 'IT_Lingkungan';
+  if (/\bkelembagaan\b|\binventaris\b/.test(s)) return 'IT_Kelembagaan';
+  if (/\bsosial\b|\bdakwah\b/.test(s)) return 'IT_Sosial';
+  return '';
+}
+
+/* Uang muka yang ditarik dengan dana Infak dipotong ke pos pilar yang
+   dibuktikan keterangan/LPJ-nya, bukan ditumpuk semua ke Infak Umum.
+   Urutannya: (1) bukti LPJ, (2) sisa dibagi menurut dana yang masih tersedia
+   di tiap pos infak, (3) kalau kantor menarik lebih besar dari dananya,
+   kelebihannya tinggal di Infak Umum sebagai defisit yang sebenarnya.
+   Jumlah total per kantor tidak berubah — hanya pindah pos. */
+function _sebarUmkInfak(k){
+  var U = Number(k.umkInfak) || 0;
+  if (Math.abs(U) < 0.005) return;
+  var POS = ['Infak_Umum','IT_Sosial','IT_Pendidikan','IT_Kesehatan','IT_Keagamaan',
+             'IT_Kemanusiaan','IT_Ekonomi','IT_Lingkungan','IT_Lainnya','IT_Kelembagaan'];
+  if (U < 0) { k.umk.Infak_Umum = (k.umk.Infak_Umum||0) + U; return; }
+  var head = {}, d, i;
+  for (i=0;i<POS.length;i++){ d = POS[i];
+    head[d] = (k.awal[d]||0) + (k.himpun[d]||0) - (k.amil[d]||0) - (k.salur[d]||0);
+  }
+  var sisa = U, alok = {};
+  var bukti = Object.keys(k.lpjPilar||{}).filter(function(x){ return POS.indexOf(x) >= 0; })
+    .sort(function(a,b){ return (k.lpjPilar[b]||0) - (k.lpjPilar[a]||0); });
+  for (i=0;i<bukti.length && sisa>0.005;i++){
+    d = bukti[i];
+    var ambil = Math.min(k.lpjPilar[d]||0, Math.max(0,head[d]), sisa);
+    if (ambil > 0.005){ alok[d] = (alok[d]||0) + ambil; sisa -= ambil; }
+  }
+  if (sisa > 0.005){
+    var bobot = {}, total = 0;
+    for (i=0;i<POS.length;i++){ d = POS[i];
+      var h = Math.max(0, head[d] - (alok[d]||0));
+      if (h > 0.005){ bobot[d] = h; total += h; }
+    }
+    if (total > 0.005){
+      var pakai = Math.min(sisa, total);
+      for (i=0;i<POS.length;i++){ d = POS[i];
+        if (!bobot[d]) continue;
+        alok[d] = (alok[d]||0) + pakai*bobot[d]/total;
+      }
+      sisa -= pakai;
+    }
+  }
+  if (sisa > 0.005) alok.Infak_Umum = (alok.Infak_Umum||0) + sisa;
+  Object.keys(alok).forEach(function(x){ k.umk[x] = (k.umk[x]||0) + alok[x]; });
+}
+
 function _saldoAnalisaUntuk(t, sampai, golongan, publik){
   if (!publik) {
     _requirePerm(t,'saldokll','view');
@@ -2528,7 +2589,7 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
       var awal = {}, x;
       for (var q=0;q<pembuka.length;q++){ x=pembuka[q]; if(x.nama===nama) awal[x.dana]=(awal[x.dana]||0)+(Number(x.nominal)||0); }
       daftar[nama] = { nama:nama, tipe:/^DAERAH|Penghimpunan Daerah/i.test(nama)?'Daerah':(/^ULL/.test(nama)?'ULL':'KLL'),
-        awal:awal, himpun:{}, amil:{}, salur:{}, umk:{} };
+        awal:awal, himpun:{}, amil:{}, salur:{}, umk:{}, umkInfak:0, lpjPilar:{} };
     }
     return daftar[nama];
   }
@@ -2559,17 +2620,27 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
   (readAll(SHEETS.PENTASYARUFAN)||[]).forEach(function(r){
     if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
     if (sampai && String(r.tanggal) > sampai) return;
-    /* LPJ adalah pertanggungjawaban UMP, bukan pengeluaran kas kedua.
-       Di berkas Analisa UMK/LPJ dan Penyaluran memang dua kolom terpisah.
-       Memasukkan LPJ ke sini mengurangi saldo dua kali. */
-    var seksiSalur = String(r.section||'');
-    if (/^UMP\b|^LPJ\b/i.test(seksiSalur) || /^UMP\b|^LPJ\b/i.test(String(r.program||''))) return;
     var nama = _namaKantorDariTeks(String(r.namaPenerima||'')+' '+String(r.keterangan||''), layanan);
     var ketSalur = String(r.keterangan||'') + ' ' + String(r.program||'');
     if (_gabungKeDaerah(ketSalur)) nama = 'DAERAH Bantul';
     if (_keDaerahSaja(nama)) nama = 'DAERAH Bantul';
-    var k = kantorBaru(nama);
     var sumber = String(r.sumberDana||'');
+    /* LPJ adalah pertanggungjawaban UMP, bukan pengeluaran kas kedua.
+       Di berkas Analisa UMK/LPJ dan Penyaluran memang dua kolom terpisah.
+       Memasukkan LPJ ke sini mengurangi saldo dua kali. Tapi isinya dipakai
+       sebagai bukti pilar: uang muka infak dipotong ke pos yang dilaporkan. */
+    var seksiSalur = String(r.section||'');
+    if (/^UMP\b|^LPJ\b/i.test(seksiSalur) || /^UMP\b|^LPJ\b/i.test(String(r.program||''))) {
+      if (!/zakat|amil/i.test(sumber)) {
+        var posLpj = _posPilarTegas(String(r.program||'') + ' ' + String(r.keterangan||''));
+        if (posLpj) {
+          var kLpj = kantorBaru(nama);
+          kLpj.lpjPilar[posLpj] = (kLpj.lpjPilar[posLpj]||0) + (Number(r.jumlah)||0);
+        }
+      }
+      return;
+    }
+    var k = kantorBaru(nama);
     var dana = /zakat/i.test(sumber) ? 'Zakat_Maal' : /amil/i.test(sumber) ? 'Amil'
       : _danaDariTransaksi('Infak','Infak Terikat','',r.program,r.keterangan);
     k.salur[dana] = (k.salur[dana]||0) + (Number(r.jumlah)||0);
@@ -2581,14 +2652,16 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
     var nama = petaLay[String(r.layananId||'')] || _namaKantorDariTeks(String(r.layanan||'')+' '+String(r.keterangan||''), layanan);
     if (_keDaerahSaja(nama)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
-    /* UMP Amil jangan dibebankan ke Infak Umum. Di buku ULL Masjid Aceh
-       ada UMP Operasional Rp30,6 juta yang dana asalnya Amil; memasukkannya
-       ke Infak Umum membuat pos itu minus palsu. */
-    var dUmp = /amil/i.test(String(r.dana||'')) ? 'Amil'
-      : /zakat/i.test(String(r.dana||'')) ? 'Zakat_Maal' : 'Infak_Umum';
     var nilaiUmp = String(r.jenis)==='kembali' ? -(Number(r.nominal)||0) : (Number(r.nominal)||0);
-    k.umk[dUmp] = (k.umk[dUmp]||0) + nilaiUmp;
+    /* UMP Amil dan Zakat sudah jelas posnya. UMP Infak dipotong per pilar:
+       keterangan pengajuan dibaca dulu, sisanya disebar proporcional. */
+    if (/amil/i.test(String(r.dana||''))) { k.umk.Amil = (k.umk.Amil||0) + nilaiUmp; return; }
+    if (/zakat/i.test(String(r.dana||''))) { k.umk.Zakat_Maal = (k.umk.Zakat_Maal||0) + nilaiUmp; return; }
+    var posTegas = _posPilarTegas(String(r.keterangan||''));
+    if (posTegas) { k.umk[posTegas] = (k.umk[posTegas]||0) + nilaiUmp; return; }
+    k.umkInfak += nilaiUmp;
   });
+  Object.keys(daftar).forEach(function(nama){ _sebarUmkInfak(daftar[nama]); });
 
   var hasil = [];
   Object.keys(daftar).forEach(function(nama){
