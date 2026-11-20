@@ -191,27 +191,34 @@ function klCari(){
         +'</tr></thead><tbody>';
 
       dana.forEach(function(x){
+        /* Hak amil memotong tiap pos, lalu seluruhnya masuk ke pos Amil
+           kantor yang sama. Jadi di baris Amil nilainya bertanda plus. */
+        var selAmil = (String(x.dana)==='Amil')
+          ? ('+'+klRp(x.amilMasuk))
+          : ('−'+klRp(x.amil));
         h+='<tr><td class="pos">'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
           +'<td class="n">'+klRp(x.awal)+'</td>'
           +'<td class="n">'+klRp(x.himpun)+'</td>'
-          +'<td class="n">'+klRp(x.amil)+'</td>'
+          +'<td class="n">'+selAmil+'</td>'
           +'<td class="n">'+klRp(x.sisaUmk)+'</td>'
-          +'<td class="n akhir'+(x.akhir<0?' minus':'')+'" style="color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
+          +'<td class="n akhir" style="color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
       });
 
       h+='</tbody><tfoot><tr><td>TOTAL</td>'
         +'<td class="n">'+klRp(d.pembuka)+'</td>'
         +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.himpun)||0);},0))+'</td>'
-        +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.amil)||0);},0))+'</td>'
+        +'<td class="n">Rp0</td>'
         +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.sisaUmk)||0);},0))+'</td>'
         +'<td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot>'
         +'</table></div>';
 
       if(Math.abs(salur)>0.5){
-        h+='<div class="kl-note">Penyaluran langsung (di luar uang muka): <b>'+klRp(salur)+'</b>. '
-          +'Saldo akhir = saldo awal + penghimpunan − hak amil − UMP − penyaluran langsung.</div>';
+        h+='<div class="kl-note">Hak amil hanya berpindah pos: memotong tiap jenis dana, lalu masuk ke pos Amil kantor ini — makanya di baris Amil tandanya plus dan totalnya Rp0. '
+          +'Penyaluran langsung (di luar uang muka): <b>'+klRp(salur)+'</b>. '
+          +'Saldo akhir = saldo awal + penghimpunan ± hak amil − UMP − penyaluran langsung.</div>';
       }else{
-        h+='<div class="kl-note">Saldo akhir = saldo awal + penghimpunan − hak amil − UMP.</div>';
+        h+='<div class="kl-note">Hak amil hanya berpindah pos: memotong tiap jenis dana, lalu masuk ke pos Amil kantor ini — makanya di baris Amil tandanya plus dan totalnya Rp0. '
+          +'Saldo akhir = saldo awal + penghimpunan ± hak amil − UMP.</div>';
       }
       h+='</div>';
       hasil.innerHTML=h;
