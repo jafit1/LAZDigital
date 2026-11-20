@@ -86,7 +86,7 @@
     padding-left:22px;border-left:1px solid var(--border2);
   }
   .kl-hero-meta .ml{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-  .kl-hero-meta .mv{display:block;font-size:13px;font-weight:600;line-height:1.45;margin-top:2px;color:var(--text)}
+  .kl-hero-meta .mv{display:block;font-size:13px;font-weight:600;line-height:1.45;margin-top:2px;color:var(--text);overflow-wrap:anywhere}
 
   /* --- tabel --- */
   .kl-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1px solid var(--border2)}
@@ -137,7 +137,7 @@
     .kl-btn{flex:1 1 100%}
     .kl-hero{padding:15px 16px;border-radius:14px;gap:14px}
     .kl-hero-meta{
-      flex:1 1 100%;grid-template-columns:1fr 1fr;gap:10px 16px;
+      flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;
       padding-left:0;padding-top:13px;border-left:0;border-top:1px solid var(--border2);
     }
     table.kl-tbl{font-size:12px;min-width:520px}
