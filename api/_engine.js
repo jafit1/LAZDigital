@@ -2024,6 +2024,18 @@ function hitungSaldoLayanan(sampai, bulan){
   var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
 
   var rekap = {}, urut = [];
+  /* LPJ sering dibukukan di bulan berikutnya dari bulan uang muka ditarik.
+     "Belum LPJ" dihitung berjalan dari Januari tahun berjalan sampai bulan
+     yang dilihat, bukan selisih bulan itu saja. Dengan begitu LPJ lintas
+     bulan mengurangi uang muka bulan sebelumnya, bukan bikin minus palsu. */
+  var berjalan = {};
+  var kunciBerjalan = function(n){ return _ratakanHuruf(n); };
+  var tambahBerjalan = function(n, field, nilai){
+    var k = kunciBerjalan(n);
+    if (!berjalan[k]) berjalan[k] = { keluar:0, kembali:0, lpj:0 };
+    berjalan[k][field] += nilai;
+  };
+  var akhirBerjalan = bulan ? (tahun + '-' + bulan.slice(5) + '-31') : sampai;
   function slot(nama){
     var k = _norm(nama);
     if (!rekap[k]) {
@@ -2056,6 +2068,11 @@ function hitungSaldoLayanan(sampai, bulan){
   });
 
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    var tglU = String(r.tanggal || '').slice(0, 10);
+    if (tglU >= awalTahun && tglU <= akhirBerjalan) {
+      tambahBerjalan(_layananUmp(r.layanan, layList),
+        String(r.jenis) === 'kembali' ? 'kembali' : 'keluar', Number(r.nominal) || 0);
+    }
     if (!dalam(r.tanggal)) return;
     var n = Number(r.nominal) || 0;
     var s = slot(_layananUmp(r.layanan, layList));
@@ -2063,8 +2080,13 @@ function hitungSaldoLayanan(sampai, bulan){
   });
 
   (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    var tglL = String(r.tanggal || '').slice(0, 10);
+    var lpjBaris = /^UMP\s+LPJ/i.test(String(r.section || ''));
+    if (tglL >= awalTahun && tglL <= akhirBerjalan && lpjBaris) {
+      tambahBerjalan(_layananUmp(r.namaPenerima, layList), 'lpj', Number(r.jumlah) || 0);
+    }
     if (!dalam(r.tanggal)) return;
-    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    if (!lpjBaris) return;
     var n = Number(r.jumlah) || 0;
     var s = slot(_layananUmp(r.namaPenerima, layList));
     s.lpj += n; s.nLpj++;
@@ -2102,7 +2124,8 @@ function hitungSaldoLayanan(sampai, bulan){
     var s = gabung[k];
     s.saldoKLL  = s.himpun - s.hakAmil;
     s.sisaSaldo = s.saldoKLL - s.umpKeluar + s.umpKembali;
-    s.belumLPJ  = s.umpKeluar - s.lpj - s.umpKembali;
+    var bj = berjalan[kunciBerjalan(s.layanan)] || {};
+    s.belumLPJ  = (bj.keluar || 0) - (bj.lpj || 0) - (bj.kembali || 0);
     return s;
   }).sort(function(a,b){ return b.sisaSaldo - a.sisaSaldo; });
 
@@ -2838,6 +2861,33 @@ function apiSaldoKLRincian(kode, bulan){
   var inti = function(n){ return _norm(String(n == null ? '' : n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
   var kunci = inti(e.nama);
   var cocok = function(nama){ return inti(nama) === kunci; };
+
+  /* LPJ tidak selalu dibukukan di bulan yang sama dengan uang muka. Saldo
+     belum LPJ dihitung berjalan dari Januari sampai bulan yang dilihat, jadi
+     LPJ bulan ini boleh mengurangi uang muka bulan sebelumnya. */
+  var UM = readAll(SHEETS.UANGMUKA) || [];
+  var PT = readAll(SHEETS.PENTASYARUFAN) || [];
+  var berjalan = { keluar:0, kembali:0, lpj:0 };
+  var bl = b.slice(0, 4) + '-01';
+  while (bl <= b) {
+    UM.forEach(function(r){
+      if (String(r.tanggal || '').slice(0, 7) !== bl) return;
+      if (!cocok(_layananUmp(r.layanan, layList))) return;
+      var n = Number(r.nominal) || 0;
+      if (String(r.jenis) === 'kembali') berjalan.kembali += n; else berjalan.keluar += n;
+    });
+    PT.forEach(function(r){
+      if (String(r.tanggal || '').slice(0, 7) !== bl) return;
+      if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+      if (!cocok(_layananUmp(r.namaPenerima, layList))) return;
+      berjalan.lpj += Number(r.jumlah) || 0;
+    });
+    var th = Number(bl.slice(0, 4)), bn = Number(bl.slice(5, 7)) + 1;
+    if (bn > 12) { th++; bn = 1; }
+    bl = th + '-' + String(bn).padStart(2, '0');
+  }
+  var belumBerjalan = berjalan.keluar - berjalan.lpj - berjalan.kembali;
+
   var dalam = function(t){ return String(t || '').slice(0, 7) === b; };
 
   var himpun = 0, hakAmil = 0, umpKeluar = 0, umpKembali = 0, lpjJumlah = 0;
@@ -2892,7 +2942,9 @@ function apiSaldoKLRincian(kode, bulan){
 
   return { nama:e.nama, tipe:e.tipe, bulan:b, bulanTersedia:tersedia,
     ringkas:{ himpun:himpun, hakAmil:hakAmil, umpKeluar:umpKeluar, umpKembali:umpKembali,
-      lpj:lpjJumlah, belumLPJ:umpKeluar - lpjJumlah - umpKembali },
+      lpj:lpjJumlah, belumLPJ:belumBerjalan,
+      belumLPJBulanan:umpKeluar - lpjJumlah - umpKembali,
+      berjalan:{ umpKeluar:berjalan.keluar, umpKembali:berjalan.kembali, lpj:berjalan.lpj } },
     setoran:setoran, ump:ump, lpj:lpj, diperbarui:new Date().toISOString() };
 }
 
