@@ -296,6 +296,13 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
   Kode akses diterbitkan dari daftar hasil `_saldoAnalisaUntuk` (hanya kantor
   yang punya saldo), bukan dari tabel `Layanan` yang berisi 59 baris — kalau
   dari `Layanan`, 30 kode menunjuk kantor tanpa data dan halamannya kosong.
+  Audit ulang 20 November 2026: `tools/audit_saldo_2026.py` (pembuka 105 pos
+  vs sheet, selisih Rp0,00; penyaluran 1.207 baris Rp5.572.954.539,01 sama
+  persis, 2.843 baris LPJ/UMP dilewat) dan `tools/audit_himpun_kantor.py`
+  (penghimpunan Rp9.613.657.992,48 cocok per kantor). Catatan terbuka: 16 baris
+  penghimpunan bertipe donatur "Kantor Layanan (KLL)" tanpa `layananId`
+  (Rp61.028.200) masih jatuh ke Daerah; Rp26.450.000 di antaranya memang
+  bencana Sumatera/Aceh, sisanya milik lima kantor.
 - **Kolom F jurnal bank = fundraising** (17 November 2026). `fundraisingDariBarisJurnal`
   membaca kolom ke-6 (index 5) untuk baris penghimpunan **dan** pentasyarufan.
   Isi "Kantor" diterjemahkan `cleanFundraisingName` menjadi
