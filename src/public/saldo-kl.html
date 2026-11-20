@@ -149,21 +149,20 @@ function klCari(){
         +'</div>'
         +'<span class="kl-pill">Posisi '+esc(d.sampai||'terbaru')+'</span>'
         +'</div>'
-        +'<div class="kl-total">'+klRp(d.total)+'</div>'
+        +'<div class="kl-total" style="color:'+(d.total<0?'var(--red)':'var(--green)')+'">'+klRp(d.total)+'</div>'
         +'<div class="kl-meta">'
         +'<div>Saldo pembuka 2026<b>'+klRp(d.pembuka)+'</b></div>'
         +'<div>Diperbarui<b>'+klTgl(d.diperbarui)+'</b></div>'
         +'</div></div>';
       h+='<div class="kl-kartuanal"><div class="kl-label" style="margin-bottom:10px">Rincian per pos dana</div>'
-        +'<table class="kl-tbl"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Penyeimbang</th><th class="n">Saldo</th></tr></thead><tbody>';
+        +'<table class="kl-tbl"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Saldo</th></tr></thead><tbody>';
       (d.dana||[]).forEach(function(x){
         h+='<tr><td>'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
           +'<td class="n">'+klRp(x.awal)+'</td><td class="n">'+klRp(x.himpun)+'</td><td class="n">'+klRp(x.amil)+'</td>'
           +'<td class="n">'+klRp(x.salur)+'</td><td class="n">'+klRp(x.sisaUmk)+'</td>'
-          +'<td class="n">'+(x.seimbang?klRp(x.seimbang):'-')+'</td>'
-          +'<td class="n" style="font-weight:800">'+klRp(x.akhir)+'</td></tr>';
+          +'<td class="n" style="font-weight:800;color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
       });
-      h+='</tbody><tfoot><tr><td colspan="7">TOTAL</td><td class="n">'+klRp(d.total)+'</td></tr></tfoot></table></div>';
+      h+='</tbody><tfoot><tr><td colspan="6">TOTAL</td><td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot></table></div>';
       hasil.innerHTML=h;
     })
     .catch(function(e){err.textContent=(e&&e.message)||'Kode tidak dikenali.';err.style.display='block';})

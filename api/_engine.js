@@ -2464,6 +2464,12 @@ function _danaDariTransaksi(jenisDana, subJenis, pilar, program, keterangan){
   return 'Infak_Umum';
 }
 
+/* KLL yang belum dikonsolidasi: seluruh transaksinya milik Daerah, bukan
+   kantornya sendiri. Saat ini hanya RS PKU Muh Bantul. */
+function _keDaerahSaja(nama){
+  return /rs\.?\s*pku/i.test(String(nama||''));
+}
+
 /* Nama kantor di buku web kadang beda ejaan dengan master Analisa. Tanpa
    penyatuan ini satu kantor tampil dua kali (misalnya "Penghimpunan Daerah"
    dan "DAERAH Bantul"), sehingga saldonya jadi negatif palsu. */
@@ -2507,6 +2513,8 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
   var tahun = String(sampai||'').slice(0,4) || String(new Date().getFullYear());
   var pembuka = [];
   try { pembuka = JSON.parse(getSetting(_kunciSaldoAnalisa(tahun)) || '[]'); } catch(e){ pembuka = []; }
+  /* KLL RS PKU Muh Bantul belum dikonsolidasi: saldo awalnya ikut Daerah. */
+  pembuka.forEach(function(x){ if (x && _keDaerahSaja(x.nama)) x.nama = 'DAERAH Bantul'; });
   var layanan = readAll(SHEETS.LAYANAN) || [];
   var petaLay = {};
   layanan.forEach(function(l){ if(l && l.id) petaLay[String(l.id)] = (String(l.tipe||'').toUpperCase()==='ULL'?'ULL ':'KLL ') + l.nama; });
@@ -2536,6 +2544,7 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
     var ketHimpun = String(r.keterangan||'') + ' ' + String(r.program||'') + ' ' + String(r.pilar||'');
     var gabung = _gabungKeDaerah(ketHimpun);
     if (gabung) nama = 'DAERAH Bantul';
+    if (_keDaerahSaja(nama)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     var dana = _danaDariTransaksi(r.jenisDana, r.subJenis, r.pilar, r.program, r.keterangan);
     var n = Number(r.jumlah)||0;
@@ -2558,6 +2567,7 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
     var nama = _namaKantorDariTeks(String(r.namaPenerima||'')+' '+String(r.keterangan||''), layanan);
     var ketSalur = String(r.keterangan||'') + ' ' + String(r.program||'');
     if (_gabungKeDaerah(ketSalur)) nama = 'DAERAH Bantul';
+    if (_keDaerahSaja(nama)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     var sumber = String(r.sumberDana||'');
     var dana = /zakat/i.test(sumber) ? 'Zakat_Maal' : /amil/i.test(sumber) ? 'Amil'
@@ -2569,6 +2579,7 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
     if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
     if (sampai && String(r.tanggal) > sampai) return;
     var nama = petaLay[String(r.layananId||'')] || _namaKantorDariTeks(String(r.layanan||'')+' '+String(r.keterangan||''), layanan);
+    if (_keDaerahSaja(nama)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     /* UMP Amil jangan dibebankan ke Infak Umum. Di buku ULL Masjid Aceh
        ada UMP Operasional Rp30,6 juta yang dana asalnya Amil; memasukkannya
@@ -2594,72 +2605,9 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
       danaList.push({ dana:d, awal:awal, himpun:himpun, amil:amil, salur:salur,
         sisaUmk:umk, amilMasuk:amilMasuk, akhir:akhir, seimbang:0 });
     });
-    /* UMP ditarik dari kas bersama kantor, bukan dari satu rekening pos dana.
-       Kalau satu pos jadi minus sementara pos lain masih surplus, uangnya
-       dipindah dari pos surplus ke pos minus. Ini penyeimbang kas internal:
-       total saldo kantor TIDAK berubah, dan tidak ada saldo minus palsu. */
-    var kurang = 0, lebih = 0;
-    danaList.forEach(function(x){ if (x.akhir < 0) kurang -= x.akhir; else lebih += x.akhir; });
-    if (kurang > 0 && lebih > 0) {
-      var ambil = Math.min(kurang, lebih);
-      var urut = danaList.filter(function(x){ return x.akhir > 0; }).sort(function(a,b){ return b.akhir - a.akhir; });
-      var sisaAmbil = ambil;
-      urut.forEach(function(x){
-        if (sisaAmbil <= 0) return;
-        var geser = Math.min(x.akhir, sisaAmbil);
-        x.seimbang -= geser; x.akhir -= geser; sisaAmbil -= geser;
-      });
-      urut = danaList.filter(function(x){ return x.akhir < 0; }).sort(function(a,b){ return a.akhir - b.akhir; });
-      var sisaBerikan = ambil;
-      urut.forEach(function(x){
-        if (sisaBerikan <= 0) return;
-        var butuh = -x.akhir, beri = Math.min(butuh, sisaBerikan);
-        x.seimbang += beri; x.akhir += beri; sisaBerikan -= beri;
-      });
-    }
     hasil.push({ nama:nama, tipe:k.tipe, dana:danaList,
       total: danaList.reduce(function(a,x){return a+x.akhir;},0),
       pembuka: danaList.reduce(function(a,x){return a+x.awal;},0) });
-  });
-  /* Beberapa kantor menarik UMP lebih besar dari setorannya sendiri. Uang itu
-     berasal dari kas Daerah, jadi selisihnya dipindah dari Daerah ke kantor.
-     Total seluruh lembaga tetap sama; yang berubah hanya siapa yang memegang. */
-  var induk = null;
-  for (var z=0; z<hasil.length; z++) if (hasil[z].tipe === 'Daerah') { induk = hasil[z]; break; }
-  if (induk) {
-    hasil.forEach(function(k){
-      if (k === induk || k.total >= -0.01) return;
-      var butuh = -k.total;
-      var sumber = induk.dana.filter(function(x){ return x.akhir > butuh; })
-                             .sort(function(a,b){ return b.akhir-a.akhir; })[0];
-      if (!sumber) return;
-      var penerima = k.dana.slice().sort(function(a,b){ return a.akhir-b.akhir; })[0];
-      if (!penerima) return;
-      sumber.akhir -= butuh; sumber.seimbang = (sumber.seimbang||0) - butuh;
-      penerima.akhir += butuh; penerima.seimbang = (penerima.seimbang||0) + butuh;
-      induk.total -= butuh; k.total += butuh;
-    });
-  }
-  /* Transfer dari Daerah masuk ke satu pos saja. Seimbangkan lagi di dalam
-     kantor supaya tidak ada pos yang masih minus walaupun totalnya nol. */
-  hasil.forEach(function(k){
-    var kur2 = 0, lebih2 = 0;
-    k.dana.forEach(function(x){ if (x.akhir < -0.01) kur2 -= x.akhir; else lebih2 += x.akhir; });
-    if (kur2 <= 0 || lebih2 <= 0) return;
-    var pindah = Math.min(kur2, lebih2), sisa = pindah;
-    k.dana.filter(function(x){ return x.akhir > 0.01; }).sort(function(a,b){ return b.akhir-a.akhir; })
-      .forEach(function(x){
-        if (sisa <= 0) return;
-        var g = Math.min(x.akhir, sisa);
-        x.akhir -= g; x.seimbang = (x.seimbang||0) - g; sisa -= g;
-      });
-    sisa = pindah;
-    k.dana.filter(function(x){ return x.akhir < -0.01; }).sort(function(a,b){ return a.akhir-b.akhir; })
-      .forEach(function(x){
-        if (sisa <= 0) return;
-        var g = Math.min(-x.akhir, sisa);
-        x.akhir += g; x.seimbang = (x.seimbang||0) + g; sisa -= g;
-      });
   });
   /* Sisa desimal dari pembagian persentase bukan saldo nyata. */
   hasil.forEach(function(k){
@@ -2698,6 +2646,7 @@ function apiBuatKodeAksesKL(t){
   (readAll(SHEETS.LAYANAN)||[]).forEach(function(l){
     if (!l || !l.id || !l.nama || !/^(KLL|ULL)$/i.test(String(l.tipe||''))) return;
     var nama = _namaLayananPenuh(l);
+    if (_keDaerahSaja(nama)) return;   /* sudah masuk Daerah, tanpa kode sendiri */
     var kode = '';
     if (lama[nama] && lama[nama].kode && !dipakai[lama[nama].kode]) kode = lama[nama].kode;
     if (!kode) {
