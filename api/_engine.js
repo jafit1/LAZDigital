@@ -2448,6 +2448,35 @@ function _danaDariTransaksi(jenisDana, subJenis, pilar, program, keterangan){
   return 'Infak_Umum';
 }
 
+/* Nama kantor di buku web kadang beda ejaan dengan master Analisa. Tanpa
+   penyatuan ini satu kantor tampil dua kali (misalnya "Penghimpunan Daerah"
+   dan "DAERAH Bantul"), sehingga saldonya jadi negatif palsu. */
+function _kanonikKantor(nama, kanonik){
+  var n = String(nama||'').trim();
+  if (!n) return 'DAERAH Bantul';
+  if (/^penghimpunan daerah$/i.test(n) || /^daerah\b/i.test(n)) return 'DAERAH Bantul';
+  if (kanonik.indexOf(n) >= 0) return n;
+  var ganti = [
+    [/^ull\s+ull\s+/i,'ULL '], [/mts\s+muhammadiyah\s+kasihan/i,'MTs Kasihan'],
+    [/smp\s+muh\s*2\s+bambanglipuro/i,'SMP Muhammadiyah 2 Bambanglipuro'],
+    [/smk\s+muh\s+imogiri/i,'SMK Muhammadiyah 1 Imogiri'],
+    [/smk\s+muh\s+bambanglipuro/i,'SMK Muhammadiyah 1 Bambang'],
+    [/smk\s+muh\s+1\s+bantul/i,'SMK Muhammadiyah 1 Bantul'],
+    [/masjid\s+at\s+taqwa/i,'Masjid At Taqwa Gluntung']
+  ];
+  for (var i=0;i<ganti.length;i++) n = n.replace(ganti[i][0], ganti[i][1]);
+  if (kanonik.indexOf(n) >= 0) return n;
+  var kata = function(s){ return String(s||'').toLowerCase().replace(/^(kll|ull)\s+/,'').replace(/muhammadiyah/g,'muh').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean); };
+  var a = kata(n), terbaik = '', skor = 0;
+  for (var j=0;j<kanonik.length;j++){
+    var b = kata(kanonik[j]), sama = 0;
+    b.forEach(function(x){ if (a.indexOf(x) >= 0) sama++; });
+    var nilai = sama / Math.max(1, Math.min(a.length, b.length));
+    if (nilai > skor) { skor = nilai; terbaik = kanonik[j]; }
+  }
+  return skor >= 0.7 ? terbaik : nama;
+}
+
 function _namaKantorDariTeks(teks, daftarLayanan){
   var hit = (typeof extractLayananFromText === 'function') ? extractLayananFromText(teks, daftarLayanan) : null;
   if (!hit) return 'Penghimpunan Daerah';
@@ -2464,8 +2493,11 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
   var petaLay = {};
   layanan.forEach(function(l){ if(l && l.id) petaLay[String(l.id)] = (String(l.tipe||'').toUpperCase()==='ULL'?'ULL ':'KLL ') + l.nama; });
 
+  var kanonik = [];
+  pembuka.forEach(function(x){ if(x && x.nama && kanonik.indexOf(x.nama) < 0) kanonik.push(x.nama); });
   var daftar = {};
   function kantorBaru(nama){
+    nama = _kanonikKantor(nama, kanonik);
     if (!daftar[nama]) {
       var awal = {}, x;
       for (var q=0;q<pembuka.length;q++){ x=pembuka[q]; if(x.nama===nama) awal[x.dana]=(awal[x.dana]||0)+(Number(x.nominal)||0); }
@@ -2480,6 +2512,11 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
     if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
     if (sampai && String(r.tanggal) > sampai) return;
     var nama = petaLay[String(r.layananId||'')] || 'Penghimpunan Daerah';
+    /* Dana bencana/NTT/Palestina milik Daerah, siapa pun kanal yang
+       menyetornya. Tanpa ini setoran ada di KLL tapi penyalurannya di
+       Daerah, dan salah satu sisi jadi minus besar. */
+    var ketHimpun = String(r.keterangan||'').toLowerCase();
+    if (/palestin|gaza|ntt|nusa tenggara|bencana|gempa|sumatera|kemanusiaan|air bersih|sumur bor/.test(ketHimpun)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     var dana = _danaDariTransaksi(r.jenisDana, r.subJenis, r.pilar, r.program, r.keterangan);
     var n = Number(r.jumlah)||0;
@@ -2492,6 +2529,8 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
     if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
     if (sampai && String(r.tanggal) > sampai) return;
     var nama = _namaKantorDariTeks(String(r.namaPenerima||'')+' '+String(r.keterangan||''), layanan);
+    var ketSalur = String(r.keterangan||'').toLowerCase();
+    if (/palestin|gaza|ntt|nusa tenggara|bencana|gempa|sumatera|air bersih|sumur bor/.test(ketSalur)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     var sumber = String(r.sumberDana||'');
     var dana = /zakat/i.test(sumber) ? 'Zakat_Maal' : /amil/i.test(sumber) ? 'Amil'
