@@ -2499,9 +2499,11 @@ function _namaKantorDariTeks(teks, daftarLayanan){
   return (String(hit.tipe||'').toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + hit.nama;
 }
 
-function _saldoAnalisaUntuk(t, sampai, golongan){
-  _requirePerm(t,'saldokll','view');
-  if (golongan === 'daerah') _requirePerm(t,'saldodaerah','view');
+function _saldoAnalisaUntuk(t, sampai, golongan, publik){
+  if (!publik) {
+    _requirePerm(t,'saldokll','view');
+    if (golongan === 'daerah') _requirePerm(t,'saldodaerah','view');
+  }
   var tahun = String(sampai||'').slice(0,4) || String(new Date().getFullYear());
   var pembuka = [];
   try { pembuka = JSON.parse(getSetting(_kunciSaldoAnalisa(tahun)) || '[]'); } catch(e){ pembuka = []; }
@@ -2677,6 +2679,67 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
 
 function apiSaldoDaerahRinci(t, sampai){ return _saldoAnalisaUntuk(t, sampai, 'daerah'); }
 function apiSaldoKantorRinci(t, sampai, golongan){ return _saldoAnalisaUntuk(t, sampai, golongan === 'ull' ? 'ull' : 'kll'); }
+
+/* ============================================================
+   KODE AKSES SALDO KL
+   Satu link untuk semua KL. Tiap KL memasukkan kodenya sendiri dan
+   hanya melihat saldo kantornya. Kode disimpan di Settings, bukan di
+   halaman publik, supaya tidak bisa ditebak dari daftar kantor.
+   ============================================================ */
+function _bacaKodeKL(){
+  try { return JSON.parse(getSetting('kodeAksesKL') || '{}') || {}; } catch(e){ return {}; }
+}
+function _namaLayananPenuh(l){
+  return (String(l.tipe||'').toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + String(l.nama||'').trim();
+}
+function apiBuatKodeAksesKL(t){
+  var admin = _requirePerm(t,'settings','edit');
+  var lama = _bacaKodeKL(), baru = {}, dipakai = {};
+  (readAll(SHEETS.LAYANAN)||[]).forEach(function(l){
+    if (!l || !l.id || !l.nama || !/^(KLL|ULL)$/i.test(String(l.tipe||''))) return;
+    var nama = _namaLayananPenuh(l);
+    var kode = '';
+    if (lama[nama] && lama[nama].kode && !dipakai[lama[nama].kode]) kode = lama[nama].kode;
+    if (!kode) {
+      do { kode = 'KL-' + Utilities.getUuid().replace(/-/g,'').slice(0,8).toUpperCase(); }
+      while (dipakai[kode]);
+    }
+    dipakai[kode] = 1;
+    baru[nama] = { kode:kode, nama:nama, layananId:String(l.id), tipe:String(l.tipe).toUpperCase(), aktif:true };
+  });
+  setSetting('kodeAksesKL', JSON.stringify(baru));
+  audit(admin.id, admin.username, 'kode_akses_kl', 'terbitkan kode',
+    { modul:'settings', ringkas: Object.keys(baru).length + ' kantor layanan' });
+  return { ok:true, jumlah:Object.keys(baru).length, daftar:Object.keys(baru).sort().map(function(n){ return baru[n]; }) };
+}
+function apiDaftarKodeAksesKL(t){
+  _requirePerm(t,'settings','view');
+  var peta = _bacaKodeKL();
+  return { daftar:Object.keys(peta).sort().map(function(n){ return peta[n]; }) };
+}
+function apiNonaktifkanKodeAksesKL(t, kode){
+  var admin = _requirePerm(t,'settings','edit');
+  var peta = _bacaKodeKL(), k = String(kode||'').trim().toUpperCase();
+  if (!peta[k]) throw new Error('Kode tidak ditemukan.');
+  peta[k].aktif = false;
+  setSetting('kodeAksesKL', JSON.stringify(peta));
+  audit(admin.id, admin.username, 'kode_akses_kl', 'nonaktifkan ' + k, { modul:'settings' });
+  return { ok:true };
+}
+/* Dipanggil dari halaman publik tanpa sesi. Satu kode hanya membuka
+   satu kantor; tidak pernah mengembalikan daftar kantor lain. */
+function apiSaldoKLPublik(kode, sampai){
+  var k = String(kode||'').trim().toUpperCase();
+  var peta = _bacaKodeKL();
+  var e = peta[k];
+  if (!e || e.aktif === false) throw new Error('Kode akses tidak valid atau sudah dinonaktifkan.');
+  var d = _saldoAnalisaUntuk(null, sampai || '', '', true);
+  var cocok = null;
+  for (var i=0;i<d.daftar.length;i++) if (d.daftar[i].nama === e.nama) { cocok = d.daftar[i]; break; }
+  if (!cocok) throw new Error('Saldo untuk kantor ini belum tersedia.');
+  return { nama:e.nama, tipe:e.tipe, sampai:d.sampai, total:cocok.total, pembuka:cocok.pembuka,
+    dana:cocok.dana, diperbarui:new Date().toISOString() };
+}
 
 /* ---- saldo awal per tahun ---- */
 function apiListSaldoAwal(t, tahun){
@@ -9186,6 +9249,10 @@ REGISTRY['apiSimpanSaldoAwalAnalisa']=apiSimpanSaldoAwalAnalisa;
 REGISTRY['apiDaftarSaldoAwalAnalisa']=apiDaftarSaldoAwalAnalisa;
 REGISTRY['apiSaldoDaerahRinci']=apiSaldoDaerahRinci;
 REGISTRY['apiSaldoKantorRinci']=apiSaldoKantorRinci;
+REGISTRY['apiBuatKodeAksesKL']=apiBuatKodeAksesKL;
+REGISTRY['apiDaftarKodeAksesKL']=apiDaftarKodeAksesKL;
+REGISTRY['apiNonaktifkanKodeAksesKL']=apiNonaktifkanKodeAksesKL;
+REGISTRY['apiSaldoKLPublik']=apiSaldoKLPublik;
 async function runRPC(db, fn, args, ctx){
   DB = db || {sheets:{},props:{}};
   if(!DB.sheets) DB.sheets={}; if(!DB.props) DB.props={};

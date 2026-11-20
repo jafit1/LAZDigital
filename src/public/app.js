@@ -140,6 +140,7 @@ var NAV_ICONS={
   kll:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>',
   saldoDaerahRinci: navIcon('<path d="M4 20h16M6 20V9m6 11V4m6 16v-7"/><path d="M3 9h7M9 4h7M15 13h6"/>'),
   saldoKantorRinci: navIcon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/>'),
+  kodeAksesKL: navIcon('<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/>'),
   broadcast: navIcon('<path d="M4 11.5a7.5 7.5 0 1 1 3.2 6.15L3.5 20l1-3.4A7.4 7.4 0 0 1 4 11.5z"/><path d="M8.5 10.5h7"/><path d="M8.5 13.5h4.5"/>'),
   fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>'),
   ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>'),
@@ -158,6 +159,7 @@ var MENU=[
   {id:'laporan',label:'Laporan',ic:NAV_ICONS.laporan,mod:'laporan'},
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
   {id:'settings',label:'Pengaturan',ic:NAV_ICONS.settings,mod:'settings'},
+  {id:'kodeAksesKL',label:'Kode Akses KL',ic:NAV_ICONS.kodeAksesKL,mod:'settings'},
   {id:'broadcast',label:'Broadcast',ic:NAV_ICONS.broadcast,mod:'broadcast',url:'/blast.html'},
   {id:'fundraising',label:'Fundraising',ic:NAV_ICONS.fundraising,mod:'fundraising',url:'/fund.html'},
   {id:'ai',label:'AI Asisten',ic:NAV_ICONS.ai,mod:'ai',url:'/ai.html'},
@@ -560,7 +562,7 @@ function saveProfile(){
   gas('apiUpdateMyProfile')(TOKEN,d).then(function(){ME.nama=nama;if(PROF_FOTO)SETTINGS['uf_'+ME.id]=PROF_FOTO;PROF_FOTO=null;closeModal();startApp();toast('Profil tersimpan');}).catch(handleErr);
 }
 function resizeImg(file,max,cb,fmt){var r=new FileReader();r.onload=function(ev){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>h){if(w>max){h=h*max/w;w=max;}}else{if(h>max){w=w*max/h;h=max;}}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.85));};img.src=ev.target.result;};r.readAsDataURL(file);}
-function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,saldo:viewSaldo,kll:viewKll,saldoDaerahRinci:viewSaldoDaerahRinci,saldoKantorRinci:viewSaldoKantorRinci,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,log:viewLog}[view]||viewDashboard)();}
+function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,saldo:viewSaldo,kll:viewKll,saldoDaerahRinci:viewSaldoDaerahRinci,saldoKantorRinci:viewSaldoKantorRinci,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,kodeAksesKL:viewKodeAksesKL,log:viewLog}[view]||viewDashboard)();}
 
 /* ============ SALDO RINCI PER KONSOLIDASI / POS DANA ============
    Angka pembuka diambil dari sheet Analisa [2025] DATA-transaksi.xlsx
@@ -619,6 +621,56 @@ function saldoRinciMuat(gol){
     h+='</div>';
     host.innerHTML=h;
   }).catch(handleErr);
+}
+
+/* ============ KODE AKSES SALDO KL ============
+   Satu link publik untuk semua KL. Kode dibuat di sini, lalu diekspor
+   dan dikirim ke contact person masing-masing. */
+function viewKodeAksesKL(){
+  var c=el('content'); if(!c) return;
+  c.innerHTML='<div class="card"><div class="card-h"><div><div class="card-t">Kode Akses Saldo KL</div>'
+    + '<div class="muted" style="font-size:12px;margin-top:3px">Satu link untuk semua KL. Tiap KL hanya bisa membuka saldanya sendiri dengan kodenya.</div></div></div>'
+    + '<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<button class="btn btn-primary btn-sm" onclick="buatKodeKL()">Buat / perbarui semua kode</button>'
+    + '<button class="btn btn-sm" onclick="eksporKodeKL()">Unduh CSV</button>'
+    + '<button class="btn btn-sm" onclick="salinLinkKL()">Salin link publik</button>'
+    + '<span class="muted" id="kodeKLInfo" style="font-size:12px"></span></div>'
+    + '<div id="kodeKLTabel" style="margin-top:12px"><div class="muted">Memuat kode...</div></div></div>';
+  muatKodeKL();
+}
+function muatKodeKL(){
+  gas('apiDaftarKodeAksesKL')(TOKEN).then(function(d){
+    var host=el('kodeKLTabel'); if(!host) return;
+    var daftar=d.daftar||[], h='<table class="tbl"><thead><tr><th>Kantor</th><th>Kode akses</th><th>Status</th></tr></thead><tbody>';
+    daftar.forEach(function(x){
+      h+='<tr><td>'+esc(x.nama)+'</td><td style="font-family:monospace;font-weight:700">'+esc(x.kode)+'</td>'
+        + '<td>'+(x.aktif===false?'<span style="color:var(--red)">Nonaktif</span>':'<span style="color:var(--green)">Aktif</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    host.innerHTML=h;
+    var info=el('kodeKLInfo'); if(info) info.textContent=daftar.length+' kantor';
+    window.KODE_KL=daftar;
+  }).catch(handleErr);
+}
+function buatKodeKL(){
+  gas('apiBuatKodeAksesKL')(TOKEN).then(function(d){
+    toast('Kode dibuat untuk '+d.jumlah+' kantor'); muatKodeKL();
+  }).catch(handleErr);
+}
+function eksporKodeKL(){
+  var d=window.KODE_KL||[];
+  if(!d.length){toast('Belum ada kode',true);return;}
+  var baris=['Kantor,Kode akses,Link'];
+  var link=location.origin+'/saldo-kl.html';
+  d.forEach(function(x){baris.push('"'+String(x.nama).replace(/"/g,'""')+'","'+x.kode+'","'+link+'"');});
+  var b=new Blob(['\ufeff'+baris.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='kode-akses-kl.csv'; a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+}
+function salinLinkKL(){
+  var link=location.origin+'/saldo-kl.html';
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(function(){toast('Link tersalin');});
+  else toast(link);
 }
 
 /* ============ MODAL ============ */

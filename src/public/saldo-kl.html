@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#F2704F">
+<link rel="icon" href="/ikon/lazismu.svg" type="image/svg+xml">
+<meta name="robots" content="noindex,nofollow">
+<title>Saldo Kantor Layanan - LAZISMU Daerah Bantul</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<script src="/js/lz-tema.js"></script>
+<script src="/js/lz-logo.js"></script>
+<style>
+  body{padding:0;margin:0;background:var(--bg);color:var(--tx);font-family:var(--body);}
+  .kl-wrap{max-width:980px;margin:0 auto;padding:18px 14px 44px;}
+  .kl-hero{background:var(--grad-accent);color:#fff;border-radius:20px;padding:22px 22px 20px;box-shadow:var(--glow);margin-bottom:16px;position:relative;overflow:hidden;}
+  .kl-hero:after{content:"";position:absolute;width:240px;height:240px;border-radius:50%;right:-70px;top:-90px;background:radial-gradient(circle,rgba(255,255,255,.24),transparent 70%);pointer-events:none;}
+  .kl-hero h1{font-family:var(--head);font-size:20px;margin:0 0 5px;letter-spacing:-.01em;position:relative;}
+  .kl-hero p{margin:0;font-size:12.5px;opacity:.92;position:relative;}
+  .kl-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+  .kl-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;}
+  .kl-input{width:100%;box-sizing:border-box;height:46px;border:1px solid var(--line);border-radius:12px;background:var(--surface2);color:var(--tx);padding:0 13px;font-size:16px;font-family:monospace;letter-spacing:.08em;text-transform:uppercase;outline:none;}
+  .kl-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(242,112,79,.14);}
+  .kl-btn{height:46px;border:0;border-radius:12px;padding:0 20px;background:var(--accent);color:#fff;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;}
+  .kl-btn:disabled{opacity:.55;cursor:default;}
+  .kl-form{display:flex;gap:9px;align-items:stretch;flex-wrap:wrap;}
+  .kl-form .kl-input{flex:1 1 240px;}
+  .kl-error{margin-top:10px;color:var(--red);font-size:12.5px;font-weight:600;}
+  .kl-total{font-family:var(--head);font-size:30px;font-weight:800;color:var(--green);line-height:1.1;margin-top:5px;}
+  .kl-meta{display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;}
+  .kl-meta div{font-size:12px;color:var(--muted);}
+  .kl-meta b{display:block;color:var(--tx);font-size:15px;margin-top:2px;}
+  table.kl-tbl{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px;}
+  .kl-tbl th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:9px 8px;border-bottom:1px solid var(--line);}
+  .kl-tbl td{padding:10px 8px;border-bottom:1px solid var(--line);}
+  .kl-tbl td.n,.kl-tbl th.n{text-align:right;font-variant-numeric:tabular-nums;}
+  .kl-tbl tr:last-child td{border-bottom:0;}
+  .kl-tbl tfoot td{font-weight:800;border-top:2px solid var(--line);}
+  .kl-pill{display:inline-block;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:4px 9px;font-size:11px;color:var(--muted);}
+  .kl-foot{text-align:center;color:var(--muted);font-size:11px;margin-top:18px;}
+  @media print{.kl-form,.kl-foot,.kl-hero p{display:none!important;}body{background:#fff;} .kl-card{box-shadow:none;border-color:#ccc;}}
+</style>
+</head>
+<body>
+<div class="kl-wrap">
+  <div class="kl-hero">
+    <h1>Saldo Kantor Layanan</h1>
+    <p>LAZISMU Daerah Bantul. Data saldo real time, diperbarui setiap ada transaksi.</p>
+  </div>
+
+  <div class="kl-card">
+    <div class="kl-label">Kode akses Anda</div>
+    <div class="kl-form" style="margin-top:7px">
+      <input id="klKode" class="kl-input" placeholder="KL-XXXXXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button id="klBtn" class="kl-btn" onclick="klCari()">Lihat Saldo</button>
+    </div>
+    <div id="klError" class="kl-error" style="display:none"></div>
+  </div>
+
+  <div id="klHasil"></div>
+  <div class="kl-foot">Saldo mengikuti pembukuan LAZISMU Daerah Bantul. Kode akses bersifat pribadi untuk masing-masing kantor.</div>
+</div>
+
+<script>
+(function(){
+  var input=document.getElementById('klKode');
+  var simpan=localStorage.getItem('klKode'); if(simpan) input.value=simpan;
+  input.addEventListener('input',function(){this.value=this.value.toUpperCase();});
+  input.addEventListener('keydown',function(e){if(e.key==='Enter')klCari();});
+})();
+
+function klRp(n){try{return 'Rp'+new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Number(n)||0);}catch(e){return 'Rp'+Math.round(Number(n)||0);}}
+function klTgl(s){var d=new Date(s);if(isNaN(d))return String(s||'');return new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}).format(d)+' WIB';}
+
+function klCari(){
+  var kode=(document.getElementById('klKode').value||'').trim().toUpperCase();
+  var err=document.getElementById('klError'), btn=document.getElementById('klBtn'), hasil=document.getElementById('klHasil');
+  err.style.display='none'; hasil.innerHTML='';
+  if(!kode){err.textContent='Kode akses belum diisi.';err.style.display='block';return;}
+  localStorage.setItem('klKode',kode);
+  btn.disabled=true; btn.textContent='Memuat...';
+  fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({fn:'apiSaldoKLPublik',args:[kode,'']})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if(j&&j.__error) throw new Error(j.__error);
+      var d=j.result;
+      var h='<div class="kl-card">'
+        +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">'
+        +'<div><div class="kl-label">Saldo '+d.tipe+'</div><div style="font-family:var(--head);font-size:18px;font-weight:800;margin-top:3px">'+esc(d.nama)+'</div></div>'
+        +'<span class="kl-pill">Posisi '+esc(d.sampai||'terbaru')+'</span></div>'
+        +'<div class="kl-total">'+klRp(d.total)+'</div>'
+        +'<div class="kl-meta"><div>Saldo pembuka 2026<b>'+klRp(d.pembuka)+'</b></div>'
+        +'<div>Diperbarui<b>'+klTgl(d.diperbarui)+'</b></div></div></div>';
+      h+='<div class="kl-card"><div class="kl-label">Rincian per pos dana</div>'
+        +'<table class="kl-tbl"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Penyeimbang</th><th class="n">Saldo</th></tr></thead><tbody>';
+      (d.dana||[]).forEach(function(x){
+        h+='<tr><td>'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
+          +'<td class="n">'+klRp(x.awal)+'</td><td class="n">'+klRp(x.himpun)+'</td><td class="n">'+klRp(x.amil)+'</td>'
+          +'<td class="n">'+klRp(x.salur)+'</td><td class="n">'+klRp(x.sisaUmk)+'</td>'
+          +'<td class="n">'+(x.seimbang?klRp(x.seimbang):'-')+'</td>'
+          +'<td class="n" style="font-weight:800">'+klRp(x.akhir)+'</td></tr>';
+      });
+      h+='</tbody><tfoot><tr><td colspan="7">TOTAL</td><td class="n">'+klRp(d.total)+'</td></tr></tfoot></table></div>';
+      hasil.innerHTML=h;
+    })
+    .catch(function(e){err.textContent=(e&&e.message)||'Kode tidak dikenali.';err.style.display='block';})
+    .then(function(){btn.disabled=false;btn.textContent='Lihat Saldo';});
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+</script>
+</body>
+</html>
