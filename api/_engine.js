@@ -475,7 +475,7 @@ function apiMe(t){ return sanitizeUser(authUser(t)); }
    pengguna (uf_*, diubah lewat apiUpdateMyProfile oleh pemiliknya). Dulu
    apiSaveSettings menerima semuanya, jadi pemegang izin Pengaturan bisa
    membuka kunci login orang, mengganti token publik, atau foto orang lain. */
-function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || /^um_/.test(k) || /^lhToken/.test(k) || k === 'publicToken' || k === 'publicEnabled' || k === 'aliasKantor'; }
+function _kunciSistem(k){ k = String(k); return /^lg_/.test(k) || /^uf_/.test(k) || /^um_/.test(k) || /^lhToken/.test(k) || /^lhKode/.test(k) || k === 'publicToken' || k === 'publicEnabled' || k === 'aliasKantor'; }
 /* Settings yang boleh dikirim ke peramban. Catatan penguncian login tidak
    pernah dikirim; token publik hanya ke pemegang izin lihat Pengaturan (dan
    lewat apiGetPublicLinkInfo). Dulu apiBootstrap mengirim semuanya ke setiap
