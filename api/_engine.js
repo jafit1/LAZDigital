@@ -2509,13 +2509,22 @@ function _namaKantorDariTeks(teks, daftarLayanan){
    pengajuan uang muka & LPJ: "Uang Muka Program Infak" tidak menyebut pilar
    apa pun, jadi tidak boleh ditebak (dulu semuanya jatuh ke Infak Umum dan
    pos itu tampak minus). Kalau tidak ada kata pilar, kembalikan '' supaya
-   pemanggil memakai sebaran proporsional. */
-function _posPilarTegas(teks){
-  var s = ' ' + String(teks||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim() + ' ';
+   pemanggil memakai sebaran proporsional.
+   `abaikan` = nama kantor; dibuang dulu sebelum dibaca. Tanpa ini nama
+   "ULL Masjid Baiturrahman Aceh" atau "KLL SDUA Bantul" ikut terbaca sebagai
+   pilar Keagamaan/Pendidikan dan seluruh uang muka kantor itu salah pos. */
+function _posPilarTegas(teks, abaikan){
+  var teks2 = String(teks||'');
+  var ab = String(abaikan||'').trim();
+  if (ab) teks2 = teks2.replace(new RegExp(ab.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+  var s = ' ' + teks2.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim() + ' ';
   if (/\bpalestin\w*\b|\bgaza\b|\bntt\b|\bnusa tenggara\b|\bsumatera\b|\bbencana\b|\bgempa\b|\bbanjir\b|\bkemanusiaan\b|\bair bersih\b|\bsumur bor\b|\bkekeringan\b/.test(s)) return 'IT_Kemanusiaan';
   if (/\bkesehatan\b|\bklinik\b|\bambulan\w*\b|\bberobat\b|\bdonor darah\b|\bobat\b|\basy syifa\b/.test(s)) return 'IT_Kesehatan';
-  if (/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bspp\b|\bppdb\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bguru\b|\bsdua\b|\bkuliah\b/.test(s)) return 'IT_Pendidikan';
-  if (/\bkeagamaan\b|\bmasjid\b|\bmusholl?a\b|\btakmir\b|\bmuadzin\b|\bquran\b|\bramadhan\b|\bifthar\b|\bqurban\b|\bkurban\b|\bfidyah\b/.test(s)) return 'IT_Keagamaan';
+  if (/\bpendidikan\b|\bsekolah\b|\bbeasiswa\b|\bspp\b|\bppdb\b|\bpesantren\b|\bpondok\b|\bmadrasah\b|\bsantri\b|\bkuliah\b/.test(s)) return 'IT_Pendidikan';
+  /* Qurban & Fidyah tidak punya pos sendiri di Analisa; keduanya IT_Lainnya
+     (sama dengan aturan pemetaan penghimpunan). */
+  if (/\bqurban\b|\bkurban\b|\bfidyah\b|\bhadyu\b|\bjagalmu\b/.test(s)) return 'IT_Lainnya';
+  if (/\bkeagamaan\b|\bmasjid\b|\bmusholl?a\b|\btakmir\b|\bmuadzin\b|\bquran\b|\bramadhan\b|\bifthar\b/.test(s)) return 'IT_Keagamaan';
   if (/\bekonomi\b|\bumkm\b|\bmodal usaha\b/.test(s)) return 'IT_Ekonomi';
   if (/\blingkungan\b|\bsampah\b/.test(s)) return 'IT_Lingkungan';
   if (/\bkelembagaan\b|\binventaris\b/.test(s)) return 'IT_Kelembagaan';
@@ -2632,7 +2641,10 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
     var seksiSalur = String(r.section||'');
     if (/^UMP\b|^LPJ\b/i.test(seksiSalur) || /^UMP\b|^LPJ\b/i.test(String(r.program||''))) {
       if (!/zakat|amil/i.test(sumber)) {
-        var posLpj = _posPilarTegas(String(r.program||'') + ' ' + String(r.keterangan||''));
+        /* Program lebih tegas daripada keterangan; keterangan hanya dipakai
+           kalau programnya tidak menyebut pilar. */
+        var posLpj = _posPilarTegas(String(r.program||''), String(r.namaPenerima||''))
+          || _posPilarTegas(String(r.keterangan||''), String(r.namaPenerima||''));
         if (posLpj) {
           var kLpj = kantorBaru(nama);
           kLpj.lpjPilar[posLpj] = (kLpj.lpjPilar[posLpj]||0) + (Number(r.jumlah)||0);
@@ -2657,7 +2669,7 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik){
        keterangan pengajuan dibaca dulu, sisanya disebar proporcional. */
     if (/amil/i.test(String(r.dana||''))) { k.umk.Amil = (k.umk.Amil||0) + nilaiUmp; return; }
     if (/zakat/i.test(String(r.dana||''))) { k.umk.Zakat_Maal = (k.umk.Zakat_Maal||0) + nilaiUmp; return; }
-    var posTegas = _posPilarTegas(String(r.keterangan||''));
+    var posTegas = _posPilarTegas(String(r.keterangan||''), String(r.layanan||''));
     if (posTegas) { k.umk[posTegas] = (k.umk[posTegas]||0) + nilaiUmp; return; }
     k.umkInfak += nilaiUmp;
   });
