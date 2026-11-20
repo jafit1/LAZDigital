@@ -4016,6 +4016,9 @@ function jpBersih(x){ return String(x==null?'':x).replace(/\s+/g,' ').trim(); }
 function jpPilarBaku(x){
   var s = jpBersih(x), l = jpNorm(s);
   if (!l) return s;
+  /* Jurnal beberapa bulan menulis "Sosial Dakwah Dakwah". Tanpa perapian ini
+     satu pilar terpecah jadi dua nama di Closing Bulanan. */
+  l = l.replace(/\b(\w+)\s+\1\b/g, '$1');
   if (l === 'sosial' || l === 'dakwah' || l === 'sosial dakwah' || l === 'dakwah sosial') return 'Sosial Dakwah';
   if (l === 'kemanusiaan' || l === 'bencana' || l === 'sosial kemanusiaan') return 'Kemanusiaan';
   if (l === 'pendidikan') return 'Pendidikan';
@@ -4620,8 +4623,15 @@ function transformJurnalToImportData(rawRows, listRek, listLayanan) {
             sJenis  = _dana.subJenis;
             pilar   = _dana.pilar;
             program = _pecah.program || '';
-            if (jDana === 'Infak' && sJenis === 'Infak Terikat' && !pilar) {
-              pilar = detectPilarFromText(program || uraian);
+            if (jDana === 'Infak' && sJenis === 'Infak Terikat') {
+              /* Akun kredit hanya memberi category kasar ("Sosial Dakwah").
+                 Keterangan baris membawa peruntukan yang sebenarnya:
+                 "Air Bersih", "Ambulan", "Peduli Guru", "Gempa NTT".
+                 Pemilik meminta keduanya dibaca, bukan hanya pilar akun.
+                 Pengembalian "Sosial Dakwah" dari penebak tidak boleh
+                 menimpa pilar spesifik yang sudah ada di akun. */
+              var _pilarKet = detectPilarFromText((program || '') + ' ' + uraian);
+              if (_pilarKet && (!pilar || pilar === 'Sosial Dakwah' || _pilarKet !== 'Sosial Dakwah')) pilar = _pilarKet;
             } else if (_dana.terikat && !pilar) {
               /* Bagi hasil terikat: pakai penebak tegas supaya pilar tidak
                  dikarang saat uraiannya memang tidak menyebut pilar apa pun. */
