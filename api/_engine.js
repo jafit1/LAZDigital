@@ -2732,7 +2732,7 @@ function apiSaldoKLPublik(kode, sampai){
   var k = String(kode||'').trim().toUpperCase();
   var peta = _bacaKodeKL();
   var e = peta[k];
-  if (!e || e.aktif === false) throw new Error('Kode akses tidak valid atau sudah dinonaktifkan.');
+  if (!e || e.aktif === false) throw new Error('Kode akses tidak valid atau sudah dinonaktifkan. (kode dikenal: ' + Object.keys(peta).length + ')');
   var d = _saldoAnalisaUntuk(null, sampai || '', '', true);
   var cocok = null;
   for (var i=0;i<d.daftar.length;i++) if (d.daftar[i].nama === e.nama) { cocok = d.daftar[i]; break; }
