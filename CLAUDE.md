@@ -303,6 +303,24 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
   penghimpunan bertipe donatur "Kantor Layanan (KLL)" tanpa `layananId`
   (Rp61.028.200) masih jatuh ke Daerah; Rp26.450.000 di antaranya memang
   bencana Sumatera/Aceh, sisanya milik lima kantor.
+- **Uang muka Infak dipotong per pilar** (20 November 2026). Dulu seluruh UMP
+  dana `Infak` dibebankan ke `Infak_Umum` karena tabel `UangMuka` hanya
+  menyimpan Infak/Zakat/Amil tanpa pilar; akibatnya `Infak_Umum` minus palsu
+  (mis. KLL Srandakan −Rp53,6 juta) sementara pos pilar kelebihan.
+  `_sebarUmkInfak` sekarang membaginya: (1) potong ke pilar yang dibuktikan
+  LPJ (`lpjPilar`, dibaca dari `program` lalu `keterangan` baris seksi
+  `UMP LPJ ...`), (2) sisa dibagi menurut dana yang masih tersedia di tiap pos
+  infak, (3) kelebihan yang tak tertampung tinggal di `Infak_Umum` sebagai
+  defisit sungguhan. Total per kantor tidak berubah, hanya pindah pos.
+  `_posPilarTegas` hanya percaya kata pilar yang tegas dan **membuang nama
+  kantor lebih dulu** — tanpa itu "ULL Masjid Baiturrahman Aceh" dan
+  "KLL SDUA Bantul" terbaca sebagai pilar Keagamaan/Pendidikan dan seluruh UMP
+  kantor itu salah pos. Qurban/Fidyah ikut `IT_Lainnya`, sama dengan aturan
+  pemetaan penghimpunan. Efek 20 November 2026: pos minus turun 47 → 33 baris,
+  tujuh kantor defisit tetap minus (nyata), total tetap Rp2.664.809.018,01.
+  Halaman `/saldo-kl.html`: hak amil ditulis tanpa tanda minus, baris `Amil`
+  diberi warna/garing sendiri + label "hak amil", keterangan kolom di bawah
+  tabel.
 - **Kolom F jurnal bank = fundraising** (17 November 2026). `fundraisingDariBarisJurnal`
   membaca kolom ke-6 (index 5) untuk baris penghimpunan **dan** pentasyarufan.
   Isi "Kantor" diterjemahkan `cleanFundraisingName` menjadi
