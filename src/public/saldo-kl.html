@@ -110,12 +110,30 @@
   }
   .kl-nav:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
   .kl-nav:disabled{opacity:.35;cursor:default}
+  .kl-select-wrap{position:relative;flex:1 1 auto;min-width:0}
   .kl-pilih{
-    flex:1 1 auto;min-width:0;height:38px;border:1px solid var(--border);border-radius:10px;
-    background:var(--surface);color:var(--text);font-family:var(--sans);font-size:13.5px;font-weight:700;
-    padding:0 10px;outline:none;cursor:pointer;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;height:38px;
+    border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);
+    font-family:var(--sans);font-size:13.5px;font-weight:700;padding:0 12px;outline:none;cursor:pointer;
+    text-align:left;transition:border-color .15s,box-shadow .15s;
   }
-  .kl-pilih:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(242,112,79,.14)}
+  .kl-pilih:hover,.kl-pilih[aria-expanded="true"]{border-color:var(--accent)}
+  .kl-pilih:focus-visible{box-shadow:0 0 0 3px rgba(242,112,79,.14)}
+  .kl-pilih svg{width:15px;height:15px;flex:none;color:var(--muted);transition:transform .15s}
+  .kl-pilih[aria-expanded="true"] svg{transform:rotate(180deg)}
+  .kl-bulanmenu{
+    position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;max-height:min(320px,55vh);overflow:auto;
+    padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--surface);
+    box-shadow:0 12px 30px -14px rgba(0,0,0,.35);
+  }
+  .kl-bulanopsi{
+    display:flex;align-items:center;justify-content:space-between;width:100%;min-height:38px;padding:8px 10px;
+    border:0;border-radius:8px;background:transparent;color:var(--text2);font:600 13px var(--sans);
+    text-align:left;cursor:pointer;transition:background .12s,color .12s;
+  }
+  .kl-bulanopsi:hover,.kl-bulanopsi:focus-visible{background:var(--surface2);color:var(--text);outline:none}
+  .kl-bulanopsi.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:800}
+  .kl-bulanopsi svg{width:15px;height:15px;color:var(--accent)}
 
   .kl-stat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .kl-st{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px 13px;min-width:0}
@@ -410,11 +428,39 @@ function isiSekarang(){
   return TAB==='setoran' ? isiSetoran() : isiSaldo();
 }
 
-/* Dua belas bulan terakhir; bulan yang sedang dilihat selalu ikut di daftar. */
+/* Daftar bulan custom: permukaan dan warna pilihan mengikuti tokens tema,
+   tidak membuka menu native biru sistem operasi. Klik luar menutupnya. */
 function opsiBulan(ls,pilih){
   return (ls||[]).map(function(b){
-    return '<option value="'+b+'"'+(b===pilih?' selected':'')+'>'+nmBulan(b)+'</option>';
+    var on=b===pilih;
+    return '<button type="button" role="option" aria-selected="'+(on?'true':'false')+'"'
+      +' class="kl-bulanopsi'+(on?' on':'')+'" data-bulan="'+esc(b)+'"'
+      +' onclick="klPilihBulan(\''+esc(b)+'\')"><span>'+esc(nmBulan(b))+'</span>'
+      +(on?'<svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m4.5 10.5 3.6 3.3 7.4-7.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')
+      +'</button>';
   }).join('');
+}
+function klToggleBulan(force){
+  var menu=document.getElementById('klBulanMenu'), btn=document.getElementById('klPilihBtn');
+  if(!menu||!btn) return;
+  var buka=typeof force==='boolean'?force:menu.classList.contains('hidden');
+  menu.classList.toggle('hidden',!buka); btn.setAttribute('aria-expanded',buka?'true':'false');
+  if(buka){
+    var aktif=menu.querySelector('.kl-bulanopsi.on');
+    if(aktif) aktif.scrollIntoView({block:'nearest'});
+  }
+}
+document.addEventListener('click',function(e){
+  var wrap=document.querySelector('.kl-select-wrap');
+  if(wrap&&!wrap.contains(e.target)) klToggleBulan(false);
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape') klToggleBulan(false);
+});
+function klPilihBulan(b){
+  if(!b||b===BULAN){ klToggleBulan(false); return; }
+  klToggleBulan(false);
+  muatRincian(b);
 }
 function muatRincian(b){
   if(MUAT_RINCI) return;
@@ -436,7 +482,6 @@ function muatRincian(b){
         +'<button class="kl-ganti" type="button" style="margin-top:0" onclick="muatRincian(BULAN)">Coba lagi</button></div>';
     });
 }
-function klPilihBulan(b){ if(b&&b!==BULAN) muatRincian(b); }
 function klGeserBulan(arah){
   var r=RINCI[BULAN]; if(!r) return;
   var ls=r.bulanTersedia||[], i=ls.indexOf(BULAN);
@@ -510,8 +555,9 @@ function isiSetoran(){
     +'<div class="kl-bulanbar">'
     +'<button class="kl-nav" type="button" aria-label="Bulan sebelumnya" onclick="klGeserBulan(1)"'
       +(i<0||i>=ls.length-1?' disabled':'')+'>&#8249;</button>'
-    +'<select class="kl-pilih" aria-label="Pilih bulan" onchange="klPilihBulan(this.value)">'
-      +opsiBulan(ls,BULAN)+'</select>'
+    +'<div class="kl-select-wrap"><button id="klPilihBtn" class="kl-pilih" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="klToggleBulan()">'
+      +'<span>'+esc(nmBulan(BULAN))+'</span><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    +'</button><div id="klBulanMenu" class="kl-bulanmenu hidden" role="listbox" aria-label="Pilih bulan">'+opsiBulan(ls,BULAN)+'</div></div>'
     +'<button class="kl-nav" type="button" aria-label="Bulan berikutnya" onclick="klGeserBulan(-1)"'
       +(i<=0?' disabled':'')+'>&#8250;</button>'
     +'</div>';
