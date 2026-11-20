@@ -2482,26 +2482,25 @@ function _gateUangMuka(namaKantor, nominal, jenis, tanggal){
   var layList = readAll(SHEETS.LAYANAN) || [];
   var cfgAmil = _bacaHakAmil();
   var cocok = _layananUmp(namaKantor, layList);
-  /* Angka kantor dari jalur yang sama dengan menu Analisa, dihitung sebagai
-     data publik: modul ini tidak punya baris izin sendiri, dan tanpa parameter
-     publik _saldoAnalisaUntuk menuntut sesi. golongan dikosongkan supaya kantor
-     ULL ikut terbaca, bukan hanya KLL. */
+  /* SALDO DARI JALUR YANG SAMA DENGAN HALAMAN KL.
+     Gerbang ini harus memakai angka yang dilihat kantor, yaitu
+     hitungSaldoLayanan - bukan sheet Analisa. Dua jalur itu punya pembuka
+     berbeda (Analisa memakai Saldo Awal Analisa tahun lalu), sehingga gerbang
+     bisa menuduh kantor minus padahal saldonya sehat di matanya sendiri. */
   var baris = null;
   try {
-    var hasil = _saldoAnalisaUntuk(null, tgl, '', true);
-    var daftar = (hasil && hasil.daftar) || [];
-    for (var i=0;i<daftar.length;i++){ if (String(daftar[i].nama) === String(cocok)) { baris = daftar[i]; break; } }
+    var rekap = hitungSaldoLayanan(tgl, '');
+    var barisSemua = (rekap && rekap.daftar) || [];
+    for (var i=0;i<barisSemua.length;i++){
+      if (String(barisSemua[i].layanan) === String(cocok)) { baris = barisSemua[i]; break; }
+    }
   } catch(e){ _lolosLembar(e); baris = null; }
-  if (!baris) return out;   /* kantor belum ada di pembuka: jangan tebak */
+  if (!baris) return out;   /* kantor belum punya saldo: jangan tebak */
 
-  /* Angka dibaca langsung dari sumbernya, bukan dari objek kantor Analisa:
-     objek itu hanya menyimpan danaList, bukan peta awal/himpun/salur/umk. */
-  var aK = {}; baris.dana.forEach(function(x){ aK[String(x.dana)] = x; });
-  var ambil = function(f){ var t=0; Object.keys(aK).forEach(function(d){ t += Number(aK[d][f])||0; }); return t; };
-  /* hak amil ikut dikurangkan: uang itu sudah pindah ke Dana Amil dan tidak
-     bisa dipakai membiayai uang muka program. */
-  var awal = ambil('awal'), himpun = ambil('himpun'), salur = ambil('salur'),
-      amil = ambil('amil'), umk = ambil('sisaUmk');
+  /* hak amil sudah dipotong di dalam saldoKLL, uang muka yang belum di-LPJ
+     masih tercatat sebagai kas keluar. */
+  var ke = function(f){ return Number(baris[f]) || 0; };
+  var umk = ke('umpKeluar') - ke('umpKembali') - ke('lpj');
 
   /* Pengembalian uang muka tahun berjalan sudah masuk saldo kas kantor lagi,
      jadi tidak perlu dikurangkan dua kali. */
@@ -2533,7 +2532,7 @@ function _gateUangMuka(namaKantor, nominal, jenis, tanggal){
     if (_bebasHakAmil(r, kecualiAmil)) himpunDaerah += v;
   });
 
-  out.saldoTersedia = awal + himpun - amil - salur - umk;
+  out.saldoTersedia = ke('saldoKLL') - Math.max(0, umk);
   /* Uang muka yang sudah dikembalikan belum tentu sudah di-LPJ; hanya
      pengembalian tanpa LPJ yang dipakai menutup tarikan baru. */
   if (kembaliTahun > 0) out.saldoTersedia += Math.min(kembaliTahun, Math.max(0, umk));
