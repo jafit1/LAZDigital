@@ -2445,121 +2445,6 @@ var _DANA_ANALISA = ['Zakat_Maal','Zakat_Fitrah','Infak_Umum','IT_Ekonomi','IT_P
 
 function _kunciSaldoAnalisa(tahun){ return 'saldoAwalAnalisa:' + String(tahun || ''); }
 
-/* ============================================================
-   GERBANG UANG MUKA (UMP) TERHADAP SALDO KANTOR
-   Uang muka adalah pinjaman kantor kepada dirinya sendiri: kas keluar
-   sekarang, diganti LPJ nanti. Kalau penarikan melebihi kas yang benar-benar
-   ada, saldo kantor langsung negatif dan angka di halaman saldo KL ikut
-   minus - inilah yang terjadi di enam kantor (Pandak Timur, Kasihan,
-   Piyungan, Pleret, dll).
-
-   Saldo tersedia dihitung persis seperti rumus halaman saldo KL:
-     awal tahun (Analisa Saldo Awal) + himpun - amil - salur - (ump - LPJ)
-   Ditambah pengembalian periode berjalan, karena uang yang baru dikembalikan
-   boleh ditarik ulang pada periode yang sama.
-
-   Aturan hari ini, sengaja konservatif supaya tidak memblokir pekerjaan
-   lapangan yang sah:
-   - BLOKIR hanya bila saldo sudah minus dan tarikan memperburuk minusnya.
-   - Selain itu hanya PERINGATAN (dikembalikan ke pemanggil), isian tetap
-     masuk. Kantor yang sehat tidak boleh diganggu.
-   - Peringatan tambahan bila >= 80% setoran kantor berupa dana yang langsung
-     menempel ke Daerah (bencana/kemanusiaan): uangnya sudah tidak di kantor.
-   ============================================================ */
-var _GATE_UMP = { blokirMinus:true, ambangBencana:0.8 };
-
-function _gateUangMuka(namaKantor, nominal, jenis, tanggal){
-  var out = { boleh:true, pesan:'', saldoTersedia:0, minusSekarang:0, porsiDaerah:0 };
-  var n = Number(nominal) || 0;
-  if (String(jenis) === 'kembali' || n <= 0) return out;
-
-  var tgl = String(tanggal || '').slice(0,10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) tgl = _hariIni();
-  var tahun = tgl.slice(0,4);
-  if (tahun !== _hariIni().slice(0,4)) return out;   /* hitung tahun berjalan saja */
-
-  var layList = readAll(SHEETS.LAYANAN) || [];
-  var cfgAmil = _bacaHakAmil();
-  var cocok = _layananUmp(namaKantor, layList);
-  var golongan = /daerah/i.test(String(namaKantor||'')) ? 'daerah' : 'kll';
-
-  /* Angka kantor dari jalur yang sama dengan menu Analisa. */
-  var baris = null;
-  try {
-    var hasil = _saldoAnalisaUntuk(null, tgl, golongan, true);
-    var daftar = (hasil && (hasil.daftar || hasil.kantor)) || [];
-    for (var i=0;i<daftar.length;i++){ if (String(daftar[i].nama) === String(cocok)) { baris = daftar[i]; break; } }
-  } catch(e){ baris = null; }
-  if (!baris) return out;   /* kantor belum ada di pembuka: jangan tebak */
-
-  /* Angka dibaca langsung dari sumbernya, bukan dari objek kantor Analisa:
-     objek itu hanya menyimpan danaList, bukan peta awal/himpun/salur/umk. */
-  var aK = {}; baris.dana.forEach(function(x){ aK[String(x.dana)] = x; });
-  var ambil = function(f){ var t=0; Object.keys(aK).forEach(function(d){ t += Number(aK[d][f])||0; }); return t; };
-  /* hak amil ikut dikurangkan: uang itu sudah pindah ke Dana Amil dan tidak
-     bisa dipakai membiayai uang muka program. */
-  var awal = ambil('awal'), himpun = ambil('himpun'), salur = ambil('salur'),
-      amil = ambil('amil'), umk = ambil('sisaUmk');
-
-  /* Pengembalian uang muka tahun berjalan sudah masuk saldo kas kantor lagi,
-     jadi tidak perlu dikurangkan dua kali. */
-  var kembaliTahun = 0, himpunDaerah = 0, himpunTotal = 0;
-  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
-    if (String(r.tanggal||'').slice(0,4) !== tahun) return;
-    if (String(r.jenis) !== 'kembali') return;
-    if (_layananUmp(r.layanan, layList) !== cocok) return;
-    kembaliTahun += Number(r.nominal) || 0;
-  });
-  var kecualiAmil = cfgAmil.kecuali || [];
-  /* Sheet penghimpunan tidak punya kolom "layanan": kantornya dibaca dari
-     layananId dulu, lalu dari teks keterangan - urutan yang sama dengan
-     _saldoAnalisaUntuk supaya porsi setorannya konsisten. */
-  var layMap = {}; layList.forEach(function(l){ layMap[String(l.id)] = l; });
-  var kantorSetoran = function(r){
-    var l = layMap[String(r.layananId||'')];
-    if (l) return _layananUmp(((String(l.tipe||'').toUpperCase()==='ULL')?'ULL ':'KLL ') + l.nama, layList);
-    return _namaKantorDariTeks(String(r.layanan||'') + ' ' + String(r.keterangan||''), layList);
-  };
-  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
-    var t = String(r.tanggal||'').slice(0,10);
-    if (t.slice(0,4) !== tahun || t > tgl) return;
-    if (kantorSetoran(r) !== cocok) return;
-    var v = Number(r.jumlah) || 0;
-    himpunTotal += v;
-    /* Setoran yang bebas hak amil adalah dana yang tidak tinggal di kas
-       kantor: seluruhnya milik Daerah (bencana, kemanusiaan, titipan). */
-    if (_bebasHakAmil(r, kecualiAmil)) himpunDaerah += v;
-  });
-
-  out.saldoTersedia = awal + himpun - amil - salur - umk;
-  /* Uang muka yang sudah dikembalikan belum tentu sudah di-LPJ; hanya
-     pengembalian tanpa LPJ yang dipakai menutup tarikan baru. */
-  if (kembaliTahun > 0) out.saldoTersedia += Math.min(kembaliTahun, Math.max(0, umk));
-  out.minusSekarang = Math.min(0, out.saldoTersedia);
-  out.porsiDaerah = himpunTotal > 0 ? himpunDaerah / himpunTotal : 0;
-
-  if (_GATE_UMP.blokirMinus && out.saldoTersedia < 0 && (out.saldoTersedia - n) < out.saldoTersedia) {
-    out.boleh = false;
-    out.pesan = 'Saldo ' + cocok + ' sudah minus ' + _rpGate(out.saldoTersedia) +
-      '. Uang muka ' + _rpGate(n) + ' tidak bisa dicairkan sampai setoran masuk atau LPJ diselesaikan.';
-    return out;
-  }
-  if (out.saldoTersedia - n < 0 && out.saldoTersedia >= 0) {
-    out.pesan = 'Uang muka ' + _rpGate(n) + ' melebihi saldo kantor ' + _rpGate(out.saldoTersedia) +
-      '. Setelah dicairkan saldo ' + cocok + ' menjadi ' + _rpGate(out.saldoTersedia - n) + '.';
-  }
-  if (out.porsiDaerah >= _GATE_UMP.ambangBencana) {
-    var pesanD = Math.round(out.porsiDaerah * 100) + '% setoran ' + cocok +
-      ' berupa dana yang langsung dibukukan ke Daerah (bencana/kemanusiaan), jadi kasnya tidak tinggal di kantor.';
-    out.pesan = out.pesan ? (out.pesan + ' ' + pesanD) : pesanD;
-  }
-  return out;
-}
-
-function _rpGate(n){
-  return 'Rp' + Math.round(Number(n)||0).toLocaleString('id-ID');
-}
-
 function apiSimpanSaldoAwalAnalisa(t, tahun, baris){
   var admin = _requirePerm(t,'settings','edit');
   tahun = String(tahun || '');
@@ -2976,26 +2861,6 @@ function apiSaldoKLRincian(kode, bulan){
   var inti = function(n){ return _norm(String(n == null ? '' : n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
   var kunci = inti(e.nama);
   var cocok = function(nama){ return inti(nama) === kunci; };
-  /* Nama kantor pada baris UMP tidak selalu duduk di kolom "layanan": kadang
-     kolom itu kosong dan namanya justru tertulis di keterangan. Analisa sudah
-     membaca keduanya lewat _namaKantorDariTeks, rincian publik dulu hanya
-     membaca "layanan" - akibatnya saldo kantor memuat UMP yang rinciannya
-     tidak pernah tampil (mis. KLL SMK Muhammadiyah 1 Bantul). Sekarang
-     kedua jalur memakai pembacaan yang sama. */
-  var namaUmp = function(r){
-    var dari = _layananUmp(r.layanan, layList);
-    if (dari && cocok(dari)) return dari;
-    var teks = String(r.layanan || '') + ' ' + String(r.keterangan || '');
-    var dariTeks = _namaKantorDariTeks(teks, layList);
-    return (dariTeks && cocok(dariTeks)) ? dariTeks : dari;
-  };
-  var namaLpj = function(r){
-    var dari = _layananUmp(r.namaPenerima, layList);
-    if (dari && cocok(dari)) return dari;
-    var teks = String(r.namaPenerima || '') + ' ' + String(r.keterangan || '');
-    var dariTeks = _namaKantorDariTeks(teks, layList);
-    return (dariTeks && cocok(dariTeks)) ? dariTeks : dari;
-  };
 
   /* LPJ tidak selalu dibukukan di bulan yang sama dengan uang muka. Saldo
      belum LPJ dihitung berjalan dari Januari sampai bulan yang dilihat, jadi
@@ -3007,14 +2872,14 @@ function apiSaldoKLRincian(kode, bulan){
   while (bl <= b) {
     UM.forEach(function(r){
       if (String(r.tanggal || '').slice(0, 7) !== bl) return;
-      if (!cocok(namaUmp(r))) return;
+      if (!cocok(_layananUmp(r.layanan, layList))) return;
       var n = Number(r.nominal) || 0;
       if (String(r.jenis) === 'kembali') berjalan.kembali += n; else berjalan.keluar += n;
     });
     PT.forEach(function(r){
       if (String(r.tanggal || '').slice(0, 7) !== bl) return;
       if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
-      if (!cocok(namaLpj(r))) return;
+      if (!cocok(_layananUmp(r.namaPenerima, layList))) return;
       berjalan.lpj += Number(r.jumlah) || 0;
     });
     var th = Number(bl.slice(0, 4)), bn = Number(bl.slice(5, 7)) + 1;
@@ -3043,7 +2908,7 @@ function apiSaldoKLRincian(kode, bulan){
 
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
     if (!dalam(r.tanggal)) return;
-    if (!cocok(namaUmp(r))) return;
+    if (!cocok(_layananUmp(r.layanan, layList))) return;
     var n = Number(r.nominal) || 0;
     var arah = String(r.jenis) === 'kembali' ? 'kembali' : 'keluar';
     if (arah === 'kembali') umpKembali += n; else umpKeluar += n;
@@ -3054,7 +2919,7 @@ function apiSaldoKLRincian(kode, bulan){
   (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
     if (!dalam(r.tanggal)) return;
     if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
-    if (!cocok(namaLpj(r))) return;
+    if (!cocok(_layananUmp(r.namaPenerima, layList))) return;
     var n = Number(r.jumlah) || 0;
     lpjJumlah += n;
     /* Hanya program yang dikirim, bukan keterangan bebasnya: kolom itu kadang
@@ -7121,13 +6986,6 @@ async function apiParseImportText(t, text, type, opsi) {
   }
 }
 
-async /* Dipanggil layar sebelum Nominal UMP disimpan, supaya peringatan muncul saat
-   orang masih bisa membatalkan sendiri - bukan setelah baris terlanjur masuk. */
-function apiCekUangMuka(t, layanan, nominal, tanggal, jenis){
-  _requirePerm(t, 'pentasyarufan', 'create');
-  return _gateUangMuka(layanan, nominal, jenis, tanggal);
-}
-
 async function apiSaveImportedData(t, rows, type) {
   var u = authUser(t);
   if (!Array.isArray(rows) || !rows.length) throw new Error('Tidak ada data untuk diimpor.');
@@ -7141,40 +6999,17 @@ async function apiSaveImportedData(t, rows, type) {
        sama persis dianggap sudah pernah diimpor. */
     var sidik = function(r){ return [r.tanggal, r.jenis, Math.round(Number(r.nominal)||0), r.akun || (r.dariAkun + '>' + r.keAkun), String(r.keterangan||'').trim().toLowerCase()].join('|'); };
     var ada = {}; (readAll(sheetK) || []).forEach(function(r){ ada[sidik(r)] = 1; });
-    var nK = 0, nDobel = 0, peringatan = [], ditolak = [];
-    /* Tarikan yang lolos di dalam impor yang sama ikut mengurangi jatah baris
-       berikutnya. Tanpa ini, satu kantor bisa lolos sepuluh kali berturut-turut
-       karena tiap baris dihitung dari saldo yang belum dikurangi baris lain. */
-    var pakaiUmp = {};
-    var kunciKantor = function(nama){ return String(nama || '').trim().toLowerCase(); };
+    var nK = 0, nDobel = 0;
     rows.forEach(function(row){
       var b = {}; Object.keys(row).forEach(function(k){ if (k !== 'akunDikenal' && k !== 'isDuplicate') b[k] = row[k]; });
       var sd = sidik(b);
       if (ada[sd]) { nDobel++; return; }
-      /* Gerbang saldo: uang muka tidak boleh melebihi kas kantor. Berlaku
-         untuk input manual maupun impor jurnal, satu aturan. */
-      if (type === 'ump') {
-        var g = _gateUangMuka(b.layanan, b.nominal, b.jenis, b.tanggal);
-        if (g.boleh && String(b.jenis) !== 'kembali') {
-          var kn = kunciKantor(b.layanan);
-          var sudah = pakaiUmp[kn] || 0;
-          if (sudah > 0 && (g.saldoTersedia - sudah - (Number(b.nominal)||0)) < 0) {
-            g.boleh = false;
-            g.pesan = 'Uang muka ' + _rpGate(b.nominal) + ' melebihi sisa saldo kantor ' + _rpGate(Math.max(0, g.saldoTersedia - sudah))
-              + ' setelah tarikan lain di impor ini.';
-          }
-          if (g.boleh) pakaiUmp[kn] = sudah + (Number(b.nominal)||0);
-        }
-        if (!g.boleh) { ditolak.push({ tanggal:b.tanggal, layanan:b.layanan, nominal:Number(b.nominal)||0, pesan:g.pesan }); return; }
-        if (g.pesan) peringatan.push({ tanggal:b.tanggal, layanan:b.layanan, nominal:Number(b.nominal)||0, pesan:g.pesan });
-      }
       ada[sd] = 1;
       b.id = makeId(); b.petugas = u.nama; b.dibuat = new Date().toISOString();
       insertRow(sheetK, b); nK++;
     });
-    audit(u.id, u.username, 'import_' + type, nK + ' data berhasil diimpor' + (nDobel ? ', ' + nDobel + ' dilewati (sudah ada)' : '') +
-      (ditolak.length ? ', ' + ditolak.length + ' ditolak gerbang saldo' : ''));
-    return { ok:true, count:nK, dilewati:nDobel, ditolak:ditolak, peringatan:peringatan };
+    audit(u.id, u.username, 'import_' + type, nK + ' data berhasil diimpor' + (nDobel ? ', ' + nDobel + ' dilewati (sudah ada)' : ''));
+    return { ok:true, count:nK, dilewati:nDobel };
   }
 
   _requirePerm(t, type === 'himpun' ? 'penghimpunan' : 'pentasyarufan', 'create');
@@ -9616,7 +9451,6 @@ REGISTRY['apiSimpanTandaTanganA2']=apiSimpanTandaTanganA2;
 REGISTRY['apiClosingBulanan']=apiClosingBulanan;
 REGISTRY['apiClosingRincianFundraiser']=apiClosingRincianFundraiser;
 REGISTRY['apiHapusAudit']=apiHapusAudit;
-REGISTRY['apiCekUangMuka']=apiCekUangMuka;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
 REGISTRY['apiSimpanSaldoAwalAnalisa']=apiSimpanSaldoAwalAnalisa;
 REGISTRY['apiDaftarSaldoAwalAnalisa']=apiDaftarSaldoAwalAnalisa;

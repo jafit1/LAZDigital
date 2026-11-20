@@ -6910,29 +6910,6 @@ function simpanImportData() {
       closeModal();
       var totalSaved = (res[0].count || 0) + (res[1].count || 0);
       var gerak = (res[2].count || 0) + (res[3].count || 0);
-      /* Uang muka yang ditolak gerbang saldo tidak ikut tersimpan. Diberitahukan
-         terbuka, bukan dilebur ke dalam angka "berhasil". */
-      var tolakUmp = (res[2] && res[2].ditolak) || [];
-      var warnUmp = (res[2] && res[2].peringatan) || [];
-      if (tolakUmp.length) {
-        var rincian = tolakUmp.slice(0, 3).map(function(x) { return x.layanan + ' ' + rp(x.nominal); }).join('; ');
-        toast(tolakUmp.length + ' uang muka ditolak, saldo kantor tidak cukup: ' + rincian + (tolakUmp.length > 3 ? '; dan ' + (tolakUmp.length - 3) + ' lainnya' : ''), true);
-        var kotak = document.createElement('div');
-        kotak.className = 'imp-tolak-ump';
-        var barisTolak = function(x) {
-          return '<div>' + esc(String(x.tanggal || '')) + ' &middot; ' + esc(String(x.layanan || '')) + ' &middot; ' + rp(x.nominal)
-            + '<br><span class="muted">' + esc(String(x.pesan || '')) + '</span></div>';
-        };
-        kotak.innerHTML = '<b>Uang muka tidak disimpan (' + tolakUmp.length + ')</b>'
-          + tolakUmp.map(barisTolak).join('')
-          + (warnUmp.length ? '<b class="imp-tolak-ump-kepala">Perlu diperiksa (' + warnUmp.length + ')</b>' + warnUmp.map(barisTolak).join('') : '')
-          + '<button type="button" class="btn btn-sm" onclick="this.parentNode.remove()">Tutup</button>';
-        document.body.appendChild(kotak);
-        CACHE.dash = null;
-        if (IMPORT_TEMP_TYPE === 'himpun') viewPenghimpunan();
-        else viewPentasyarufan();
-        return;
-      }
       toast(totalSaved + ' data Jurnal berhasil diimpor' + (gerak ? ' + ' + gerak + ' pergerakan kas' : '') + '!');
       CACHE.dash = null;
       if (IMPORT_TEMP_TYPE === 'himpun') viewPenghimpunan();
