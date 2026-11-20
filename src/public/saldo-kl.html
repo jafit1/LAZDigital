@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
 <link rel="stylesheet" href="/styles.css">
 <script src="/js/lz-tema.js"></script>
+<script src="/js/lz-logo.js" defer></script>
 <style>
   /* === halaman saldo kl — memakai token styles.css supaya tema ikut === */
   *{box-sizing:border-box}
@@ -30,11 +31,14 @@
     content:"";position:absolute;right:-60px;top:-70px;width:210px;height:210px;border-radius:50%;
     background:radial-gradient(circle,rgba(255,255,255,.26),transparent 70%);pointer-events:none;
   }
-  .kl-logo{
-    width:42px;height:42px;flex:none;border-radius:13px;background:rgba(255,255,255,.2);
-    border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;overflow:hidden;
+  /* Logo Lazismu Bantul: SVG bergerak (js/lz-logo.js), sama dengan bilah menu web asli.
+     Ditaruh di kepingan putih supaya tulisan logo tetap gelap dan terbaca di atas gradasi. */
+  .kl-head #brandBox{
+    flex:none;display:flex;align-items:center;justify-content:center;
+    padding:7px 9px;border-radius:14px;background:#fff;
+    box-shadow:0 6px 16px -10px rgba(0,0,0,.55);
   }
-  .kl-logo img{width:100%;height:100%;object-fit:contain}
+  .kl-head #brandBox .lz-logo-svg{--lz-logo-t:30px;--lzm-ink:#1b1e25 !important;--lzm-orange:#F59A1F}
   .kl-nama{font-family:var(--head);font-size:clamp(16px,2.4vw,19px);font-weight:800;line-height:1.25;letter-spacing:-.01em}
   .kl-sub{font-size:12px;opacity:.93;margin-top:2px}
 
@@ -126,7 +130,7 @@
 <body>
 <div class="kl-wrap">
   <div class="kl-head">
-    <div class="kl-logo"><img src="/ikon/lazismu.svg" alt="LAZISMU"></div>
+    <div id="brandBox"><span class="lz-logo-svg lz-logo-tunggu" data-lz-logo role="img" aria-label="Lazismu Bantul"></span></div>
     <div>
       <div class="kl-nama">Saldo Kantor Layanan</div>
       <div class="kl-sub">LAZISMU Daerah Bantul · posisi real time</div>
@@ -169,6 +173,25 @@ function klTgl(s){
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
+/* Layar muat & logo bergerak memakai js/lz-logo.js yang sama dengan web asli:
+   logo Lazismu Bantul besar di tengah, latar diburamkan sesuai tema. Tampil
+   saat halaman masuk/refresh dan setiap kali saldo dicek. */
+function klMuat(tahan){
+  if(!window.LZLogo) return {selesai:function(){},tutup:function(){}};
+  try{ return LZLogo.muat({tahan:!!tahan}); }catch(e){ return {selesai:function(){},tutup:function(){}}; }
+}
+function klMulai(){
+  var box=document.getElementById('brandBox');
+  if(!window.LZLogo){
+    /* js/lz-logo.js gagal termuat: kepala halaman jangan kosong. */
+    if(box) box.innerHTML='<img src="/ikon/lazismu.svg" alt="LAZISMU" style="width:38px;height:38px;display:block">';
+    return;
+  }
+  try{ LZLogo.periksa(); }catch(e){ /* biarkan logo tampil apa adanya */ }
+  klMuat(false);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',klMulai); else klMulai();
+
 function klCari(){
   var kode=(document.getElementById('klKode').value||'').trim().toUpperCase();
   var err=document.getElementById('klError'), btn=document.getElementById('klBtn'), hasil=document.getElementById('klHasil');
@@ -176,6 +199,7 @@ function klCari(){
   if(!kode){err.textContent='Kode akses belum diisi.';err.style.display='block';return;}
   localStorage.setItem('klKode',kode);
   btn.disabled=true; btn.textContent='Memuat...';
+  var muat=klMuat(true);
   fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({fn:'apiSaldoKLPublik',args:[kode,'']})})
     .then(function(r){return r.json();})
@@ -233,8 +257,9 @@ function klCari(){
       h+='<div class="kl-note">'+note+'</div>';
       h+='</div>';
       hasil.innerHTML=h;
+      muat.selesai();
     })
-    .catch(function(e){err.textContent=(e&&e.message)||'Kode tidak dikenali.';err.style.display='block';})
+    .catch(function(e){err.textContent=(e&&e.message)||'Kode tidak dikenali.';err.style.display='block';muat.selesai();})
     .then(function(){btn.disabled=false;btn.textContent='Lihat Saldo';});
 }
 </script>
