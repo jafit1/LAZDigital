@@ -431,8 +431,9 @@ function muatRincian(b){
     .catch(function(e){
       MUAT_RINCI=false;
       var box=document.getElementById('klIsi');
-      if(box && TAB==='setoran') box.innerHTML='<div class="kl-card"><div class="kl-error" style="margin:0">'
-        +esc((e&&e.message)||'Setoran belum bisa dimuat.')+'</div></div>';
+      if(box && TAB==='setoran') box.innerHTML='<div class="kl-card">'
+        +'<div class="kl-error" style="margin:0 0 10px">'+esc((e&&e.message)||'Setoran belum bisa dimuat.')+'</div>'
+        +'<button class="kl-ganti" type="button" style="margin-top:0" onclick="muatRincian(BULAN)">Coba lagi</button></div>';
     });
 }
 function klPilihBulan(b){ if(b&&b!==BULAN) muatRincian(b); }
