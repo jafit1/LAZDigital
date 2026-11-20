@@ -2719,9 +2719,10 @@ function apiDaftarKodeAksesKL(t){
 }
 function apiNonaktifkanKodeAksesKL(t, kode){
   var admin = _requirePerm(t,'settings','edit');
-  var peta = _bacaKodeKL(), k = String(kode||'').trim().toUpperCase();
-  if (!peta[k]) throw new Error('Kode tidak ditemukan.');
-  peta[k].aktif = false;
+  var peta = _bacaKodeKL(), k = String(kode||'').trim().toUpperCase(), kunci = '';
+  Object.keys(peta).forEach(function(n){ if (String(peta[n].kode||'').toUpperCase() === k) kunci = n; });
+  if (!kunci) throw new Error('Kode tidak ditemukan.');
+  peta[kunci].aktif = false;
   setSetting('kodeAksesKL', JSON.stringify(peta));
   audit(admin.id, admin.username, 'kode_akses_kl', 'nonaktifkan ' + k, { modul:'settings' });
   return { ok:true };
@@ -2730,9 +2731,9 @@ function apiNonaktifkanKodeAksesKL(t, kode){
    satu kantor; tidak pernah mengembalikan daftar kantor lain. */
 function apiSaldoKLPublik(kode, sampai){
   var k = String(kode||'').trim().toUpperCase();
-  var peta = _bacaKodeKL();
-  var e = peta[k];
-  if (!e || e.aktif === false) throw new Error('Kode akses tidak valid atau sudah dinonaktifkan. (kode dikenal: ' + Object.keys(peta).length + ')');
+  var peta = _bacaKodeKL(), e = null;
+  Object.keys(peta).forEach(function(n){ if (String(peta[n].kode||'').toUpperCase() === k) e = peta[n]; });
+  if (!e || e.aktif === false) throw new Error('Kode akses tidak valid atau sudah dinonaktifkan.');
   var d = _saldoAnalisaUntuk(null, sampai || '', '', true);
   var cocok = null;
   for (var i=0;i<d.daftar.length;i++) if (d.daftar[i].nama === e.nama) { cocok = d.daftar[i]; break; }
