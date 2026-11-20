@@ -2528,6 +2528,11 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
   (readAll(SHEETS.PENTASYARUFAN)||[]).forEach(function(r){
     if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
     if (sampai && String(r.tanggal) > sampai) return;
+    /* LPJ adalah pertanggungjawaban UMP, bukan pengeluaran kas kedua.
+       Di berkas Analisa UMK/LPJ dan Penyaluran memang dua kolom terpisah.
+       Memasukkan LPJ ke sini mengurangi saldo dua kali. */
+    var seksiSalur = String(r.section||'');
+    if (/^UMP\b|^LPJ\b/i.test(seksiSalur) || /^UMP\b|^LPJ\b/i.test(String(r.program||''))) return;
     var nama = _namaKantorDariTeks(String(r.namaPenerima||'')+' '+String(r.keterangan||''), layanan);
     var ketSalur = String(r.keterangan||'').toLowerCase();
     if (/palestin|gaza|ntt|nusa tenggara|bencana|gempa|sumatera|air bersih|sumur bor/.test(ketSalur)) nama = 'DAERAH Bantul';
