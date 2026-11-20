@@ -2436,12 +2436,15 @@ function _danaDariTransaksi(jenisDana, subJenis, pilar, program, keterangan){
     if (/keagamaan|masjid|mushol|takmir|quran|ramadhan|takjil/.test(teks)) return 'IT_Keagamaan';
     if (/ekonomi|usaha|modal|umkm/.test(teks)) return 'IT_Ekonomi';
     if (/lingkungan|sampah/.test(teks)) return 'IT_Lingkungan';
-    if (/fidyah/.test(teks)) return 'Fidyah';
-    if (/qurban|kurban/.test(teks)) return 'Qurban';
+    /* Analisa 2025 tidak punya pos Qurban/Fidyah: keduanya masuk
+       IT_Lainnya. Membiarkan nama Qurban justru membuat nominalnya hilang
+       dari daftar pos karena tidak ada di daftar pos resmi. */
+    if (/fidyah|qurban|kurban|hadyu|dam\s+hadyu/.test(teks)) return 'IT_Lainnya';
     if (/kelembagaan|kantor|inventaris/.test(teks)) return 'IT_Kelembagaan';
     if (/sosial|dakwah/.test(teks)) return 'IT_Sosial';
     return 'IT_Lainnya';
   }
+  if (/fidyah|qurban|kurban|hadyu|dam\s+hadyu/.test(teks)) return 'IT_Lainnya';
   if (/palestin|gaza|ntt|nusa tenggara|bencana|kemanusiaan|gempa|sumatera/.test(teks)) return 'IT_Kemanusiaan';
   if (/kesehatan|ambulan|klinik/.test(teks)) return 'IT_Kesehatan';
   if (/pendidikan|sekolah|beasiswa|guru|ponpes/.test(teks)) return 'IT_Pendidikan';
@@ -2560,9 +2563,6 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
   var hasil = [];
   Object.keys(daftar).forEach(function(nama){
     var k = daftar[nama];
-    if (golongan === 'daerah' && k.tipe !== 'Daerah') return;
-    if (golongan === 'kll' && k.tipe !== 'KLL') return;
-    if (golongan === 'ull' && k.tipe !== 'ULL') return;
     var totalAmil = 0;
     Object.keys(k.amil).forEach(function(d){ totalAmil += k.amil[d]||0; });
     var danaList = [];
@@ -2602,10 +2602,38 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
       total: danaList.reduce(function(a,x){return a+x.akhir;},0),
       pembuka: danaList.reduce(function(a,x){return a+x.awal;},0) });
   });
+  /* Beberapa kantor menarik UMP lebih besar dari setorannya sendiri. Uang itu
+     berasal dari kas Daerah, jadi selisihnya dipindah dari Daerah ke kantor.
+     Total seluruh lembaga tetap sama; yang berubah hanya siapa yang memegang. */
+  var induk = null;
+  for (var z=0; z<hasil.length; z++) if (hasil[z].tipe === 'Daerah') { induk = hasil[z]; break; }
+  if (induk) {
+    hasil.forEach(function(k){
+      if (k === induk || k.total >= -0.01) return;
+      var butuh = -k.total;
+      var sumber = induk.dana.filter(function(x){ return x.akhir > butuh; })
+                             .sort(function(a,b){ return b.akhir-a.akhir; })[0];
+      if (!sumber) return;
+      var penerima = k.dana.slice().sort(function(a,b){ return a.akhir-b.akhir; })[0];
+      if (!penerima) return;
+      sumber.akhir -= butuh; sumber.seimbang = (sumber.seimbang||0) - butuh;
+      penerima.akhir += butuh; penerima.seimbang = (penerima.seimbang||0) + butuh;
+      induk.total -= butuh; k.total += butuh;
+    });
+  }
+  /* Sisa desimal dari pembagian persentase bukan saldo nyata. */
+  hasil.forEach(function(k){
+    k.dana.forEach(function(x){ if (Math.abs(x.akhir) < 0.01) x.akhir = 0; });
+    if (Math.abs(k.total) < 0.01) k.total = 0;
+  });
   hasil.sort(function(a,b){ return b.total - a.total; });
-  return { sampai:sampai||'', tahun:tahun, golongan:golongan||'', daftar:hasil,
-    total: hasil.reduce(function(a,x){return a+x.total;},0),
-    pembuka: hasil.reduce(function(a,x){return a+x.pembuka;},0),
+  var tampil = hasil.filter(function(k){
+    return !golongan || (golongan === 'daerah' && k.tipe === 'Daerah')
+      || (golongan === 'kll' && k.tipe === 'KLL') || (golongan === 'ull' && k.tipe === 'ULL');
+  });
+  return { sampai:sampai||'', tahun:tahun, golongan:golongan||'', daftar:tampil,
+    total: tampil.reduce(function(a,x){return a+x.total;},0),
+    pembuka: tampil.reduce(function(a,x){return a+x.pembuka;},0),
     sumber:'Saldo Kas Akhir sheet Analisa, [2025] DATA-transaksi.xlsx' };
 }
 
