@@ -2422,7 +2422,10 @@ function apiDaftarSaldoAwalAnalisa(t, tahun){
    tidak masuk sini: ia tetap milik KLL masing-masing. */
 function _gabungKeDaerah(teks){
   var t = String(teks||'').toLowerCase();
-  return /palestin|gaza|falastin|ntt|nusa tenggara|gempa|sumatera|sumatra|aceh|banjir|bencana/.test(t);
+  if (/palestin|gaza|falastin|ntt|nusa tenggara|gempa|sumatera|sumatra|banjir|bencana/.test(t)) return true;
+  /* "Aceh" saja tidak cukup: ULL Masjid Baiturrahman Aceh menerima infak
+     operasional biasa yang tetap milik ULL. Yang disatukan hanya bencana. */
+  return /aceh/.test(t) && /korban|bencana|banjir|gempa|sumatera|kemanusiaan/.test(t);
 }
 
 /* Petakan transaksi web ke pos dana Analisa. Keterangan ikut dibaca:
