@@ -281,6 +281,10 @@
       return panggil('apiPenghimpunanHarian', [TOKEN, tgl || '']).then(function(d){
         if (!DATA || d.tanggal !== DATA.tanggal) KUNCI_LAMA = null;
         DATA = d; TGL = d.tanggal;
+        /* Link KLL/ULL dibuka langsung di tampilan Bulanan — itu yang paling
+           sering dicari kantor. Link donatur tetap Harian. Begitu pengguna
+           memilih mode sendiri, pilihannya tidak ditimpa lagi. */
+        if (!MODE_DIPILIH && d.jenis === 'kantor') MODE = 'bulanan';
         gambar();
         jadwal();
         selesaiMuat();
@@ -410,7 +414,7 @@
       $('lhMetode').classList.toggle('hidden', !metode.length);
     }
 
-    var SEMUA_KANTOR = false, MODE = 'harian', SIDIK_ISI = '', TAMPIL = 'daftar';
+    var SEMUA_KANTOR = false, MODE = 'harian', MODE_DIPILIH = false, SIDIK_ISI = '', TAMPIL = 'daftar';
     function rpPendek(n){
       n = Math.round(Number(n) || 0);
       if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, '').replace('.', ',') + ' M';
@@ -420,6 +424,7 @@
     }
     function pilihMode(m){
       MODE = m === 'bulanan' ? 'bulanan' : 'harian';
+      MODE_DIPILIH = true;
       SIDIK_ISI = ''; kepala(); gambarIsi(); segarkanKendali();
     }
     function nmBulan(b){ return BULAN[Number(b.slice(5, 7))] + ' ' + b.slice(0, 4); }

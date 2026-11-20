@@ -2799,17 +2799,101 @@ function apiNonaktifkanKodeAksesKL(t, kode){
 }
 /* Dipanggil dari halaman publik tanpa sesi. Satu kode hanya membuka
    satu kantor; tidak pernah mengembalikan daftar kantor lain. */
-function apiSaldoKLPublik(kode, sampai){
+function _entriKodeKL(kode){
   var k = String(kode||'').trim().toUpperCase();
   var peta = _bacaKodeKL(), e = null;
   Object.keys(peta).forEach(function(n){ if (String(peta[n].kode||'').toUpperCase() === k) e = peta[n]; });
   if (!e || e.aktif === false) throw new Error('Kode akses tidak valid atau sudah dinonaktifkan.');
+  return e;
+}
+function apiSaldoKLPublik(kode, sampai){
+  var e = _entriKodeKL(kode);
   var d = _saldoAnalisaUntuk(null, sampai || '', '', true);
   var cocok = null;
   for (var i=0;i<d.daftar.length;i++) if (d.daftar[i].nama === e.nama) { cocok = d.daftar[i]; break; }
   if (!cocok) throw new Error('Saldo untuk kantor ini belum tersedia.');
   return { nama:e.nama, tipe:e.tipe, sampai:d.sampai, total:cocok.total, pembuka:cocok.pembuka,
     dana:cocok.dana, diperbarui:new Date().toISOString() };
+}
+
+/* RINCIAN SETORAN SATU BULAN (pemilik, 20 November 2026)
+   Dipakai tab "Setoran" di /saldo-kl.html: kantor memilih bulan, lalu melihat
+   setorannya per transaksi, uang muka yang ditarik, LPJ-nya, dan sisa uang muka
+   yang belum di-LPJ. Aturan hitungnya sengaja sama dengan hitungSaldoLayanan
+   (pemilik, hak amil per jenis dana, LPJ = section "UMP LPJ") supaya angka di
+   halaman publik tidak pernah berbeda dengan menu Saldo KLL milik admin.
+   Nama donatur tidak ikut: yang dibutuhkan kantor hanya tanggal, pilar,
+   metode, dan nominal setorannya. */
+function apiSaldoKLRincian(kode, bulan){
+  var e = _entriKodeKL(kode);
+  var ini = _hariIni();
+  var b = String(bulan == null ? '' : bulan).slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(b) || b > ini.slice(0, 7)) b = ini.slice(0, 7);
+
+  var cfg = _bacaHakAmil();
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+  /* Awalan KLL/ULL dibuang saat membandingkan: kunci di kodeAksesKL memakai
+     nama penuh, sedangkan beberapa baris jurnal hanya menulis nama kantornya. */
+  var inti = function(n){ return _norm(String(n == null ? '' : n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
+  var kunci = inti(e.nama);
+  var cocok = function(nama){ return inti(nama) === kunci; };
+  var dalam = function(t){ return String(t || '').slice(0, 7) === b; };
+
+  var himpun = 0, hakAmil = 0, umpKeluar = 0, umpKembali = 0, lpjJumlah = 0;
+  var setoran = [], ump = [], lpj = [];
+
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    if (!cocok(resolveLayananName(r, layList, layMap))) return;
+    var n = Number(r.jumlah) || 0;
+    var bebas = _bebasHakAmil(r, cfg.kecuali);
+    var dana = String(r.jenisDana || 'Infak').trim();
+    var persen = bebas ? 0 : (cfg.persen[dana] === undefined ? (cfg.persen.Infak || 0) : cfg.persen[dana]);
+    var amil = bebas ? 0 : Math.round(n * persen / 100);
+    himpun += n; hakAmil += amil;
+    setoran.push({ tanggal:String(r.tanggal).slice(0,10), dana:dana, pilar:String(r.pilar || ''),
+      metode:String(r.metode || ''), jumlah:n, amil:amil });
+  });
+
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    if (!cocok(_layananUmp(r.layanan, layList))) return;
+    var n = Number(r.nominal) || 0;
+    var arah = String(r.jenis) === 'kembali' ? 'kembali' : 'keluar';
+    if (arah === 'kembali') umpKembali += n; else umpKeluar += n;
+    ump.push({ tanggal:String(r.tanggal).slice(0,10), arah:arah, nominal:n,
+      dana:String(r.dana || ''), keterangan:String(r.keterangan || '') });
+  });
+
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!dalam(r.tanggal)) return;
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    if (!cocok(_layananUmp(r.namaPenerima, layList))) return;
+    var n = Number(r.jumlah) || 0;
+    lpjJumlah += n;
+    /* Hanya program yang dikirim, bukan keterangan bebasnya: kolom itu kadang
+       memuat nama penerima manfaat, dan halaman ini dibuka tanpa sesi. */
+    lpj.push({ tanggal:String(r.tanggal).slice(0,10), jumlah:n, program:String(r.program || '') });
+  });
+
+  setoran.sort(function(a, b2){ return String(b2.tanggal).localeCompare(String(a.tanggal)); });
+  ump.sort(function(a, b2){ return String(b2.tanggal).localeCompare(String(a.tanggal)); });
+  lpj.sort(function(a, b2){ return String(b2.tanggal).localeCompare(String(a.tanggal)); });
+
+  /* Dua belas bulan terakhir untuk pemilih bulan; bulan yang sedang dilihat
+     selalu ada di daftar walau lebih tua dari itu. */
+  var tersedia = [];
+  for (var i = 0; i < 12; i++) {
+    var d = new Date(Date.UTC(Number(ini.slice(0, 4)), Number(ini.slice(5, 7)) - 1 - i, 1));
+    tersedia.push(d.toISOString().slice(0, 7));
+  }
+  if (tersedia.indexOf(b) < 0) tersedia.push(b);
+
+  return { nama:e.nama, tipe:e.tipe, bulan:b, bulanTersedia:tersedia,
+    ringkas:{ himpun:himpun, hakAmil:hakAmil, umpKeluar:umpKeluar, umpKembali:umpKembali,
+      lpj:lpjJumlah, belumLPJ:umpKeluar - lpjJumlah - umpKembali },
+    setoran:setoran, ump:ump, lpj:lpj, diperbarui:new Date().toISOString() };
 }
 
 /* ---- saldo awal per tahun ---- */
@@ -9324,6 +9408,7 @@ REGISTRY['apiBuatKodeAksesKL']=apiBuatKodeAksesKL;
 REGISTRY['apiDaftarKodeAksesKL']=apiDaftarKodeAksesKL;
 REGISTRY['apiNonaktifkanKodeAksesKL']=apiNonaktifkanKodeAksesKL;
 REGISTRY['apiSaldoKLPublik']=apiSaldoKLPublik;
+REGISTRY['apiSaldoKLRincian']=apiSaldoKLRincian;
 async function runRPC(db, fn, args, ctx){
   DB = db || {sheets:{},props:{}};
   if(!DB.sheets) DB.sheets={}; if(!DB.props) DB.props={};

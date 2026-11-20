@@ -48,6 +48,7 @@
   .kl-label{display:flex;align-items:center;gap:8px;font-family:var(--head);font-size:13px;
             font-weight:700;color:var(--text);margin-bottom:10px}
   .kl-label .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+  .kl-label .n{font-size:11px;font-weight:600;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
 
   /* --- form kode --- */
   .kl-form{display:flex;gap:9px;flex-wrap:wrap}
@@ -72,7 +73,7 @@
   .kl-hero{
     background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;
     margin-bottom:14px;box-shadow:var(--shadow);
-    display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 26px;
+    display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 26px;
   }
   .kl-hero-main{flex:1 1 260px;min-width:0}
   .kl-hero .l{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
@@ -81,12 +82,52 @@
     color:var(--green);margin-top:6px;word-break:break-word;font-variant-numeric:tabular-nums;
   }
   .kl-hero .v.minus{color:var(--red)}
+  /* Kantor di kiri, waktu di kanan — bukan bertumpuk, karena ruangnya cukup. */
   .kl-hero-meta{
-    flex:0 1 240px;min-width:0;display:grid;gap:11px;
+    flex:0 1 340px;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 18px;
     padding-left:22px;border-left:1px solid var(--border2);
   }
   .kl-hero-meta .ml{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
   .kl-hero-meta .mv{display:block;font-size:13px;font-weight:600;line-height:1.45;margin-top:2px;color:var(--text);overflow-wrap:anywhere}
+
+  /* --- tab --- */
+  .kl-tabs{display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);
+           border-radius:12px;margin-bottom:14px}
+  .kl-tab{
+    flex:1 1 0;min-width:0;border:0;background:transparent;color:var(--muted);
+    font-family:var(--sans);font-size:12.5px;font-weight:700;padding:9px 8px;border-radius:9px;
+    cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;
+  }
+  .kl-tab:hover{color:var(--text2)}
+  .kl-tab.on{background:var(--surface);color:var(--accent);box-shadow:0 2px 10px -6px rgba(0,0,0,.45)}
+
+  /* --- pemilih bulan + empat angka ringkas --- */
+  .kl-bulanbar{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+  .kl-nav{
+    flex:none;width:38px;height:38px;border:1px solid var(--border);background:var(--surface);
+    color:var(--text2);border-radius:10px;font-size:17px;line-height:1;cursor:pointer;
+    font-family:var(--sans);transition:border-color .15s,color .15s;
+  }
+  .kl-nav:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  .kl-nav:disabled{opacity:.35;cursor:default}
+  .kl-pilih{
+    flex:1 1 auto;min-width:0;height:38px;border:1px solid var(--border);border-radius:10px;
+    background:var(--surface);color:var(--text);font-family:var(--sans);font-size:13.5px;font-weight:700;
+    padding:0 10px;outline:none;cursor:pointer;
+  }
+  .kl-pilih:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(242,112,79,.14)}
+
+  .kl-stat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .kl-st{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px 13px;min-width:0}
+  .kl-st .l{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .kl-st .v{font-family:var(--head);font-size:clamp(15px,3.4vw,19px);font-weight:800;margin-top:4px;
+            font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.2}
+  .kl-st .s{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.45;overflow-wrap:anywhere}
+  .kl-st.belum .v{color:var(--accent)}
+  .kl-st.belum.minus .v{color:var(--red)}
+
+  .kl-note{margin:12px 0 0;font-size:11.5px;line-height:1.65;color:var(--muted)}
+  .kl-note b{color:var(--text2);font-weight:700}
 
   /* --- tabel --- */
   .kl-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1px solid var(--border2)}
@@ -105,6 +146,7 @@
   table.kl-tbl tbody tr:hover td:first-child{background:var(--surface3)}
   table.kl-tbl td.pos{font-weight:600;color:var(--text2)}
   table.kl-tbl td.akhir{font-weight:800}
+  table.kl-tbl td .sub{display:block;font-size:10.5px;font-weight:500;color:var(--muted);margin-top:1px;white-space:normal}
   /* Baris Amil dipisahkan garis tebal + warna lembut: tempat hak amil
      berkumpul, bukan dana yang bisa dibelanjakan. */
   table.kl-tbl tbody tr.amil td{background:var(--surface2);border-top:2px solid var(--border);border-bottom:2px solid var(--border);font-weight:600}
@@ -112,6 +154,32 @@
   table.kl-tbl tbody tr.amil:hover td,table.kl-tbl tbody tr.amil:hover td:first-child{background:var(--surface3)}
   table.kl-tbl tfoot td{font-weight:800;border-top:2px solid var(--border);background:var(--surface)}
   table.kl-tbl tfoot td:first-child{background:var(--surface)}
+
+  /* tabel rincian setoran: lebih rapat, tanpa kolom menganga */
+  table.kl-tbl.kecil{min-width:0;font-size:12.5px}
+  table.kl-tbl.kecil th{font-size:10px;padding:8px 10px}
+  table.kl-tbl.kecil td{padding:8px 10px}
+  /* Kolom keterangan boleh turun baris; angka tetap sebaris. Tanpa ini tabel
+     meluber ke samping dan nominal di kanan terpotong di layar HP. */
+  table.kl-tbl.kecil td.w{white-space:normal;overflow-wrap:anywhere;min-width:100px;line-height:1.45}
+  .kl-arah{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;
+           background:var(--surface2);color:var(--text2);white-space:nowrap}
+  .kl-arah.kembali{background:rgba(26,162,96,.14);color:var(--green)}
+
+  .kl-kosong{text-align:center;color:var(--muted);font-size:12.5px;padding:22px 10px;
+             border:1px dashed var(--border);border-radius:12px}
+
+  /* --- keadaan memuat --- */
+  .kl-load{display:flex;align-items:center;justify-content:center;gap:9px;padding:36px 10px;
+           color:var(--muted);font-size:12.5px;font-weight:600}
+  .kl-load i{display:block;width:14px;height:14px;border-radius:50%;border:2px solid var(--border);
+             border-top-color:var(--accent);animation:klSpin .7s linear infinite}
+  @keyframes klSpin{to{transform:rotate(360deg)}}
+  .kl-dim{opacity:.4;transition:opacity .15s;pointer-events:none}
+  @media (prefers-reduced-motion:reduce){
+    .kl-load i{animation:none;border-top-color:var(--border)}
+    .kl-dim{transition:none}
+  }
 
   /* keterangan di bawah tabel */
   .kl-catatan{margin:12px 0 0;padding:0;list-style:none}
@@ -127,7 +195,17 @@
 
   .kl-foot{text-align:center;color:var(--muted);font-size:11.5px;padding:16px 8px 0;line-height:1.7}
   .kl-foot b{color:var(--text)}
+  .kl-kode{font-family:ui-monospace,monospace;letter-spacing:.06em;font-style:normal}
+  .kl-ganti{
+    display:inline-flex;align-items:center;gap:6px;margin-top:12px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:700;
+    padding:7px 15px;border-radius:999px;cursor:pointer;transition:border-color .15s,color .15s;
+  }
+  .kl-ganti:hover{border-color:var(--accent);color:var(--accent)}
 
+  @media (min-width:720px){
+    .kl-stat{grid-template-columns:repeat(4,minmax(0,1fr))}
+  }
   @media (max-width:600px){
     .kl-wrap{padding:14px 10px 32px}
     .kl-head{padding:15px 16px;border-radius:16px}
@@ -135,19 +213,22 @@
     .kl-form{gap:8px}
     .kl-input,.kl-btn{height:44px;font-size:15px}
     .kl-btn{flex:1 1 100%}
-    .kl-hero{padding:15px 16px;border-radius:14px;gap:14px}
+    .kl-hero{padding:15px 16px;border-radius:14px;gap:13px}
     .kl-hero-meta{
       flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;
       padding-left:0;padding-top:13px;border-left:0;border-top:1px solid var(--border2);
     }
     table.kl-tbl{font-size:12px;min-width:520px}
     table.kl-tbl th,table.kl-tbl td{padding:8px 9px}
+    table.kl-tbl.kecil{min-width:0}
+    table.kl-tbl.kecil th,table.kl-tbl.kecil td{padding:7px 8px}
   }
   @media print{
-    .kl-form,.kl-foot,.kl-head::after{display:none!important}
+    .kl-form,.kl-foot,.kl-tabs,.kl-bulanbar,.kl-head::after{display:none!important}
     body{background:#fff}
     .kl-card,.kl-hero{box-shadow:none;border-color:#ccc}
     .kl-tw{overflow:visible;border-color:#ccc}
+    table.kl-tbl th:first-child,table.kl-tbl td:first-child{position:static}
   }
 </style>
 </head>
@@ -161,7 +242,7 @@
     </div>
   </div>
 
-  <div class="kl-card">
+  <div class="kl-card" id="klKodeCard">
     <div class="kl-label"><span class="dot"></span> Kode akses Anda</div>
     <div class="kl-form">
       <input id="klKode" class="kl-input" placeholder="KL-XXXXXXXX" autocomplete="off"
@@ -173,7 +254,11 @@
 
   <div id="klHasil"></div>
 
-  <div class="kl-foot">Saldo mengikuti pembukuan LAZISMU Daerah Bantul.<br>Kode akses bersifat pribadi untuk masing-masing kantor.</div>
+  <div class="kl-foot">
+    <span id="klFootKode" class="hidden">Kode <em class="kl-kode" id="klKodeTampil"></em><br></span>
+    Saldo mengikuti pembukuan LAZISMU Daerah Bantul.<br>Kode akses bersifat pribadi untuk masing-masing kantor.
+    <div id="klGantiWrap" class="hidden"><button class="kl-ganti" type="button" onclick="klGanti()">Ganti kode</button></div>
+  </div>
 </div>
 
 <script>
@@ -200,6 +285,15 @@ function klWaktu(s){
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
+var NB=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+var NS=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+function nmBulan(b){ var m=Number(String(b||'').slice(5,7)); return (NB[m-1]||'')+' '+String(b||'').slice(0,4); }
+function klTgl(s){
+  var t=String(s||'').slice(0,10);
+  if(t.length<10) return t||'—';
+  return Number(t.slice(8,10))+' '+NS[Number(t.slice(5,7))-1];
+}
+
 /* Layar muat & logo bergerak memakai js/lz-logo.js yang sama dengan web asli:
    logo Lazismu Bantul besar di tengah, latar diburamkan sesuai tema. Tampil
    saat halaman masuk/refresh dan setiap kali saldo dicek. */
@@ -219,84 +313,292 @@ function klMulai(){
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',klMulai); else klMulai();
 
+/* ==== keadaan halaman ==== */
+var KODE='', DATA=null, TAB='saldo', RINCI={}, BULAN='', MUAT_RINCI=false;
+
+function rpc(fn,args){
+  return fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({fn:fn,args:args||[]})}).then(function(r){return r.json();})
+    .then(function(j){ if(j&&j.__error) throw new Error(j.__error); return j.result; });
+}
+
 function klCari(){
   var kode=(document.getElementById('klKode').value||'').trim().toUpperCase();
-  var err=document.getElementById('klError'), btn=document.getElementById('klBtn'), hasil=document.getElementById('klHasil');
-  err.style.display='none'; hasil.innerHTML='';
+  var err=document.getElementById('klError'), btn=document.getElementById('klBtn');
+  err.style.display='none';
   if(!kode){err.textContent='Kode akses belum diisi.';err.style.display='block';return;}
   localStorage.setItem('klKode',kode);
   btn.disabled=true; btn.textContent='Memuat...';
   var muat=klMuat(true);
-  fetch('/api/rpc',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({fn:'apiSaldoKLPublik',args:[kode,'']})})
-    .then(function(r){return r.json();})
-    .then(function(j){
-      if(j&&j.__error) throw new Error(j.__error);
-      var d=j.result, dana=d.dana||[];
-      var salur=dana.reduce(function(a,x){return a+(Number(x.salur)||0);},0);
-      var waktu=klWaktu(d.diperbarui);
-
-      /* Satu kartu ringkas: saldo akhir besar, kantor & waktu di sisi kanan
-         (di HP turun jadi dua kolom kecil di bawah angka). */
-      var h='<div class="kl-hero">'
-        +'<div class="kl-hero-main">'
-        +'<div class="l">Saldo akhir</div>'
-        +'<div class="v'+(d.total<0?' minus':'')+'">'+klRp(d.total)+'</div>'
-        +'</div>'
-        +'<div class="kl-hero-meta">'
-        +'<div><span class="ml">Kantor</span><span class="mv">'+esc(d.nama)+'</span></div>'
-        +'<div><span class="ml">Diperbarui</span><span class="mv">'+esc(waktu.tgl)+(waktu.jam?' · '+esc(waktu.jam):'')+'</span></div>'
-        +'</div></div>';
-
-      h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Rincian per jenis dana</div>'
-        +'<div class="kl-tw"><table class="kl-tbl"><thead><tr>'
-        +'<th>Jenis dana</th><th class="n">Saldo awal 2026</th><th class="n">Penghimpunan</th>'
-        +'<th class="n">Hak amil</th><th class="n">UMP</th><th class="n">Saldo akhir</th>'
-        +'</tr></thead><tbody>';
-
-      dana.forEach(function(x){
-        /* Hak amil ditulis apa adanya tanpa tanda minus: staf KL bingung
-           membaca angka bersimbul. Baris Amil dipisah warna & garing sendiri
-           supaya kelihatan bahwa di situlah potongan itu berkumpul. */
-        var isAmil = String(x.dana)==='Amil';
-        var selAmil = isAmil ? klRp(x.amilMasuk) : klRp(Math.abs(x.amil));
-        h+='<tr'+(isAmil?' class="amil"':'')+'>'
-          +'<td class="pos">'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
-          +'<td class="n">'+klRp(x.awal)+'</td>'
-          +'<td class="n">'+klRp(x.himpun)+'</td>'
-          +'<td class="n">'+selAmil+'</td>'
-          +'<td class="n">'+klRp(x.sisaUmk)+'</td>'
-          +'<td class="n akhir" style="color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
-      });
-
-      h+='</tbody><tfoot><tr><td>TOTAL</td>'
-        +'<td class="n">'+klRp(d.pembuka)+'</td>'
-        +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.himpun)||0);},0))+'</td>'
-        +'<td class="n">Rp0</td>'
-        +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.sisaUmk)||0);},0))+'</td>'
-        +'<td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot>'
-        +'</table></div>';
-
-      var butir = [
-        'Hak amil dipotong dari tiap jenis dana, lalu dikumpulkan di baris <b>Amil</b> (baris berlatar abu). '
-          + 'Karena hanya berpindah pos, jumlah kolom hak amil = <b>Rp0</b>.',
-        'UMP adalah uang muka program yang diserahkan ke kantor. Potongannya mengikuti pilar pada pengajuan dan LPJ, '
-          + 'jadi tidak menumpuk di Infak Umum. Sisa yang belum di-LPJ tetap di pos asalnya.'
-      ];
-      if(Math.abs(salur)>0.5){
-        butir.push('Penyaluran langsung di luar uang muka: <b>'+klRp(salur)+'</b>.');
-      }
-      butir.push('Saldo akhir = saldo awal + penghimpunan − hak amil − UMP'
-        + (Math.abs(salur)>0.5?' − penyaluran langsung':'') + '.');
-      h+='<ul class="kl-catatan">'
-        + butir.map(function(b){return '<li>'+b+'</li>';}).join('')
-        + '</ul>';
-      h+='</div>';
-      hasil.innerHTML=h;
+  rpc('apiSaldoKLPublik',[kode,''])
+    .then(function(d){
+      KODE=kode; DATA=d; TAB='saldo'; RINCI={}; BULAN=''; MUAT_RINCI=false;
+      /* Kartu kode hanya untuk pintu masuk: setelah saldo terbuka, tempatnya
+         dipakai hasilnya. Kode tetap tersimpan, jadi setelah refresh tinggal
+         klik "Lihat Saldo" lagi. */
+      document.getElementById('klKodeCard').classList.add('hidden');
+      document.getElementById('klKodeTampil').textContent=kode;
+      document.getElementById('klFootKode').classList.remove('hidden');
+      document.getElementById('klGantiWrap').classList.remove('hidden');
+      gambarHasil();
       muat.selesai();
     })
-    .catch(function(e){err.textContent=(e&&e.message)||'Kode tidak dikenali.';err.style.display='block';muat.selesai();})
+    .catch(function(e){
+      err.textContent=(e&&e.message)||'Kode tidak dikenali.';
+      err.style.display='block';
+      muat.selesai();
+    })
     .then(function(){btn.disabled=false;btn.textContent='Lihat Saldo';});
+}
+
+/* Kembali ke pintu masuk kode; isi hasil dikosongkan supaya tidak ada sisa
+   saldo kantor lama yang tertinggal di layar. */
+function klGanti(){
+  DATA=null; RINCI={}; BULAN=''; TAB='saldo'; MUAT_RINCI=false;
+  document.getElementById('klHasil').innerHTML='';
+  document.getElementById('klKodeCard').classList.remove('hidden');
+  document.getElementById('klFootKode').classList.add('hidden');
+  document.getElementById('klGantiWrap').classList.add('hidden');
+  var i=document.getElementById('klKode');
+  i.value=localStorage.getItem('klKode')||KODE||'';
+  i.focus(); i.select();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function gambarHasil(){
+  if(!DATA) return;
+  var d=DATA, waktu=klWaktu(d.diperbarui);
+  var h='<div class="kl-hero">'
+    +'<div class="kl-hero-main">'
+    +'<div class="l">Saldo akhir</div>'
+    +'<div class="v'+(d.total<0?' minus':'')+'">'+klRp(d.total)+'</div>'
+    +'</div>'
+    +'<div class="kl-hero-meta">'
+    +'<div><span class="ml">Kantor</span><span class="mv">'+esc(d.nama)+'</span></div>'
+    +'<div><span class="ml">Diperbarui</span><span class="mv">'+esc(waktu.tgl)+(waktu.jam?' · '+esc(waktu.jam):'')+'</span></div>'
+    +'</div></div>';
+
+  h+='<div class="kl-tabs" role="tablist">'
+    +tabBtn('saldo','Saldo per dana')+tabBtn('setoran','Setoran &amp; UMP')
+    +'</div><div id="klIsi">'+isiSekarang()+'</div>';
+
+  document.getElementById('klHasil').innerHTML=h;
+}
+function tabBtn(k,label){
+  var on=TAB===k;
+  return '<button type="button" role="tab" class="kl-tab'+(on?' on':'')+'" data-t="'+k+'"'
+    +' aria-selected="'+(on?'true':'false')+'" onclick="klTab(\''+k+'\')">'+label+'</button>';
+}
+function klTab(t){
+  t=t==='setoran'?'setoran':'saldo';
+  if(t===TAB) return;
+  TAB=t;
+  var b=document.querySelectorAll('.kl-tab');
+  for(var i=0;i<b.length;i++){
+    var on=b[i].getAttribute('data-t')===TAB;
+    b[i].classList.toggle('on',on);
+    b[i].setAttribute('aria-selected',on?'true':'false');
+  }
+  gambarIsi();
+  if(TAB==='setoran' && !MUAT_RINCI && !RINCI[BULAN]) muatRincian('');
+}
+function gambarIsi(){
+  var box=document.getElementById('klIsi');
+  if(box) box.innerHTML=isiSekarang();
+}
+function isiSekarang(){
+  return TAB==='setoran' ? isiSetoran() : isiSaldo();
+}
+
+/* Dua belas bulan terakhir; bulan yang sedang dilihat selalu ikut di daftar. */
+function opsiBulan(ls,pilih){
+  return (ls||[]).map(function(b){
+    return '<option value="'+b+'"'+(b===pilih?' selected':'')+'>'+nmBulan(b)+'</option>';
+  }).join('');
+}
+function muatRincian(b){
+  if(MUAT_RINCI) return;
+  var target=/^\d{4}-\d{2}$/.test(String(b||''))?String(b):(BULAN||'');
+  if(target) BULAN=target;
+  MUAT_RINCI=true;
+  if(TAB==='setoran') gambarIsi();
+  rpc('apiSaldoKLRincian',[KODE,BULAN||''])
+    .then(function(d){
+      MUAT_RINCI=false;
+      RINCI[d.bulan]=d; BULAN=d.bulan;
+      if(TAB==='setoran') gambarIsi();
+    })
+    .catch(function(e){
+      MUAT_RINCI=false;
+      var box=document.getElementById('klIsi');
+      if(box && TAB==='setoran') box.innerHTML='<div class="kl-card"><div class="kl-error" style="margin:0">'
+        +esc((e&&e.message)||'Setoran belum bisa dimuat.')+'</div></div>';
+    });
+}
+function klPilihBulan(b){ if(b&&b!==BULAN) muatRincian(b); }
+function klGeserBulan(arah){
+  var r=RINCI[BULAN]; if(!r) return;
+  var ls=r.bulanTersedia||[], i=ls.indexOf(BULAN);
+  if(i<0) i=0;
+  var j=i+arah;
+  if(j<0||j>=ls.length) return;
+  muatRincian(ls[j]);
+}
+
+/* ---------- tab 1: saldo per jenis dana ---------- */
+function isiSaldo(){
+  var d=DATA, dana=d.dana||[];
+  var salur=dana.reduce(function(a,x){return a+(Number(x.salur)||0);},0);
+  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Rincian per jenis dana</div>'
+    +'<div class="kl-tw"><table class="kl-tbl"><thead><tr>'
+    +'<th>Jenis dana</th><th class="n">Saldo awal 2026</th><th class="n">Penghimpunan</th>'
+    +'<th class="n">Hak amil</th><th class="n">UMP</th><th class="n">Saldo akhir</th>'
+    +'</tr></thead><tbody>';
+
+  dana.forEach(function(x){
+    /* Hak amil ditulis apa adanya tanpa tanda minus: staf KL bingung
+       membaca angka bersimbul. Baris Amil dipisah warna & garing sendiri
+       supaya kelihatan bahwa di situlah potongan itu berkumpul. */
+    var isAmil=String(x.dana)==='Amil';
+    var selAmil=isAmil?klRp(x.amilMasuk):klRp(Math.abs(x.amil));
+    h+='<tr'+(isAmil?' class="amil"':'')+'>'
+      +'<td class="pos">'+esc(String(x.dana||'').replace(/_/g,' '))+'</td>'
+      +'<td class="n">'+klRp(x.awal)+'</td>'
+      +'<td class="n">'+klRp(x.himpun)+'</td>'
+      +'<td class="n">'+selAmil+'</td>'
+      +'<td class="n">'+klRp(x.sisaUmk)+'</td>'
+      +'<td class="n akhir" style="color:'+(x.akhir<0?'var(--red)':'')+'">'+klRp(x.akhir)+'</td></tr>';
+  });
+
+  h+='</tbody><tfoot><tr><td>TOTAL</td>'
+    +'<td class="n">'+klRp(d.pembuka)+'</td>'
+    +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.himpun)||0);},0))+'</td>'
+    +'<td class="n">Rp0</td>'
+    +'<td class="n">'+klRp(dana.reduce(function(a,x){return a+(Number(x.sisaUmk)||0);},0))+'</td>'
+    +'<td class="n" style="color:'+(d.total<0?'var(--red)':'')+'">'+klRp(d.total)+'</td></tr></tfoot>'
+    +'</table></div>';
+
+  var butir=[
+    'Hak amil dipotong dari tiap jenis dana, lalu dikumpulkan di baris <b>Amil</b> (baris berlatar abu). '
+      +'Karena hanya berpindah pos, jumlah kolom hak amil = <b>Rp0</b>.',
+    'UMP adalah uang muka program yang diserahkan ke kantor. Potongannya mengikuti pilar pada pengajuan dan LPJ, '
+      +'jadi tidak menumpuk di Infak Umum. Sisa yang belum di-LPJ tetap di pos asalnya.'
+  ];
+  if(Math.abs(salur)>0.5){
+    butir.push('Penyaluran langsung di luar uang muka: <b>'+klRp(salur)+'</b>.');
+  }
+  butir.push('Saldo akhir = saldo awal + penghimpunan − hak amil − UMP'
+    +(Math.abs(salur)>0.5?' − penyaluran langsung':'')+'.');
+  h+='<ul class="kl-catatan">'+butir.map(function(b){return '<li>'+b+'</li>';}).join('')+'</ul>';
+  return h+'</div>';
+}
+
+/* ---------- tab 2: setoran rinci + UMP + belum LPJ ---------- */
+function isiSetoran(){
+  var r=RINCI[BULAN];
+  if(MUAT_RINCI || !r){
+    return '<div class="kl-card">'+(MUAT_RINCI
+      ? '<div class="kl-load"><i></i> Memuat setoran '+esc(nmBulan(BULAN||''))+'…</div>'
+      : '<div class="kl-load"><i></i> Menyiapkan…</div>')+'</div>';
+  }
+  var g=r.ringkas||{}, ls=r.bulanTersedia||[], i=ls.indexOf(BULAN);
+  var nSetor=(r.setoran||[]).length, nUmp=(r.ump||[]).length;
+
+  var h='<div class="kl-card">'
+    +'<div class="kl-bulanbar">'
+    +'<button class="kl-nav" type="button" aria-label="Bulan sebelumnya" onclick="klGeserBulan(1)"'
+      +(i<0||i>=ls.length-1?' disabled':'')+'>&#8249;</button>'
+    +'<select class="kl-pilih" aria-label="Pilih bulan" onchange="klPilihBulan(this.value)">'
+      +opsiBulan(ls,BULAN)+'</select>'
+    +'<button class="kl-nav" type="button" aria-label="Bulan berikutnya" onclick="klGeserBulan(-1)"'
+      +(i<=0?' disabled':'')+'>&#8250;</button>'
+    +'</div>';
+
+  h+='<div class="kl-stat">'
+    +kartu('Setoran',klRp(g.himpun),nSetor+' transaksi','')
+    +kartu('Hak amil',klRp(g.hakAmil),'dipotong dari setoran','')
+    +kartu('Uang muka',klRp(g.umpKeluar),(g.umpKembali>0?'kembali '+klRp(g.umpKembali):'diserahkan ke kantor'),'')
+    +kartu('Belum LPJ',klRp(g.belumLPJ),(g.belumLPJ>0?'uang muka tanpa LPJ':'tidak ada sisa'),'belum'+(g.belumLPJ<0?' minus':''))
+    +'</div>';
+  h+='<p class="kl-note">Saldo belum LPJ = <b>uang muka</b> bulan ini − <b>LPJ</b> − uang muka yang <b>dikembalikan</b>. '
+    +'Angkanya sama dengan menu Saldo KLL di kantor pusat.</p>';
+  h+='</div>';
+
+  /* setoran */
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Setoran '
+    +esc(nmBulan(BULAN))+'<span class="n">'+nSetor+' baris</span></div>';
+  var s=r.setoran||[];
+  if(!s.length){
+    h+='<div class="kl-kosong">Belum ada setoran di bulan ini.</div>';
+  }else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
+      +'<th>Tanggal</th><th>Jenis dana</th><th>Metode</th><th class="n">Jumlah</th>'
+      +'</tr></thead><tbody>';
+    s.forEach(function(x){
+      h+='<tr><td>'+klTgl(x.tanggal)+'</td>'
+        +'<td class="pos">'+esc(String(x.dana||'Infak').replace(/_/g,' '))
+          +(x.pilar?'<span class="sub">'+esc(x.pilar)+'</span>':'')+'</td>'
+        +'<td>'+esc(x.metode||'—')+'</td>'
+        +'<td class="n akhir">'+klRp(x.jumlah)
+          +(x.amil?'<span class="sub">amil '+klRp(x.amil)+'</span>':'')+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="3">Total setoran</td>'
+      +'<td class="n">'+klRp(g.himpun)+'</td></tr></tfoot></table></div>';
+  }
+  h+='</div>';
+
+  /* uang muka */
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Uang muka (UMP)'
+    +'<span class="n">'+nUmp+' baris</span></div>';
+  var u=r.ump||[];
+  if(!u.length){
+    h+='<div class="kl-kosong">Tidak ada uang muka di bulan ini.</div>';
+  }else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
+      +'<th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th class="n">Jumlah</th>'
+      +'</tr></thead><tbody>';
+    u.forEach(function(x){
+      var balik=x.arah==='kembali';
+      h+='<tr><td>'+klTgl(x.tanggal)+'</td>'
+        +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Dikembalikan':'Diserahkan')+'</span></td>'
+        +'<td class="w">'+esc(x.keterangan||x.dana||'—')+'</td>'
+        +'<td class="n akhir">'+klRp(x.nominal)+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="3">Total diserahkan</td>'
+      +'<td class="n">'+klRp(g.umpKeluar)+'</td></tr>'
+      +(g.umpKembali>0?'<tr><td colspan="3">Dikembalikan</td><td class="n">'+klRp(g.umpKembali)+'</td></tr>':'')
+      +'</tfoot></table></div>';
+  }
+  h+='</div>';
+
+  /* LPJ */
+  var l=r.lpj||[], nLpj=l.length;
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> LPJ uang muka'
+    +'<span class="n">'+nLpj+' baris</span></div>';
+  if(!nLpj){
+    h+='<div class="kl-kosong">Belum ada LPJ di bulan ini.</div>';
+  }else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
+      +'<th>Tanggal</th><th>Program</th><th class="n">Jumlah</th>'
+      +'</tr></thead><tbody>';
+    l.forEach(function(x){
+      h+='<tr><td>'+klTgl(x.tanggal)+'</td>'
+        +'<td class="pos w">'+esc(x.program||'—')
+          +(x.keterangan?'<span class="sub">'+esc(x.keterangan)+'</span>':'')+'</td>'
+        +'<td class="n akhir">'+klRp(x.jumlah)+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="2">Total LPJ</td>'
+      +'<td class="n">'+klRp(g.lpj)+'</td></tr></tfoot></table></div>';
+  }
+  h+='<ul class="kl-catatan"><li>LPJ adalah laporan penggunaan uang muka yang sudah dicatat kantor pusat '
+    +'(menu UMP LPJ). Selama belum dilaporkan, uang mukanya masih dihitung sebagai <b>belum LPJ</b>.</li>'
+    +'<li>Setoran di atas adalah penghimpunan yang tercatat atas nama kantor ini; kolom amil menunjukkan '
+    +'bagian yang sudah dipotong untuk hak amil.</li></ul>';
+  return h+'</div>';
+}
+function kartu(label,nilai,sub,kelas){
+  return '<div class="kl-st'+(kelas?' '+kelas:'')+'"><div class="l">'+label+'</div>'
+    +'<div class="v">'+nilai+'</div><div class="s">'+esc(sub)+'</div></div>';
 }
 </script>
 </body>
