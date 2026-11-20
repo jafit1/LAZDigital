@@ -266,6 +266,17 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
 - **Impor lewat URL** hanya https, dan setiap alamat IP hasil DNS harus
   publik, termasuk sesudah pengalihan (`_periksaUrlImpor`, `_ambilUrlImpor`,
   `redirect: 'manual'`). Batas unduhan 20 MB.
+- **Kode akses saldo KL** (20 November 2026). `apiBuatKodeAksesKL` menerbitkan
+  satu kode per KLL/ULL (`KL-XXXXXXXX`) yang disimpan di Settings `kodeAksesKL`.
+  Menu **Kode Akses KL** (izin Pengaturan) bisa men-generate ulang tanpa
+  mengubah kode lama, mengunduh CSV, dan menyalin link `/saldo-kl.html`.
+  Halaman publik itu memanggil `apiSaldoKLPublik(kode)` TANPA sesi dan hanya
+  mengembalikan satu kantor yang cocok dengan kode itu. Kuncinya: peta Settings
+  di-index oleh **nama kantor**, jadi pencocokan harus memeriksa nilai `.kode`,
+  bukan `peta[kode]`. `lib/laz-pg.js` punya `PETUNJUK_TETAP` untuk memuat
+  Settings/Penghimpunan/Pentasyarufan/UangMuka/Layanan pada fungsi baru, karena
+  tabel yang belum dimuat tampil sebagai judul kosong dan readAll tidak
+  melempar `PerluLembar`.
 - **Saldo rinci per konsolidasi** (20 November 2026). Sheet `Analisa` berkas
   `[2025] DATA-transaksi.xlsx` memuat 608 baris pos dana. Rumus yang sudah
   dibuktikan cocok semua baris: `Saldo Kas Akhir = Saldo Kas Awal + Penghimpunan
