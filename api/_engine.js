@@ -2478,18 +2478,20 @@ function _gateUangMuka(namaKantor, nominal, jenis, tanggal){
   var tahun = tgl.slice(0,4);
   if (tahun !== _hariIni().slice(0,4)) return out;   /* hitung tahun berjalan saja */
 
+  _perluLembar(SHEETS.LAYANAN); _perluLembar(SHEETS.UANGMUKA); _perluLembar(SHEETS.PENGHIMPUNAN);
   var layList = readAll(SHEETS.LAYANAN) || [];
   var cfgAmil = _bacaHakAmil();
   var cocok = _layananUmp(namaKantor, layList);
-  var golongan = /daerah/i.test(String(namaKantor||'')) ? 'daerah' : 'kll';
-
-  /* Angka kantor dari jalur yang sama dengan menu Analisa. */
+  /* Angka kantor dari jalur yang sama dengan menu Analisa, dihitung sebagai
+     data publik: modul ini tidak punya baris izin sendiri, dan tanpa parameter
+     publik _saldoAnalisaUntuk menuntut sesi. golongan dikosongkan supaya kantor
+     ULL ikut terbaca, bukan hanya KLL. */
   var baris = null;
   try {
-    var hasil = _saldoAnalisaUntuk(null, tgl, golongan, true);
-    var daftar = (hasil && (hasil.daftar || hasil.kantor)) || [];
+    var hasil = _saldoAnalisaUntuk(null, tgl, '', true);
+    var daftar = (hasil && hasil.daftar) || [];
     for (var i=0;i<daftar.length;i++){ if (String(daftar[i].nama) === String(cocok)) { baris = daftar[i]; break; } }
-  } catch(e){ baris = null; }
+  } catch(e){ _lolosLembar(e); baris = null; }
   if (!baris) return out;   /* kantor belum ada di pembuka: jangan tebak */
 
   /* Angka dibaca langsung dari sumbernya, bukan dari objek kantor Analisa:
@@ -7121,7 +7123,7 @@ async function apiParseImportText(t, text, type, opsi) {
   }
 }
 
-async /* Dipanggil layar sebelum Nominal UMP disimpan, supaya peringatan muncul saat
+/* Dipanggil layar sebelum Nominal UMP disimpan, supaya peringatan muncul saat
    orang masih bisa membatalkan sendiri - bukan setelah baris terlanjur masuk. */
 function apiCekUangMuka(t, layanan, nominal, tanggal, jenis){
   _requirePerm(t, 'pentasyarufan', 'create');
