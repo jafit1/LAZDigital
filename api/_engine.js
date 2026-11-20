@@ -4854,8 +4854,12 @@ function _layCocokNama(pre, listLayanan){
       if (!hit || ln.length > jpNorm(hit.nama).length) hit = l;
     } else if (ln.indexOf(c + ' ') === 0) awalan.push(l);
   });
+  /* Prefix hanya sah bila tepat satu kantor yang diawali nama itu.
+     Jangan memilih kantor terpanjang secara kebetulan: "Masjid Nurul Huda"
+     punya beberapa kandidat, begitu juga "Masjid At Taqwa". */
   if (hit) return hit;
-  return awalan.length === 1 ? awalan[0] : null;
+  if (awalan.length !== 1) return null;
+  return awalan[0];
 }
 
 function jpDanaDariAkun(akunKredit){
