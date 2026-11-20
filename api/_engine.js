@@ -2415,6 +2415,16 @@ function apiDaftarSaldoAwalAnalisa(t, tahun){
   return { tahun:String(tahun||''), ada:!!mentah, baris:isi };
 }
 
+/* Dana kebencanaan (banjir Sumatera/Aceh), gempa NTT, dan Palestina
+   dipungut lewat KLL/ULL tetapi penyalurannya disatukan di Daerah. Jadi
+   penghimpunan maupun penyalurannya sama-sama dibukukan di Daerah, dan hak
+   amilnya dikosongkan karena seluruh dana ditasyarufkan. Sumur bor SENGaja
+   tidak masuk sini: ia tetap milik KLL masing-masing. */
+function _gabungKeDaerah(teks){
+  var t = String(teks||'').toLowerCase();
+  return /palestin|gaza|falastin|ntt|nusa tenggara|gempa|sumatera|sumatra|aceh|banjir|bencana/.test(t);
+}
+
 /* Petakan transaksi web ke pos dana Analisa. Keterangan ikut dibaca:
    akun memberijenis dana, uraian memberi peruntukannya. */
 function _danaDariTransaksi(jenisDana, subJenis, pilar, program, keterangan){
@@ -2518,13 +2528,17 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
     /* Dana bencana/NTT/Palestina milik Daerah, siapa pun kanal yang
        menyetornya. Tanpa ini setoran ada di KLL tapi penyalurannya di
        Daerah, dan salah satu sisi jadi minus besar. */
-    var ketHimpun = String(r.keterangan||'').toLowerCase();
-    if (/palestin|gaza|ntt|nusa tenggara|bencana|gempa|sumatera|kemanusiaan|air bersih|sumur bor/.test(ketHimpun)) nama = 'DAERAH Bantul';
+    var ketHimpun = String(r.keterangan||'') + ' ' + String(r.program||'') + ' ' + String(r.pilar||'');
+    var gabung = _gabungKeDaerah(ketHimpun);
+    if (gabung) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     var dana = _danaDariTransaksi(r.jenisDana, r.subJenis, r.pilar, r.program, r.keterangan);
     var n = Number(r.jumlah)||0;
     k.himpun[dana] = (k.himpun[dana]||0) + n;
     var persen = /zakat/i.test(String(r.jenisDana||'')) ? 0.125 : /amil/i.test(String(r.jenisDana||'')) ? 0 : 0.2;
+    /* Dana yang disatukan ke Daerah tidak dipotong hak amil: semuanya
+       ditasyarufkan, sesuai keputusan pemilik. */
+    if (gabung) persen = 0;
     k.amil[dana] = (k.amil[dana]||0) + n*persen;
   });
 
@@ -2537,8 +2551,8 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
     var seksiSalur = String(r.section||'');
     if (/^UMP\b|^LPJ\b/i.test(seksiSalur) || /^UMP\b|^LPJ\b/i.test(String(r.program||''))) return;
     var nama = _namaKantorDariTeks(String(r.namaPenerima||'')+' '+String(r.keterangan||''), layanan);
-    var ketSalur = String(r.keterangan||'').toLowerCase();
-    if (/palestin|gaza|ntt|nusa tenggara|bencana|gempa|sumatera|air bersih|sumur bor/.test(ketSalur)) nama = 'DAERAH Bantul';
+    var ketSalur = String(r.keterangan||'') + ' ' + String(r.program||'');
+    if (_gabungKeDaerah(ketSalur)) nama = 'DAERAH Bantul';
     var k = kantorBaru(nama);
     var sumber = String(r.sumberDana||'');
     var dana = /zakat/i.test(sumber) ? 'Zakat_Maal' : /amil/i.test(sumber) ? 'Amil'
