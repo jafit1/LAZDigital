@@ -285,6 +285,17 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
   Angka `Saldo Kas Akhir` ini dipakai sebagai saldo pembuka 2026 lewat
   `apiSimpanSaldoAwalAnalisa` dan ditampilkan di dua menu tersendiri
   (`apiSaldoDaerahRinci`, `apiSaldoKantorRinci`). Uji: `tools/analisa2025_validate.py`.
+  **Saldo ditampilkan apa adanya** (20 November 2026): tidak ada penyeimbang
+  antar pos maupun transfer Daerah→kantor. Pos yang minus dibiarkan minus karena
+  itu memang UMP yang ditarik melebihi himpunan kantor itu sendiri. Pembuka per
+  kantor sudah dicocokkan dengan sheet lewat `tools/cek_pembuka_web_vs_analisa.py`
+  (selisih Rp0,00; total Rp3.580.605.448,55).
+  **KLL RS PKU Muh Bantul** belum dikonsolidasi: seluruh penghimpunan,
+  pentasyarufan, UMP, dan saldo awalnya masuk ke `DAERAH Bantul` lewat
+  `_keDaerahSaja`, jadi tidak muncul sebagai KLL dan tidak dapat kode akses.
+  Kode akses diterbitkan dari daftar hasil `_saldoAnalisaUntuk` (hanya kantor
+  yang punya saldo), bukan dari tabel `Layanan` yang berisi 59 baris — kalau
+  dari `Layanan`, 30 kode menunjuk kantor tanpa data dan halamannya kosong.
 - **Kolom F jurnal bank = fundraising** (17 November 2026). `fundraisingDariBarisJurnal`
   membaca kolom ke-6 (index 5) untuk baris penghimpunan **dan** pentasyarufan.
   Isi "Kantor" diterjemahkan `cleanFundraisingName` menjadi
