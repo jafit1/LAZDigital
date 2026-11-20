@@ -485,6 +485,7 @@ function _settingsAman(semua, bolehToken){
   Object.keys(semua || {}).forEach(function(k){
     if (/^lg_/.test(k)) return;
     if (/^lhToken/.test(k)) return;   /* token link harian hanya lewat apiInfoLinkHarian */
+    if (/^lhKode/.test(k)) return;    /* kode pendek link harian juga */
     if (!bolehToken && k === 'publicToken') return;
     o[k] = semua[k];
   });
@@ -675,19 +676,17 @@ function apiKwitansiRentang(t,dari,sampai){
   baris.sort(function(a,b){ var x=String(a.tanggal||''), y=String(b.tanggal||''); if(x!==y) return x.localeCompare(y); return String(a.noKwitansi||'').localeCompare(String(b.noKwitansi||'')); });
   var total=baris.length, jumlah=0; baris.forEach(function(r){ jumlah+=Number(r.jumlah)||0; });
   var dipotong=total>BATAS; if(dipotong) baris=baris.slice(0,BATAS);
-  var tk=getSetting('lhTokenDonatur')||'';
   return {rows:baris.map(function(d){ var rk=d.rekeningId&&rek[d.rekeningId]; var no=rk?String(rk.nomor||'').replace(/\D/g,''):''; return no?Object.assign({},d,{rekeningAkhir:no.slice(-3)}):d; }),
     total:total, jumlah:jumlah, dipotong:dipotong, batas:BATAS,
-    settings:_settingsAman(getAllSettings(),false), linkDonatur:tk?('/harian.html?t='+tk):''};
+    settings:_settingsAman(getAllSettings(),false), linkDonatur:_lhLinkDonatur()};
 }
 function apiGetKwitansi_(d){
   /* Kwitansi hanya menampilkan 3 angka terakhir nomor rekening; nomor lengkapnya tidak ikut dikirim ke peramban. */
   if(d&&d.rekeningId){ var rk=findById(SHEETS.REKENING,d.rekeningId); var no=String((rk&&rk.nomor)||'').replace(/\D/g,''); if(no) d=Object.assign({},d,{rekeningAkhir:no.slice(-3)}); }
   /* Alamat halaman publik donatur (bila sudah diaktifkan), untuk disisipkan di ucapan terima kasih. Tautan ini memang
-     untuk dibagikan ke donatur; token link KLL/ULL tidak ikut. */
-  var tk=getSetting('lhTokenDonatur')||'';
+     untuk dibagikan ke donatur; token link KLL/ULL tidak ikut. Alamat pendek /h/<kode> dipakai kalau sudah ada. */
   /* Disaring: dulu seluruh Settings ikut, termasuk lg_* dan token link harian KLL/ULL, ke siapa pun yang boleh melihat Penghimpunan. */
-  return {data:d,settings:_settingsAman(getAllSettings(),false),linkDonatur:tk?('/harian.html?t='+tk):''}; }
+  return {data:d,settings:_settingsAman(getAllSettings(),false),linkDonatur:_lhLinkDonatur()}; }
 
 /* ===== PENTASYARUFAN ===== */
 function generateNoBukti(){ var ym=Utilities.formatDate(new Date(),TZ,'yyyyMM'); var awalan='BPT/'+ym+'/'; return awalan+('0000'+(_nomorUrutTerakhir(SHEETS.PENTASYARUFAN,'noBukti',awalan)+1)).slice(-4); }
@@ -1573,11 +1572,51 @@ function apiPublicDashboard(t, bulan){
    dan petugas tidak pernah ikut, termasuk kalau kelak ada kolom baru.
    ============================================================ */
 var _LH_KUNCI = { donatur: 'lhTokenDonatur', kantor: 'lhTokenKantor' };
-function _lhInfo(jenis){ var x = getSetting(_LH_KUNCI[jenis]) || ''; return { jenis: jenis, aktif: !!x, token: x }; }
+/* Kode pendek (20 November 2026): alamat yang dibagikan ke donatur dan kantor
+   cukup /h/<kode> — delapan huruf, tanpa i/l/o/0/1 supaya tidak salah ketik.
+   Kode ini pengganti token panjang di alamat; token lama tetap diterima agar
+   tautan yang sudah tercetak di kwitansi tidak mati. */
+var _LH_KODE = { donatur: 'lhKodeDonatur', kantor: 'lhKodeKantor' };
+var _LH_ABJAD = 'abcdefghjkmnpqrstuvwxyz23456789';
+function _lhKodeBaru(n){
+  var v = BigInt('0x' + String(Utilities.getUuid()).replace(/-/g, ''));
+  var base = BigInt(_LH_ABJAD.length), s = '';
+  n = n || 8;
+  while (s.length < n) { s = _LH_ABJAD.charAt(Number(v % base)) + s; v = v / base; }
+  return s;
+}
+function _lhLinkDonatur(){
+  var k = getSetting('lhKodeDonatur') || '', x = getSetting('lhTokenDonatur') || '';
+  return k ? ('/h/' + k) : (x ? ('/harian.html?t=' + x) : '');
+}
+function _lhLinkKantor(){
+  var k = getSetting('lhKodeKantor') || '', x = getSetting('lhTokenKantor') || '';
+  return k ? ('/h/' + k) : (x ? ('/harian.html?t=' + x) : '');
+}
+/* Satu pintu pemeriksa: menerima kode pendek maupun token panjang. */
+function _lhJenisToken(nilai){
+  var t = String(nilai == null ? '' : nilai), i, a, b;
+  if (t.length < 4) return '';
+  var pasang = [['donatur', getSetting('lhTokenDonatur'), getSetting('lhKodeDonatur')],
+                ['kantor', getSetting('lhTokenKantor'), getSetting('lhKodeKantor')]];
+  for (i = 0; i < pasang.length; i++) {
+    a = pasang[i][1] || ''; b = pasang[i][2] || '';
+    if ((a && t === a) || (b && t === b)) return pasang[i][0];
+  }
+  return '';
+}
+function _lhInfo(jenis){
+  var x = getSetting(_LH_KUNCI[jenis]) || '', k = getSetting(_LH_KODE[jenis]) || '';
+  /* Tautan lama (token panjang) tetap hidup; kode pendeknya dibuat sekali di
+     sini supaya alamat pendek langsung tersedia tanpa memutar token. */
+  if (x && !k) { k = _lhKodeBaru(8); setSetting(_LH_KODE[jenis], k); }
+  return { jenis: jenis, aktif: !!x, token: x, kode: k, url: k ? ('/h/' + k) : (x ? ('/harian.html?t=' + x) : '') };
+}
 function _lhJenisSah(jenis){ if (!_LH_KUNCI[jenis]) throw new Error('Jenis link tidak dikenal.'); return jenis; }
 function apiInfoLinkHarian(t){ _requirePerm(t, 'dashboard', 'view'); return { donatur: _lhInfo('donatur'), kantor: _lhInfo('kantor') }; }
 function apiBuatLinkHarian(t, jenis){
   var u = _requirePerm(t, 'settings', 'edit'); _lhJenisSah(jenis);
+  setSetting(_LH_KODE[jenis], _lhKodeBaru(8));
   setSetting(_LH_KUNCI[jenis], Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 8));
   audit(u.id, u.username, 'link_harian_buat', jenis, { modul: 'settings', ringkas: 'link penghimpunan harian ' + jenis + ' dibuat ulang' });
   return _lhInfo(jenis);
@@ -1585,6 +1624,7 @@ function apiBuatLinkHarian(t, jenis){
 function apiMatikanLinkHarian(t, jenis){
   var u = _requirePerm(t, 'settings', 'edit'); _lhJenisSah(jenis);
   setSetting(_LH_KUNCI[jenis], '');
+  setSetting(_LH_KODE[jenis], '');
   audit(u.id, u.username, 'link_harian_matikan', jenis, { modul: 'settings', ringkas: 'link penghimpunan harian ' + jenis + ' dimatikan' });
   return _lhInfo(jenis);
 }
@@ -1594,9 +1634,7 @@ function apiMatikanLinkHarian(t, jenis){
    penanggung jawab, telepon, wilayah, dan kode tidak ikut. Isian pengajuan
    sendiri tidak pernah dikirim ke server. */
 function apiDaftarKantorUmp(token){
-  token = String(token == null ? '' : token);
-  var kunci = getSetting('lhTokenKantor') || '';
-  if (token.length < 24 || !kunci || token !== kunci) throw new Error('Link tidak valid atau sudah dimatikan.');
+  if (_lhJenisToken(token) !== 'kantor') throw new Error('Link tidak valid atau sudah dimatikan.');
   var s = getAllSettings();
   return {
     kantor: (readAll(SHEETS.LAYANAN) || []).filter(function(l){ return l && l.nama && String(l.aktif) !== 'false'; })
@@ -1613,12 +1651,7 @@ function _lhNama(n){
   return s;
 }
 function apiPenghimpunanHarian(token, tanggal){
-  token = String(token == null ? '' : token);
-  var jenis = '';
-  if (token.length >= 24) {
-    if (token === getSetting('lhTokenDonatur')) jenis = 'donatur';
-    else if (token === getSetting('lhTokenKantor')) jenis = 'kantor';
-  }
+  var jenis = _lhJenisToken(token);
   if (!jenis) throw new Error('Link tidak valid atau sudah dimatikan.');
   var hari = _hariIni();
   var tgl = String(tanggal == null ? '' : tanggal);

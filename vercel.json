@@ -30,9 +30,17 @@
         "Content-Security-Policy": "frame-ancestors 'none'",
         "Strict-Transport-Security": "max-age=31536000",
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=()"
+        "Permissions-Policy": "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(self)"
       },
       "continue": true
+    },
+    {
+      "src": "/h/([A-Za-z0-9]{4,24})",
+      "dest": "/harian.html?k=$1"
+    },
+    {
+      "src": "/u/([A-Za-z0-9]{4,24})",
+      "dest": "/ump.html?k=$1"
     },
     {
       "src": "/api/(.*)",

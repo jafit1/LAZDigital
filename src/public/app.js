@@ -941,7 +941,9 @@ function openLinkHarian(){
   gas('apiInfoLinkHarian')(TOKEN).then(function(info){
     var bolehUbah = canDo('settings','edit');
     var kartu = function(j){
-      var x = info[j] || {}, url = x.token ? location.origin + '/harian.html?t=' + x.token : '';
+      var x = info[j] || {};
+      var url = x.url ? location.origin + x.url : (x.token ? location.origin + '/harian.html?t=' + x.token : '');
+      var urlUmp = location.origin + (x.kode ? '/u/' + x.kode : '/ump.html?t=' + x.token);
       return '<div class="lh-admin-kartu"><div class="lh-admin-h"><b>' + LH_KET[j].judul + '</b>'
         + '<span class="badge ' + (x.aktif ? 'green' : '') + '">' + (x.aktif ? 'Aktif' : 'Belum aktif') + '</span></div>'
         + '<div class="muted lh-admin-k">' + LH_KET[j].isi + '</div>'
@@ -954,11 +956,12 @@ function openLinkHarian(){
         + '</div>'
         /* Pengajuan UMP (26 Oktober 2026) memakai token link KLL/ULL yang sama. */
         + (j === 'kantor' && x.aktif ? '<div class="muted lh-admin-k" style="margin-top:10px">Pengajuan UMP untuk KL/ULL (formulir F-08-C dan F-08-D, isian tersimpan di browser masing-masing):</div>'
-          + '<div class="link-box"><input id="lhUrl_ump" readonly value="' + esc(location.origin + '/ump.html?t=' + x.token) + '">'
+          + '<div class="link-box"><input id="lhUrl_ump" readonly value="' + esc(urlUmp) + '">'
           + '<button class="btn btn-sm btn-primary" onclick="salinLinkHarian(\'ump\')">Salin</button></div>' : '')
         + '</div>';
     };
-    var b = '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Halaman memperbarui sendiri tiap 30 detik dan bisa memilih tanggal lain. '
+    var b = '<p class="muted" style="margin:0 0 12px;font-size:12.5px">Alamatnya pendek (…/h/abcd1234), jadi enak dikirim lewat WhatsApp atau ditempel di kartu. '
+      + 'Halaman memperbarui sendiri tiap 15 detik dan bisa memilih tanggal lain. '
       + 'Telepon, alamat, email, keterangan, dan nomor kwitansi tidak pernah ditampilkan. "Buat ulang" mematikan alamat lama.</p>'
       + kartu('donatur') + kartu('kantor')
       + (bolehUbah ? '' : '<p class="muted" style="font-size:12px">Menyalakan atau mematikan link butuh izin ubah Pengaturan.</p>');

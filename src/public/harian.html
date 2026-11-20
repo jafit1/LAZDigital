@@ -51,18 +51,26 @@
     .lh-tema{ width:34px; height:34px; padding:0; border-radius:10px; border:1px solid var(--border); background:var(--surface2); color:var(--text2); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
     .lh-tema .lz-tema-ikon{ width:19px; height:19px; display:block; }
 
-    .lh-utama{ position:relative; margin-top:16px; padding:18px 20px; border-radius:var(--radius); overflow:hidden;
+    .lh-utama{ position:relative; margin-top:16px; padding:20px 22px; border-radius:var(--radius); overflow:hidden;
       background:var(--grad-accent); color:#fff; box-shadow:var(--glow); }
     .lh-utama::after{ content:""; position:absolute; right:-50px; top:-70px; width:210px; height:210px; border-radius:50%;
       background:radial-gradient(circle,rgba(255,255,255,.24),transparent 70%); pointer-events:none; }
+    /* Angka di kiri, ringkasan di kanan: dulu kolom kanan terpisah jadi kosong
+       kalau metode pembayarannya cuma satu. */
+    .lh-angka-atas{ position:relative; display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:8px 26px; }
+    .lh-angka{ min-width:0; }
     .lh-label{ position:relative; font-size:12.5px; font-weight:600; color:#fff; opacity:.92; }
     .lh-total{ position:relative; font-family:var(--head); font-size:40px; font-weight:800; line-height:1.1; margin-top:2px; letter-spacing:-.015em;
       font-variant-numeric:tabular-nums; overflow-wrap:anywhere; color:#fff; }
-    .lh-info{ position:relative; font-size:13px; color:#fff; opacity:.95; margin-top:4px; }
+    .lh-info{ position:relative; font-size:13px; color:#fff; opacity:.95; margin-top:4px; text-align:right; padding-bottom:6px; }
     .lh-info b{ font-weight:800; color:#fff; }
-    .lh-metode-baris{ position:relative; display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:16px; padding-top:12px; border-top:1px solid var(--border); }
-    .lh-pil{ font-size:12.5px; color:var(--muted); white-space:nowrap; }
-    .lh-pil b{ font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; margin-left:3px; }
+    /* Per metode: keping putih bening di dalam kartu angka. */
+    .lh-metode-baris{ position:relative; display:flex; flex-wrap:wrap; gap:6px; margin-top:16px; padding-top:14px;
+      border-top:1px solid rgba(255,255,255,.26); }
+    .lh-pil{ display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px;
+      font-size:12px; font-weight:600; color:#fff; white-space:nowrap;
+      background:rgba(255,255,255,.17); border:1px solid rgba(255,255,255,.26); }
+    .lh-pil b{ font-weight:800; color:#fff; font-variant-numeric:tabular-nums; }
 
     /* Bilah alat: tanggal dan cari dalam satu baris, tanpa label di atas. */
     .lh-bilah{ display:flex; align-items:center; gap:8px; margin:14px 0 18px; flex-wrap:wrap; }
@@ -111,6 +119,8 @@
     .lh-kantor-kartu.nol{ opacity:.6; }
     .lh-kk-n{ font-weight:700; font-size:12.5px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .lh-kk-v{ font-family:var(--head); font-weight:800; font-size:16px; color:var(--text); margin-top:2px; font-variant-numeric:tabular-nums; }
+    .lh-kk-b{ font-size:11px; color:var(--muted); margin-top:1px; font-variant-numeric:tabular-nums; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis; }
     .lh-kantor-kartu.nol .lh-kk-v{ color:var(--muted); }
     .lh-semua{ grid-column:1 / -1; justify-self:center; border:0; background:none; color:var(--accent-d); font-weight:700; font-size:12.5px; cursor:pointer; padding:4px 8px; }
 
@@ -162,24 +172,29 @@
     .lh-kosong{ text-align:center; color:var(--muted); font-size:13px; padding:34px 12px; background:var(--surface);
       border:1px dashed var(--border); border-radius:18px; }
     .lh-kosong b{ display:block; font-size:22px; margin-bottom:4px; }
+
+    /* Tanda sedang memuat: batang tipis di puncak layar + isi lama diredupkan
+       (bukan dikosongkan) supaya halaman tidak berkedip saat ganti tanggal. */
+    .lh-muat-bar{ position:fixed; top:0; left:0; right:0; height:3px; z-index:9998; overflow:hidden; pointer-events:none;
+      background:rgba(var(--accent-rgb),.18); }
+    .lh-muat-bar i{ position:absolute; top:0; bottom:0; width:36%; background:var(--grad-accent); border-radius:0 3px 3px 0;
+      animation:lhJalan 1.15s cubic-bezier(.55,.1,.35,.95) infinite; }
+    @keyframes lhJalan{ 0%{ transform:translateX(-110%) } 100%{ transform:translateX(300%) } }
+    @media (prefers-reduced-motion: reduce){ .lh-muat-bar i{ animation:none; width:100%; opacity:.55; } }
+    .lh-isimuat{ opacity:.4; transition:opacity .18s; pointer-events:none; }
     .lh-galat{ max-width:420px; margin:80px auto; text-align:center; background:var(--surface); border:1px solid var(--border);
       border-radius:18px; padding:28px 22px; color:var(--text2); font-size:14px; line-height:1.6; }
     .lh-galat b{ display:block; font-family:var(--head); font-size:17px; color:var(--text); margin-bottom:6px; }
     .lh-kaki{ text-align:center; font-size:12px; line-height:1.6; color:var(--muted); margin-top:24px; }
 
     /* Menyesuaikan perangkat (lz-perangkat.js): HP dan tablet dapat tombol dan isian lebih besar dan huruf 16px
-       (supaya iPhone tidak memperbesar halaman sendiri); komputer dapat halaman lebih lebar dengan angka utama di kiri,
-       rincian metode di kanan. */
+       (supaya iPhone tidak memperbesar halaman sendiri); komputer dapat halaman lebih lebar dengan angka utama. */
     html[data-sentuh="ya"] .lh-tgl-btn, html[data-sentuh="ya"] .lh-cari input{ height:44px; }
     html[data-sentuh="ya"] .lh-tgl-btn{ min-width:44px; }
     html[data-sentuh="ya"] .lh-cari input{ font-size:16px; }
     html[data-sentuh="ya"] .lh-kantor-kartu{ padding:12px 14px; }
     html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-wrap{ max-width:980px; padding-top:28px; }
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-head{ display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); column-gap:20px; align-items:stretch; }
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-atas{ grid-column:1 / -1; }
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-utama{ margin-top:16px; }
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-metode-baris{ margin-top:16px; padding-top:0; border-top:0; align-content:center; align-items:stretch; flex-direction:column; gap:8px; }
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-pil{ width:100%; font-size:13.5px; display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--border); padding-bottom:8px; }
+    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-utama{ margin-top:18px; padding:24px 26px; }
     html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-total{ font-size:48px; }
     html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .lh-baris{ padding:14px 20px; }
     html[data-perangkat="tablet"] .lh-wrap{ max-width:820px; }
@@ -187,7 +202,9 @@
     @media(max-width:620px){
       .lh-wrap{ padding:12px 12px 40px; }
       .lh-head{ padding:14px 14px 16px; border-radius:14px; }
+      .lh-utama{ padding:17px 16px; }
       .lh-total{ font-size:32px; }
+      .lh-info{ text-align:left; padding-bottom:0; width:100%; }
       .lh-tgl-baris{ flex:1 1 100%; }
       .lh-tgl-baris .custom-dropdown,.lh-tgl-baris .datepicker-enhanced{ flex:1; width:auto; min-width:0; }
       .lh-cari{ flex-basis:100%; }
@@ -221,12 +238,21 @@
   </script>
 
   <div id="boot" class="lz lz--full"><div class="lz-bar" aria-hidden="true"><i></i><i></i><i></i></div></div>
+  <div id="lhMuat" class="lh-muat-bar hidden" aria-hidden="true"><i></i></div>
   <div id="root" class="lh-wrap hidden"></div>
   <script>var MUAT = LZLogo.muat({ kunci: 'lz_muat_harian', tahan: true });</script>
 
   <script src="/js/lz-ui.js" defer></script>
   <script>
-    var TOKEN = new URLSearchParams(location.search).get('t') || '';
+    /* Alamat publik (20 November 2026): /h/<kode> delapan huruf. Token panjang
+       /harian.html?t=… tetap diterima supaya tautan lama dan kwitansi tercetak
+       tidak mati. */
+    var TOKEN = (function(){
+      var q = new URLSearchParams(location.search);
+      var v = q.get('k') || q.get('t') || '';
+      if (!v) { var m = location.pathname.match(/^\/h\/([A-Za-z0-9]{4,24})\/?$/); if (m) v = m[1]; }
+      return v;
+    })();
     var HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
     var BULAN = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
     var DATA = null, TGL = '', SARING = '', CARI = '', KUNCI_LAMA = null, PEWAKTU = null, KERANGKA = '';
@@ -251,15 +277,33 @@
     }
 
     function muat(tgl, diam){
+      mulaiMuat();
       return panggil('apiPenghimpunanHarian', [TOKEN, tgl || '']).then(function(d){
         if (!DATA || d.tanggal !== DATA.tanggal) KUNCI_LAMA = null;
         DATA = d; TGL = d.tanggal;
         gambar();
         jadwal();
+        selesaiMuat();
       }).catch(function(e){
+        selesaiMuat();
         if (diam && DATA) { jadwal(); return; }   /* gagal sesaat saat memperbarui: data lama tetap tampil */
         galat(e.message || String(e));
       });
+    }
+    /* Indikator muat: batang tipis di puncak layar, isi lama diredupkan.
+       Dihitung bertingkat supaya refresh otomatis tidak mematikan tanda saat
+       permintaan lain masih berjalan. */
+    var SEDANG_MUAT = 0;
+    function mulaiMuat(){
+      SEDANG_MUAT++;
+      var b = $('lhMuat'); if (b) b.classList.remove('hidden');
+      var i = $('lhIsi'); if (i && DATA) i.classList.add('lh-isimuat');
+    }
+    function selesaiMuat(){
+      SEDANG_MUAT = Math.max(0, SEDANG_MUAT - 1);
+      if (SEDANG_MUAT) return;
+      var b = $('lhMuat'); if (b) b.classList.add('hidden');
+      var i = $('lhIsi'); if (i) i.classList.remove('lh-isimuat');
     }
     function jadwal(){
       clearTimeout(PEWAKTU);
@@ -269,6 +313,7 @@
     document.addEventListener('visibilitychange', function(){ if (!document.hidden && DATA && DATA.tanggal === DATA.hariIni) muat(TGL, true); });
 
     function galat(pesan){
+      selesaiMuat();
       $('boot').classList.add('hidden'); MUAT.selesai();
       var r = $('root'); r.classList.remove('hidden');
       KERANGKA = '';
@@ -288,8 +333,10 @@
         + '<div class="lh-nama">' + esc(s.namaLembaga || 'Lazismu') + '</div></div>'
         + '<div class="lh-alat"><span class="lh-langsung" id="lhLangsung"><span class="lh-titik"></span><span id="lhLangsungT"></span></span>'
         + '<button class="lh-tema kepala-tema" type="button" id="lhTema" title="' + LZTema.judul(LZTema.gelap()) + '" aria-label="' + LZTema.judul(LZTema.gelap()) + '">' + LZTema.svg() + '</button></div></div>'
-        + '<div class="lh-utama"><div class="lh-label" id="lhLabel"></div><div class="lh-total" id="lhTotal"></div>'
-        + '<div class="lh-info" id="lhInfo"></div></div><div class="lh-metode-baris" id="lhMetode"></div></div>';
+        + '<div class="lh-utama"><div class="lh-angka-atas"><div class="lh-angka">'
+        + '<div class="lh-label" id="lhLabel"></div><div class="lh-total" id="lhTotal"></div></div>'
+        + '<div class="lh-info" id="lhInfo"></div></div>'
+        + '<div class="lh-metode-baris" id="lhMetode"></div></div></div>';
       h += '<div class="lh-bilah">'
         + (kantor ? '<div class="lh-mode" role="group" aria-label="Tampilan"><button type="button" id="lhModeH" onclick="pilihMode(\'harian\')">Harian</button>'
           + '<button type="button" id="lhModeB" onclick="pilihMode(\'bulanan\')">Bulanan</button></div>' : '')
@@ -494,7 +541,8 @@
           h += '<div class="lh-kantor-grid">' + tampilK.map(function(k){
                 return '<button type="button" class="lh-kantor-kartu' + (SARING === k.kantor ? ' on' : '') + (k.hariIni ? '' : ' nol') + '" data-k="' + esc(k.kantor) + '" title="' + esc(nBulanIni() + ': ' + rp(k.bulanIni)) + '">'
                   + '<div class="lh-kk-n">' + esc(k.kantor) + '</div>'
-                  + '<div class="lh-kk-v">' + rp(k.hariIni) + '</div></button>';
+                  + '<div class="lh-kk-v">' + rp(k.hariIni) + '</div>'
+                  + '<div class="lh-kk-b">' + esc(nBulanIni().slice(0, 3)) + ' &middot; ' + rpPendek(k.bulanIni) + '</div></button>';
               }).join('')
             + (!CARI && nol ? '<button type="button" class="lh-semua" onclick="SEMUA_KANTOR=!SEMUA_KANTOR;gambarIsi()">'
               + (SEMUA_KANTOR ? 'Sembunyikan yang belum setor' : '+ ' + nol + ' kantor belum setor') + '</button>' : '')

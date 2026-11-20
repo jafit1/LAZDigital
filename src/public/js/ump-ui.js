@@ -7,7 +7,12 @@
   'use strict';
   var U = window.LZUmp, esc = U.esc;
   function $(id) { return document.getElementById(id); }
-  var TOKEN = new URLSearchParams(location.search).get('t') || '';
+  /* Alamat pendek /u/<kode>; token panjang ?t= tetap diterima. */
+  var TOKEN = (function () {
+    var q = new URLSearchParams(location.search), v = q.get('k') || q.get('t') || '';
+    if (!v) { var m = location.pathname.match(/^\/u\/([A-Za-z0-9]{4,24})\/?$/); if (m) v = m[1]; }
+    return v;
+  })();
   var hari = (function () { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
   var S = U.muat(null, hari), KANTOR = [], LEMBAGA = {}, LANGKAH = 1, pewaktu = 0, pewaktuPdf = 0, CACHE = { kunci: '', blob: null };
   var CEK = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.3 5 8.6 9.6 3.4" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
