@@ -2638,6 +2638,27 @@ function _saldoAnalisaUntuk(t, sampai, golongan){
       induk.total -= butuh; k.total += butuh;
     });
   }
+  /* Transfer dari Daerah masuk ke satu pos saja. Seimbangkan lagi di dalam
+     kantor supaya tidak ada pos yang masih minus walaupun totalnya nol. */
+  hasil.forEach(function(k){
+    var kur2 = 0, lebih2 = 0;
+    k.dana.forEach(function(x){ if (x.akhir < -0.01) kur2 -= x.akhir; else lebih2 += x.akhir; });
+    if (kur2 <= 0 || lebih2 <= 0) return;
+    var pindah = Math.min(kur2, lebih2), sisa = pindah;
+    k.dana.filter(function(x){ return x.akhir > 0.01; }).sort(function(a,b){ return b.akhir-a.akhir; })
+      .forEach(function(x){
+        if (sisa <= 0) return;
+        var g = Math.min(x.akhir, sisa);
+        x.akhir -= g; x.seimbang = (x.seimbang||0) - g; sisa -= g;
+      });
+    sisa = pindah;
+    k.dana.filter(function(x){ return x.akhir < -0.01; }).sort(function(a,b){ return a.akhir-b.akhir; })
+      .forEach(function(x){
+        if (sisa <= 0) return;
+        var g = Math.min(-x.akhir, sisa);
+        x.akhir += g; x.seimbang = (x.seimbang||0) + g; sisa -= g;
+      });
+  });
   /* Sisa desimal dari pembagian persentase bukan saldo nyata. */
   hasil.forEach(function(k){
     k.dana.forEach(function(x){ if (Math.abs(x.akhir) < 0.01) x.akhir = 0; });
