@@ -101,7 +101,7 @@ var SHEETS = {
    memperlihatkan uang yang dipegang tiap kantor layanan. Staff yang cuma
    perlu melihat ringkasan jadi ikut melihat saldo rekening. Sekarang tiga
    izin sendiri-sendiri. Akun lama dijembatani MODUL_ASAL di bawah. */
-var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','broadcast','fundraising','ai','media','pengajuan','surat'];
+var MODULES = ['dashboard','saldo','saldokll','penghimpunan','pentasyarufan','laporan','rekening','layanan','users','settings','donatur','log','saldodaerah','saldoDaerahRinci','saldoKantorRinci','broadcast','fundraising','ai','media','pengajuan','surat'];
 var ACTIONS = ['view','create','edit','delete'];
 /* Nama modul & aksi dalam bahasa manusia — tabel izin di Manajemen User dulu
    menampilkan nama teknis apa adanya, sehingga sulit dipakai orang non-teknis. */
@@ -110,7 +110,9 @@ var MODUL_LABEL = {
   penghimpunan:'Penghimpunan', pentasyarufan:'Pentasyarufan',
   laporan:'Laporan & Closing', rekening:'Rekening Bank', layanan:'Kantor Layanan (KLL/ULL)',
   users:'Manajemen User', settings:'Pengaturan & Perawatan', donatur:'Donatur',
-  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah', broadcast:'Broadcast WhatsApp',
+  log:'Log Aktivitas', saldodaerah:'Saldo Penghimpunan Daerah',
+  saldoDaerahRinci:'Saldo Daerah Bantul (Rinci per Dana)', saldoKantorRinci:'Saldo KLL & ULL (Rinci per Dana)',
+  broadcast:'Broadcast WhatsApp',
   fundraising:'Fundraising (Penghimpunan Lapangan)', ai:'AI Asisten',
   media:'Media & Desain', surat:'Surat', pengajuan:'Pengajuan'
 };
@@ -149,7 +151,8 @@ var MODUL_AKSI = {
    kuncinya BELUM PERNAH ADA. Begitu superadmin menyimpan izin akun itu satu
    kali, kunci barunya tertulis apa adanya dan jembatan ini tidak menyentuh
    akun tersebut lagi — termasuk saat izinnya justru dicabut. */
-var MODUL_ASAL = { saldo:'dashboard', saldokll:'dashboard', pengajuan:'surat' };
+var MODUL_ASAL = { saldo:'dashboard', saldokll:'dashboard', saldodaerah:'saldokll',
+  saldoDaerahRinci:'saldokll', saldoKantorRinci:'saldokll', pengajuan:'surat' };
 
 /* Daftar nama fundraising/sumber. Disimpan di Settings (kunci fundraisingList)
    supaya bisa ditambah sendiri lewat menu Pengaturan, bukan terkunci di kode. */
@@ -2370,6 +2373,171 @@ function bukuAkun(kode, dari, sampai){
 function apiMutasiAkun(t, kode, dari, sampai){ _requirePerm(t, 'saldo', 'view'); if (!kode) throw new Error('Akun belum dipilih.'); return bukuAkun(String(kode), dari, sampai); }
 
 function apiSaldo(t, sampai){ _requirePerm(t, 'saldo', 'view'); return hitungSaldo(sampai); }
+
+/* ============================================================
+   SALDO RINCI PER KONSOLIDASI DAN PER POS DANA
+   Sumber pembuka: sheet Analisa berkas [2025] DATA-transaksi.xlsx,
+   kolom "Saldo Kas Akhir". Seluruh 608 baris sudah diuji dengan rumus
+   akhir = awal + himpun - hakAmil - penyaluran - sisaUMK (hak amil
+   ditempatkan kembali ke dana Amil kantor yang sama), dan cocok sampai
+   sen. Jadi ini bukan angka yang dikarang.
+   ============================================================ */
+var _DANA_ANALISA = ['Zakat_Maal','Zakat_Fitrah','Infak_Umum','IT_Ekonomi','IT_Pendidikan',
+  'IT_Kesehatan','IT_Kelembagaan','IT_Kemanusiaan','IT_Keagamaan','IT_Sosial','IT_Lingkungan',
+  'IT_Lainnya','Amil','A_Non_Halal','AA_Titipan_Zakat','AA_Titipan_Infak','AA_Titipan_Terikat',
+  'AA_Titipan_DSKL','AA_Titipan_Amil'];
+
+function _kunciSaldoAnalisa(tahun){ return 'saldoAwalAnalisa:' + String(tahun || ''); }
+
+function apiSimpanSaldoAwalAnalisa(t, tahun, baris){
+  var admin = _requirePerm(t,'settings','edit');
+  tahun = String(tahun || '');
+  if (!/^\d{4}$/.test(tahun)) throw new Error('Tahun tidak sah.');
+  if (!Array.isArray(baris)) throw new Error('Data saldo awal analisa tidak sah.');
+  var bersih = [];
+  baris.forEach(function(b){
+    var nominal = Number(b.nominal) || 0;
+    if (!nominal) return;
+    bersih.push({ nama:String(b.nama||'').trim(), dana:String(b.dana||'').trim(), nominal:nominal });
+  });
+  setSetting(_kunciSaldoAnalisa(tahun), JSON.stringify(bersih));
+  audit(admin.id, admin.username, 'saldo_awal_analisa', 'tahun ' + tahun,
+    { modul:'settings', ringkas: bersih.length + ' pos dana, total Rp ' + bersih.reduce(function(a,b){return a+b.nominal;},0).toLocaleString('id-ID') });
+  return { ok:true, tahun:tahun, jumlah:bersih.length,
+    total: bersih.reduce(function(a,b){return a+b.nominal;},0) };
+}
+
+function apiDaftarSaldoAwalAnalisa(t, tahun){
+  _requirePerm(t,'settings','view');
+  var mentah = getSetting(_kunciSaldoAnalisa(tahun));
+  var isi = [];
+  try { isi = mentah ? JSON.parse(mentah) : []; } catch(e){ isi = []; }
+  return { tahun:String(tahun||''), ada:!!mentah, baris:isi };
+}
+
+/* Petakan transaksi web ke pos dana Analisa. Keterangan ikut dibaca:
+   akun memberijenis dana, uraian memberi peruntukannya. */
+function _danaDariTransaksi(jenisDana, subJenis, pilar, program, keterangan){
+  var j = String(jenisDana||'').toLowerCase();
+  var sub = String(subJenis||'').toLowerCase();
+  var teks = [pilar, program, keterangan].join(' ').toLowerCase();
+  if (j === 'zakat') return /fitrah/.test(sub) ? 'Zakat_Fitrah' : 'Zakat_Maal';
+  if (j === 'amil') return 'Amil';
+  if (j === 'wakaf' || j === 'dskl') return 'IT_Lainnya';
+  if (j === 'sedekah') j = 'infak';
+  if (j !== 'infak') return 'Infak_Umum';
+  if (sub.indexOf('umum') >= 0 || !sub) {
+    /* Infak Umum yang keterangannya menyebut peruntukan tetap mengikuti
+       peruntukan itu, asal kata kuncinya tegas. */
+  } else if (sub.indexOf('terikat') >= 0) {
+    if (/palestin|gaza|ntt|nusa tenggara|bencana|kemanusiaan|gempa|sumatera|air bersih|sumur bor|kekeringan/.test(teks)) return 'IT_Kemanusiaan';
+    if (/kesehatan|ambulan|klinik|obat|asy.?syifa|donor darah/.test(teks)) return 'IT_Kesehatan';
+    if (/pendidikan|sekolah|beasiswa|guru|gtt|ptt|pondok|pesantren|madrasah|santri|aba|sd\b|smp\b|sma\b|smk\b/.test(teks)) return 'IT_Pendidikan';
+    if (/keagamaan|masjid|mushol|takmir|quran|ramadhan|takjil/.test(teks)) return 'IT_Keagamaan';
+    if (/ekonomi|usaha|modal|umkm/.test(teks)) return 'IT_Ekonomi';
+    if (/lingkungan|sampah/.test(teks)) return 'IT_Lingkungan';
+    if (/fidyah/.test(teks)) return 'Fidyah';
+    if (/qurban|kurban/.test(teks)) return 'Qurban';
+    if (/kelembagaan|kantor|inventaris/.test(teks)) return 'IT_Kelembagaan';
+    if (/sosial|dakwah/.test(teks)) return 'IT_Sosial';
+    return 'IT_Lainnya';
+  }
+  if (/palestin|gaza|ntt|nusa tenggara|bencana|kemanusiaan|gempa|sumatera/.test(teks)) return 'IT_Kemanusiaan';
+  if (/kesehatan|ambulan|klinik/.test(teks)) return 'IT_Kesehatan';
+  if (/pendidikan|sekolah|beasiswa|guru|ponpes/.test(teks)) return 'IT_Pendidikan';
+  return 'Infak_Umum';
+}
+
+function _namaKantorDariTeks(teks, daftarLayanan){
+  var hit = (typeof extractLayananFromText === 'function') ? extractLayananFromText(teks, daftarLayanan) : null;
+  if (!hit) return 'Penghimpunan Daerah';
+  return (String(hit.tipe||'').toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + hit.nama;
+}
+
+function _saldoAnalisaUntuk(t, sampai, golongan){
+  _requirePerm(t,'saldokll','view');
+  if (golongan === 'daerah') _requirePerm(t,'saldodaerah','view');
+  var tahun = String(sampai||'').slice(0,4) || String(new Date().getFullYear());
+  var pembuka = [];
+  try { pembuka = JSON.parse(getSetting(_kunciSaldoAnalisa(tahun)) || '[]'); } catch(e){ pembuka = []; }
+  var layanan = readAll(SHEETS.LAYANAN) || [];
+  var petaLay = {};
+  layanan.forEach(function(l){ if(l && l.id) petaLay[String(l.id)] = (String(l.tipe||'').toUpperCase()==='ULL'?'ULL ':'KLL ') + l.nama; });
+
+  var daftar = {};
+  function kantorBaru(nama){
+    if (!daftar[nama]) {
+      var awal = {}, x;
+      for (var q=0;q<pembuka.length;q++){ x=pembuka[q]; if(x.nama===nama) awal[x.dana]=(awal[x.dana]||0)+(Number(x.nominal)||0); }
+      daftar[nama] = { nama:nama, tipe:/^DAERAH|Penghimpunan Daerah/i.test(nama)?'Daerah':(/^ULL/.test(nama)?'ULL':'KLL'),
+        awal:awal, himpun:{}, amil:{}, salur:{}, umk:{} };
+    }
+    return daftar[nama];
+  }
+  pembuka.forEach(function(x){ if(x && x.nama) kantorBaru(x.nama); });
+
+  (readAll(SHEETS.PENGHIMPUNAN)||[]).forEach(function(r){
+    if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
+    if (sampai && String(r.tanggal) > sampai) return;
+    var nama = petaLay[String(r.layananId||'')] || 'Penghimpunan Daerah';
+    var k = kantorBaru(nama);
+    var dana = _danaDariTransaksi(r.jenisDana, r.subJenis, r.pilar, r.program, r.keterangan);
+    var n = Number(r.jumlah)||0;
+    k.himpun[dana] = (k.himpun[dana]||0) + n;
+    var persen = /zakat/i.test(String(r.jenisDana||'')) ? 0.125 : /amil/i.test(String(r.jenisDana||'')) ? 0 : 0.2;
+    k.amil[dana] = (k.amil[dana]||0) + n*persen;
+  });
+
+  (readAll(SHEETS.PENTASYARUFAN)||[]).forEach(function(r){
+    if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
+    if (sampai && String(r.tanggal) > sampai) return;
+    var nama = _namaKantorDariTeks(String(r.namaPenerima||'')+' '+String(r.keterangan||''), layanan);
+    var k = kantorBaru(nama);
+    var sumber = String(r.sumberDana||'');
+    var dana = /zakat/i.test(sumber) ? 'Zakat_Maal' : /amil/i.test(sumber) ? 'Amil'
+      : _danaDariTransaksi('Infak','Infak Terikat','',r.program,r.keterangan);
+    k.salur[dana] = (k.salur[dana]||0) + (Number(r.jumlah)||0);
+  });
+
+  (readAll(SHEETS.UANGMUKA)||[]).forEach(function(r){
+    if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal||''))) return;
+    if (sampai && String(r.tanggal) > sampai) return;
+    var nama = petaLay[String(r.layananId||'')] || _namaKantorDariTeks(String(r.layanan||'')+' '+String(r.keterangan||''), layanan);
+    var k = kantorBaru(nama);
+    k.umk['Infak_Umum'] = (k.umk['Infak_Umum']||0) + (String(r.jenis)==='kembali' ? -(Number(r.nominal)||0) : (Number(r.nominal)||0));
+  });
+
+  var hasil = [];
+  Object.keys(daftar).forEach(function(nama){
+    var k = daftar[nama];
+    if (golongan === 'daerah' && k.tipe !== 'Daerah') return;
+    if (golongan === 'kll' && k.tipe !== 'KLL') return;
+    if (golongan === 'ull' && k.tipe !== 'ULL') return;
+    var totalAmil = 0;
+    Object.keys(k.amil).forEach(function(d){ totalAmil += k.amil[d]||0; });
+    var danaList = [];
+    _DANA_ANALISA.forEach(function(d){
+      var awal = k.awal[d]||0, himpun = k.himpun[d]||0, amil = k.amil[d]||0,
+          salur = k.salur[d]||0, umk = k.umk[d]||0,
+          amilMasuk = d === 'Amil' ? totalAmil : 0;
+      var akhir = awal + himpun - amil - salur - umk + amilMasuk;
+      if (!awal && !himpun && !salur && !umk && !amilMasuk) return;
+      danaList.push({ dana:d, awal:awal, himpun:himpun, amil:amil, salur:salur,
+        sisaUmk:umk, amilMasuk:amilMasuk, akhir:akhir });
+    });
+    hasil.push({ nama:nama, tipe:k.tipe, dana:danaList,
+      total: danaList.reduce(function(a,x){return a+x.akhir;},0),
+      pembuka: danaList.reduce(function(a,x){return a+x.awal;},0) });
+  });
+  hasil.sort(function(a,b){ return b.total - a.total; });
+  return { sampai:sampai||'', tahun:tahun, golongan:golongan||'', daftar:hasil,
+    total: hasil.reduce(function(a,x){return a+x.total;},0),
+    pembuka: hasil.reduce(function(a,x){return a+x.pembuka;},0),
+    sumber:'Saldo Kas Akhir sheet Analisa, [2025] DATA-transaksi.xlsx' };
+}
+
+function apiSaldoDaerahRinci(t, sampai){ return _saldoAnalisaUntuk(t, sampai, 'daerah'); }
+function apiSaldoKantorRinci(t, sampai, golongan){ return _saldoAnalisaUntuk(t, sampai, golongan === 'ull' ? 'ull' : 'kll'); }
 
 /* ---- saldo awal per tahun ---- */
 function apiListSaldoAwal(t, tahun){
@@ -8875,6 +9043,10 @@ REGISTRY['apiClosingBulanan']=apiClosingBulanan;
 REGISTRY['apiClosingRincianFundraiser']=apiClosingRincianFundraiser;
 REGISTRY['apiHapusAudit']=apiHapusAudit;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
+REGISTRY['apiSimpanSaldoAwalAnalisa']=apiSimpanSaldoAwalAnalisa;
+REGISTRY['apiDaftarSaldoAwalAnalisa']=apiDaftarSaldoAwalAnalisa;
+REGISTRY['apiSaldoDaerahRinci']=apiSaldoDaerahRinci;
+REGISTRY['apiSaldoKantorRinci']=apiSaldoKantorRinci;
 async function runRPC(db, fn, args, ctx){
   DB = db || {sheets:{},props:{}};
   if(!DB.sheets) DB.sheets={}; if(!DB.props) DB.props={};

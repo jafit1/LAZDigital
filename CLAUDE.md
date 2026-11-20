@@ -266,6 +266,14 @@ Gelombang kedua pada hari yang sama (`tools/test_keamanan_lanjutan.js`):
 - **Impor lewat URL** hanya https, dan setiap alamat IP hasil DNS harus
   publik, termasuk sesudah pengalihan (`_periksaUrlImpor`, `_ambilUrlImpor`,
   `redirect: 'manual'`). Batas unduhan 20 MB.
+- **Saldo rinci per konsolidasi** (20 November 2026). Sheet `Analisa` berkas
+  `[2025] DATA-transaksi.xlsx` memuat 608 baris pos dana. Rumus yang sudah
+  dibuktikan cocok semua baris: `Saldo Kas Akhir = Saldo Kas Awal + Penghimpunan
+  - Hak Amil - Penyaluran - Sisa UMK`, dengan hak amil seluruh kantor
+  ditempatkan kembali ke pos `Amil` kantor itu. Total akhir Rp3.580.605.448,55.
+  Angka `Saldo Kas Akhir` ini dipakai sebagai saldo pembuka 2026 lewat
+  `apiSimpanSaldoAwalAnalisa` dan ditampilkan di dua menu tersendiri
+  (`apiSaldoDaerahRinci`, `apiSaldoKantorRinci`). Uji: `tools/analisa2025_validate.py`.
 - **Kolom F jurnal bank = fundraising** (17 November 2026). `fundraisingDariBarisJurnal`
   membaca kolom ke-6 (index 5) untuk baris penghimpunan **dan** pentasyarufan.
   Isi "Kantor" diterjemahkan `cleanFundraisingName` menjadi

@@ -138,6 +138,8 @@ var NAV_ICONS={
   saldo: navIcon('<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M16 15h2"/>')
 ,
   kll:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>',
+  saldoDaerahRinci: navIcon('<path d="M4 20h16M6 20V9m6 11V4m6 16v-7"/><path d="M3 9h7M9 4h7M15 13h6"/>'),
+  saldoKantorRinci: navIcon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10M15 10v10"/>'),
   broadcast: navIcon('<path d="M4 11.5a7.5 7.5 0 1 1 3.2 6.15L3.5 20l1-3.4A7.4 7.4 0 0 1 4 11.5z"/><path d="M8.5 10.5h7"/><path d="M8.5 13.5h4.5"/>'),
   fundraising: navIcon('<path d="M12 20s-7-4.3-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7 2.8C19 15.7 12 20 12 20z"/>'),
   ai: navIcon('<path d="M11 3.5 12.7 8.3 17.5 10 12.7 11.7 11 16.5 9.3 11.7 4.5 10 9.3 8.3z"/><path d="M17.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>'),
@@ -150,6 +152,8 @@ var MENU=[
   {id:'pentasyarufan',label:'Pentasyarufan',ic:NAV_ICONS.pentasyarufan,mod:'pentasyarufan'},
   {id:'saldo',label:'Saldo Kas & Bank',ic:NAV_ICONS.saldo,mod:'saldo'},
   {id:'kll',label:'Saldo KLL & ULL',ic:NAV_ICONS.kll,mod:'saldokll'},
+  {id:'saldoDaerahRinci',label:'Saldo Daerah Bantul (Rinci)',ic:NAV_ICONS.saldoDaerahRinci,mod:'saldoDaerahRinci'},
+  {id:'saldoKantorRinci',label:'Saldo KLL & ULL (Rinci)',ic:NAV_ICONS.saldoKantorRinci,mod:'saldoKantorRinci'},
   {id:'donatur',label:'Donatur',ic:NAV_ICONS.donatur,mod:'penghimpunan'},
   {id:'laporan',label:'Laporan',ic:NAV_ICONS.laporan,mod:'laporan'},
   {id:'users',label:'Manajemen User',ic:NAV_ICONS.users,mod:'users'},
@@ -168,7 +172,7 @@ var MENU=[
    kunci itu, jadi selama kuncinya belum pernah ada, izin asalnya yang
    dipakai. Tanpa ini menunya hilang dari bilah kiri walau servernya masih
    mengizinkan, dan itu terbaca sebagai fitur yang raib. */
-var MODUL_ASAL={saldo:'dashboard',saldokll:'dashboard',pengajuan:'surat'};
+var MODUL_ASAL={saldo:'dashboard',saldokll:'dashboard',saldodaerah:'saldokll',saldoDaerahRinci:'saldokll',saldoKantorRinci:'saldokll',pengajuan:'surat'};
 function canDo(mod,act){
   if(!ME)return false;
   if(ME.role==='superadmin')return true;
@@ -556,7 +560,65 @@ function saveProfile(){
   gas('apiUpdateMyProfile')(TOKEN,d).then(function(){ME.nama=nama;if(PROF_FOTO)SETTINGS['uf_'+ME.id]=PROF_FOTO;PROF_FOTO=null;closeModal();startApp();toast('Profil tersimpan');}).catch(handleErr);
 }
 function resizeImg(file,max,cb,fmt){var r=new FileReader();r.onload=function(ev){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>h){if(w>max){h=h*max/w;w=max;}}else{if(h>max){w=w*max/h;h=max;}}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);cb(c.toDataURL(fmt==='jpeg'?'image/jpeg':'image/png',0.85));};img.src=ev.target.result;};r.readAsDataURL(file);}
-function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,saldo:viewSaldo,kll:viewKll,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,log:viewLog}[view]||viewDashboard)();}
+function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAll('.tn-item').forEach(function(n){n.classList.remove('active');});var a=el('nav_'+view);if(a)a.classList.add('active');closeSidebar();window.__viewAnim=true;var c=el('content');if(c){c.classList.remove('view-anim','view-enter');c.classList.add('view-leaving');}({dashboard:viewDashboard,penghimpunan:viewPenghimpunan,pentasyarufan:viewPentasyarufan,saldo:viewSaldo,kll:viewKll,saldoDaerahRinci:viewSaldoDaerahRinci,saldoKantorRinci:viewSaldoKantorRinci,donatur:viewDonatur,laporan:viewLaporan,rekening:viewRekening,layanan:viewLayanan,users:viewUsers,settings:viewSettings,log:viewLog}[view]||viewDashboard)();}
+
+/* ============ SALDO RINCI PER KONSOLIDASI / POS DANA ============
+   Angka pembuka diambil dari sheet Analisa [2025] DATA-transaksi.xlsx
+   kolom Saldo Kas Akhir. Sengaja memakai halaman sendiri supaya rincian
+   Daerah tidak menyembunyikan rincian KLL/ULL, dan sebaliknya. */
+function _saldoRinciHeader(judul, gol){
+  var hari = window.SALDO_RINCI_SAMPAI || '2026-11-20';
+  var pil = gol ? '<select id="srGol" class="inp" style="height:34px"><option value="kll"'+(gol==='kll'?' selected':'')+'>KLL</option><option value="ull"'+(gol==='ull'?' selected':'')+'>ULL</option></select>' : '';
+  return '<div class="card" style="margin-bottom:14px"><div class="card-h"><div><div class="card-t">'+judul+'</div>'
+    + '<div class="muted" style="font-size:12px;margin-top:3px">Saldo awal = Saldo Kas Akhir sheet Analisa 2025. Hak amil dipindah ke dana Amil kantor yang sama.</div></div></div>'
+    + '<div class="toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<label class="muted" style="font-size:12px">Posisi sampai</label>'
+    + '<input type="date" id="srSampai" class="inp" value="'+hari+'" style="height:34px">'+pil
+    + '<button class="btn btn-primary btn-sm" onclick="saldoRinciMuat('+(gol?JSON.stringify(gol):"'daerah'")+')">Tampilkan</button>'
+    + '</div></div><div id="srHasil"><div class="muted" style="padding:16px">Memuat saldo...</div></div>';
+}
+function viewSaldoDaerahRinci(){
+  var c=el('content'); if(!c) return;
+  c.innerHTML=_saldoRinciHeader('Saldo Lazismu Daerah Bantul per Dana', null);
+  saldoRinciMuat('daerah');
+}
+function viewSaldoKantorRinci(){
+  var c=el('content'); if(!c) return;
+  c.innerHTML=_saldoRinciHeader('Saldo KLL & ULL per Dana', window.SALDO_RINCI_GOL || 'kll');
+  saldoRinciMuat(window.SALDO_RINCI_GOL || 'kll');
+}
+function saldoRinciMuat(gol){
+  var tgl=el('srSampai');
+  if(tgl && /^\d{4}-\d{2}-\d{2}$/.test(tgl.value)) window.SALDO_RINCI_SAMPAI=tgl.value;
+  var p=el('srGol'); if(p){window.SALDO_RINCI_GOL=p.value;gol=p.value;}
+  var sampai=window.SALDO_RINCI_SAMPAI || '2026-11-20';
+  var fn=gol==='daerah'?'apiSaldoDaerahRinci':'apiSaldoKantorRinci';
+  var args=gol==='daerah'?[TOKEN,sampai]:[TOKEN,sampai,gol];
+  gas(fn).apply(null,args).then(function(d){
+    var host=el('srHasil'); if(!host) return;
+    var h='<div class="card"><div class="card-h"><div><div class="card-t">Ringkasan</div>'
+      + '<div class="muted" style="font-size:12px;margin-top:3px">'+esc(d.sumber||'')+' · posisi '+esc(d.sampai||'')+'</div></div></div>'
+      + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 14px">'
+      + '<div><div class="muted" style="font-size:11px">Saldo pembuka 2025</div><div style="font-size:18px;font-weight:700">'+rp(d.pembuka)+'</div></div>'
+      + '<div><div class="muted" style="font-size:11px">Saldo berjalan</div><div style="font-size:18px;font-weight:700;color:var(--green)">'+rp(d.total)+'</div></div>'
+      + '<div><div class="muted" style="font-size:11px">Jumlah entitas</div><div style="font-size:18px;font-weight:700">'+((d.daftar||[]).length)+'</div></div>'
+      + '</div>';
+    (d.daftar||[]).forEach(function(k){
+      h+='<div style="border-top:1px solid var(--line);padding:12px 0">'
+        + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
+        + '<div style="font-weight:700">'+esc(k.nama)+'</div><div style="font-weight:700;color:'+(k.total<0?'var(--red)':'var(--green)')+'">'+rp(k.total)+'</div></div>'
+        + '<table class="tbl" style="margin-top:8px"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Amil masuk</th><th class="n">Saldo akhir</th></tr></thead><tbody>';
+      (k.dana||[]).forEach(function(x){
+        h+='<tr><td>'+esc(x.dana.replace(/_/g,' '))+'</td><td class="n">'+rp(x.awal)+'</td><td class="n">'+rp(x.himpun)+'</td>'
+          + '<td class="n">'+rp(x.amil)+'</td><td class="n">'+rp(x.salur)+'</td><td class="n">'+rp(x.sisaUmk)+'</td>'
+          + '<td class="n">'+rp(x.amilMasuk)+'</td><td class="n" style="font-weight:700;color:'+(x.akhir<0?'var(--red)':'')+'">'+rp(x.akhir)+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+    });
+    h+='</div>';
+    host.innerHTML=h;
+  }).catch(handleErr);
+}
 
 /* ============ MODAL ============ */
 function openModal(t,b,f){el('modalTitle').textContent=t;el('modalBody').innerHTML=b;el('modalFoot').innerHTML=f||'';el('modalBg').classList.add('show');}
