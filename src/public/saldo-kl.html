@@ -566,18 +566,11 @@ function isiSetoran(){
     +kartu('Setoran',klRp(g.himpun),nSetor+' transaksi','')
     +kartu('Hak amil',klRp(g.hakAmil),'dipotong dari setoran','')
     +kartu('Uang muka',klRp(g.umpKeluar),(g.umpKembali>0?'kembali '+klRp(g.umpKembali):'diserahkan ke kantor'),'')
-    +kartu('Belum LPJ',klRp(belum),'kumulatif sejak Januari','belum'+(belum<0?' minus':''))
+  /* Kartu "Belum LPJ" dan catatannya disembunyikan sementara (21 November 2026,
+     permintaan pemilik): angkanya kumulatif sejak Januari dan membuat staf
+     bingung saat rapat. Datanya tetap dihitung server (ringkas.belumLPJ) -
+     cukup dikembalikan blok ini kalau nanti mau ditampilkan lagi. */
     +'</div>';
-  h+='<p class="kl-note">Saldo belum LPJ = <b>total uang muka</b> sejak Januari − <b>total LPJ</b> − uang muka yang <b>dikembalikan</b>. '
-    +'LPJ yang dibukukan di bulan berikutnya tetap mengurangi uang muka bulan sebelumnya, jadi tidak bikin angka minus karena beda bulan. '
-    +'Angkanya sama dengan menu Saldo KLL di kantor pusat.</p>';
-  if(Number(g.belumLPJBulanan)<0){
-    h+='<p class="kl-note">Bulan ini LPJ ('+klRp(g.lpj)+') lebih besar daripada uang muka yang ditarik ('+klRp(g.umpKeluar)+') — '
-      +'wajar kalau LPJ bulan ini memakai uang muka bulan sebelumnya.</p>';
-  }
-  if(belum<0){
-    h+='<p class="kl-note">Angka <b>minus</b> di sini berarti total LPJ sudah melebihi total uang muka yang pernah ditarik sejak Januari.</p>';
-  }
   h+='</div>';
 
   /* setoran */
@@ -647,7 +640,7 @@ function isiSetoran(){
       +'<td class="n">'+klRp(g.lpj)+'</td></tr></tfoot></table></div>';
   }
   h+='<ul class="kl-catatan"><li>LPJ adalah laporan penggunaan uang muka yang sudah dicatat kantor pusat '
-    +'(menu UMP LPJ). Selama belum dilaporkan, uang mukanya masih dihitung sebagai <b>belum LPJ</b>.</li>'
+    +'(menu UMP LPJ).</li>'
     +'<li>Setoran di atas adalah penghimpunan yang tercatat atas nama kantor ini; kolom amil menunjukkan '
     +'bagian yang sudah dipotong untuk hak amil.</li></ul>';
   return h+'</div>';
