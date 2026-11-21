@@ -9144,7 +9144,6 @@ function renderLog(d){
 
   var h = '<div class="page-head"><div><h2>Log Aktivitas</h2>'
     + '<div class="desc">Riwayat siapa mengubah apa</div></div>'
-    + ((ME&&ME.role==='superadmin') ? '<button class="btn btn-ghost" onclick="logBersihkan()">Bersihkan log</button>' : '')
     + '</div>';
 
   h += '<div class="lap-filter">'
@@ -9221,21 +9220,8 @@ function ringkasPeramban(ua){
   return app + (mesin ? ' di ' + mesin : '');
 }
 
-function logBersihkan(){
-  /* Pakai dialog milik aplikasi, bukan confirm() bawaan peramban — yang
-     bawaan tampil dengan gaya sistem operasi dan menampilkan nama domain. */
-  confirmDialog({
-    title:'Bersihkan Log Aktivitas',
-    message:'Seluruh catatan aktivitas akan dihapus permanen dan tidak bisa dikembalikan.',
-    okText:'Ya, hapus semua', cancelText:'Batal', danger:true, icon:SVG_ICONS.dlgHapus
-  }).then(function(setuju){
-    if (!setuju) return;
-    gas('apiHapusAudit')(TOKEN).then(function(r){
-      toast(r.dihapus + ' catatan dihapus');
-      viewLog();
-    }).catch(handleErr);
-  });
-}
+/* Penghapus log sudah tidak ada: log audit bersifat tetap, dan tombolnya
+   dulu hanya memberi rasa aman palsu kepada orang yang sedang diawasi. */
 
 /* ================================================================
    PERAWATAN DATA — perbaikan sekali jalan

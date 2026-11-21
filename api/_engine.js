@@ -550,7 +550,23 @@ async function apiSavePenghimpunan(t,d){ var u=_requirePerm(t,'penghimpunan',d.i
 }
 /* Badan penyimpanan dipisah dari pemeriksaan izin supaya jalur Fundraising (apiFundHimpunkan) memakai satu-satunya
    aturan tulis yang sama (nomor kwitansi, audit, donatur terdaftar, sinkron bulanan) dengan izin modul fundraising. */
+/* Kolom yang boleh datang dari klien. Sisanya (id, petugas, dibuat, __row,
+   akunKredit, apa pun yang belum dikenal) hanya boleh diisi server: tanpa
+   saringan ini satu payload tambahan bisa menuliskan jejak palsu. */
+var KOLOM_HIMPUN = ['tanggal','jenisDana','subJenis','pilar','program','namaDonatur','tipeDonatur',
+  'layananId','telepon','email','alamat','jumlah','metode','rekeningId','bank','statusBayar',
+  'atasNama','keterangan','noKwitansi','fundraising'];
+function _saringHimpun(d){
+  var out = {};
+  for (var i = 0; i < KOLOM_HIMPUN.length; i++) {
+    var k = KOLOM_HIMPUN[i];
+    if (d[k] !== undefined) out[k] = d[k];
+  }
+  if (d.id !== undefined) out.id = d.id;
+  return out;
+}
 async function _simpanPenghimpunan(u,d){
+  d = _saringHimpun(d || {});
   /* Akun yang terikat nama fundraising mengisi atas namanya sendiri — tidak
      bisa memilih nama lain di formulir (kecuali superadmin/koordinator yang
      memang boleh mengisi untuk siapa pun). */
@@ -9014,14 +9030,12 @@ function apiListAudit(t, opsi){
 /* Hanya superadmin. Dulu pemegang izin "hapus log" bisa menghapus seluruh
    jejak, termasuk jejak perbuatannya sendiri sesaat sebelumnya. Log yang bisa
    dihapus orang yang diawasinya bukan pengawasan. */
+/* Log audit bersifat tetap. Satu-satunya jalan menghapusnya dulu adalah
+   fungsi ini, dan akun yang jejaknya sedang diawasi tidak boleh memegang
+   penghapusnya. Dibiarkan ada sebagai penolakan yang jelas, bukan dibuang,
+   supaya pemanggil lama menerima alasannya. */
 function apiHapusAudit(t){
-  var u = authUser(t);
-  if (u.role !== 'superadmin') throw new Error('IZIN: hanya superadmin yang boleh membersihkan log aktivitas.');
-  var sh = getSS().getSheetByName(SHEETS.LOG);
-  var jml = sh ? Math.max(sh.getLastRow() - 1, 0) : 0;
-  if (sh) { for (var i = 0; i < jml; i++) sh.deleteRow(2); }
-  audit(u.id, u.username, 'hapus_log', jml + ' catatan dihapus', { modul: 'log' });
-  return { ok: true, dihapus: jml };
+  throw new Error('Log audit bersifat tetap: tidak bisa dihapus.');
 }
 
 /* ================================================================
@@ -9703,7 +9717,7 @@ REGISTRY['apiLaporanHarian']=apiLaporanHarian;
 REGISTRY['apiSimpanTandaTanganA2']=apiSimpanTandaTanganA2;
 REGISTRY['apiClosingBulanan']=apiClosingBulanan;
 REGISTRY['apiClosingRincianFundraiser']=apiClosingRincianFundraiser;
-REGISTRY['apiHapusAudit']=apiHapusAudit;
+/* REGISTRY['apiHapusAudit'] sengaja tidak didaftarkan: log audit append-only. */
 REGISTRY['apiCekUangMuka']=apiCekUangMuka;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
 REGISTRY['apiSimpanSaldoAwalAnalisa']=apiSimpanSaldoAwalAnalisa;
@@ -9715,12 +9729,41 @@ REGISTRY['apiDaftarKodeAksesKL']=apiDaftarKodeAksesKL;
 REGISTRY['apiNonaktifkanKodeAksesKL']=apiNonaktifkanKodeAksesKL;
 REGISTRY['apiSaldoKLPublik']=apiSaldoKLPublik;
 REGISTRY['apiSaldoKLRincian']=apiSaldoKLRincian;
+/* ===== FUNGSI YANG BOLEH DIPANGGIL TANPA SESI =====
+   Daftar ini sengaja pendek dan harus diisi dengan tangan. Menambah fungsi
+   yang memakai token sesi ke sini sama dengan membuka fungsi itu ke internet:
+   jangan. Fungsi publik yang memakai token tautan (harian, UMP) atau kode KL
+   memeriksa tokennya sendiri di dalam badan fungsi. */
+var PUBLIC_FN = {
+  login: 1,          /* pintu masuk */
+  loginIngat: 1,     /* token "Ingat saya" 256 bit, bukan sesi */
+  logout: 1,         /* hanya menghapus sesi yang dikirim */
+  setup: 1,          /* pemasangan awal; dijaga pastikanTerpasang() */
+  apiPublicDashboard: 1,
+  apiVerifyKwitansi: 1,
+  apiDaftarKantorUmp: 1,
+  apiPenghimpunanHarian: 1,
+  apiSaldoKLPublik: 1,
+  apiSaldoKLRincian: 1
+};
+function _fnPublik(fn){ return Object.prototype.hasOwnProperty.call(PUBLIC_FN, fn); }
+function _wajibSesi(t){
+  var s = _cariSesi(t);
+  if(!s || new Date(s.expired) < new Date()) throw new Error('AUTH: sesi tidak valid, login ulang.');
+  var u = findById(SHEETS.USERS, s.userId);
+  if(!u || String(u.aktif) !== 'true') throw new Error('AUTH: akun dinonaktifkan, hubungi admin.');
+}
+
 async function runRPC(db, fn, args, ctx){
   DB = db || {sheets:{},props:{}};
   if(!DB.sheets) DB.sheets={}; if(!DB.props) DB.props={};
   auditKonteks(ctx);
   setup(); // Always run setup to keep table schemas and defaults up to date
   if(!REGISTRY[fn]) throw new Error('Fungsi tidak dikenal: '+fn);
+  /* Deny-by-default: semua fungsi wajib membawa token sesi sah pada argumen
+     pertama, kecuali yang tercatat di PUBLIC_FN. Satu fungsi baru yang lupa
+     memanggil _requirePerm tidak lagi otomatis terbuka ke internet. */
+  if(!_fnPublik(fn)) _wajibSesi(args[0]);
   var result = await REGISTRY[fn].apply(null, args||[]);
   /* Catat "siapa membuka apa" setelah fungsinya berhasil, supaya panggilan
      yang gagal izin tidak ikut tercatat sebagai kunjungan. */

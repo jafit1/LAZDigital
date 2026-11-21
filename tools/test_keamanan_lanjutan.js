@@ -101,15 +101,14 @@ const SANDI = 'Contoh1234';
   cek('tautan Google Sheets tidak diblokir oleh penjaga ini', r.ok || !DIBLOK.test(r.galat), r.galat);
   const mesin = baca('api/_engine.js');
   cek('pengalihan (redirect) diperiksa ulang, tidak diikuti buta', /redirect:\s*'manual'/.test(mesin));
-
-  console.log('\n=== D. LOG AKTIVITAS HANYA BISA DIHAPUS SUPERADMIN ===');
-  r = await rpc(db, 'apiHapusAudit', [tLog]);
-  cek('pemegang izin "hapus log" yang bukan superadmin ditolak', !r.ok && /IZIN/.test(r.galat), r.galat || 'diterima');
+  console.log('\n=== D. LOG AKTIVITAS BERSIFAT TETAP ===');
   const nLog = (db.sheets.AuditLog || []).length;
+  r = await rpc(db, 'apiHapusAudit', [tLog]);
+  cek('pemegang izin "hapus log" ditolak', !r.ok, r.galat || 'diterima');
   cek('log tidak berkurang', (r.db.sheets.AuditLog || []).length >= nLog);
   r = await rpc(db, 'apiHapusAudit', [tSuper]);
-  cek('superadmin tetap bisa membersihkan log', r.ok, r.galat);
-  cek('tombol Bersihkan log hanya muncul untuk superadmin', /ME\.role==='superadmin'\)?\s*\?\s*'<button class="btn btn-ghost" onclick="logBersihkan\(\)"/.test(app));
+  cek('superadmin pun tidak bisa menghapus log', !r.ok && /tetap|tidak dikenal/.test(r.galat), r.galat);
+  cek('tidak ada tombol penghapus log di UI', !/apiHapusAudit|logBersihkan/.test(app));
 
   console.log('\n=== E. VERIFIKASI KWITANSI ===');
   r = await rpc(db, 'apiSavePenghimpunan', [tLihat, { tanggal: '2026-09-15', jenisDana: 'Infak', namaDonatur: 'Budi Karangan', jumlah: 750000, metode: 'Tunai' }]); db = r.db;
