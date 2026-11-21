@@ -2991,20 +2991,12 @@ function apiSaldoKLRincian(kode, bulan){
      membaca "layanan" - akibatnya saldo kantor memuat UMP yang rinciannya
      tidak pernah tampil (mis. KLL SMK Muhammadiyah 1 Bantul). Sekarang
      kedua jalur memakai pembacaan yang sama. */
-  var namaUmp = function(r){
-    var dari = _layananUmp(r.layanan, layList);
-    if (dari && cocok(dari)) return dari;
-    var teks = String(r.layanan || '') + ' ' + String(r.keterangan || '');
-    var dariTeks = _namaKantorDariTeks(teks, layList);
-    return (dariTeks && cocok(dariTeks)) ? dariTeks : dari;
-  };
-  var namaLpj = function(r){
-    var dari = _layananUmp(r.namaPenerima, layList);
-    if (dari && cocok(dari)) return dari;
-    var teks = String(r.namaPenerima || '') + ' ' + String(r.keterangan || '');
-    var dariTeks = _namaKantorDariTeks(teks, layList);
-    return (dariTeks && cocok(dariTeks)) ? dariTeks : dari;
-  };
+  /* Satu baris diterjemahkan ke kunci kantor lewat _kunciBarisKantor - jalur
+     yang sama dengan menu Saldo KLL - lalu dibandingkan dengan kunci kantor
+     yang sedang dibuka. Dengan begitu halaman kantor dan kantor pusat tidak
+     bisa menghitung baris yang berbeda. */
+  var cocokUmp = function(r){ var k = _kunciBarisKantor(r.layanan, r.keterangan, layList); return (k && kunciLay) ? k === kunciLay : cocok(r.layanan); };
+  var cocokLpj = function(r){ var k = _kunciBarisKantor(r.namaPenerima, r.keterangan, layList); return (k && kunciLay) ? k === kunciLay : cocok(r.namaPenerima); };
 
   /* LPJ tidak selalu dibukukan di bulan yang sama dengan uang muka. Saldo
      belum LPJ dihitung berjalan dari Januari sampai bulan yang dilihat, jadi
@@ -3016,14 +3008,14 @@ function apiSaldoKLRincian(kode, bulan){
   while (bl <= b) {
     UM.forEach(function(r){
       if (String(r.tanggal || '').slice(0, 7) !== bl) return;
-      if (!cocok(namaUmp(r))) return;
+      if (!cocokUmp(r)) return;
       var n = Number(r.nominal) || 0;
       if (String(r.jenis) === 'kembali') berjalan.kembali += n; else berjalan.keluar += n;
     });
     PT.forEach(function(r){
       if (String(r.tanggal || '').slice(0, 7) !== bl) return;
       if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
-      if (!cocok(namaLpj(r))) return;
+      if (!cocokLpj(r)) return;
       berjalan.lpj += Number(r.jumlah) || 0;
     });
     var th = Number(bl.slice(0, 4)), bn = Number(bl.slice(5, 7)) + 1;
@@ -3052,7 +3044,7 @@ function apiSaldoKLRincian(kode, bulan){
 
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
     if (!dalam(r.tanggal)) return;
-    if (!cocok(namaUmp(r))) return;
+    if (!cocokUmp(r)) return;
     var n = Number(r.nominal) || 0;
     var arah = String(r.jenis) === 'kembali' ? 'kembali' : 'keluar';
     if (arah === 'kembali') umpKembali += n; else umpKeluar += n;
@@ -3063,7 +3055,7 @@ function apiSaldoKLRincian(kode, bulan){
   (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
     if (!dalam(r.tanggal)) return;
     if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
-    if (!cocok(namaLpj(r))) return;
+    if (!cocokLpj(r)) return;
     var n = Number(r.jumlah) || 0;
     lpjJumlah += n;
     /* Hanya program yang dikirim, bukan keterangan bebasnya: kolom itu kadang
@@ -3233,6 +3225,34 @@ function _kunciKantor(nama, layList){
   return t ? 'nm:' + _norm(t) : '';
 }
 
+/* Nama kantor yang tertulis di dalam sebuah teks (mis. keterangan uang muka
+   "Uang Muka Program Infak KLL Pundong"). Tidak membaca lembar Layanan
+   sendiri supaya aman dipanggil ribuan kali dalam satu permintaan. */
+function _kantorDariTeks(teks, layList){
+  var pre = _layFromPrefix(String(teks || ''), layList || []);
+  var hit = pre ? _layCocokNama(pre, layList || []) : null;
+  if (!hit) return '';
+  return (String(hit.tipe || '').toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + hit.nama;
+}
+
+/* KUNCI KANTOR UNTUK SATU BARIS uang muka / LPJ. Kolom nama dicoba lebih dulu,
+   lalu nama yang sudah dipadankan ke master Layanan, lalu nama yang tertulis
+   di keterangan. Yang dipakai hanya hasil yang benar-benar terdaftar; kalau
+   tidak ada, kunci nama apa adanya dipakai sebagai cadangan. Urutan yang sama
+   dipakai menu pusat dan halaman kantor, jadi hasilnya tidak bisa berbeda. */
+function _kunciBarisKantor(nilai, keterangan, layList){
+  layList = layList || readAll(SHEETS.LAYANAN) || [];
+  var calon = [nilai, _layananUmp(nilai, layList), _kantorDariTeks(String(nilai || '') + ' ' + String(keterangan || ''), layList)];
+  var cadangan = '';
+  for (var i = 0; i < calon.length; i++) {
+    var k = _kunciKantor(calon[i], layList);
+    if (!k) continue;
+    if (k.indexOf('lay:') === 0) return k;
+    if (!cadangan) cadangan = k;
+  }
+  return cadangan;
+}
+
 /* REKAP UANG MUKA & LPJ PER KANTOR, kumulatif sejak 1 Januari sampai tanggal
    posisi. Satu sumber untuk halaman /saldo-kl.html dan menu Saldo KLL, supaya
    "sudah LPJ" dan "belum LPJ" tidak pernah berbeda di dua layar. */
@@ -3240,8 +3260,7 @@ function _rekapUmpLpjKantor(sampai, layList){
   sampai = String(sampai || '').slice(0, 10);
   var awal = sampai.slice(0, 4) + '-01-01';
   var peta = {};
-  var tambah = function(nama, f, n){
-    var k = _kunciKantor(nama, layList);
+  var tambah = function(k, f, n){
     if (!k) return;
     var p = peta[k] || (peta[k] = { keluar: 0, kembali: 0, lpj: 0 });
     p[f] += n;
@@ -3249,13 +3268,13 @@ function _rekapUmpLpjKantor(sampai, layList){
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
     var t = String(r.tanggal || '').slice(0, 10);
     if (t < awal || t > sampai) return;
-    tambah(r.layanan, String(r.jenis) === 'kembali' ? 'kembali' : 'keluar', Number(r.nominal) || 0);
+    tambah(_kunciBarisKantor(r.layanan, r.keterangan, layList), String(r.jenis) === 'kembali' ? 'kembali' : 'keluar', Number(r.nominal) || 0);
   });
   (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
     var t = String(r.tanggal || '').slice(0, 10);
     if (t < awal || t > sampai) return;
     if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
-    tambah(r.namaPenerima, 'lpj', Number(r.jumlah) || 0);
+    tambah(_kunciBarisKantor(r.namaPenerima, r.keterangan, layList), 'lpj', Number(r.jumlah) || 0);
   });
   return peta;
 }
