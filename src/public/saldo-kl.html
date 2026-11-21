@@ -12,6 +12,14 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
 <link rel="stylesheet" href="/styles.css">
 <script src="/js/lz-tema.js"></script>
+<script>
+/* Tema dipasang sebelum isi halaman digambar: kalau menunggu lz-tema.js,
+   halaman sempat tampil terang lalu berkedip gelap. Pilihannya sama dengan
+   halaman lacak: pilihan terakhir orang, kalau belum ada ikut sistem. */
+(function(){ var t=null; try{ t=localStorage.getItem('laz_theme'); }catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t); })();
+</script>
 <script src="/js/lz-logo.js" defer></script>
 <style>
   /* === halaman saldo kl — memakai token styles.css supaya tema ikut === */
@@ -31,6 +39,22 @@
     content:"";position:absolute;right:-60px;top:-70px;width:210px;height:210px;border-radius:50%;
     background:radial-gradient(circle,rgba(255,255,255,.26),transparent 70%);pointer-events:none;
   }
+  /* Tombol tema pojok kanan atas. Animasinya milik js/lz-tema.js bersama
+     styles.css (ikon matahari/bulan berubah bentuk, lingkaran melebar dari
+     tombol); di sini hanya bentuk dan tempatnya di kepala halaman. */
+  .kl-head{padding-right:62px}
+  .kl-tema{
+    position:absolute;top:13px;right:13px;z-index:3;
+    width:38px;height:38px;padding:0;flex:none;border-radius:12px;
+    border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.16);
+    color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent;
+    transition:background .18s ease,border-color .18s ease,transform .18s ease;
+  }
+  .kl-tema:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.55)}
+  .kl-tema:active{transform:scale(.92)}
+  .kl-tema:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .kl-tema .lz-tema-ikon{width:21px;height:21px;display:block}
   /* Logo Lazismu Bantul: SVG bergerak (js/lz-logo.js), sama dengan bilah menu web asli.
      Ditaruh di kepingan putih supaya tulisan logo tetap gelap dan terbaca di atas gradasi. */
   .kl-head #brandBox{
@@ -226,7 +250,7 @@
   }
   @media (max-width:600px){
     .kl-wrap{padding:14px 10px 32px}
-    .kl-head{padding:15px 16px;border-radius:16px}
+    .kl-head{padding:15px 58px 15px 16px;border-radius:16px}
     .kl-card{padding:14px;border-radius:14px}
     .kl-form{gap:8px}
     .kl-input,.kl-btn{height:44px;font-size:15px}
@@ -242,6 +266,7 @@
     table.kl-tbl.kecil th,table.kl-tbl.kecil td{padding:7px 8px}
   }
   @media print{
+    .kl-tema{display:none!important}
     .kl-form,.kl-foot,.kl-tabs,.kl-bulanbar,.kl-head::after{display:none!important}
     body{background:#fff}
     .kl-card,.kl-hero{box-shadow:none;border-color:#ccc}
@@ -253,6 +278,7 @@
 <body>
 <div class="kl-wrap">
   <div class="kl-head">
+    <button type="button" class="kl-tema kepala-tema" data-lz-tema aria-label="Ganti tema"></button>
     <div id="brandBox"><span class="lz-logo-svg lz-logo-tunggu" data-lz-logo role="img" aria-label="Lazismu Bantul"></span></div>
     <div>
       <div class="kl-nama">Saldo Kantor Layanan</div>
