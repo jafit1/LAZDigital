@@ -2154,12 +2154,19 @@ function apiSaldoLayanan(t, sampai, bulan){
   var u = _requirePerm(t, 'saldokll', 'view');
   /* Satu sumber angka: saldo pembuka Analisa + UMP per dana/pilar. */
   var rinci = _saldoAnalisaUntuk(t, sampai || '', '', true);
+  /* Uang muka & LPJ kumulatif sejak Januari - angka yang sama dengan tab
+     Setoran di /saldo-kl.html. Dulu kolom "Belum LPJ" di sini selalu 0
+     sementara halaman kantor menampilkan angka besar, jadi dua layar
+     bertentangan. */
+  var layListSaldo = readAll(SHEETS.LAYANAN) || [];
+  var petaUmk = _rekapUmpLpjKantor(rinci.sampai, layListSaldo);
   var ubah = function(k){
     var himpun=0, amil=0, ump=0, salur=0;
     (k.dana||[]).forEach(function(d){ himpun+=Number(d.himpun)||0; amil+=Number(d.amil)||0; ump+=Number(d.sisaUmk)||0; salur+=Number(d.salur)||0; });
+    var be = _belumLpjKantor(petaUmk, k.nama, layListSaldo);
     return { layanan:k.nama, tipe:k.tipe, himpun:himpun, kenaAmil:himpun, bebasAmil:0,
-      hakAmil:amil, saldoKLL:(Number(k.total)||0)+ump, umpKeluar:ump, umpKembali:0, lpj:salur,
-      sisaSaldo:Number(k.total)||0, belumLPJ:0, nHimpun:0, nUmp:0, nLpj:0 };
+      hakAmil:amil, saldoKLL:(Number(k.total)||0)+ump, umpKeluar:ump, umpKembali:be.kembali, lpj:be.lpj,
+      sisaSaldo:Number(k.total)||0, belumLPJ:be.belum, nHimpun:0, nUmp:0, nLpj:0 };
   };
   var semua=(rinci.daftar||[]).map(ubah), kosong=function(){return {himpun:0,kenaAmil:0,bebasAmil:0,hakAmil:0,saldoKLL:0,umpKeluar:0,umpKembali:0,lpj:0,sisaSaldo:0,belumLPJ:0};};
   var hasil={tanggal:rinci.sampai,bulan:String(bulan||''),tahun:rinci.tahun,persen:_bacaHakAmil().persen,kecuali:[],daftar:semua,total:kosong(),totalKll:kosong(),daerah:null,jumlahLayanan:0,olehAnalisa:true,sumber:rinci.sumber, bolehDaerah:can(u,'saldodaerah','view')};
@@ -2964,9 +2971,20 @@ function apiSaldoKLRincian(kode, bulan){
   var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
   /* Awalan KLL/ULL dibuang saat membandingkan: kunci di kodeAksesKL memakai
      nama penuh, sedangkan beberapa baris jurnal hanya menulis nama kantornya. */
+  /* Nama kantor pada baris uang muka/LPJ sering ditulis beda dengan master
+     Layanan ("KLL SMK Muh 1 Bantul" vs "KLL SMK Muhammadiyah 1 Bantul",
+     "KLL Bnatul Kota"). Dulu hanya dibandingkan huruf demi huruf, sehingga LPJ
+     yang memakai ejaan lain tidak pernah mengurangi uang muka dan "belum LPJ"
+     kantor itu membesar palsu. Sekarang keduanya diterjemahkan ke id Layanan
+     lebih dulu, memakai alias yang sama dengan layar impor. */
   var inti = function(n){ return _norm(String(n == null ? '' : n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
-  var kunci = inti(e.nama);
-  var cocok = function(nama){ return inti(nama) === kunci; };
+  var kunciLay = _kunciKantor(e.nama, layList);
+  var kunciNm = inti(e.nama);
+  var cocok = function(nama){
+    var k = _kunciKantor(nama, layList);
+    if (k && kunciLay && k === kunciLay) return true;
+    return inti(nama) === kunciNm;
+  };
   /* Nama kantor pada baris UMP tidak selalu duduk di kolom "layanan": kadang
      kolom itu kosong dan namanya justru tertulis di keterangan. Analisa sudah
      membaca keduanya lewat _namaKantorDariTeks, rincian publik dulu hanya
@@ -3175,11 +3193,15 @@ function _layMaster(){
    Settings (kunci aliasKantor) supaya impor bulan berikutnya tidak
    menanyakannya lagi. Kuncinya "tipe nama" yang sudah dinormalkan, isinya
    { id, tipe, nama } kantor terdaftar. */
+var _ALIAS_KANTOR_CACHE = null;
 function _aliasKantor(){
+  if (_ALIAS_KANTOR_CACHE) return _ALIAS_KANTOR_CACHE;
   try {
     var v = getSetting('aliasKantor');
     var o = v ? JSON.parse(v) : {};
-    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+    o = (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+    _ALIAS_KANTOR_CACHE = o;
+    return o;
   } catch (e) {
     if (e && (e.perluLembar || /belum dimuat/.test(String(e.message || '')))) throw e;
     return {};
@@ -3194,6 +3216,54 @@ var _PILIHAN_DAERAH = { id: '__DAERAH__', tipe: '', nama: 'Penghimpunan Daerah',
 var _ID_SENDIRI = '__SENDIRI__';
 var _PILIHAN_SENDIRI = { id: '__SENDIRI__', tipe: '', nama: '', label: 'Nama sendiri, tidak didaftarkan (jangan tanya lagi)' };
 function _kunciAlias(tipe, nama){ return String(tipe || '').toLowerCase() + ' ' + _norm(nama); }
+
+/* KUNCI KANTOR untuk mencocokkan baris uang muka & LPJ dengan daftar kantor.
+   Dipakai jalur yang sama dengan impor: _layFromPrefix (yang sudah membaca
+   alias pilihan orang) lalu _layCocokNama. Hasilnya id Layanan, bukan teks,
+   supaya "KLL SMK Muh 1 Bantul" dan "KLL SMK Muhammadiyah 1 Bantul" terbaca
+   sebagai kantor yang sama tanpa menebak. Bila tidak terdaftar, nama yang
+   sudah dirapikan dipakai sebagai kunci cadangan. */
+function _kunciKantor(nama, layList){
+  layList = layList || readAll(SHEETS.LAYANAN) || [];
+  var pre = _layFromPrefix(String(nama || ''), layList);
+  var hit = pre ? _layCocokNama(pre, layList) : null;
+  if (hit) return 'lay:' + String(hit.id || _norm(hit.nama));
+  var t = String(nama || '').trim();
+  for (var i = 0; i < 3; i++) t = t.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '').trim();
+  return t ? 'nm:' + _norm(t) : '';
+}
+
+/* REKAP UANG MUKA & LPJ PER KANTOR, kumulatif sejak 1 Januari sampai tanggal
+   posisi. Satu sumber untuk halaman /saldo-kl.html dan menu Saldo KLL, supaya
+   "sudah LPJ" dan "belum LPJ" tidak pernah berbeda di dua layar. */
+function _rekapUmpLpjKantor(sampai, layList){
+  sampai = String(sampai || '').slice(0, 10);
+  var awal = sampai.slice(0, 4) + '-01-01';
+  var peta = {};
+  var tambah = function(nama, f, n){
+    var k = _kunciKantor(nama, layList);
+    if (!k) return;
+    var p = peta[k] || (peta[k] = { keluar: 0, kembali: 0, lpj: 0 });
+    p[f] += n;
+  };
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    var t = String(r.tanggal || '').slice(0, 10);
+    if (t < awal || t > sampai) return;
+    tambah(r.layanan, String(r.jenis) === 'kembali' ? 'kembali' : 'keluar', Number(r.nominal) || 0);
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    var t = String(r.tanggal || '').slice(0, 10);
+    if (t < awal || t > sampai) return;
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    tambah(r.namaPenerima, 'lpj', Number(r.jumlah) || 0);
+  });
+  return peta;
+}
+function _belumLpjKantor(peta, nama, layList){
+  var p = peta[_kunciKantor(nama, layList)];
+  if (!p) return { keluar: 0, kembali: 0, lpj: 0, belum: 0 };
+  return { keluar: p.keluar, kembali: p.kembali, lpj: p.lpj, belum: p.keluar - p.lpj - p.kembali };
+}
 
 function _layFromPrefix(rawText, layList){
   /* Penanda kantor yang diakui pemilik (1 Oktober 2026): KLL, ULL, KL, UL,
@@ -6473,6 +6543,7 @@ function apiSimpanAliasKantor(t, nama, layananId){
     var as = _aliasKantor(), tws = p.tipe + ' ' + p.inti;
     as[_kunciAlias(p.tipe, p.inti)] = { sendiri: true, tipe: p.tipe, nama: p.inti, tertulis: tws, oleh: u.username, waktu: new Date().toISOString() };
     setSetting('aliasKantor', JSON.stringify(as));
+    _ALIAS_KANTOR_CACHE = null;
     audit(u.id, u.username, 'alias_kantor', tws + ' -> nama sendiri', { modul: 'layanan', ringkas: '"' + tws + '" dihitung di kelompok ' + p.tipe + ' tanpa didaftarkan' });
     return { ok: true, tertulis: tws, label: tws };
   }
@@ -6480,6 +6551,7 @@ function apiSimpanAliasKantor(t, nama, layananId){
     var al = _aliasKantor(), tw = p.tipe + ' ' + p.inti;
     al[_kunciAlias(p.tipe, p.inti)] = { daerah: true, tipe: p.tipe, nama: LAYANAN_DAERAH, tertulis: tw, oleh: u.username, waktu: new Date().toISOString() };
     setSetting('aliasKantor', JSON.stringify(al));
+    _ALIAS_KANTOR_CACHE = null;
     audit(u.id, u.username, 'alias_kantor', tw + ' -> Daerah', { modul: 'layanan', ringkas: '"' + tw + '" dibaca sebagai milik Daerah, bukan kantor' });
     return { ok: true, tertulis: tw, label: 'Daerah' };
   }
@@ -6491,6 +6563,7 @@ function apiSimpanAliasKantor(t, nama, layananId){
   var tertulis = p.tipe + ' ' + p.inti;
   alias[_kunciAlias(p.tipe, p.inti)] = { id: l.id, tipe: lt, nama: l.nama, tertulis: tertulis, oleh: u.username, waktu: new Date().toISOString() };
   setSetting('aliasKantor', JSON.stringify(alias));
+  _ALIAS_KANTOR_CACHE = null;
   audit(u.id, u.username, 'alias_kantor', tertulis + ' -> ' + lt + ' ' + l.nama, { modul: 'layanan', ringkas: '"' + tertulis + '" dibaca sebagai ' + lt + ' ' + l.nama });
   return { ok: true, tertulis: tertulis, label: lt + ' ' + l.nama };
 }
@@ -6508,6 +6581,7 @@ function apiHapusAliasKantor(t, nama){
   if (!a[k]) return { ok: true, ada: false };
   delete a[k];
   setSetting('aliasKantor', JSON.stringify(a));
+  _ALIAS_KANTOR_CACHE = null;
   audit(u.id, u.username, 'hapus_alias_kantor', p.tipe + ' ' + p.inti, { modul: 'layanan' });
   return { ok: true, ada: true };
 }
