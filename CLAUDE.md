@@ -1031,6 +1031,20 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   `Downloads/audit-saldo-data-final-2026.md` dan `.csv`.
   Tab Setoran masih memakai mesin `hitungSaldoLayanan` dan belum disamakan.
 
+- **Saldo final hidup, bukan beku (23 November 2026, commit `fb18e38`).**
+  Settings `saldoFinalBatas:2026` menyimpan batas `2026-11-30`. Sampai batas
+  itu angka memakai lampiran; transaksi yang dicatat setelah batas dihitung
+  dari input dan ditambahkan per `alias|dana` (hak amil ikut dipindah ke dana
+  Amil), jadi setoran baru langsung menggeser saldo. `_saldoAnalisaUntuk`
+  punya argumen internal `mentah` untuk menghitung delta tanpa memakai
+  saldo final (argumen ini TIDAK boleh ditambahkan ke fungsi yang terdaftar
+  di REGISTRY). `apiDetailSaldoLayanan` dan `apiSaldoKLRincian` ikut
+  memakai total final lewat field `saldoFinal`, `pembukaFinal`, dan
+  `sumberFinal`; `apiDetailSaldoLayanan` menimpa `ringkas.sisaSaldo`
+  dengan angka final. Dijaga `tools/test_saldo_final.js` (12/12).
+  Verifikasi produksi: batas `2026-11-30`, total Rp 3.009.680.081,
+  Bambanglipuro Rp 40.357.723 di tiga jalur (publik, detail, tab Setoran).
+
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
