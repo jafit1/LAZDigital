@@ -3079,6 +3079,29 @@ function apiBuatKodeAksesKL(t){
     { modul:'settings', ringkas: Object.keys(baru).length + ' kantor layanan' });
   return { ok:true, jumlah:Object.keys(baru).length, daftar:Object.keys(baru).sort().map(function(n){ return baru[n]; }) };
 }
+/* Rotasi penuh: kode lama TIDAK disalin. Dipakai bila ada kode yang bocor.
+   Semua kode lama berhenti berlaku begitu kunci Settings ditimpa. */
+function apiRotasiKodeAksesKL(t){
+  var admin = _requirePerm(t, 'settings', 'edit');
+  var semua = _saldoAnalisaUntuk(null, '', '', true).daftar || [];
+  var baru = {}, dipakai = {};
+  semua.forEach(function(k){
+    var nama = String(k.nama || '').trim();
+    if (!/^(KLL|ULL)\s/i.test(nama)) return;
+    if (_keDaerahSaja(nama)) return;      /* RS PKU sudah masuk Daerah */
+    var kode;
+    do { kode = 'KL-' + Utilities.getUuid().replace(/-/g,'').slice(0,8).toUpperCase(); }
+    while (dipakai[kode]);
+    dipakai[kode] = 1;
+    baru[nama] = { kode:kode, nama:nama, tipe:k.tipe, aktif:true };
+  });
+  var jumlah = Object.keys(baru).length;
+  if (!jumlah) throw new Error('Tidak ada kantor dengan saldo untuk diberi kode.');
+  setSetting('kodeAksesKL', JSON.stringify(baru));
+  audit(admin.id, admin.username, 'rotasi_kode_akses_kl', 'semua kantor',
+    { modul:'settings', ringkas:jumlah + ' kode lama dicabut, ' + jumlah + ' kode baru diterbitkan' });
+  return { ok:true, jumlah:jumlah, daftar:Object.keys(baru).sort().map(function(n){ return baru[n]; }) };
+}
 function apiDaftarKodeAksesKL(t){
   _requirePerm(t,'settings','view');
   var peta = _bacaKodeKL();
@@ -9887,6 +9910,7 @@ REGISTRY['apiSaldoKantorRinci']=apiSaldoKantorRinci;
 REGISTRY['apiBuatKodeAksesKL']=apiBuatKodeAksesKL;
 REGISTRY['apiDaftarKodeAksesKL']=apiDaftarKodeAksesKL;
 REGISTRY['apiNonaktifkanKodeAksesKL']=apiNonaktifkanKodeAksesKL;
+REGISTRY['apiRotasiKodeAksesKL']=apiRotasiKodeAksesKL;
 REGISTRY['apiSaldoKLPublik']=apiSaldoKLPublik;
 REGISTRY['apiSaldoKLRincian']=apiSaldoKLRincian;
 /* ===== FUNGSI YANG BOLEH DIPANGGIL TANPA SESI =====
