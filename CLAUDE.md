@@ -1058,6 +1058,16 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   Daftar 13 baris tetap ada di `Downloads/audit-saldo-data-final-2026.md`.
   Kode snapshot dibiarkan tidak aktif sebagai jalur kembali, bukan sumber angka.
 
+- **STATUS SEMENTARA (23 November 2026, permintaan pemilik):** saldo最终
+  dipasang KEMBALI dari `saldoFinalAnalisa:2026` (608 baris Data Final.xlsx,
+  batas `2026-11-30`) supaya angka rapat sama dengan file. Total Rp 3.009.680.081.
+  **Ini belum benar secara inputan.** Saldo akhir masih dipangkal dari angka
+  lampiran, bukan turunan penuh transaksi. Cara menghapus: `apiHapusSaldoFinalAnalisa`.
+  Yang harus dibenarkan: 13 baris lampiran yang tidak balance (koreksi bersih
+  Rp 130.327.657) dan beda aturan klasifikasi dana, lalu saldo dikembalikan
+  ke mesin `saldoAwalAnalisa:2026` + transaksi. **Wajib mengingatkan pemilik
+  di setiap balasan bahwa angka ini sementara dan perlu dibenarkan.**
+
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
