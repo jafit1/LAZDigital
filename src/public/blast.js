@@ -2661,16 +2661,39 @@ halaman.kontak = {
         <div id="isiGrup">${isiGrup(d.grup || [])}</div>`, (wadah) => {
         $('#fgrTutup').onclick = tutupModal;
         const pasang = () => {
-          $$('[data-namaulang]', wadah).forEach((b) => b.onclick = async () => {
-            const baru = prompt(`Nama baru untuk grup "${b.dataset.namaulang}":`, b.dataset.namaulang);
-            if (baru === null || !baru.trim()) return;
-            try {
-              const h = await rpc('grup.ubahNama', { lama: b.dataset.namaulang, baru });
-              $('#isiGrup', wadah).innerHTML = isiGrup(h.baris);
-              pasang();
-              toast(`${h.kontak} kontak diperbarui.`, 'sukses');
-              halaman.kontak.gambar(el);
-            } catch (e) { toast(e.message, 'galat'); }
+          $$('[data-namaulang]', wadah).forEach((b) => b.onclick = () => {
+            const lama = b.dataset.namaulang;
+            const ov = document.createElement('div');
+            ov.className = 'cd-overlay show';
+            ov.innerHTML = `<div class="cd-card" role="dialog" aria-modal="true">
+              <div class="cd-title">Ubah nama grup</div>
+              <div class="cd-msg" style="margin-bottom:10px">Masukkan nama baru untuk grup <b>${H(lama)}</b>:</div>
+              <input id="fgrBaruInp" value="${H(lama)}" style="width:100%;margin-bottom:14px">
+              <div class="cd-acts">
+                <button type="button" class="btn btn-ghost" id="fgrBaruBatal">Batal</button>
+                <button type="button" class="btn btn-primary" id="fgrBaruOk">Simpan</button>
+              </div>
+            </div>`;
+            document.body.appendChild(ov);
+            const inp = $('#fgrBaruInp', ov);
+            const tutup = () => ov.remove();
+            ov.onclick = (e) => { if (e.target === ov) tutup(); };
+            $('#fgrBaruBatal', ov).onclick = tutup;
+            const simpan = async () => {
+              const baru = (inp.value || '').trim();
+              if (!baru) return;
+              tutup();
+              try {
+                const h = await rpc('grup.ubahNama', { lama, baru });
+                $('#isiGrup', wadah).innerHTML = isiGrup(h.baris);
+                pasang();
+                toast(`${h.kontak} kontak diperbarui.`, 'sukses');
+                halaman.kontak.gambar(el);
+              } catch (e) { toast(e.message, 'galat'); }
+            };
+            $('#fgrBaruOk', ov).onclick = simpan;
+            inp.onkeydown = (e) => { if (e.key === 'Enter') simpan(); else if (e.key === 'Escape') tutup(); };
+            setTimeout(() => { inp.focus(); inp.select(); }, 20);
           });
           $$('[data-bubar]', wadah).forEach((b) => b.onclick = async () => {
             try {
@@ -2767,7 +2790,7 @@ halaman.kontak = {
                 + p.tidakSah.slice(0, 3).map((x) => H(x.nama || '(tanpa nama)') + ' ' + H(x.nomor)).join('; ')
                 + `</div>` : '')
             + `</div>`;
-        } catch (e) { kotak.innerHTML = `<span style="color:var(--bahaya)">${H(e.message)}</span>`; }
+        } catch (e) { kotak.innerHTML = `<span style="color:var(--red)">${H(e.message)}</span>`; }
       }
 
       $('#teksK', wadah).oninput = () => {

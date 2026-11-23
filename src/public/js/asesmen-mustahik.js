@@ -60,7 +60,6 @@
       window.toast(pesan, merah);
       return;
     }
-    alert(pesan);
   }
 
   function konfirmasiHapus(namaMustahik, onYa) {
@@ -631,7 +630,7 @@
 
   function cetakLembar(x) {
     const w = window.open('', '_blank');
-    if (!w) return alert('Izinkan popup untuk mencetak formulir asesmen.');
+    if (!w) return pesanToast('Izinkan popup untuk mencetak formulir asesmen.', true);
     const jaw = x.jawaban || {};
     const tanggalTeks = tanggalIndo(x.tanggal);
 
@@ -783,7 +782,7 @@
         ikatTombol();
       } catch (e) {
         b.disabled = false;
-        alert('Gagal sinkronkan ke server: ' + e.message);
+        pesanToast('Gagal sinkronkan ke server: ' + e.message, true);
       }
       return;
     }
@@ -888,7 +887,7 @@
       } catch (e) {
         b.disabled = false;
         b.innerHTML = teksLama;
-        alert('Server belum menerima: ' + e.message + '. Salinan asesmen tetap tersimpan aman di perangkat ini dan dapat disinkronkan saat koneksi pulih.');
+        pesanToast('Server belum menerima: ' + e.message + '. Salinan asesmen tetap tersimpan aman di perangkat ini.', true);
         induk.innerHTML = judul()
           + '<div class="am-sukses am-sukses-warn card">'
           + '<div class="am-sukses-text">'
@@ -1025,6 +1024,9 @@
       .am-field>span{font-size:12px;font-weight:700;color:var(--text2)}
       .am-field input,.am-field textarea{width:100%;min-width:0;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;padding:9px 12px}
       .am-field input:focus,.am-field textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+      .am-tujuan-box{margin-bottom:4px}
+      .am-bawah-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+      .am-hasil-skor-box{display:flex;flex-direction:column;gap:2px}
       .am-penuh{grid-column:1/-1}
 
       .am-bagian{padding:0;overflow:hidden;margin-bottom:16px}

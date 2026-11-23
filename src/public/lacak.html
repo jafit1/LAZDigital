@@ -10,8 +10,14 @@
   <title>Lacak Progres</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"></noscript>
   <link rel="stylesheet" href="/styles.css">
+  <script>
+    (function(){ var t = null; try { t = localStorage.getItem('laz_theme'); } catch(e) {}
+      if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t); })();
+  </script>
   <script src="/js/lz-tema.js"></script>
   <script src="/js/lz-perangkat.js"></script>
   <script src="/js/lz-logo.js"></script>
@@ -80,11 +86,6 @@
   </style>
 </head>
 <body>
-  <script>
-    (function(){ var t = null; try { t = localStorage.getItem('laz_theme'); } catch(e) {}
-      if (!t) t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', t); })();
-  </script>
   <script>LZLogo.muat({ kunci: 'lz_muat_lacak' });</script>
   <div class="lk-wrap">
     <div class="lk-atas-bar"><div class="lk-id"><div class="lk-logo lz-logo-kepala" id="lkLogo"><script>document.write(LZLogo.statis("Lazismu Bantul"));</script></div><div class="lk-lembaga" id="lkLembaga">Lazismu Daerah Bantul</div></div>

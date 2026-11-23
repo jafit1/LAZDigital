@@ -119,6 +119,7 @@ const DAFTAR = [
   { label: 'Alat ukur dan rapikan Redis', berkas: 'test_alat_redis.js' },
   { label: 'Alat ekspor Redis', berkas: 'test_ekspor_redis.js' },
   { label: 'Lambang dan ikon situs', berkas: 'test_ikon.js' },
+  { label: 'Sinkronisasi UI, CSS, dan 12 halaman HTML', berkas: 'test_sinkron_ui.js' },
   { label: 'Bilah menu: logo dan tombol keluar', berkas: 'test_sidebar_ui.js' },
   { label: 'Tombol tema terang/gelap dan sapuannya', berkas: 'test_tema_ui.js' },
   { label: 'Logo SVG bilah menu, bergerak sekali per menu', berkas: 'test_logo_ui.js' },

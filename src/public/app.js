@@ -569,54 +569,58 @@ function go(view){window.REK_HOST='';window.LAY_HOST='';document.querySelectorAl
    kolom Saldo Kas Akhir. Sengaja memakai halaman sendiri supaya rincian
    Daerah tidak menyembunyikan rincian KLL/ULL, dan sebaliknya. */
 function _saldoRinciHeader(judul, gol){
-  var hari = window.SALDO_RINCI_SAMPAI || '2026-11-20';
-  var pil = gol ? '<select id="srGol" class="inp" style="height:34px"><option value="kll"'+(gol==='kll'?' selected':'')+'>KLL</option><option value="ull"'+(gol==='ull'?' selected':'')+'>ULL</option></select>' : '';
-  return '<div class="card" style="margin-bottom:14px"><div class="card-h"><div><div class="card-t">'+judul+'</div>'
-    + '<div class="muted" style="font-size:12px;margin-top:3px">Saldo awal = Saldo Kas Akhir sheet Analisa 2025. Hak amil dipindah ke dana Amil kantor yang sama.</div></div></div>'
-    + '<div class="toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+  var hari = window.SALDO_RINCI_SAMPAI || today();
+  var pil = gol ? '<select id="srGol" style="height:34px;width:auto;min-width:100px"><option value="kll"'+(gol==='kll'?' selected':'')+'>KLL</option><option value="ull"'+(gol==='ull'?' selected':'')+'>ULL</option></select>' : '';
+  return '<div class="page-head"><div><h2>'+judul+'</h2>'
+    + '<div class="desc">Saldo awal = Saldo Kas Akhir sheet Analisa 2025. Hak amil dipindah ke dana Amil kantor yang sama.</div></div></div>'
+    + '<div class="card" style="margin-bottom:14px">'
+    + '<div class="toolbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0;border:0">'
     + '<label class="muted" style="font-size:12px">Posisi sampai</label>'
-    + '<input type="date" id="srSampai" class="inp" value="'+hari+'" style="height:34px">'+pil
+    + '<input type="date" id="srSampai" value="'+esc(hari)+'" max="'+today()+'" style="height:34px;width:auto">'+pil
     + '<button class="btn btn-primary btn-sm" onclick="saldoRinciMuat('+(gol?JSON.stringify(gol):"'daerah'")+')">Tampilkan</button>'
     + '</div></div><div id="srHasil"><div class="muted" style="padding:16px">Memuat saldo...</div></div>';
 }
 function viewSaldoDaerahRinci(){
   var c=el('content'); if(!c) return;
   c.innerHTML=_saldoRinciHeader('Saldo Lazismu Daerah Bantul per Dana', null);
+  if(typeof enhanceDatePickers==='function') enhanceDatePickers(c);
   saldoRinciMuat('daerah');
 }
 function viewSaldoKantorRinci(){
   var c=el('content'); if(!c) return;
   c.innerHTML=_saldoRinciHeader('Saldo KLL & ULL per Dana', window.SALDO_RINCI_GOL || 'kll');
+  if(typeof enhanceSelects==='function') enhanceSelects(c);
+  if(typeof enhanceDatePickers==='function') enhanceDatePickers(c);
   saldoRinciMuat(window.SALDO_RINCI_GOL || 'kll');
 }
 function saldoRinciMuat(gol){
   var tgl=el('srSampai');
   if(tgl && /^\d{4}-\d{2}-\d{2}$/.test(tgl.value)) window.SALDO_RINCI_SAMPAI=tgl.value;
   var p=el('srGol'); if(p){window.SALDO_RINCI_GOL=p.value;gol=p.value;}
-  var sampai=window.SALDO_RINCI_SAMPAI || '2026-11-20';
+  var sampai=window.SALDO_RINCI_SAMPAI || today();
   var fn=gol==='daerah'?'apiSaldoDaerahRinci':'apiSaldoKantorRinci';
   var args=gol==='daerah'?[TOKEN,sampai]:[TOKEN,sampai,gol];
   gas(fn).apply(null,args).then(function(d){
     var host=el('srHasil'); if(!host) return;
-    var h='<div class="card"><div class="card-h"><div><div class="card-t">Ringkasan</div>'
-      + '<div class="muted" style="font-size:12px;margin-top:3px">'+esc(d.sumber||'')+' · posisi '+esc(d.sampai||'')+'</div></div></div>'
+    var h='<div class="card"><h3>Ringkasan</h3>'
+      + '<div class="desc">'+esc(d.sumber||'')+' · posisi '+esc(d.sampai||'')+'</div>'
       + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 14px">'
       + '<div><div class="muted" style="font-size:11px">Saldo pembuka 2025</div><div style="font-size:18px;font-weight:700">'+rp(d.pembuka)+'</div></div>'
       + '<div><div class="muted" style="font-size:11px">Saldo berjalan</div><div style="font-size:18px;font-weight:700;color:var(--green)">'+rp(d.total)+'</div></div>'
       + '<div><div class="muted" style="font-size:11px">Jumlah entitas</div><div style="font-size:18px;font-weight:700">'+((d.daftar||[]).length)+'</div></div>'
       + '</div>';
     (d.daftar||[]).forEach(function(k){
-      h+='<div style="border-top:1px solid var(--line);padding:12px 0">'
+      h+='<div style="border-top:1px solid var(--border);padding:12px 0">'
         + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
         + '<div style="font-weight:700">'+esc(k.nama)+'</div><div style="font-weight:700;color:'+(k.total<0?'var(--red)':'var(--green)')+'">'+rp(k.total)+'</div></div>'
-        + '<table class="tbl" style="margin-top:8px"><thead><tr><th>Pos dana</th><th class="n">Pembuka</th><th class="n">Himpun</th><th class="n">Hak amil</th><th class="n">Penyaluran</th><th class="n">Sisa UMP</th><th class="n">Amil masuk</th><th class="n">Saldo akhir</th></tr></thead><tbody>';
+        + '<div class="tabel-geser" style="margin-top:8px"><table class="lap-table saldo-tabel"><thead><tr><th>Pos dana</th><th class="num">Pembuka</th><th class="num">Himpun</th><th class="num">Hak amil</th><th class="num">Penyaluran</th><th class="num">Sisa UMP</th><th class="num">Amil masuk</th><th class="num">Saldo akhir</th></tr></thead><tbody>';
       (k.dana||[]).forEach(function(x){
-        h+='<tr><td>'+esc(x.dana.replace(/_/g,' '))+'</td><td class="n">'+rp(x.awal)+'</td><td class="n">'+rp(x.himpun)+'</td>'
-          + '<td class="n">'+rp(x.amil)+'</td><td class="n">'+rp(x.salur)+'</td><td class="n">'+rp(x.sisaUmk)+'</td>'
-          + '<td class="n">'+rp(x.amilMasuk)+'</td>'
-          + '<td class="n" style="font-weight:700;color:'+(x.akhir<0?'var(--red)':'')+'">'+rp(x.akhir)+'</td></tr>';
+        h+='<tr><td>'+esc(x.dana.replace(/_/g,' '))+'</td><td class="num">'+rp(x.awal)+'</td><td class="num">'+rp(x.himpun)+'</td>'
+          + '<td class="num">'+rp(x.amil)+'</td><td class="num">'+rp(x.salur)+'</td><td class="num">'+rp(x.sisaUmk)+'</td>'
+          + '<td class="num">'+rp(x.amilMasuk)+'</td>'
+          + '<td class="num" style="font-weight:700;color:'+(x.akhir<0?'var(--red)':'')+'">'+rp(x.akhir)+'</td></tr>';
       });
-      h+='</tbody></table></div>';
+      h+='</tbody></table></div></div>';
     });
     h+='</div>';
     host.innerHTML=h;
@@ -628,9 +632,10 @@ function saldoRinciMuat(gol){
    dan dikirim ke contact person masing-masing. */
 function viewKodeAksesKL(){
   var c=el('content'); if(!c) return;
-  c.innerHTML='<div class="card"><div class="card-h"><div><div class="card-t">Kode Akses Saldo KL</div>'
-    + '<div class="muted" style="font-size:12px;margin-top:3px">Satu link untuk semua KL. Tiap KL hanya bisa membuka saldanya sendiri dengan kodenya.</div></div></div>'
-    + '<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+  c.innerHTML='<div class="page-head"><div><h2>Kode Akses Saldo KL</h2>'
+    + '<div class="desc">Satu link untuk semua KL. Tiap KL hanya bisa membuka saldonya sendiri dengan kodenya.</div></div></div>'
+    + '<div class="card">'
+    + '<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 12px">'
     + '<button class="btn btn-primary btn-sm" onclick="buatKodeKL()">Buat / perbarui semua kode</button>'
     + '<button class="btn btn-sm" onclick="eksporKodeKL()">Unduh CSV</button>'
     + '<button class="btn btn-sm" onclick="cetakKartuKL()">Cetak kartu akses</button>'
@@ -642,13 +647,13 @@ function viewKodeAksesKL(){
 function muatKodeKL(){
   gas('apiDaftarKodeAksesKL')(TOKEN).then(function(d){
     var host=el('kodeKLTabel'); if(!host) return;
-    var daftar=d.daftar||[], h='<table class="tbl"><thead><tr><th>Kantor</th><th>Kode akses</th><th>Status</th><th>Kartu</th></tr></thead><tbody>';
+    var daftar=d.daftar||[], h='<div class="tabel-geser"><table><thead><tr><th>Kantor</th><th>Kode akses</th><th>Status</th><th>Kartu</th></tr></thead><tbody>';
     daftar.forEach(function(x,i){
       h+='<tr><td>'+esc(x.nama)+'</td><td style="font-family:monospace;font-weight:700">'+esc(x.kode)+'</td>'
         + '<td>'+(x.aktif===false?'<span style="color:var(--red)">Nonaktif</span>':'<span style="color:var(--green)">Aktif</span>')+'</td>'
         + '<td><button type="button" class="btn btn-xs btn-ghost" onclick="cetakKartuKL('+i+')">Cetak kartu</button></td></tr>';
     });
-    h+='</tbody></table>';
+    h+='</tbody></table></div>';
     host.innerHTML=h;
     var info=el('kodeKLInfo'); if(info) info.textContent=daftar.length+' kantor';
     window.KODE_KL=daftar;
@@ -2215,13 +2220,13 @@ function renderJurnalPreview(d){
   var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3>'+esc(d.title)+'</h3><div class="muted" style="font-size:13px">'+esc(d.settings.namaLembaga||'')+' • Periode '+esc(d.periode)+' • '+d.count+' transaksi</div></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" style="border:1px solid var(--border)" onclick="copyAllJurnal()">'+SVG_ICONS.salin+' Salin Semua</button><button class="btn btn-primary btn-sm" onclick="exportJurnalXlsx(CACHE.jurnal)">'+SVG_ICONS.unduh+' Unduh .xlsx</button></div></div>';
   h+='<div class="jurnal-scroll"><table><thead><tr><th>Tanggal</th><th>Akun</th><th>Debit</th><th>Kredit</th><th>Keterangan</th></tr></thead><tbody>';
   d.sections.forEach(function(sec, idx){
-    h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--font);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">'+SVG_ICONS.salin+' Salin Kategori</button></div></td></tr>';
+    h+='<tr style="background:rgba(255,255,255,.03)"><td colspan="5" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-weight:700;font-family:var(--head);letter-spacing:.5px">'+esc(sec.title)+'</span><button class="btn btn-ghost btn-xs" onclick="copySectionJurnal('+idx+')" style="padding:2px 6px;font-size:11px;margin:0;border:1px solid var(--border);border-radius:4px;height:24px;line-height:20px;display:flex;align-items:center;gap:4px">'+SVG_ICONS.salin+' Salin Kategori</button></div></td></tr>';
     sec.lines.forEach(function(l){
       h+='<tr><td>'+esc(l.tanggal)+'</td><td>'+esc(l.akun)+'</td><td class="jnum">'+(l.debit!==''?jn(l.debit):'')+'</td><td class="jnum">'+(l.kredit!==''?jn(l.kredit):'')+'</td><td class="muted">'+esc(l.ket)+'</td></tr>';
     });
     h+='<tr><td></td><td style="font-weight:600">Subtotal</td><td colspan="2" class="jnum" style="font-weight:700;color:var(--green)">'+jn(sec.subtotal)+'</td><td></td></tr>';
   });
-  h+='<tr><td></td><td style="font-weight:700;font-family:var(--font)">TOTAL PENERIMAAN</td><td colspan="2" class="jnum" style="font-weight:700;color:var(--primary);font-size:15px">'+jn(d.grandTotal)+'</td><td></td></tr>';
+  h+='<tr><td></td><td style="font-weight:700;font-family:var(--head)">TOTAL PENERIMAAN</td><td colspan="2" class="jnum" style="font-weight:700;color:var(--accent);font-size:15px">'+jn(d.grandTotal)+'</td><td></td></tr>';
   h+='</tbody></table></div></div>';
   el('jurnalPreview').innerHTML=h;
 }
@@ -4734,7 +4739,7 @@ function renderDashboard(d){
   /* Saldo Kas & Bank sengaja tidak ditampilkan di ringkasan dasbor.
      Angkanya tetap bisa dilihat lewat menu Saldo Kas & Bank, dan widget
      Bank & Kas / Tunai & Non Tunai bisa dinyalakan lagi dari Atur Layout. */
-  var kpis='<div class="kpis-v2">'+
+  var kpis='<div class="kpis-v2 is-tiga">'+
     kpiCardV2('himpun','Total Penghimpunan',rp(d.totalHimpun),SVG_ICONS.arrowUp,'#ea6a1e',kpiSpark(d.series,'himpun'))+
     kpiCardV2('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),SVG_ICONS.arrowDown,'#3b82f6',kpiSpark(d.series,'tasyaruf'))+
     kpiCardV2('donatur','Donatur & Mustahik',totalPeople,SVG_ICONS.users,'#8b5cf6','')+
@@ -7940,8 +7945,8 @@ function renderMutasi(rows) {
     '</div>';
 
   h += '<div class="stats" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr))">' +
-    '  <div class="stat"><div class="lbl">Total Penarikan (Debet)</div><div class="val text-danger" style="color:var(--red)">' + rp(totalD) + '</div></div>' +
-    '  <div class="stat"><div class="lbl">Total Penerimaan (Kredit)</div><div class="val text-success" style="color:var(--green)">' + rp(totalK) + '</div></div>' +
+    '  <div class="stat"><div class="lbl">Total Penarikan (Debet)</div><div class="val" style="color:var(--red)">' + rp(totalD) + '</div></div>' +
+    '  <div class="stat"><div class="lbl">Total Penerimaan (Kredit)</div><div class="val" style="color:var(--green)">' + rp(totalK) + '</div></div>' +
     '  <div class="stat"><div class="lbl">Total Transaksi</div><div class="val">' + rows.length + ' Baris</div></div>' +
     '</div>';
 
@@ -8747,7 +8752,7 @@ function renderDonatur(rows) {
         '  <td><span class="badge ' + stBadgeClass + '">' + esc(r.status || 'Baru') + '</span></td>' +
         '  <td><span class="badge">' + esc(r.kategori) + '</span></td>' +
         '  <td>' + esc(r.telepon || '-') + '</td>' +
-        '  <td style="font-weight:700;color:var(--primary)">' + rp(r.totalDonasi || 0) + '</td>' +
+        '  <td style="font-weight:700;color:var(--accent)">' + rp(r.totalDonasi || 0) + '</td>' +
         '  <td>' + (r.jumlahTransaksi || 0) + ' x</td>' +
         '  <td>' + (r.terakhirDonasi ? fdate(r.terakhirDonasi) : '-') + '</td>' +
         '  <td style="text-align:center"><button class="btn btn-ghost btn-sm" onclick="openDonaturDetail(\'' + encodeURIComponent(r.nama) + '\')">'+SVG_ICONS.mata+' Detail</button></td>' +
@@ -10914,7 +10919,7 @@ function renderClosingPreview(d){
   h += '<div class="cl-sec-title" style="margin-top:24px">'
     + '<span>RINCIAN BULANAN PER DONATUR &amp; FUNDRAISING <span class="muted">(' + listDon.length + ' transaksi)</span></span>'
     + '<div style="display:flex;gap:8px;align-items:center">'
-    + '  <select id="cl_donFrFilter" class="input" style="height:28px;font-size:11.5px;padding:2px 8px;width:auto" onchange="filterClosingDonatur()">'
+    + '  <select id="cl_donFrFilter" style="height:28px;font-size:11.5px;padding:2px 8px;width:auto" onchange="filterClosingDonatur()">'
     + '    <option value="">Semua Fundraising (' + listDon.length + ')</option>'
     +      frListDon.map(function(fn){ return '<option value="' + esc(fn) + '">' + esc(fn) + '</option>'; }).join('')
     + '  </select>'
@@ -10950,7 +10955,7 @@ function renderTabelClosingDonatur(rows){
       + '<td><b>' + esc(r.namaDonatur) + '</b>' + (r.keterangan ? '<div class="muted" style="font-size:10.5px">' + esc(r.keterangan) + '</div>' : '') + '</td>'
       + '<td>' + esc(r.layanan || 'Daerah') + '</td>'
       + '<td>' + esc(jenisTeks) + '</td>'
-      + '<td><span class="badge badge-muted" style="font-size:10px;background:var(--surface2)">' + esc(r.fundraising) + '</span></td>'
+      + '<td><span class="badge grey" style="font-size:10px">' + esc(r.fundraising) + '</span></td>'
       + '<td class="cl-num cl-num-ada">' + rpCetak(r.jumlah) + '</td>'
       + '</tr>';
   });

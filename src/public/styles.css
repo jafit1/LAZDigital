@@ -173,7 +173,7 @@ html[data-theme="dark"] .nav-item.active{color:var(--accent2)}
 .stat:hover .tap{opacity:.8}
 
 /* ===== CARDS / GRID ===== */
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow);margin-bottom:16px}
 .card.clickable{cursor:pointer;transition:.16s}
 .card.clickable:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--accent-soft2)}
@@ -181,7 +181,7 @@ html[data-theme="dark"] .nav-item.active{color:var(--accent2)}
 .card h3 .more{font-size:12px;font-weight:600;color:var(--accent);opacity:.85}
 .card .desc{color:var(--muted);font-size:12.5px;margin-bottom:14px}
 .row{display:flex;gap:12px;flex-wrap:wrap}
-.row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.row-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 
 /* ===== TABLE ===== */
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
@@ -1392,8 +1392,8 @@ img, video { max-width: 100%; height: auto; }
     bottom: 0 !important;
     width: 290px !important;
     max-width: 86vw !important;
-    height: 100dvh !important;
     height: 100vh !important;
+    height: 100dvh !important;
     background: var(--surface) !important;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
     z-index: 9999 !important;
@@ -1509,7 +1509,7 @@ img, video { max-width: 100%; height: auto; }
     font-size: 13px !important;
   }
   .uc-meta { display: none !important; }
-  #lencanaPeran { display: none !important; }
+  #lencanaPeran, #lencanaLingkup, #lencanaDriver { display: none !important; }
 
   .main { padding: 16px 14px !important; max-width: 100% !important; margin: 0 !important; }
   .wc, .wc[data-size] { grid-column: span 6 !important; }
@@ -2236,7 +2236,8 @@ body.rz-active .wc{transition:none !important}
    isinya setara, dan proporsi di bawah ini membuat barisannya terlihat
    tidak lurus di sana. :not() menahannya, bukan !important tandingan. */
 @media (min-width:1101px){
-  .kpis-v2:not(.kpi-media):not(.kpi-surat):not(.is-lima){grid-template-columns:1.24fr 1fr 1fr 0.84fr !important}
+  .kpis-v2:not(.kpi-media):not(.kpi-surat):not(.is-lima):not(.is-tiga):not(.saldo-kpi){grid-template-columns:minmax(0,1.24fr) minmax(0,1fr) minmax(0,1fr) minmax(0,0.84fr) !important}
+  .kpis-v2.is-tiga{grid-template-columns:minmax(0,1.24fr) minmax(0,1fr) minmax(0,1fr) !important}
 }
 /* Di bawah itu grid sudah jadi 2 kolom / 1 kolom — biarkan sama rata. */
 
@@ -2306,7 +2307,7 @@ body.rz-active .wc{transition:none !important}
 .fsec-d{font-size:12px;color:var(--muted);margin-top:2px}
 
 /* Grid 12 kolom */
-.fgrid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px 14px;align-items:start}
+.fgrid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px 14px;align-items:start}
 .fld{display:flex;flex-direction:column;gap:5px;min-width:0;grid-column:span 12}
 .fld[data-col="2"]{grid-column:span 2}
 .fld[data-col="3"]{grid-column:span 3}
@@ -2459,7 +2460,7 @@ html[data-theme="dark"] .form-actions{
 .money-words{text-align:left}
 
 /* ---------- 20. RINGKASAN REKAP KLL / ULL ---------- */
-.lay-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.lay-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
 .lay-sum-item{
   border:1px solid var(--accent-soft2);border-radius:13px;padding:10px 12px;
   background:var(--accent-soft);
@@ -2532,7 +2533,7 @@ html[data-theme="dark"] .lay-toggle{background:rgba(255,255,255,.04)}
 .lay-split-bar{display:flex;height:9px;border-radius:99px;overflow:hidden;background:var(--surface2);margin-bottom:11px}
 .lay-bar-a{background:var(--grad-accent)}
 .lay-bar-b{background:rgba(150,141,135,.32)}
-.lay-split-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lay-split-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .lay-box{border-radius:13px;padding:10px 12px;border:1px solid var(--border)}
 .lay-box.a{background:var(--accent-soft);border-color:var(--accent-soft2)}
 .lay-box.b{background:rgba(255,255,255,.5)}
@@ -2557,7 +2558,7 @@ html[data-theme="dark"] .lap-tabs{background:rgba(255,255,255,.04)}
 .lap-tab:hover{color:var(--text)}
 .lap-tab.on{background:var(--grad-accent);color:#fff;box-shadow:0 8px 18px -12px rgba(var(--accent-rgb),.9)}
 
-.lap-sum{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px;margin-bottom:18px}
+.lap-sum{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:18px}
 .lap-sum-card{background:var(--glass-card);border:1px solid var(--glass-bd);border-radius:16px;
   padding:14px 16px;box-shadow:var(--shadow)}
 .lap-sum-card.big{background:var(--grad-accent);border-color:transparent;
@@ -2701,7 +2702,7 @@ html[data-theme="dark"] .lap-panel-a{background:linear-gradient(180deg,rgba(29,2
 .set-logo-ph{font-size:12.5px;color:var(--muted);padding:22px 0}
 .set-panel .upload-box{margin:0}
 
-.set-theme{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.set-theme{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .set-theme-opt{
   display:flex;flex-direction:column;gap:4px;text-align:left;cursor:pointer;
   border:1.5px solid var(--border);background:var(--surface);border-radius:14px;
@@ -2717,7 +2718,7 @@ html[data-theme="dark"] .lap-panel-a{background:linear-gradient(180deg,rgba(29,2
 .set-theme-t{font-size:13px;font-weight:700;color:var(--text)}
 .set-theme-d{font-size:11px;color:var(--muted);line-height:1.35}
 
-.set-switch-list{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
+.set-switch-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px}
 .set-switch{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:9px 12px;border-radius:11px;cursor:pointer;
@@ -3204,7 +3205,7 @@ html[data-theme="dark"] .lap-sub-row > td{background:rgba(255,255,255,.03)}
 .imp-h4.ok{color:var(--green)}
 .imp-h4.warn{color:var(--amber)}
 .imp-h4 span{
-  font-family:var(--body);font-size:11px;font-weight:600;color:var(--muted);
+  font-family:var(--sans);font-size:11px;font-weight:600;color:var(--muted);
   background:var(--surface3);border:1px solid var(--border);border-radius:20px;padding:2px 8px;
 }
 
@@ -6594,7 +6595,7 @@ html[data-theme="dark"] .tn-icon.kepala-tema:hover{ color:var(--accent2) !import
    sama di pil status, titik progres, kolom papan, stepper, dan riwayat.
    ================================================================ */
 .kpi-surat .sr-kpi{text-align:left;cursor:pointer;font:inherit;color:inherit;border:1px solid var(--border)}
-.kpi-surat .sr-kpi:hover{border-color:var(--kpi-accent)}
+.kpi-surat .sr-kpi:hover{border-color:var(--kpi-accent,var(--accent))}
 .kpi-surat .kpi-v2-icon{width:12px;height:12px;border-radius:50%}
 .sr-nav-angka{position:absolute;top:4px;right:4px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:var(--red);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;line-height:1}
 .tn-item{position:relative}
@@ -7152,3 +7153,38 @@ body.jrb-modal-open, html.jrb-modal-open{overflow:hidden !important}
 .pj-table tr:hover td{background:rgba(var(--accent-rgb),0.02)}
 .pj-kal-sel{transition:transform .12s ease,border-color .15s ease}
 .pj-kal-sel:hover{border-color:var(--accent) !important;transform:translateY(-1px)}
+.pj-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.pj-form-grid--utama{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+.pj-form-grid--rapat{gap:8px;margin-bottom:0}
+@media (max-width:639px){
+  .pj-form-grid,.pj-form-grid--utama{grid-template-columns:minmax(0,1fr);gap:8px}
+}
+
+/* Status toast galat (dipakai surat.js, lz-pengajuan.js, asesmen-mustahik.js) dan tombol hentikan AI */
+.toast.err, .toast.toast--danger{background:var(--red) !important;color:#fff !important}
+.ai-stop{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+.ai-stop:hover{background:var(--red);color:#fff;border-color:var(--red)}
+
+/* Penjaga akhir mobile drawer & topbar (< 1024px): ditulis setelah bagian 15/31/55
+   supaya aturan global .topnav/.tn-brand/.tn-right/.app.collapsed tidak lagi
+   menimpa topbar mobile, memotong drawer (will-change + overflow:hidden), atau
+   menghilangkan label menu drawer saat localStorage sidebar_collapsed=true. */
+@media (max-width:1023px){
+  .topnav{
+    will-change:auto !important;
+    overflow:visible !important;
+    height:54px !important;
+  }
+  .tn-brand{margin-bottom:0 !important}
+  .tn-right{border-top:none !important;gap:6px !important}
+  .app.collapsed .tn-nav .tn-item .tn-tip{
+    position:static !important;
+    opacity:1 !important;
+    transform:none !important;
+    pointer-events:auto !important;
+    display:inline-block !important;
+    width:auto !important;
+    max-width:none !important;
+  }
+  #lencanaPeran, #lencanaLingkup, #lencanaDriver{display:none !important}
+}

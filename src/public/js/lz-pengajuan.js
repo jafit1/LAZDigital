@@ -73,10 +73,66 @@
   }
   function toast(pesan, merah = false) {
     const t = el('toast');
-    if (!t) return alert(pesan);
+    if (!t) return;
     t.textContent = pesan;
     t.className = 'toast show' + (merah ? ' toast--danger' : '');
-    setTimeout(() => { t.className = 'toast'; }, 3200);
+    clearTimeout(t._tmr);
+    t._tmr = setTimeout(() => { t.className = 'toast'; }, 3200);
+  }
+  function svgTema() {
+    if (window.LZTema && typeof window.LZTema.svg === 'function') return window.LZTema.svg();
+    const gelap = document.documentElement.getAttribute('data-theme') === 'dark';
+    return gelap
+      ? '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4.6" fill="currentColor"/><g stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 2.4v2.3"/><path d="M12 19.3v2.3"/><path d="M4.2 4.2l1.7 1.7"/><path d="M18.1 18.1l1.7 1.7"/><path d="M2.4 12h2.3"/><path d="M19.3 12h2.3"/><path d="M4.2 19.8l1.7-1.7"/><path d="M18.1 5.9l1.7-1.7"/></g></svg>'
+      : '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" aria-hidden="true"><path fill="currentColor" d="M20.4 14.9A8.6 8.6 0 0 1 9.1 3.6 8.7 8.7 0 1 0 20.4 14.9z"/></svg>';
+  }
+  function tombolTemaHTML() {
+    const gelap = document.documentElement.getAttribute('data-theme') === 'dark';
+    const judul = gelap ? 'Ganti ke tema terang' : 'Ganti ke tema gelap';
+    return `<button class="tn-icon kepala-tema" id="tombolTema" type="button" title="${judul}" aria-label="${judul}">${svgTema()}</button>`;
+  }
+  function konfirmasiAksi(judul, pesan, labelOk, onYa) {
+    const lama = el('pjConfirmOverlay');
+    if (lama) lama.remove();
+    const ov = document.createElement('div');
+    ov.id = 'pjConfirmOverlay';
+    ov.className = 'cd-overlay show';
+    ov.innerHTML = `<div class="cd-card" role="dialog" aria-modal="true" aria-labelledby="pjCdJudul">
+      <div class="cd-title" id="pjCdJudul">${esc(judul)}</div>
+      <div class="cd-msg">${esc(pesan)}</div>
+      <div class="cd-acts">
+        <button type="button" class="btn btn-ghost" id="pjCdBatal">Batal</button>
+        <button type="button" class="btn btn-danger" id="pjCdYa">${esc(labelOk || 'Hapus')}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const tutup = () => { ov.remove(); };
+    ov.onclick = (e) => { if (e.target === ov) tutup(); };
+    el('pjCdBatal').onclick = tutup;
+    el('pjCdYa').onclick = async () => {
+      tutup();
+      if (typeof onYa === 'function') await onYa();
+    };
+  }
+  function siapXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    return new Promise((resolve, reject) => {
+      const sk = document.querySelector('script[src*="xlsx.full.min.js"]');
+      if (sk) {
+        let tunggu = 0;
+        const iv = setInterval(() => {
+          if (window.XLSX) { clearInterval(iv); resolve(window.XLSX); return; }
+          if (++tunggu > 80) { clearInterval(iv); reject(new Error('Pustaka Excel belum siap.')); }
+        }, 100);
+        return;
+      }
+      const baru = document.createElement('script');
+      baru.src = '/js/vendor/xlsx.full.min.js';
+      baru.async = true;
+      baru.onload = () => (window.XLSX ? resolve(window.XLSX) : reject(new Error('Pustaka Excel gagal dimuat.')));
+      baru.onerror = () => reject(new Error('Pustaka Excel gagal diunduh.'));
+      document.head.appendChild(baru);
+    });
   }
 
   async function rpc(tindakan, data = {}) {
@@ -99,6 +155,8 @@
     el('modalFoot').innerHTML = htmlFoot;
     el('modalBg').classList.add('show');
     if (window.enhanceSelects) window.enhanceSelects(el('modalBody'));
+    if (window.enhanceDatePickers) window.enhanceDatePickers(el('modalBody'));
+    if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
   }
   function closeModal() {
     el('modalBg').classList.remove('show');
@@ -106,6 +164,18 @@
   window.tutupModal = closeModal;
 
   async function inisialisasi() {
+    try {
+      if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        const av = el('appView');
+        if (av) av.classList.add('collapsed');
+      }
+    } catch (_) {}
+    const bg = el('modalBg');
+    if (bg) bg.onclick = (e) => { if (e.target === bg) closeModal(); };
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+    const chip = el('chipPengguna');
+    if (chip) chip.onclick = () => { location.hash = '#daftar'; };
+
     try {
       const res = await rpc('pengajuan.status');
       STATE.pengguna = res.pengguna;
@@ -129,7 +199,7 @@
       el('boot').innerHTML = `<div style="text-align:center;padding:30px">
         <h3 style="color:var(--red);margin-bottom:8px">Gagal Membuka Modul Pengajuan</h3>
         <p class="muted">${esc(e.message)}</p>
-        <button class="btn btn-primary" onclick="location.href='/'" style="margin-top:14px">Kembali ke Beranda</button>
+        <button class="btn btn-primary" onclick="location.href='/index.html'" style="margin-top:14px">Kembali ke Beranda</button>
       </div>`;
     }
   }
@@ -164,13 +234,12 @@
       { kode: 'daftar', label: 'Daftar Pengajuan', ikon: IKON.daftar },
       { kode: 'kalender', label: 'Kalender Detail', ikon: IKON.kalender },
       { kode: 'rekapan', label: 'Rekapan Admin', ikon: IKON.rekapan },
-      { kode: 'asesmen', label: 'Asesmen Mustahik (F.Survei)', ikon: IKON.asesmen },
-      { kode: 'kembali_main', label: 'Kembali ke LAZDigital', ikon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 19 3.5 12 10 5"/><path d="M3.5 12H20"/></svg>', url: '/' }
+      { kode: 'asesmen', label: 'Asesmen Mustahik (F.Survei)', ikon: IKON.asesmen }
     ];
 
     const nav = el('nav');
     nav.innerHTML = menu.map((m) => `
-      <button class="tn-item" id="nav_${m.kode}" type="button" title="${esc(m.label)}" aria-label="${esc(m.label)}" onclick="${m.url ? `location.href='${m.url}'` : `location.hash='#${m.kode}'; closeSidebar();`}">
+      <button class="tn-item" id="nav_${m.kode}" type="button" title="${esc(m.label)}" aria-label="${esc(m.label)}" onclick="location.hash='#${m.kode}'; closeSidebar();">
         <span class="ic">${m.ikon}</span>
         <span class="tn-tip">${esc(m.label)}</span>
       </button>
@@ -178,7 +247,7 @@
 
     const btnKembali = el('tombolKembali');
     if (btnKembali) {
-      btnKembali.onclick = () => { location.href = '/'; };
+      btnKembali.onclick = () => { location.href = '/index.html'; };
     }
   }
 
@@ -221,6 +290,7 @@
     if (STATE.rute === 'daftar') {
       wadah.innerHTML = gambarDaftarHTML();
       pasangEventDaftar();
+      if (window.tandaiPerluEnhance) window.tandaiPerluEnhance();
     } else if (STATE.rute === 'kalender') {
       wadah.innerHTML = gambarKalenderHTML();
       pasangEventKalender();
@@ -228,7 +298,7 @@
       wadah.innerHTML = gambarRekapanHTML();
       pasangEventRekapan();
     } else if (STATE.rute === 'asesmen') {
-      wadah.innerHTML = '<div id="asesmenHost"></div>';
+      wadah.innerHTML = `<div class="page-head"><div><h2>Asesmen Mustahik</h2><div class="muted" style="font-size:12px">Formulir survei kelayakan mustahik (F.Survei)</div></div><div class="page-head-aksi">${tombolTemaHTML()}</div></div><div id="asesmenHost"></div>`;
       if (window.LZAsesmenMustahik && typeof window.LZAsesmenMustahik.gambar === 'function') {
         window.LZAsesmenMustahik.gambar(
           el('asesmenHost'),
@@ -236,7 +306,7 @@
           rpc
         );
       } else {
-        wadah.innerHTML = '<div class="card" style="margin:20px 0;padding:24px;text-align:center"><p class="muted">Memuat formulir asesmen mustahik...</p></div>';
+        el('asesmenHost').innerHTML = '<div class="card" style="margin:20px 0;padding:24px;text-align:center"><p class="muted">Memuat formulir asesmen mustahik...</p></div>';
       }
     }
   }
@@ -259,6 +329,7 @@
         <button class="btn btn-ghost btn-sm" id="btnUnduhExcel" type="button" title="Unduh Excel">${IKON.excel} Excel</button>
         ${canTambah ? `<button class="btn btn-ghost btn-sm" id="btnBukaImpor" type="button" title="Impor dari Google Spreadsheet / Berkas">${IKON.proposal} Impor Spreadsheet</button>` : ''}
         ${canTambah ? `<button class="btn btn-primary btn-sm" id="btnTambahPengajuan" type="button">${IKON.plus} Catat Pengajuan</button>` : ''}
+        ${tombolTemaHTML()}
       </div>
     </div>`;
 
@@ -266,10 +337,10 @@
     h += `
     <div class="toolbar" style="margin-bottom:12px;gap:8px;flex-wrap:wrap">
       <div class="field" style="margin:0;flex:2;min-width:200px">
-        <input type="text" id="pjCari" class="input" placeholder="Cari pemohon, alamat, keperluan, jenis..." value="${esc(STATE.saring.cari)}" style="height:32px;font-size:12.5px;width:100%">
+        <input type="text" id="pjCari" placeholder="Cari pemohon, alamat, keperluan, jenis..." value="${esc(STATE.saring.cari)}" style="height:32px;font-size:12.5px;width:100%">
       </div>
       <div class="field" style="margin:0;flex:1;min-width:140px">
-        <select id="pjFilterStatus" class="input" style="height:32px;font-size:12.5px;width:100%">
+        <select id="pjFilterStatus" style="height:32px;font-size:12.5px;width:100%">
           <option value="semua">Semua Status (${list.length})</option>
           <option value="Masuk" ${STATE.saring.status === 'Masuk' ? 'selected' : ''}>Masuk</option>
           <option value="Diproses" ${STATE.saring.status === 'Diproses' ? 'selected' : ''}>Diproses</option>
@@ -279,7 +350,7 @@
         </select>
       </div>
       <div class="field" style="margin:0;flex:1.2;min-width:160px">
-        <select id="pjFilterJenis" class="input" style="height:32px;font-size:12.5px;width:100%">
+        <select id="pjFilterJenis" style="height:32px;font-size:12.5px;width:100%">
           <option value="semua">Semua Jenis Bantuan</option>
           <option value="Pendidikan" ${STATE.saring.jenisBantuan === 'Pendidikan' ? 'selected' : ''}>Pendidikan</option>
           <option value="Kesehatan" ${STATE.saring.jenisBantuan === 'Kesehatan' ? 'selected' : ''}>Kesehatan</option>
@@ -298,7 +369,7 @@
     // Tabel Pengajuan
     h += `
     <div class="card" style="padding:0;overflow:hidden">
-      <div style="overflow-x:auto">
+      <div class="tabel-geser">
         <table class="pj-table" style="width:100%;border-collapse:collapse;font-size:12px;text-align:left">
           <thead>
             <tr style="background:var(--surface2);border-bottom:1px solid var(--border)">
@@ -331,12 +402,12 @@
       const tgl = formatTglIndo(r.tanggal);
       const tglSalur = r.tanggalPentasyarufan ? formatTglIndo(r.tanggalPentasyarufan) : '-';
 
-      let badgeStatus = 'badge-muted';
+      let badgeStatus = 'grey';
       if (r.status === 'Disetujui' || r.status === 'Ditasyarufkan') badgeStatus = 'green';
       else if (r.status === 'Diproses') badgeStatus = 'amber';
       else if (r.status === 'Ditolak') badgeStatus = 'red';
 
-      let badgeAsesmen = 'badge-muted';
+      let badgeAsesmen = 'grey';
       if (/sangat layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'green';
       else if (/layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'blue';
       else if (/belum layak/i.test(r.hasilAsesmen)) badgeAsesmen = 'red';
@@ -377,7 +448,7 @@
           ${r.noBuktiSalur ? `<div class="muted" style="font-size:10px;color:var(--blue)">✓ BPT: ${esc(r.noBuktiSalur)}</div>` : ''}
         </td>
         <td style="padding:8px 10px">
-          <span class="badge badge-muted" style="font-size:10.5px;background:var(--surface2)">${esc(r.jenisBantuan)}</span>
+          <span class="badge grey" style="font-size:10.5px">${esc(r.jenisBantuan)}</span>
         </td>
         <td style="padding:8px 10px;text-align:center;white-space:nowrap">
           <div style="display:flex;gap:4px;justify-content:center;align-items:center">
@@ -397,7 +468,7 @@
               ${IKON.edit}
             </button>
             ${STATE.izin.hapus || STATE.pengguna.peran === 'superadmin' ? `
-              <button type="button" class="btn btn-xs btn-ghost text-danger" title="Hapus" onclick="LZPengajuan.hapusPengajuan('${esc(r.id)}')">
+              <button type="button" class="btn btn-xs btn-ghost" style="color:var(--red)" title="Hapus" onclick="LZPengajuan.hapusPengajuan('${esc(r.id)}')">
                 ${IKON.hapus}
               </button>
             ` : ''}
@@ -507,6 +578,7 @@
         <button class="btn btn-ghost btn-sm" id="btnKalPrev">&larr; <span class="kal-btn-label">Bulan Sebelumnya</span></button>
         <button class="btn btn-ghost btn-sm" id="btnKalKini">Bulan Ini</button>
         <button class="btn btn-ghost btn-sm" id="btnKalNext"><span class="kal-btn-label">Bulan Berikutnya</span> &rarr;</button>
+        ${tombolTemaHTML()}
       </div>
     </div>`;
 
@@ -582,7 +654,7 @@
           h += `
           <div class="card" style="padding:10px 14px;background:var(--surface2);border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <div>
-              <div style="font-weight:700;font-size:13px">${esc(item.pemohon)} <span class="badge badge-muted" style="font-size:10px">${esc(item.jenisBantuan)}</span></div>
+              <div style="font-weight:700;font-size:13px">${esc(item.pemohon)} <span class="badge grey" style="font-size:10px">${esc(item.jenisBantuan)}</span></div>
               <div style="font-size:12px;color:var(--text2);margin-top:2px">${esc(item.keperluan)}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
@@ -672,6 +744,7 @@
       </div>
       <div class="page-head-aksi">
         <button class="btn btn-ghost btn-sm" id="btnRekapExcel">${IKON.excel} Unduh Excel</button>
+        ${tombolTemaHTML()}
       </div>
     </div>`;
 
@@ -787,42 +860,42 @@
       <input type="hidden" id="pjInpAsesmenId" value="${esc(item.asesmenId || '')}">
       <input type="hidden" id="pjInpAsesmenSkor" value="${item.asesmenSkor || 0}">
 
-      <div class="pj-fgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Tanggal Pengajuan *</label>
-          <input type="date" id="pjInpTanggal" class="input" value="${esc(item.tanggal)}" required style="width:100%">
+          <input type="date" id="pjInpTanggal" value="${esc(item.tanggal)}" required style="width:100%">
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Hari (Otomatis)</label>
-          <input type="text" id="pjInpHari" class="input" value="${esc(item.hari || hitungHari(item.tanggal))}" readonly style="width:100%;background:var(--surface2);font-weight:700">
+          <input type="text" id="pjInpHari" value="${esc(item.hari || hitungHari(item.tanggal))}" readonly style="width:100%;background:var(--surface2);font-weight:700">
         </div>
       </div>
 
-      <div class="pj-fgrid" style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid pj-form-grid--utama">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nama Pemohon *</label>
-          <input type="text" id="pjInpPemohon" class="input" placeholder="Nama individu / keluarga / lembaga" value="${esc(item.pemohon)}" required style="width:100%">
+          <input type="text" id="pjInpPemohon" placeholder="Nama individu / keluarga / lembaga" value="${esc(item.pemohon)}" required style="width:100%">
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">No. Telepon / WhatsApp</label>
-          <input type="text" id="pjInpTelepon" class="input" placeholder="08xxxxxxxxxx" value="${esc(item.telepon || '')}" style="width:100%">
+          <input type="text" id="pjInpTelepon" placeholder="08xxxxxxxxxx" value="${esc(item.telepon || '')}" style="width:100%">
         </div>
       </div>
 
       <div class="field" style="margin-bottom:12px">
         <label style="font-weight:700;font-size:12px">Alamat Lengkap *</label>
-        <textarea id="pjInpAlamat" class="input" rows="2" placeholder="Dusun, RT/RW, Kelurahan/Desa, Kapanewon" required style="width:100%">${esc(item.alamat)}</textarea>
+        <textarea id="pjInpAlamat" rows="2" placeholder="Dusun, RT/RW, Kelurahan/Desa, Kapanewon" required style="width:100%">${esc(item.alamat)}</textarea>
       </div>
 
       <div class="field" style="margin-bottom:12px">
         <label style="font-weight:700;font-size:12px">Keperluan Permohonan *</label>
-        <textarea id="pjInpKeperluan" class="input" rows="2" placeholder="Rincian kebutuhan bantuan yang diajukan..." required style="width:100%">${esc(item.keperluan)}</textarea>
+        <textarea id="pjInpKeperluan" rows="2" placeholder="Rincian kebutuhan bantuan yang diajukan..." required style="width:100%">${esc(item.keperluan)}</textarea>
       </div>
 
-      <div class="pj-fgrid" style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid pj-form-grid--utama">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Jenis Bantuan / Program *</label>
-          <select id="pjInpJenis" class="input" style="width:100%">
+          <select id="pjInpJenis" style="width:100%">
             ${['Pendidikan','Kesehatan','Ekonomi & Pemberdayaan','Sosial Kemanusiaan','Dakwah & Advokasi','Lingkungan','Zakat Mal','Infak Terikat','Infak Umum'].map((j) => `
               <option value="${esc(j)}" ${item.jenisBantuan === j ? 'selected' : ''}>${esc(j)}</option>
             `).join('')}
@@ -830,7 +903,7 @@
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nominal Diajukan (Rp)</label>
-          <input type="number" id="pjInpNominal" class="input" placeholder="Contoh: 1500000" value="${item.nominalDiajukan || ''}" style="width:100%">
+          <input type="number" id="pjInpNominal" placeholder="Contoh: 1500000" value="${item.nominalDiajukan || ''}" style="width:100%">
         </div>
       </div>
 
@@ -841,9 +914,9 @@
           <button type="button" class="btn btn-xs btn-primary" onclick="LZPengajuan.bukaAsesmenUntukForm()">+ Isi Asesmen Baru</button>
         </div>
 
-        <div class="pj-fgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="pj-form-grid pj-form-grid--rapat">
           <div class="field" style="margin:0">
-            <select id="pjPilihAsesmenTersimpan" class="input" style="width:100%;font-size:11.5px">
+            <select id="pjPilihAsesmenTersimpan" style="width:100%;font-size:11.5px">
               <option value="">-- Hubungkan dari Riwayat Asesmen --</option>
               ${listAsesmen.map((as) => `
                 <option value="${esc(as.id)}" ${item.asesmenId === as.id ? 'selected' : ''}>
@@ -853,15 +926,15 @@
             </select>
           </div>
           <div class="field" style="margin:0">
-            <input type="text" id="pjInpAsesmen" class="input" placeholder="Hasil kelayakan" value="${esc(item.hasilAsesmen || 'Belum Diasesmen')}" style="width:100%;font-size:11.5px">
+            <input type="text" id="pjInpAsesmen" placeholder="Hasil kelayakan" value="${esc(item.hasilAsesmen || 'Belum Diasesmen')}" style="width:100%;font-size:11.5px">
           </div>
         </div>
       </div>
 
-      <div class="pj-fgrid" style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid pj-form-grid--utama">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Status Pengajuan</label>
-          <select id="pjInpStatus" class="input" style="width:100%">
+          <select id="pjInpStatus" style="width:100%">
             <option value="Masuk" ${item.status === 'Masuk' ? 'selected' : ''}>Masuk</option>
             <option value="Diproses" ${item.status === 'Diproses' ? 'selected' : ''}>Diproses</option>
             <option value="Disetujui" ${item.status === 'Disetujui' ? 'selected' : ''}>Disetujui</option>
@@ -871,13 +944,13 @@
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nominal Disetujui (Rp)</label>
-          <input type="number" id="pjInpNomDisetujui" class="input" placeholder="Contoh: 1000000" value="${item.nominalDisetujui || ''}" style="width:100%">
+          <input type="number" id="pjInpNomDisetujui" placeholder="Contoh: 1000000" value="${item.nominalDisetujui || ''}" style="width:100%">
         </div>
       </div>
 
       <div class="field" style="margin-bottom:12px">
         <label style="font-weight:700;font-size:12px">Tanggal Pentasyarufan (Bila Disetujui/Diserahkan)</label>
-        <input type="date" id="pjInpTglSalur" class="input" value="${esc(item.tanggalPentasyarufan || '')}" style="width:100%">
+        <input type="date" id="pjInpTglSalur" value="${esc(item.tanggalPentasyarufan || '')}" style="width:100%">
       </div>
 
       <!-- Berkas Proposal & Google Drive -->
@@ -900,7 +973,7 @@
             </div>
             <div style="display:flex;gap:6px">
               <button type="button" class="btn btn-xs btn-ghost" onclick="LZPengajuan.unduhProposal('${esc(item.id)}')">Unduh</button>
-              <button type="button" class="btn btn-xs btn-ghost text-danger" onclick="LZPengajuan.hapusProposal('${esc(item.id)}')">&times; Hapus</button>
+              <button type="button" class="btn btn-xs btn-ghost" style="color:var(--red)" onclick="LZPengajuan.hapusProposal('${esc(item.id)}')">&times; Hapus</button>
             </div>
           </div>
         ` : ''}
@@ -915,7 +988,7 @@
 
       <div class="field" style="margin:0">
         <label style="font-weight:700;font-size:12px">Catatan Tambahan</label>
-        <textarea id="pjInpCatatan" class="input" rows="2" placeholder="Catatan internal pengurus / mustahik..." style="width:100%">${esc(item.catatan || '')}</textarea>
+        <textarea id="pjInpCatatan" rows="2" placeholder="Catatan internal pengurus / mustahik..." style="width:100%">${esc(item.catatan || '')}</textarea>
       </div>
     </form>`;
 
@@ -1033,15 +1106,16 @@
   }
 
   async function hapusPengajuan(id) {
-    if (!confirm('Yakin ingin menghapus data pengajuan ini?')) return;
-    try {
-      const res = await rpc('pengajuan.hapus', { id });
-      toast(res.pesan || 'Data pengajuan dihapus');
-      await muatData();
-      gambarHalaman();
-    } catch (e) {
-      toast('Gagal menghapus: ' + e.message, true);
-    }
+    konfirmasiAksi('Hapus Pengajuan', 'Yakin ingin menghapus data pengajuan ini?', 'Hapus', async () => {
+      try {
+        const res = await rpc('pengajuan.hapus', { id });
+        toast(res.pesan || 'Data pengajuan dihapus');
+        await muatData();
+        gambarHalaman();
+      } catch (e) {
+        toast('Gagal menghapus: ' + e.message, true);
+      }
+    });
   }
 
   async function unduhProposal(id) {
@@ -1072,16 +1146,17 @@
   }
 
   async function hapusProposal(id) {
-    if (!confirm('Hapus berkas proposal ini?')) return;
-    try {
-      const res = await rpc('pengajuan.proposal.hapus', { id });
-      toast(res.pesan || 'Berkas proposal dihapus');
-      closeModal();
-      await muatData();
-      gambarHalaman();
-    } catch (e) {
-      toast('Gagal menghapus proposal: ' + e.message, true);
-    }
+    konfirmasiAksi('Hapus Proposal', 'Hapus berkas proposal ini?', 'Hapus', async () => {
+      try {
+        const res = await rpc('pengajuan.proposal.hapus', { id });
+        toast(res.pesan || 'Berkas proposal dihapus');
+        closeModal();
+        await muatData();
+        gambarHalaman();
+      } catch (e) {
+        toast('Gagal menghapus proposal: ' + e.message, true);
+      }
+    });
   }
 
   function b64KeBlob(b64, mime) {
@@ -1203,36 +1278,36 @@
     </div>
 
     <form id="fSalurkan" onsubmit="return false">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Tanggal Penyaluran *</label>
-          <input type="date" id="slrTanggal" class="input" value="${esc(tglDefault)}" required style="width:100%">
+          <input type="date" id="slrTanggal" value="${esc(tglDefault)}" required style="width:100%">
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nominal Penyaluran (Rp) *</label>
-          <input type="number" id="slrJumlah" class="input" value="${nominalDefault}" placeholder="Rp" required style="width:100%;font-weight:700;color:var(--green)">
+          <input type="number" id="slrJumlah" value="${nominalDefault}" placeholder="Rp" required style="width:100%;font-weight:700;color:var(--green)">
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid pj-form-grid--utama">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Nama Penerima / Mustahik *</label>
-          <input type="text" id="slrNama" class="input" value="${esc(item.pemohon)}" required style="width:100%;font-weight:600">
+          <input type="text" id="slrNama" value="${esc(item.pemohon)}" required style="width:100%;font-weight:600">
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Golongan Asnaf *</label>
-          <select id="slrAshnaf" class="input" style="width:100%">${ashnafOpts}</select>
+          <select id="slrAshnaf" style="width:100%">${ashnafOpts}</select>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid pj-form-grid--utama">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Pilar / Program Penyaluran *</label>
-          <input type="text" id="slrProgram" class="input" value="${esc(item.jenisBantuan)}" required style="width:100%">
+          <input type="text" id="slrProgram" value="${esc(item.jenisBantuan)}" required style="width:100%">
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Sumber Dana *</label>
-          <select id="slrSumberDana" class="input" style="width:100%">
+          <select id="slrSumberDana" style="width:100%">
             <option value="Zakat" ${/zakat/i.test(item.jenisBantuan) ? 'selected' : ''}>Zakat</option>
             <option value="Infak" ${!/zakat/i.test(item.jenisBantuan) ? 'selected' : ''}>Infak</option>
             <option value="DSKL">DSKL</option>
@@ -1241,23 +1316,23 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="pj-form-grid">
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Metode Penyaluran *</label>
-          <select id="slrMetode" class="input" style="width:100%" onchange="LZPengajuan.onMetodeSalurChange(this.value)">
+          <select id="slrMetode" style="width:100%" onchange="LZPengajuan.onMetodeSalurChange(this.value)">
             <option value="Cash/Tunai">Cash / Tunai</option>
             <option value="Transfer Bank">Transfer Bank</option>
           </select>
         </div>
         <div class="field" style="margin:0">
           <label style="font-weight:700;font-size:12px">Rekening / Kas Pengeluaran</label>
-          <select id="slrRekening" class="input" style="width:100%">${rekOpts}</select>
+          <select id="slrRekening" style="width:100%">${rekOpts}</select>
         </div>
       </div>
 
       <div class="field" style="margin:0">
         <label style="font-weight:700;font-size:12px">Keterangan Penyaluran Buku Kas</label>
-        <textarea id="slrKeterangan" class="input" rows="2" style="width:100%">Penyaluran ${esc(item.keperluan)} (${esc(item.pemohon)})</textarea>
+        <textarea id="slrKeterangan" rows="2" style="width:100%">Penyaluran ${esc(item.keperluan)} (${esc(item.pemohon)})</textarea>
       </div>
     </form>`;
 
@@ -1351,28 +1426,30 @@
     return rows;
   }
 
-  function unduhExcel() {
-    if (!window.XLSX) {
-      return alert('Pustaka Excel belum siap. Silakan refresh halaman.');
-    }
+  async function unduhExcel() {
+    let XLSX;
+    try { XLSX = await siapXlsx(); } catch (e) { return toast(e.message || 'Pustaka Excel belum siap.', true); }
     const aoa = bangunAoaPengajuan();
-    const wb = window.XLSX.utils.book_new();
-    const ws = window.XLSX.utils.aoa_to_sheet(aoa);
-    window.XLSX.utils.book_append_sheet(wb, ws, 'Pengajuan');
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    XLSX.utils.book_append_sheet(wb, ws, 'Pengajuan');
     const namaBerkas = 'Rekap_Pengajuan_' + new Date().toISOString().slice(0, 10) + '.xlsx';
-    window.XLSX.writeFile(wb, namaBerkas);
+    XLSX.writeFile(wb, namaBerkas);
     toast('Berkas Excel berhasil diunduh.');
   }
 
   function salinTSV() {
     const aoa = bangunAoaPengajuan();
     const tsv = aoa.map((row) => row.map((cell) => String(cell == null ? '' : cell).replace(/\t|\n|\r/g, ' ')).join('\t')).join('\n');
+    const salinManual = () => {
+      openModal('Salin Data TSV', `<p class="muted" style="margin-bottom:8px;font-size:12.5px">Salin teks berikut lalu tempel ke Excel atau Google Sheets:</p><textarea readonly rows="8" style="width:100%;font-family:monospace;font-size:11.5px" onclick="this.select()">${esc(tsv)}</textarea>`, '<button type="button" class="btn btn-primary" onclick="LZPengajuan.tutupModal()">Tutup</button>');
+    };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(tsv).then(() => {
         toast('Data pengajuan disalin ke clipboard (format TSV/Excel).');
-      });
+      }).catch(salinManual);
     } else {
-      alert('Salin teks berikut:\n\n' + tsv.slice(0, 400) + '...');
+      salinManual();
     }
   }
 
@@ -1392,7 +1469,7 @@
     <div class="card" style="padding:12px 14px;background:var(--surface2);border-radius:10px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text)">1. Tautan Google Spreadsheet:</div>
       <div style="display:flex;gap:8px">
-        <input type="text" id="pjInpUrlSpreadsheet" class="input" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(defaultUrl)}" style="flex:1;font-size:12px">
+        <input type="text" id="pjInpUrlSpreadsheet" placeholder="https://docs.google.com/spreadsheets/d/..." value="${esc(defaultUrl)}" style="flex:1;font-size:12px">
         <button type="button" class="btn btn-primary btn-sm" id="btnTarikSpreadsheet" onclick="LZPengajuan.tarikSpreadsheet()">Tarik Data</button>
       </div>
       <div class="muted" style="font-size:11px;margin-top:5px">
@@ -1456,14 +1533,14 @@
     const area = el('pjAreaPratinjauImpor');
     if (area) area.innerHTML = '<div class="muted" style="text-align:center;padding:24px">⏳ Membaca isi berkas...</div>';
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target.result);
-        if (!window.XLSX) throw new Error('Pustaka pembaca berkas Excel belum siap.');
-        const wb = window.XLSX.read(data, { type: 'array' });
+        const XLSX = await siapXlsx();
+        const wb = XLSX.read(data, { type: 'array' });
         const sheetName = wb.SheetNames[0];
         const sheet = wb.Sheets[sheetName];
-        const matrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1 });
         
         const parsed = parseMatrixSpreadsheetKlien(matrix);
         STATE.dataImporPreview = parsed;

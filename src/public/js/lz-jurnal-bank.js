@@ -1053,7 +1053,7 @@
         + '</div>'
         + '<div class="field" style="margin-bottom:0">'
         + '  <label style="font-weight:700">Pastikan Rekening Bank di Sistem *</label>'
-        + '  <select id="jrbSelectRekening" class="input" onchange="LZJurnalBank.gantiRekeningSistem(this.value)" style="width:100%">' + rekOpts + '</select>'
+        + '  <select id="jrbSelectRekening" onchange="LZJurnalBank.gantiRekeningSistem(this.value)" style="width:100%">' + rekOpts + '</select>'
         + '  <div class="desc" style="font-size:11.5px;margin-top:4px;color:var(--muted)">'
         + '    Harus dipastikan nomor rekeningnya sebelum lanjut ke pembuatan jurnal.'
         + '  </div>'
@@ -1284,7 +1284,7 @@
 
     muatPdfJs(function(pdfjs) {
       if (!pdfjs) {
-        if (statusEl) statusEl.innerHTML = '<span class="text-danger">Gagal memuat mesin pembaca PDF.</span>';
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--red);font-weight:600">Gagal memuat mesin pembaca PDF.</span>';
         return;
       }
 
@@ -1316,15 +1316,24 @@
           });
 
           if (statusEl) {
-            statusEl.innerHTML = '<span class="text-success">✓ Berkas terbaca: ' + res.transaksi.length + ' transaksi mutasi ditemukan.</span>';
+            statusEl.innerHTML = '<span style="color:var(--green);font-weight:600">✓ Berkas terbaca: ' + res.transaksi.length + ' transaksi mutasi ditemukan.</span>';
           }
           gambarModal();
         }).catch(function(err) {
-          if (statusEl) statusEl.innerHTML = '<span class="text-danger">Gagal memproses PDF: ' + esc(err.message) + '</span>';
+          if (statusEl) statusEl.innerHTML = '<span style="color:var(--red);font-weight:600">Gagal memproses PDF: ' + esc(err.message) + '</span>';
         });
       };
       reader.readAsArrayBuffer(file);
     });
+  }
+
+  function jrbPesan(teks) {
+    if (typeof window !== 'undefined' && typeof window.toast === 'function') {
+      window.toast(teks);
+      return;
+    }
+    var st = typeof document !== 'undefined' ? document.getElementById('jrbStatusProses') : null;
+    if (st) st.textContent = teks;
   }
 
   function gantiRekeningSistem(rekId) {
@@ -1343,7 +1352,7 @@
 
   function lanjutKeLangkah2() {
     if (!STATE.rekeningTerpilih) {
-      alert('Pastikan rekening bank di sistem sudah terpilih sebelum melanjutkan.');
+      jrbPesan('Pastikan rekening bank di sistem sudah terpilih sebelum melanjutkan.');
       return;
     }
     STATE.step = 2;
@@ -1741,7 +1750,7 @@
 
     var cek = validasiPecahUmp(tx.nominal, rincian);
     if (!cek.valid) {
-      alert('Total rincian UMP belum sama dengan nominal transfer (selisih ' + rp(cek.selisih) + ').');
+      jrbPesan('Total rincian UMP belum sama dengan nominal transfer (selisih ' + rp(cek.selisih) + ').');
       return;
     }
 
@@ -1754,31 +1763,45 @@
   // Export / Aksi Jurnal
   function salinTSV() {
     var tsv = bangunTSVJurnal(STATE.transaksi, STATE.rekeningTerpilih);
+    var salinCadangan = function() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = tsv;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        jrbPesan('Teks TSV Jurnal berhasil disalin ke clipboard.');
+      } catch (_) {
+        jrbPesan('Clipboard tidak tersedia di peramban ini.');
+      }
+    };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(tsv).then(function() {
-        if (typeof window !== 'undefined' && window.toast) window.toast('Teks TSV Jurnal berhasil disalin ke clipboard.');
-        else alert('Teks TSV Jurnal berhasil disalin.');
-      });
+        jrbPesan('Teks TSV Jurnal berhasil disalin ke clipboard.');
+      }).catch(salinCadangan);
     } else {
-      alert('Salin teks berikut:\n\n' + tsv.slice(0, 500) + '...');
+      salinCadangan();
     }
   }
 
   function unduhExcel() {
     if (typeof window === 'undefined' || !window.XLSX) {
-      alert('Pustaka Excel belum siap.');
+      jrbPesan('Pustaka Excel belum siap.');
       return;
     }
     var wb = bangunExcelJurnal(STATE.transaksi, STATE.rekeningTerpilih, window.XLSX);
     var namaRek = (STATE.rekeningTerpilih && STATE.rekeningTerpilih.nomor) ? STATE.rekeningTerpilih.nomor : 'rekening';
     window.XLSX.writeFile(wb, 'Jurnal_Mutasi_' + namaRek + '_' + (new Date().toISOString().slice(0, 10)) + '.xlsx');
-    if (typeof window !== 'undefined' && window.toast) window.toast('Berkas Excel Jurnal berhasil diunduh.');
+    jrbPesan('Berkas Excel Jurnal berhasil diunduh.');
   }
 
   function imporKeSistem() {
     var tsv = bangunTSVJurnal(STATE.transaksi, STATE.rekeningTerpilih);
     if (!tsv.trim()) {
-      alert('Tidak ada transaksi yang dipilih untuk diimpor.');
+      jrbPesan('Tidak ada transaksi yang dipilih untuk diimpor.');
       return;
     }
 

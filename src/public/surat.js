@@ -498,8 +498,12 @@ function pesanLacak(r) {
 }
 function salin(teks, pesan) {
   const ok = () => toast(pesan || 'Disalin.');
-  if (navigator.clipboard) navigator.clipboard.writeText(teks).then(ok).catch(() => prompt('Salin tautan ini:', teks));
-  else prompt('Salin tautan ini:', teks);
+  const cadangan = () => {
+    modal('Salin tautan', `<p class="muted" style="margin-bottom:8px;font-size:12.5px">Salin tautan di bawah ini:</p><input class="sr-tautan-in" readonly value="${H(teks)}" onclick="this.select()">`,
+      '<button type="button" class="btn btn-primary" onclick="tutupModal()">Tutup</button>', 'sr-modal-kecil');
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(teks).then(ok).catch(cadangan);
+  else cadangan();
 }
 
 // ------------------------------------------------------------ pindah langkah

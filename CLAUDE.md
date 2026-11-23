@@ -151,7 +151,8 @@ Modul izin sekarang (`MODULES` di `_engine.js`):
 ```
 dashboard, saldo, saldokll, penghimpunan, pentasyarufan, laporan,
 rekening, layanan, users, settings, donatur, log, saldodaerah,
-broadcast, fundraising, ai, media, surat
+saldoDaerahRinci, saldoKantorRinci, broadcast, fundraising, ai, media,
+pengajuan, surat
 ```
 
 Aksi: `view`, `create`, `edit`, `delete`. Modul yang hanya masuk akal untuk
@@ -531,6 +532,7 @@ Peramban  ──POST /api/rpc──▶  rpc.js  ──▶  laz-pg.js  ──▶ 
   `test_kwitansi_massal.js` dan `test_denominasi.js`.
 - **Dua modul punya sesi sendiri**: `lib/media/sesi-laz.js` dan padanannya di
   fund/blast/ai memetakan izin LAZDigital ke izin modulnya.
+- **Sinkronisasi UI, mobile drawer, grid KPI, dan 12 halaman HTML** (23 November 2026): blok penjaga `@media (max-width:1023px)` dipasang di akhir `styles.css` agar aturan global `.topnav` (`will-change:transform`, `overflow:hidden`), `.tn-brand`, `.tn-right`, dan `.app.collapsed .tn-item .tn-tip` tidak memotong drawer atau menghilangkan teks menu di HP/tablet, urutan `100vh`/`100dvh` dibenarkan, dan `#lencanaPeran`/`#lencanaLingkup`/`#lencanaDriver` disembunyikan seragam di `< 1024px`. Grid KPI 3 kartu di Dashboard (`.kpis-v2.is-tiga`), Saldo Kas & Bank (`.saldo-kpi` dikecualikan dari 4 kolom baris 2239), dan `saldo-kl.html` (`.kl-stat` `auto-fit` sambil tetap menyembunyikan kartu Belum LPJ) tidak lagi menyisakan kolom kosong di kanan; grid utama memakai `minmax(0,...)`. Modul Pengajuan (`pengajuan.html`, `js/lz-pengajuan.js`) mendapat tombol tema `.kepala-tema`, pembacaan `sidebar_collapsed`, klik `#chipPengguna`, `enhanceDatePickers`, `xlsx.full.min.js` `async`, dan penghapusan duplikat tombol Kembali di nav. Tiga menu 20 Nov (`Saldo Daerah Rinci`, `Saldo KLL & ULL Rinci`, `Kode Akses KL` di `app.js`) memakai `.page-head` (mendapat tombol tema otomatis), `.tabel-geser`, dan tanggal `today()`. Seluruh 12 HTML memuat Google Fonts non-blocking (`media="print"`), `lz-perangkat.js`, `apple-touch-icon`, inisialisasi `data-theme` di `<head>`, dan `<title>` tanpa em dash. Variabel tak terdefinisi (`--body`, `--line`, `--font`, `--primary`, `--bahaya`), kelas karangan (`.input`, `.inp`, `.tbl`, `.pj-fgrid`, `.badge-muted`, `.text-danger`, `.text-success`), `.toast.err`/`.toast--danger`, `.ai-stop`, serta dialog native `alert`/`confirm`/`prompt` di `lz-pengajuan.js`, `lz-jurnal-bank.js`, `asesmen-mustahik.js`, `blast.js`, dan `surat.js` dibersihkan. Dijaga `test_sinkron_ui.js` dan `test_ikon.js` (kini 12 halaman).
 
 ---
 
@@ -691,7 +693,8 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_ai_fitur.js`, `test_ai_ui.js` | AI asisten |
 | `cek-postgres.js`, `test_laz_pg.js`, `test_cadangan_pg.js`, `test_sesi_modul_pg.js` | PostgreSQL |
 | `test_alat_redis.js`, `test_ekspor_redis.js` | alat migrasi warisan |
-| `test_ikon.js` | tiap halaman punya ikon, tidak ada alamat basi |
+| `test_ikon.js` | tiap halaman (12 halaman HTML) punya ikon dan apple-touch-icon, tidak ada alamat basi |
+| `test_sinkron_ui.js` | sinkronisasi UI lintas 12 halaman HTML, penjaga CSS mobile drawer, grid KPI 3 kartu, modul Pengajuan, 3 menu saldo rinci/kode KL, variabel/kelas CSS rumah, dan bebas dialog native |
 | `test_sidebar_ui.js`, `test_sidebar_gerak.js`, `ukur-sisi.js` | bilah menu |
 | `test_skala_ui.js` | tampilan di semua ukuran layar |
 | `uji_cek_deploy.js` | apa yang benar-benar sudah sampai di GitHub |
@@ -998,6 +1001,7 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   `_simpanPenghimpunan` memakai allowlist `KOLOM_HIMPUN`, jadi `petugas`,
   `dibuat`, `akunKredit`, dan `__row` tidak bisa datang dari klien.
   Dijaga `tools/test_keamanan_lanjutan.js`.
+- **Sinkronisasi UI Tahap 1 (23 November 2026):** perbaikan konflik CSS mobile drawer `< 1024px`, 3 grid KPI yang sebelumnya berlubang (Dashboard `.is-tiga`, Saldo Kas & Bank `.saldo-kpi`, dan `saldo-kl.html` `.kl-stat` dengan kartu Belum LPJ tetap disembunyikan), sinkronisasi modul Pengajuan, 3 menu baru di `app.js`, seluruh 12 halaman HTML (Google Fonts non-blocking, `lz-perangkat.js`, `data-theme` di `<head>`, `apple-touch-icon`), pembersihan variabel/kelas CSS hilang, serta penggantian dialog native browser. Dijaga `tools/test_sinkron_ui.js` dan `tools/test_ikon.js`.
 - **Sisa audit keamanan:** escape semua output teks di `saldo-kl.html` dan
   halaman admin lalu pindahkan token sesi ke cookie `HttpOnly`; rate-limit
   `login` dan kode KL plus whitelist field respons publik; idempotensi

@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#F2704F">
 <link rel="icon" href="/ikon/lazismu.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/ikon/ikon-180.png">
 <meta name="robots" content="noindex,nofollow">
 <title>Saldo Kantor Layanan - LAZISMU Daerah Bantul</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"></noscript>
 <link rel="stylesheet" href="/styles.css">
+<script src="/js/lz-perangkat.js"></script>
 <script src="/js/lz-tema.js"></script>
 <script>
 /* Tema dipasang sebelum isi halaman digambar: kalau menunggu lz-tema.js,
@@ -246,7 +249,7 @@
   .kl-ganti:hover{border-color:var(--accent);color:var(--accent)}
 
   @media (min-width:720px){
-    .kl-stat{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .kl-stat{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
   }
   @media (max-width:600px){
     .kl-wrap{padding:14px 10px 32px}
