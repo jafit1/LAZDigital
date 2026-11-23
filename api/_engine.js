@@ -3037,7 +3037,7 @@ function _saldoAnalisaUntuk(t, sampai, golongan, publik, mentah){
   return { sampai:sampai||'', tahun:tahun, golongan:golongan||'', daftar:tampil,
     total: tampil.reduce(function(a,x){return a+x.total;},0),
     pembuka: tampil.reduce(function(a,x){return a+x.pembuka;},0),
-    sumber:'Saldo Kas Akhir sheet Analisa, [2025] DATA-transaksi.xlsx' };
+    sumber:'Saldo Kas Awal Data Final.xlsx 2026 + transaksi sistem (dihitung dari input)' };
 }
 
 function apiSaldoDaerahRinci(t, sampai){ return _saldoAnalisaUntuk(t, sampai, 'daerah'); }

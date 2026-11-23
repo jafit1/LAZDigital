@@ -1045,6 +1045,19 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   Verifikasi produksi: batas `2026-11-30`, total Rp 3.009.680.081,
   Bambanglipuro Rp 40.357.723 di tiga jalur (publik, detail, tab Setoran).
 
+- **Keputusan akhir 23 November 2026: saldo dari input, bukan snapshot.**
+  Pemilik menolak saldo yang dipakai sebagai pangkal angka beku. `saldoFinalAnalisa:2026`
+  sudah dihapus dari produksi lewat `apiHapusSaldoFinalAnalisa`. Yang dipakai:
+  `saldoAwalAnalisa:2026` berisi 102 baris dari kolom **Saldo Kas Awal**
+  Data Final.xlsx (total Rp 3.606.722.253), lalu seluruh himpunan, hak amil,
+  penyaluran, dan uang muka dihitung dari transaksi di sistem. Total 30 Nov
+  hasil hitungan input Rp 2.492.762.609; Bambanglipuro Rp 60.019.400.
+  Angka ini TIDAK sama dengan kolom Saldo Kas Akhir lampiran (Rp 3.009.680.081)
+  karena 13 baris di lampiran itu sendiri tidak balance (koreksi bersih
+  Rp 130.327.657) dan aturan klasifikasi dana lampiran berbeda dengan mesin.
+  Daftar 13 baris tetap ada di `Downloads/audit-saldo-data-final-2026.md`.
+  Kode snapshot dibiarkan tidak aktif sebagai jalur kembali, bukan sumber angka.
+
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
