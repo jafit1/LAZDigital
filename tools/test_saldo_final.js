@@ -33,6 +33,20 @@ const baris=[
  await call('apiHapusSaldoFinalAnalisa',[T,'2026']);
  const c=await call('apiSaldoKantorRinci',[T,'2026-11-30','kll']);
  cek('hapus saldo final mengembalikan mesin lama',c.total===0&&!c.final,c);
+
+ console.log('\n=== INPUT BARU SETELAH TANGGAL BATAS ===');
+ await call('apiSaveLayanan',[T,{tipe:'KLL',nama:'Uji',aktif:'true'}]);
+ const lay=(await call('apiListLayanan',[T])).find(x=>x.nama==='Uji');
+ await call('apiSavePenghimpunan',[T,{tanggal:'2026-12-05',jenisDana:'Infak',namaDonatur:'Donatur Uji',
+   jumlah:1000000,metode:'Cash/Tunai',layananId:lay.id,keterangan:'uji sinkron'}]);
+ await call('apiSimpanSaldoFinalAnalisa',[T,'2026',baris,'2026-11-30']);
+ const sebelum=await call('apiSaldoKantorRinci',[T,'2026-11-30','kll']);
+ cek('sebelum batas tidak berubah',sebelum.total===3500,sebelum.total);
+ const sesudah=await call('apiSaldoKantorRinci',[T,'2026-12-31','kll']);
+ cek('input 1 juta setelah batas menaikkan saldo 1 juta (amil pindah ke dana Amil)',sesudah.total===1003500,sesudah.total);
+ cek('batas ikut tersimpan',sesudah.batas==='2026-11-30',sesudah.batas);
+ const det=await call('apiDetailSaldoLayanan',[T,'KLL Uji','2026-12-31','']);
+ cek('ringkas detail memakai saldo final',det.ringkas.sisaSaldo===1003500&&det.ringkas.sumberFinal===true,det.ringkas);
  console.log('\nHASIL: '+ok+' lulus, '+gagal+' gagal');
  process.exitCode=gagal?1:0;
 })().catch(e=>{console.error('ERR',e);process.exitCode=1});

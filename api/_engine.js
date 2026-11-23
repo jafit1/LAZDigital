@@ -2244,6 +2244,22 @@ function apiDetailSaldoLayanan(t, nama, sampai, bulan){
 
   var ring = hitungSaldoLayanan(sampai, bulan).daftar.filter(function(s){ return sama(s.layanan); })[0]
     || { layanan:nama, tipe:'KLL', himpun:0, kenaAmil:0, bebasAmil:0, hakAmil:0, saldoKLL:0, umpKeluar:0, umpKembali:0, lpj:0, sisaSaldo:0, belumLPJ:0 };
+  /* Satu angka untuk semua layar. Baris transaksi tetap berasal dari input,
+     tetapi ringkasannya memakai saldo final hasil audit bila tersedia. */
+  try {
+    var finalRow = null;
+    (_saldoAnalisaUntuk(null, sampai, '', true).daftar || []).forEach(function(k){
+      if (_norm(k.nama) === _norm(nama)) finalRow = k;
+    });
+    if (finalRow) {
+      ring.saldoFinal = Number(finalRow.total) || 0;
+      ring.pembukaFinal = Number(finalRow.pembuka) || 0;
+      ring.finalDana = finalRow.dana;
+      ring.selisihMesin = ring.saldoFinal - (Number(ring.sisaSaldo) || 0);
+      ring.sisaSaldo = ring.saldoFinal;
+      ring.sumberFinal = true;
+    }
+  } catch (e) {}
   return { layanan:nama, tanggal:sampai, bulan:bulan, tahun:tahun, ringkas:ring, persen:cfg.persen, kecuali:cfg.kecuali,
     setoran:setoran, uangMuka:uangMuka, lpj:lpj };
 }
@@ -2458,6 +2474,13 @@ var _DANA_ANALISA = ['Zakat_Maal','Zakat_Fitrah','Infak_Umum','IT_Ekonomi','IT_P
 
 function _kunciSaldoAnalisa(tahun){ return 'saldoAwalAnalisa:' + String(tahun || ''); }
 function _kunciSaldoFinal(tahun){ return 'saldoFinalAnalisa:' + String(tahun || ''); }
+function _kunciBatasFinal(tahun){ return 'saldoFinalBatas:' + String(tahun || ''); }
+function _bacaBatasFinal(tahun){ return String(getSetting(_kunciBatasFinal(tahun)) || '').slice(0, 10); }
+function _aliasSaldoFinal(nama){
+  var n = String(nama || '').trim();
+  var peta = { 'ULL MTs Muhammadiyah Kasihan':'ULL_MTs_Kasihan' };
+  return peta[n] || n.replace(/\s+/g, '_');
+}
 function _bacaSaldoFinal(tahun){
   try { var a = JSON.parse(getSetting(_kunciSaldoFinal(tahun)) || 'null'); return (a && a.length) ? a : null; }
   catch (e) { return null; }
@@ -2473,7 +2496,7 @@ function _namaSaldoFinal(alias){
 /* Lembar hasil audit dipakai sebagai angka akhir bila sudah diunggah.
    Ini menimpa penghitungan dari transaksi, bukan menghapusnya: menghapus
    kunci Settings ini mengembalikan mesin lama tanpa perubahan kode. */
-function _saldoDariFinal(baris, golongan){
+function _saldoDariFinal(baris, golongan, sampai, batas){
   var per = {};
   baris.forEach(function(r){
     var alias = String(r.alias || '').trim();
@@ -2481,14 +2504,46 @@ function _saldoDariFinal(baris, golongan){
     if (!per[alias]) per[alias] = [];
     per[alias].push(r);
   });
+  /* Transaksi setelah tanggal batas dihitung dari input dan ditambahkan ke
+     angka lampiran. Tanpa ini saldo final beku: setoran baru tidak mengubah
+     angka sama sekali, dan itu bukan buku yang hidup. */
+  var delta = {};
+  if (sampai && batas && String(sampai) > String(batas)) {
+    var mentahAkhir = _saldoAnalisaUntuk(null, sampai, '', true, true);
+    var mentahAwal  = _saldoAnalisaUntuk(null, batas, '', true, true);
+    var petaAkhir = {}, petaAwal = {};
+    function indeks(r, keluar){
+      (r.daftar || []).forEach(function(k){
+        var al = _aliasSaldoFinal(k.nama);
+        (k.dana || []).forEach(function(d){
+          keluar[al + '|' + d.dana] = { akhir:Number(d.akhir)||0, himpun:Number(d.himpun)||0,
+            amil:Number(d.amil)||0, salur:Number(d.salur)||0, sisaUmk:Number(d.sisaUmk)||0 };
+        });
+      });
+    }
+    indeks(mentahAkhir, petaAkhir); indeks(mentahAwal, petaAwal);
+    Object.keys(petaAkhir).forEach(function(k){
+      var a = petaAkhir[k], b = petaAwal[k] || { akhir:0, himpun:0, amil:0, salur:0, sisaUmk:0 };
+      delta[k] = { akhir:a.akhir-b.akhir, himpun:a.himpun-b.himpun, amil:a.amil-b.amil,
+        salur:a.salur-b.salur, sisaUmk:a.sisaUmk-b.sisaUmk };
+    });
+  }
+  Object.keys(delta).forEach(function(k){
+    var p = k.split('|'), al = p[0], d = delta[k];
+    if (per[al]) return;
+    per[al] = [{ alias:al, dana:p[1], umkAwal:0, awal:0, himpun:d.himpun, amil:d.amil,
+      salur:d.salur, umkAkhir:d.sisaUmk, akhir:d.akhir }];
+  });
   var hasil = Object.keys(per).map(function(alias){
     var rows = per[alias];
     var totalAmil = 0, danaList = [], total = 0, pembuka = 0;
     rows.forEach(function(r){ totalAmil += Number(r.amil) || 0; });
     rows.forEach(function(r){
-      var awal = Number(r.awal)||0, himpun = Number(r.himpun)||0, amil = Number(r.amil)||0,
-          salur = Number(r.salur)||0, umkAwal = Number(r.umkAwal)||0, umkAkhir = Number(r.umkAkhir)||0,
-          akhir = Number(r.akhir)||0;
+      var d = delta[alias + '|' + r.dana] || { akhir:0, himpun:0, amil:0, salur:0, sisaUmk:0 };
+      var awal = Number(r.awal)||0, himpun = (Number(r.himpun)||0) + d.himpun,
+          amil = (Number(r.amil)||0) + d.amil, salur = (Number(r.salur)||0) + d.salur,
+          umkAwal = Number(r.umkAwal)||0, umkAkhir = (Number(r.umkAkhir)||0) + d.sisaUmk,
+          akhir = (Number(r.akhir)||0) + d.akhir;
       var asli = awal + himpun - amil - salur - (umkAkhir - umkAwal) + (String(r.dana)==='Amil' ? totalAmil : 0);
       danaList.push({ dana:String(r.dana), awal:awal, himpun:himpun, amil:amil, salur:salur,
         sisaUmk:umkAkhir, amilMasuk:String(r.dana)==='Amil' ? totalAmil : 0,
@@ -2509,9 +2564,10 @@ function _saldoDariFinal(baris, golongan){
   return { sampai:'', tahun:'', golongan:golongan||'', daftar:hasil,
     total:hasil.reduce(function(a,k){return a+k.total;},0),
     pembuka:hasil.reduce(function(a,k){return a+k.pembuka;},0),
-    sumber:'Data Final.xlsx (saldo final hasil audit)', final:true, tidakSeimbang:tidak };
+    sumber:'Data Final.xlsx (saldo final hasil audit)', final:true, batas:batas||'',
+    tidakSeimbang:tidak, diperbaruiBaris:Object.keys(delta).length };
 }
-function apiSimpanSaldoFinalAnalisa(t, tahun, baris){
+function apiSimpanSaldoFinalAnalisa(t, tahun, baris, batas){
   var admin = _requirePerm(t,'settings','edit');
   tahun = String(tahun || '');
   if(!/^\d{4}$/.test(tahun)) throw new Error('Tahun tidak sah.');
@@ -2527,16 +2583,19 @@ function apiSimpanSaldoFinalAnalisa(t, tahun, baris){
   });
   if(!bersih.length) throw new Error('Tidak ada baris saldo final yang sah.');
   setSetting(_kunciSaldoFinal(tahun), JSON.stringify(bersih));
+  var batasSah = /^\d{4}-\d{2}-\d{2}$/.test(String(batas||'')) ? String(batas) : '';
+  if (batasSah) setSetting(_kunciBatasFinal(tahun), batasSah);
   var total = bersih.reduce(function(a,r){return a+(Number(r.akhir)||0);},0);
   audit(admin.id, admin.username, 'saldo_final_analisa', 'tahun '+tahun,
-    {modul:'settings', ringkas:bersih.length+' baris, saldo akhir '+Math.round(total).toLocaleString('id-ID')});
-  return { ok:true, tahun:tahun, baris:bersih.length, total:total };
+    {modul:'settings', ringkas:bersih.length+' baris, saldo akhir '+Math.round(total).toLocaleString('id-ID')+(batasSah?', batas '+batasSah:'')});
+  return { ok:true, tahun:tahun, baris:bersih.length, total:total, batas:batasSah };
 }
 function apiHapusSaldoFinalAnalisa(t, tahun){
   var admin = _requirePerm(t,'settings','edit');
   tahun = String(tahun || '');
   if(!/^\d{4}$/.test(tahun)) throw new Error('Tahun tidak sah.');
   deleteRowBy(SHEETS.SETTINGS, 'key', _kunciSaldoFinal(tahun));
+  deleteRowBy(SHEETS.SETTINGS, 'key', _kunciBatasFinal(tahun));
   audit(admin.id, admin.username, 'hapus_saldo_final_analisa', 'tahun '+tahun, {modul:'settings'});
   return { ok:true };
 }
@@ -2843,10 +2902,10 @@ function _sebarUmkInfak(k){
   Object.keys(alok).forEach(function(x){ k.umk[x] = (k.umk[x]||0) + alok[x]; });
 }
 
-function _saldoAnalisaUntuk(t, sampai, golongan, publik){
+function _saldoAnalisaUntuk(t, sampai, golongan, publik, mentah){
   var tahunFinal = String(sampai||'').slice(0,4) || String(new Date().getFullYear());
-  var barisFinal = _bacaSaldoFinal(tahunFinal);
-  if (barisFinal) return _saldoDariFinal(barisFinal, golongan);
+  var barisFinal = mentah ? null : _bacaSaldoFinal(tahunFinal);
+  if (barisFinal) return _saldoDariFinal(barisFinal, golongan, sampai, _bacaBatasFinal(tahunFinal));
   if (!publik) {
     _requirePerm(t,'saldokll','view');
     if (golongan === 'daerah') _requirePerm(t,'saldodaerah','view');
@@ -3178,11 +3237,24 @@ function apiSaldoKLRincian(kode, bulan){
   }
   if (tersedia.indexOf(b) < 0) tersedia.push(b);
 
-  return { nama:e.nama, tipe:e.tipe, bulan:b, bulanTersedia:tersedia,
-    ringkas:{ himpun:himpun, hakAmil:hakAmil, umpKeluar:umpKeluar, umpKembali:umpKembali,
+  var ringkas = { himpun:himpun, hakAmil:hakAmil, umpKeluar:umpKeluar, umpKembali:umpKembali,
       lpj:lpjJumlah, belumLPJ:belumBerjalan,
       belumLPJBulanan:umpKeluar - lpjJumlah - umpKembali,
-      berjalan:{ umpKeluar:berjalan.keluar, umpKembali:berjalan.kembali, lpj:berjalan.lpj } },
+      berjalan:{ umpKeluar:berjalan.keluar, umpKembali:berjalan.kembali, lpj:berjalan.lpj } };
+  try {
+    var akhirBulan = b + '-' + new Date(Date.UTC(Number(b.slice(0,4)), Number(b.slice(5,7)), 0)).getUTCDate();
+    var finalRow = null;
+    (_saldoAnalisaUntuk(null, akhirBulan, '', true).daftar || []).forEach(function(k){
+      if (_norm(k.nama) === _norm(e.nama)) finalRow = k;
+    });
+    if (finalRow) {
+      ringkas.saldoFinal = Number(finalRow.total) || 0;
+      ringkas.pembukaFinal = Number(finalRow.pembuka) || 0;
+      ringkas.sumberFinal = true;
+    }
+  } catch (e2) {}
+  return { nama:e.nama, tipe:e.tipe, bulan:b, bulanTersedia:tersedia,
+    ringkas:ringkas,
     setoran:setoran, ump:ump, lpj:lpj, diperbarui:new Date().toISOString() };
 }
 
