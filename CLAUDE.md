@@ -1012,6 +1012,25 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   "murni" (tanpa saldo awal). Kartu "Belum LPJ" di halaman Saldo KL
   disembunyikan sementara sampai rapat selesai, lalu dinyalakan lagi.
 
+- **Saldo final dari Data Final.xlsx (23 November 2026, commit `c4e8802`).**
+  Pemilik menyerahkan berkas `Downloads/Data Final.xlsx` (Sheet1, 608 baris,
+  32 alias, 19 pos dana) sebagai angka yang dipakai rapat. Saldo awal 2026
+  sekarang diambil dari kolom **Saldo Kas Awal** (kolom D), bukan lagi dari
+  kolom K berkas 2025. Sisa UMK memakai kolom **Sisa UMK Akhir** (kolom H),
+  yaitu UMP setelah dikurangi LPJ. Settings `saldoFinalAnalisa:2026` menyimpan
+  salinan 608 baris; bila ada, `_saldoAnalisaUntuk` memakai angka lembar itu
+  dan semua jalur (`apiSaldoLayanan`, `apiSaldoKLPublik`, saldo rinci)
+  mengikuti. `apiHapusSaldoFinalAnalisa` mengembalikan mesin transaksi lama.
+  Total produksi: pembuka Rp 3.606.722.253, saldo akhir Rp 3.009.680.081.
+  Dijaga `tools/test_saldo_final.js`.
+  **13 dari 608 baris di berkas itu sendiri tidak balance**, total koreksi
+  bersih Rp 130.327.657 (terbesar DAERAH Bantul/Amil Rp 113.300.700 dan
+  KLL Pandak Timur/Infak Umum Rp 57.413.440). Nilai Saldo Kas Akhir SENGAJA
+  dipertahankan supaya cocok persis dengan lampiran; selisih per baris
+  tersedia di field `seimbang` dan kunci `tidakSeimbang`. Laporan lengkap:
+  `Downloads/audit-saldo-data-final-2026.md` dan `.csv`.
+  Tab Setoran masih memakai mesin `hitungSaldoLayanan` dan belum disamakan.
+
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
