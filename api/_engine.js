@@ -2457,6 +2457,89 @@ var _DANA_ANALISA = ['Zakat_Maal','Zakat_Fitrah','Infak_Umum','IT_Ekonomi','IT_P
   'AA_Titipan_DSKL','AA_Titipan_Amil'];
 
 function _kunciSaldoAnalisa(tahun){ return 'saldoAwalAnalisa:' + String(tahun || ''); }
+function _kunciSaldoFinal(tahun){ return 'saldoFinalAnalisa:' + String(tahun || ''); }
+function _bacaSaldoFinal(tahun){
+  try { var a = JSON.parse(getSetting(_kunciSaldoFinal(tahun)) || 'null'); return (a && a.length) ? a : null; }
+  catch (e) { return null; }
+}
+/* Nama di berkas "Data Final.xlsx" memakai garis bawah. Dua kantor memakai
+   nama resmi yang lebih panjang di menu Layanan; dipetakan di sini supaya
+   kode akses KL dan izin per kantor tetap menunjuk ke entitas yang sama. */
+function _namaSaldoFinal(alias){
+  var a = String(alias || '').trim();
+  var peta = { 'DAERAH_Bantul':'DAERAH Bantul', 'ULL_MTs_Kasihan':'ULL MTs Muhammadiyah Kasihan' };
+  return peta[a] || a.replace(/_/g, ' ');
+}
+/* Lembar hasil audit dipakai sebagai angka akhir bila sudah diunggah.
+   Ini menimpa penghitungan dari transaksi, bukan menghapusnya: menghapus
+   kunci Settings ini mengembalikan mesin lama tanpa perubahan kode. */
+function _saldoDariFinal(baris, golongan){
+  var per = {};
+  baris.forEach(function(r){
+    var alias = String(r.alias || '').trim();
+    if (!alias) return;
+    if (!per[alias]) per[alias] = [];
+    per[alias].push(r);
+  });
+  var hasil = Object.keys(per).map(function(alias){
+    var rows = per[alias];
+    var totalAmil = 0, danaList = [], total = 0, pembuka = 0;
+    rows.forEach(function(r){ totalAmil += Number(r.amil) || 0; });
+    rows.forEach(function(r){
+      var awal = Number(r.awal)||0, himpun = Number(r.himpun)||0, amil = Number(r.amil)||0,
+          salur = Number(r.salur)||0, umkAwal = Number(r.umkAwal)||0, umkAkhir = Number(r.umkAkhir)||0,
+          akhir = Number(r.akhir)||0;
+      var asli = awal + himpun - amil - salur - (umkAkhir - umkAwal) + (String(r.dana)==='Amil' ? totalAmil : 0);
+      danaList.push({ dana:String(r.dana), awal:awal, himpun:himpun, amil:amil, salur:salur,
+        sisaUmk:umkAkhir, amilMasuk:String(r.dana)==='Amil' ? totalAmil : 0,
+        akhir:akhir, seimbang:Math.round(akhir - asli) });
+      total += akhir; pembuka += awal;
+    });
+    var nama = _namaSaldoFinal(alias);
+    return { nama:nama, tipe:/^DAERAH/i.test(nama)?'Daerah':(/^ULL\b/i.test(nama)?'ULL':'KLL'),
+      dana:danaList, total:total, pembuka:pembuka };
+  });
+  hasil = hasil.filter(function(k){
+    return !golongan || (golongan==='daerah'&&k.tipe==='Daerah')
+      || (golongan==='kll'&&k.tipe==='KLL') || (golongan==='ull'&&k.tipe==='ULL');
+  });
+  hasil.sort(function(a,b){ return b.total - a.total; });
+  var tidak = [];
+  hasil.forEach(function(k){ k.dana.forEach(function(d){ if (Math.abs(d.seimbang)>=1) tidak.push({nama:k.nama,dana:d.dana,selisih:d.seimbang}); }); });
+  return { sampai:'', tahun:'', golongan:golongan||'', daftar:hasil,
+    total:hasil.reduce(function(a,k){return a+k.total;},0),
+    pembuka:hasil.reduce(function(a,k){return a+k.pembuka;},0),
+    sumber:'Data Final.xlsx (saldo final hasil audit)', final:true, tidakSeimbang:tidak };
+}
+function apiSimpanSaldoFinalAnalisa(t, tahun, baris){
+  var admin = _requirePerm(t,'settings','edit');
+  tahun = String(tahun || '');
+  if(!/^\d{4}$/.test(tahun)) throw new Error('Tahun tidak sah.');
+  if(!Array.isArray(baris) || baris.length > 2000) throw new Error('Data saldo final tidak sah.');
+  var bersih = [];
+  baris.forEach(function(b){
+    if(!b) return;
+    var alias = String(b.alias||'').trim().replace(/\s+/g,'_'), dana = String(b.dana||'').trim();
+    if(!alias || !dana) return;
+    bersih.push({ alias:alias, dana:dana, umkAwal:Number(b.umkAwal)||0, awal:Number(b.awal)||0,
+      himpun:Number(b.himpun)||0, amil:Number(b.amil)||0, salur:Number(b.salur)||0,
+      umkAkhir:Number(b.umkAkhir)||0, akhir:Number(b.akhir)||0 });
+  });
+  if(!bersih.length) throw new Error('Tidak ada baris saldo final yang sah.');
+  setSetting(_kunciSaldoFinal(tahun), JSON.stringify(bersih));
+  var total = bersih.reduce(function(a,r){return a+(Number(r.akhir)||0);},0);
+  audit(admin.id, admin.username, 'saldo_final_analisa', 'tahun '+tahun,
+    {modul:'settings', ringkas:bersih.length+' baris, saldo akhir '+Math.round(total).toLocaleString('id-ID')});
+  return { ok:true, tahun:tahun, baris:bersih.length, total:total };
+}
+function apiHapusSaldoFinalAnalisa(t, tahun){
+  var admin = _requirePerm(t,'settings','edit');
+  tahun = String(tahun || '');
+  if(!/^\d{4}$/.test(tahun)) throw new Error('Tahun tidak sah.');
+  deleteRowBy(SHEETS.SETTINGS, 'key', _kunciSaldoFinal(tahun));
+  audit(admin.id, admin.username, 'hapus_saldo_final_analisa', 'tahun '+tahun, {modul:'settings'});
+  return { ok:true };
+}
 
 /* ============================================================
    GERBANG UANG MUKA (UMP) TERHADAP SALDO KANTOR
@@ -2761,6 +2844,9 @@ function _sebarUmkInfak(k){
 }
 
 function _saldoAnalisaUntuk(t, sampai, golongan, publik){
+  var tahunFinal = String(sampai||'').slice(0,4) || String(new Date().getFullYear());
+  var barisFinal = _bacaSaldoFinal(tahunFinal);
+  if (barisFinal) return _saldoDariFinal(barisFinal, golongan);
   if (!publik) {
     _requirePerm(t,'saldokll','view');
     if (golongan === 'daerah') _requirePerm(t,'saldodaerah','view');
@@ -9721,6 +9807,8 @@ REGISTRY['apiClosingRincianFundraiser']=apiClosingRincianFundraiser;
 REGISTRY['apiCekUangMuka']=apiCekUangMuka;
 REGISTRY['apiSaveImportedData']=apiSaveImportedData;
 REGISTRY['apiSimpanSaldoAwalAnalisa']=apiSimpanSaldoAwalAnalisa;
+REGISTRY['apiSimpanSaldoFinalAnalisa']=apiSimpanSaldoFinalAnalisa;
+REGISTRY['apiHapusSaldoFinalAnalisa']=apiHapusSaldoFinalAnalisa;
 REGISTRY['apiDaftarSaldoAwalAnalisa']=apiDaftarSaldoAwalAnalisa;
 REGISTRY['apiSaldoDaerahRinci']=apiSaldoDaerahRinci;
 REGISTRY['apiSaldoKantorRinci']=apiSaldoKantorRinci;
