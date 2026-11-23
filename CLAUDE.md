@@ -1068,6 +1068,15 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   ke mesin `saldoAwalAnalisa:2026` + transaksi. **Wajib mengingatkan pemilik
   di setiap balasan bahwa angka ini sementara dan perlu dibenarkan.**
 
+- **Rotasi penuh kode akses KL (23 November 2026, commit `e74267d`).**
+  `apiRotasiKodeAksesKL` menerbitkan kode baru untuk semua kantor tanpa
+  menyalin kode lama, mencatatnya di audit, dan menimpa `kodeAksesKL`.
+  Di produksi 30 kode lama dicabut dan 30 kode baru diterbitkan; 0 kode lama
+  masih bisa dibuka, 0 kode baru gagal. Generator lama `apiBuatKodeAksesKL`
+  sengaja tetap menyalin kode yang sudah ada, jadi jangan dipakai untuk
+  rotasi. Daftar kode baru ada di `Downloads/kode-akses-kl-rotasi-2026-11-23.csv`
+  dan TIDAK boleh masuk repo publik. Dijaga `tools/test_rotasi_kode.js`.
+
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
 (Fonnte), peringatan cadangan, lima celah keamanan di bagian 3.10, asesmen
