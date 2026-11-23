@@ -970,7 +970,43 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
 
 ## 10. Keadaan sekarang dan pekerjaan tertunda
 
-Per 29 September 2026, dengan tambahan 3 Oktober dan 5 November 2026 di bawah.
+Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
+
+**Ditambahkan 23 November 2026: rekonsiliasi saldo, sisir duplikat, dan dua rekomendasi audit keamanan.**
+
+- **162 baris kembar dihapus, Rp 176.579.514.** 153 baris berasal dari impor
+  ulang 29 September dan 20 November (termasuk 6 baris yang tercatat di
+  kantor yang salah), 9 baris dobel di dalam satu kantor. Dua kelompok
+  Rp 300.000 (Sanden 31 Juli dan 3 Maret) sengaja disimpan karena jurnal
+  memang punya dua baris untuk masing-masing. Penyebabnya impor tanpa kunci
+  idempotensi; perbaikannya masuk sisa audit keamanan di bawah.
+- **Saldo akhir 30 November 2026: total lembaga Rp 2.466.645.804,** dengan
+  7 kantor minus total Rp 96.779.369. Bambanglipuro Rp 16.275.365 lewat mesin
+  rincian; jalur Analisa masih menampilkan Rp 60.019.400 karena dua mesin
+  saldo belum digabung.
+- **KLL SMK Muhammadiyah Bambanglipuro dipisahkan** dari KLL Bambanglipuro
+  (`lay-122`), termasuk tiga baris tunai yang dulu nyangkut di kantornya.
+- **Keamanan 1: sandi `superadmin` dirotasi** dan 44 skrip sementara yang
+  memuat sandi itu dihapus. Sandi tidak boleh pernah ditulis di skrip atau
+  berkas; pakai variabel lingkungan sekali pakai.
+- **Keamanan 2: `/api/rpc` sekarang deny-by-default.** `PUBLIC_FN` hanya
+  memuat 10 fungsi (login, loginIngat, logout, setup, apiPublicDashboard,
+  apiVerifyKwitansi, apiDaftarKantorUmp, apiPenghimpunanHarian,
+  apiSaldoKLPublik, apiSaldoKLRincian); `_wajibSesi` memeriksa token sebelum
+  badan fungsi berjalan. `apiHapusAudit` dicabut dari `REGISTRY` dan log
+  audit menjadi append-only (tombol "Bersihkan log" dihapus dari `app.js`).
+  `_simpanPenghimpunan` memakai allowlist `KOLOM_HIMPUN`, jadi `petugas`,
+  `dibuat`, `akunKredit`, dan `__row` tidak bisa datang dari klien.
+  Dijaga `tools/test_keamanan_lanjutan.js`.
+- **Sisa audit keamanan:** escape semua output teks di `saldo-kl.html` dan
+  halaman admin lalu pindahkan token sesi ke cookie `HttpOnly`; rate-limit
+  `login` dan kode KL plus whitelist field respons publik; idempotensi
+  `apiSaveImportedData` dan sanitasi formula spreadsheet.
+- **Tertunda, menunggu keputusan pemilik:** penggabungan `apiSaldoLayanan`
+  (jalur Analisa) dengan `apiSaldoKLPublik` dan `hitungSaldoLayanan`
+  (jalur rincian). Pilihannya "ikut" (saldo awal ikut ditampilkan) atau
+  "murni" (tanpa saldo awal). Kartu "Belum LPJ" di halaman Saldo KL
+  disembunyikan sementara sampai rapat selesai, lalu dinyalakan lagi.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
