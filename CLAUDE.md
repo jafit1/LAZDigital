@@ -1115,6 +1115,16 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   (insertBefore ke grid.children melenceng satu bila placeholder di depan); (3) auto-scroll saat
   pointer dekat tepi atas/bawah layar, dan `.dash-edit .wc-h{cursor:grab;touch-action:none}`
   agar seretan jari di HP tidak kalah sama gulir.
+- **Perpindahan menu lebih mulus (26 November 2026):** keluhan pemilik "perpindahan page/menu
+  dibuat lebih smooth dan mulus". Diukur `tools/test_transisi_menu.js` (7 cek, baru): konten lama
+  sebelumnya terukur JATUH ke opacity 0 sesaat (layar kosong berkedip) karena animasi masuk
+  `viewBlurIn` mulai dari opacity:0 sementara redup keluar hanya .2s ease. Sekarang: redup keluar
+  ke opacity .35 dengan blur 2,5 px selama .24s cubic-bezier (mulus dua arah), animasi masuk
+  `viewBlurIn` mulai DARI .35 (bukan 0) sehingga tidak ada bingkai layar kosong, durasi .32s.
+  `go()` menggulir halaman ke atas dengan `behavior:'smooth'` saat menu diganti (dulu: lompatan
+  paksa). Dijaga `test_transisi_menu.js` (terdaftar di jalankan-uji.js): redup tidak jatuh ke
+  kosong, isi masuk beranimasi, gulir tidak dilompatkan, konten kembali opasitas penuh, spam
+  klik tiga menu tidak membekukan konten dan tidak meninggalkan kelas lengket.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
