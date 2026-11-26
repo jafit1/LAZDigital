@@ -8601,6 +8601,71 @@ function apiPulihkanDB(t, cadangan, konfirmasi){
    Selalu dijalankan dua tahap: `terapkan:false` hanya menghitung dan
    merinci, `terapkan:true` baru menghapus. Rentang harian maupun bulanan
    sama-sama dinyatakan sebagai tanggal awal dan tanggal akhir. */
+/* ===== HAPUS PER-BARIS UMP & TRANSFER + SELARASKAN JURNAL (pemilik, 26 Nov 2026) =====
+   Baris uang muka/transfer yang salah (mis. dobel dengan baris koreksi tanggal)
+   tidak bisa dibersihkan apiHapusRentang: ia menyapu SEMUA salur+transfer pada
+   rentang tanggal yang sama. Dua fungsi pertama menghapus SATU baris berdasar
+   id, polanya sama dengan apiDeletePenghimpunan.
+   apiSelaraskanJurnal menyelaraskan tanggal & klasifikasi baris lama ke buku
+   jurnal resmi dalam SATU panggilan: tiap entri {tabel, id, kolom:{...}} hanya
+   boleh menyentuh kolom daftar putih, baris wajib sudah ada (tanpa create),
+   bulan yang tersentuh disinkronkan sekali di akhir. */
+async function apiDeleteUangMuka(t, id) {
+  var u = _requirePerm(t, 'pentasyarufan', 'delete');
+  var oldRow = findById(SHEETS.UANGMUKA, id);
+  if (!oldRow) throw new Error('Baris uang muka tidak ditemukan.');
+  var oldMonth = getMonthFromDate(oldRow.tanggal);
+  deleteRowById(SHEETS.UANGMUKA, id);
+  audit(u.id, u.username, 'delete_uangmuka', id, { modul: 'pentasyarufan', entitasId: id,
+    ringkas: (oldRow.layanan || '-') + ' · ' + (oldRow.tanggal || '') + ' · Rp ' + (Number(oldRow.nominal) || 0).toLocaleString('id-ID') });
+  if (oldMonth) await syncMonthlySpreadsheet(oldMonth);
+  return { ok: true };
+}
+async function apiDeleteTransfer(t, id) {
+  var u = _requirePerm(t, 'pentasyarufan', 'delete');
+  var oldRow = findById(SHEETS.TRANSFER, id);
+  if (!oldRow) throw new Error('Baris transfer tidak ditemukan.');
+  var oldMonth = getMonthFromDate(oldRow.tanggal);
+  deleteRowById(SHEETS.TRANSFER, id);
+  audit(u.id, u.username, 'delete_transfer', id, { modul: 'pentasyarufan', entitasId: id,
+    ringkas: (oldRow.dariAkun || '-') + ' > ' + (oldRow.keAkun || '-') + ' · ' + (oldRow.tanggal || '') + ' · Rp ' + (Number(oldRow.nominal) || 0).toLocaleString('id-ID') });
+  if (oldMonth) await syncMonthlySpreadsheet(oldMonth);
+  return { ok: true };
+}
+var SELARAS_KOLOM = {
+  Penghimpunan: ['tanggal', 'jenisDana', 'subJenis', 'pilar', 'program'],
+  Pentasyarufan: ['tanggal', 'ashnaf', 'sumberDana', 'program'],
+};
+async function apiSelaraskanJurnal(t, daftar) {
+  var u = _requirePerm(t, 'settings', 'edit');
+  if (!Array.isArray(daftar) || !daftar.length) throw new Error('Daftar koreksi kosong.');
+  if (daftar.length > 8000) throw new Error('Terlalu banyak baris sekali panggil (maks 8000).');
+  var bulan = {}, ubah = 0, lewati = [];
+  for (var i = 0; i < daftar.length; i++) {
+    var e = daftar[i] || {};
+    var namaTabel = e.tabel === 'Penghimpunan' ? SHEETS.PENGHIMPUNAN
+      : (e.tabel === 'Pentasyarufan' ? SHEETS.PENTASYARUFAN : null);
+    if (!namaTabel) { lewati.push({ id: e.id, alasan: 'tabel tidak dikenal' }); continue; }
+    var kolomBoleh = SELARAS_KOLOM[e.tabel], patch = {}, ada = false;
+    kolomBoleh.forEach(function (k) { if (e.kolom && e.kolom[k] !== undefined) { patch[k] = e.kolom[k]; ada = true; } });
+    if (!ada) { lewati.push({ id: e.id, alasan: 'tidak ada kolom yang boleh diubah' }); continue; }
+    if (patch.tanggal !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(patch.tanggal))) { lewati.push({ id: e.id, alasan: 'format tanggal salah' }); continue; }
+    var lama = findById(namaTabel, e.id);
+    if (!lama) { lewati.push({ id: e.id, alasan: 'baris tidak ditemukan' }); continue; }
+    updateRowById(namaTabel, e.id, patch);
+    ubah++;
+    var blBaru = String((patch.tanggal !== undefined ? patch.tanggal : lama.tanggal) || '').slice(0, 7);
+    var blLama = String(lama.tanggal || '').slice(0, 7);
+    if (blBaru) bulan[blBaru] = true;
+    if (blLama) bulan[blLama] = true;
+  }
+  var daftarBulan = Object.keys(bulan).sort();
+  for (var j = 0; j < daftarBulan.length; j++) await syncMonthlySpreadsheet(daftarBulan[j]);
+  audit(u.id, u.username, 'selaraskan_jurnal', ubah + ' baris',
+    { modul: 'settings', ringkas: ubah + ' baris diselaraskan ke jurnal 2026, ' + lewati.length + ' dilewati' });
+  return { ok: true, ubah: ubah, dilewati: lewati.length, contohDilewati: lewati.slice(0, 10), bulan: daftarBulan };
+}
+
 async function apiHapusRentang(t, d){
   var u = _requirePerm(t, 'settings', 'delete');
   d = d || {};
@@ -10139,6 +10204,9 @@ REGISTRY['apiCekIzin']=apiCekIzin;
 REGISTRY['apiStatusCadangan']=apiStatusCadangan;
 REGISTRY['apiPulihkanDB']=apiPulihkanDB;
 REGISTRY['apiHapusRentang']=apiHapusRentang;
+REGISTRY['apiDeleteUangMuka']=apiDeleteUangMuka;
+REGISTRY['apiDeleteTransfer']=apiDeleteTransfer;
+REGISTRY['apiSelaraskanJurnal']=apiSelaraskanJurnal;
 REGISTRY['apiListAudit']=apiListAudit;
 REGISTRY['apiLaporanHarian']=apiLaporanHarian;
 REGISTRY['apiSimpanTandaTanganA2']=apiSimpanTandaTanganA2;
