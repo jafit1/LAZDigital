@@ -1125,6 +1125,29 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   paksa). Dijaga `test_transisi_menu.js` (terdaftar di jalankan-uji.js): redup tidak jatuh ke
   kosong, isi masuk beranimasi, gulir tidak dilompatkan, konten kembali opasitas penuh, spam
   klik tiga menu tidak membekukan konten dan tidak meninggalkan kelas lengket.
+- **Sinkronisasi Saldo KL/UL, halaman baru /sinkron-kl.html (26 November 2026, commit `d4f716a`+
+  2):** pemilik minta fitur tersendiri untuk menyamakan catatan KL/UL dengan daerah, SKEMA
+  AKSESNYA SAMA dengan cek saldo (kunci `kodeAksesKL` yang sama, `_entriKodeKL`). Mesin
+  (`api/_engine.js`): `apiSinkronKLMuat(kode)` mengirim setoran, UMP, dan LPJ kantor itu SAJA
+  tahun berjalan, TERPISAH per jenis, dengan persen amil per baris (`persenAmil`, `amil`,
+  `bebas` dari `_bebasHakAmil`/`hakAmilKecuali`), `kunci` stabil (id baris atau tanggal|nominal);
+  plus ajuan dan log tersimpan di Settings `sinkronKL` per nama kantor. `apiSinkronKLSimpan`
+  (publik, menerima maks 50 ajuan) menerima HANYA kolom di whitelist `SINKRON_KOLOM`
+  (setoran.diambilAmil pilihan sudah/belum; ump & lpj: nominal, tanggal, keterangan/program) -
+  deny-by-default; nominal 0..1e12 dibulatkan, tanggal YYYY-MM-DD; ajuan ulang kunci sama
+  MENGGANTI; hapus lewat `hapus:true` atau nilai kosong; log 200 terbaru per kantor; audit()
+  aksi `sinkron_kl`. BUKU UTAMA (UangMuka/Pentasyarufan/Penghimpunan) TIDAK PERNAH ditulis
+  dari halaman publik: penyesuaian KL/UL adalah AJUAN yang dipakai daerah menyamakan catatan.
+  Halaman `src/public/sinkron-kl.html` desain persis saldo-kl.html (boot, tema, lz-logo loading,
+  kode akses KL-XXXXXXXX, hero, tab, kl-card/kl-tbl/kl-catatan): 4 tab - Penghimpunan (setoran
+  + UMP + LPJ terpisah, kolom "Diambil amil?" pilihan yang menjadi ajuan, rincian persen per
+  baris), UMP & LPJ (sel sunting tanggal/nominal/keterangan + usul baris baru, tanda oranye +
+  batalkan ×), Ringkasan (hasil sementara: saldo, setoran, amil diambil/belum, UMP, LPJ, belum
+  LPJ), Log (server + draft belum terkirim bertanda "di peramban"); savebar sticky + tombol
+  Simpan; draft jaga-jaga di localStorage `sinkronKLDraft_<kode>` per peramban, dibersihkan
+  setelah terkirim. Dijaga `tools/test_sinkron_kl.js` (23 cek mesin) dan
+  `tools/test_sinkron_kl_ui.js` (12 cek halaman: loading, kode sama, tab, ajuan, simpan, log),
+  keduanya terdaftar di jalankan-uji.js.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama

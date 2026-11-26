@@ -3281,6 +3281,185 @@ function apiSaldoKLRincian(kode, bulan){
     setoran:setoran, ump:ump, lpj:lpj, diperbarui:new Date().toISOString() };
 }
 
+/* ============================================================
+   SINKRONISASI SALDO KL/UL (pemilik, 26 November 2026)
+   Halaman /sinkron-kl.html memakai KODE AKSES YANG SAMA dengan
+   cek saldo (kodeAksesKL). Isinya: setoran, UMP, dan LPJ kantor
+   dipisah lengkap dengan kolom "diambil amil atau tidak" beserta
+   persen hak amilnya, penyesuaian (ajuan) UMP/LPJ yang fleksibel
+   supaya catatan KL/UL bisa disamakan dengan catatan daerah,
+   ringkasan hasil sementara, dan log perubahan.
+   Penyimpanan: Settings 'sinkronKL' per nama kantor - AJUAN,
+   bukan pembukuan. Buku utama (UangMuka/Pentasyarufan) tidak
+   pernah ditulis dari halaman publik ini: uangnya sungguhan,
+   penyesuaiannya harus melewati daerah. Setiap simpan mencatat
+   audit() di server, dan halaman menyimpan salinan gagal-di-
+   kirim di localStorage peramban yang membukanya (jaga-jaga).
+   ============================================================ */
+function _bacaSinkronKL(){
+  try { return JSON.parse(getSetting('sinkronKL') || '{}') || {}; } catch(e){ return {}; }
+}
+/* Kunci baris untuk ajuan: id baris buku bila ada; kalau tidak,
+ * tanggal + nominal (stabil terhadap pengurutan). */
+function _kunciSinkron(r, kolJumlah){
+  var id = String(r.id || '').trim();
+  if (id) return id;
+  return 'x' + String(r.tanggal || '').slice(0, 10) + '|' + (Number(kolJumlah === 'nominal' ? r.nominal : r.jumlah) || 0) + '|' + String(r.section || '') .slice(0, 12);
+}
+function apiSinkronKLMuat(kode){
+  var e = _entriKodeKL(kode);
+  var ini = _hariIni();
+  var tahun = ini.slice(0, 4) + '-01-01';
+
+  var cfg = _bacaHakAmil();
+  var layList = readAll(SHEETS.LAYANAN) || [];
+  var layMap = {}; layList.forEach(function(l){ layMap[l.id] = l; });
+  var inti = function(n){ return _norm(String(n == null ? '' : n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
+  var kunciLay = _kunciKantor(e.nama, layList);
+  var kunciNm = inti(e.nama);
+  var cocok = function(nama){
+    var k = _kunciKantor(nama, layList);
+    if (k && kunciLay && k === kunciLay) return true;
+    return inti(nama) === kunciNm;
+  };
+  var cocokUmp = function(r){ var k = _kunciBarisKantor(r.layanan, r.keterangan, layList); return (k && kunciLay) ? k === kunciLay : cocok(r.layanan); };
+  var cocokLpj = function(r){ var k = _kunciBarisKantor(r.namaPenerima, r.keterangan, layList); return (k && kunciLay) ? k === kunciLay : cocok(r.namaPenerima); };
+
+  var dalamTahun = function(t){ var s = String(t || '').slice(0, 10); return s >= tahun && s <= ini; };
+
+  var setoran = [], ump = [], lpj = [];
+  (readAll(SHEETS.PENGHIMPUNAN) || []).forEach(function(r){
+    if (!dalamTahun(r.tanggal)) return;
+    if (!cocok(resolveLayananName(r, layList, layMap))) return;
+    var n = Number(r.jumlah) || 0;
+    var bebas = _bebasHakAmil(r, cfg.kecuali);
+    var dana = String(r.jenisDana || 'Infak').trim();
+    var persen = bebas ? 0 : (cfg.persen[dana] === undefined ? (cfg.persen.Infak || 0) : cfg.persen[dana]);
+    var amil = bebas ? 0 : Math.round(n * persen / 100);
+    setoran.push({ kunci:_kunciSinkron(r, 'jumlah'), tanggal:String(r.tanggal).slice(0, 10), dana:dana,
+      pilar:String(r.pilar || ''), metode:String(r.metode || ''), jumlah:n,
+      persenAmil:persen, amil:amil, bebas:bebas });
+  });
+  (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
+    if (!dalamTahun(r.tanggal)) return;
+    if (!cocokUmp(r)) return;
+    ump.push({ kunci:_kunciSinkron(r, 'nominal'), tanggal:String(r.tanggal).slice(0, 10),
+      arah:String(r.jenis) === 'kembali' ? 'kembali' : 'keluar', nominal:Number(r.nominal) || 0,
+      dana:String(r.dana || ''), keterangan:String(r.keterangan || '') });
+  });
+  (readAll(SHEETS.PENTASYARUFAN) || []).forEach(function(r){
+    if (!dalamTahun(r.tanggal)) return;
+    if (!/^UMP\s+LPJ/i.test(String(r.section || ''))) return;
+    if (!cocokLpj(r)) return;
+    lpj.push({ kunci:_kunciSinkron(r, 'jumlah'), tanggal:String(r.tanggal).slice(0, 10),
+      jumlah:Number(r.jumlah) || 0, program:String(r.program || '') });
+  });
+
+  setoran.sort(function(a, b){ return String(b.tanggal).localeCompare(String(a.tanggal)); });
+  ump.sort(function(a, b){ return String(b.tanggal).localeCompare(String(a.tanggal)); });
+  lpj.sort(function(a, b){ return String(b.tanggal).localeCompare(String(a.tanggal)); });
+
+  /* Ajuan + log tersimpan per nama kantor. */
+  var peta = _bacaSinkronKL();
+  var milik = peta[e.nama] || { ajuan: [], log: [] };
+  var ajuan = (milik.ajuan || []).slice();
+  var statusAmil = {};
+  ajuan.forEach(function(a){
+    if (a.jenis === 'setoran' && a.kolom === 'diambilAmil' && a.nilai) statusAmil[a.kunci] = a.nilai;
+  });
+
+  var himpun = 0, amilSudah = 0, amilBelum = 0, umpKeluar = 0, umpKembali = 0, lpjJumlah = 0;
+  setoran.forEach(function(s){
+    himpun += s.jumlah;
+    var ambil = statusAmil[s.kunci];
+    if (ambil === 'sudah') amilSudah += s.amil; else if (ambil === 'belum') amilBelum += s.amil;
+  });
+  ump.forEach(function(u){ if (u.arah === 'kembali') umpKembali += u.nominal; else umpKeluar += u.nominal; });
+  lpj.forEach(function(l){ lpjJumlah += l.jumlah; });
+
+  var saldoAkhir = 0;
+  try {
+    var daftar = _saldoAnalisaUntuk(null, ini, '', true).daftar || [];
+    for (var i = 0; i < daftar.length; i++) if (_norm(daftar[i].nama) === _norm(e.nama)) { saldoAkhir = Number(daftar[i].total) || 0; break; }
+  } catch (e2) {}
+
+  var ringkas = {
+    himpun:himpun, hakAmil:amilSudah + amilBelum,
+    amilSudah:amilSudah, amilBelum:amilBelum,
+    umpKeluar:umpKeluar, umpKembali:umpKembali, lpj:lpjJumlah,
+    belumLPJ:umpKeluar - lpjJumlah - umpKembali,
+    ajuanMenunggu:ajuan.length, saldoAkhir:saldoAkhir
+  };
+  return { nama:e.nama, tipe:e.tipe, sampai:ini, setoran:setoran, ump:ump, lpj:lpj,
+    ringkas:ringkas, ajuan:ajuan, log:(milik.log || []).slice(0, 200),
+    diperbarui:new Date().toISOString() };
+}
+/* Kolom yang boleh diajukan per jenis - whitelist tangan, deny-by-default. */
+var SINKRON_KOLOM = {
+  setoran: { diambilAmil: 'pilihan' },
+  ump: { nominal: 'angka', tanggal: 'tanggal', keterangan: 'teks' },
+  lpj: { nominal: 'angka', tanggal: 'tanggal', program: 'teks' }
+};
+var SINKRON_AMIL = { 'sudah':1, 'belum':1, '':1 };
+function apiSinkronKLSimpan(kode, ajuanBaru){
+  var e = _entriKodeKL(kode);
+  if (!Array.isArray(ajuanBaru) || !ajuanBaru.length) throw new Error('Tidak ada perubahan yang disimpan.');
+  if (ajuanBaru.length > 50) throw new Error('Terlalu banyak perubahan sekaligus (maksimal 50).');
+  var peta = _bacaSinkronKL();
+  var milik = peta[e.nama] || { ajuan: [], log: [] };
+  var ajuan = (milik.ajuan || []).slice();
+  var log = (milik.log || []).slice();
+  var nAksi = { simpan: 0, ubah: 0, hapus: 0 };
+
+  ajuanBaru.forEach(function(a0){
+    a0 = a0 || {};
+    var jenis = String(a0.jenis || '');
+    var kolom = String(a0.kolom || '');
+    var kunci = String(a0.kunci || '').slice(0, 64);
+    if (!SINKRON_KOLOM[jenis] || !SINKRON_KOLOM[jenis][kolom]) throw new Error('Ajuan tidak dikenal: ' + jenis + '.' + kolom);
+    if (!kunci) throw new Error('Ajuan tanpa baris tujuan.');
+    var tipe = SINKRON_KOLOM[jenis][kolom];
+    var nilai = a0.nilai;
+    if (tipe === 'angka') {
+      nilai = Number(nilai);
+      if (!isFinite(nilai) || nilai < 0 || nilai > 1e12) throw new Error('Nominal tidak wajar.');
+      nilai = Math.round(nilai);
+    } else if (tipe === 'tanggal') {
+      nilai = String(nilai || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(nilai)) throw new Error('Tanggal tidak valid.');
+    } else if (tipe === 'pilihan') {
+      nilai = String(nilai || '');
+      if (!SINKRON_AMIL[nilai]) throw new Error('Pilihan diambil amil tidak dikenal.');
+    } else {
+      nilai = String(nilai == null ? '' : nilai).slice(0, 200);
+    }
+    var catatan = String(a0.catatan == null ? '' : a0.catatan).slice(0, 300);
+    /* Hapus: nilai kosong pada pilihan, atau tanda hapus eksplisit. */
+    if (a0.hapus || (tipe === 'pilihan' && nilai === '')) {
+      var sebelum = ajuan.length;
+      ajuan = ajuan.filter(function(a){ return !(a.jenis === jenis && a.kunci === kunci && a.kolom === kolom); });
+      if (ajuan.length < sebelum) { nAksi.hapus++; log.unshift({ waktu:new Date().toISOString(), aksi:'batalkan ajuan', rincian:jenis + ' ' + kunci + '.' + kolom + (catatan ? ' - ' + catatan : '') }); }
+      return;
+    }
+    var baru = { id:'aj' + new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14) + Math.floor(Math.random() * 90 + 10),
+      jenis:jenis, kunci:kunci, kolom:kolom, nilai:nilai, catatan:catatan, waktu:new Date().toISOString() };
+    var idx = -1;
+    for (var i = 0; i < ajuan.length; i++) if (ajuan[i].jenis === jenis && ajuan[i].kunci === kunci && ajuan[i].kolom === kolom) { idx = i; break; }
+    if (idx >= 0) { baru.waktu = ajuan[idx].waktu; ajuan[idx] = baru; nAksi.ubah++; log.unshift({ waktu:baru.waktu, aksi:'ubah ajuan', rincian:jenis + ' ' + kunci + '.' + kolom + ' = ' + nilai }); }
+    else { ajuan.unshift(baru); nAksi.simpan++; log.unshift({ waktu:baru.waktu, aksi:'ajuan baru', rincian:jenis + ' ' + kunci + '.' + kolom + ' = ' + nilai + (catatan ? ' - ' + catatan : '') }); }
+  });
+
+  if (ajuan.length > 500) ajuan = ajuan.slice(0, 500);
+  if (log.length > 200) log = log.slice(0, 200);
+  milik.ajuan = ajuan; milik.log = log; milik.diperbarui = new Date().toISOString();
+  peta[e.nama] = milik;
+  setSetting('sinkronKL', JSON.stringify(peta));
+  audit('publik', 'kode:' + e.nama, 'sinkron_kl',
+    nAksi.simpan + ' ajuan baru, ' + nAksi.ubah + ' diubah, ' + nAksi.hapus + ' dibatalkan',
+    { modul:'sinkron-kl', entitasId:e.nama, ringkas:'sinkronisasi saldo KL/UL' });
+  return { ok:true, ajuan:ajuan, log:log, diperbarui:milik.diperbarui };
+}
+
 /* ---- saldo awal per tahun ---- */
 function apiListSaldoAwal(t, tahun){
   _requirePerm(t, 'settings', 'view');
@@ -9913,6 +10092,8 @@ REGISTRY['apiNonaktifkanKodeAksesKL']=apiNonaktifkanKodeAksesKL;
 REGISTRY['apiRotasiKodeAksesKL']=apiRotasiKodeAksesKL;
 REGISTRY['apiSaldoKLPublik']=apiSaldoKLPublik;
 REGISTRY['apiSaldoKLRincian']=apiSaldoKLRincian;
+REGISTRY['apiSinkronKLMuat']=apiSinkronKLMuat;
+REGISTRY['apiSinkronKLSimpan']=apiSinkronKLSimpan;
 /* ===== FUNGSI YANG BOLEH DIPANGGIL TANPA SESI =====
    Daftar ini sengaja pendek dan harus diisi dengan tangan. Menambah fungsi
    yang memakai token sesi ke sini sama dengan membuka fungsi itu ke internet:
@@ -9928,7 +10109,9 @@ var PUBLIC_FN = {
   apiDaftarKantorUmp: 1,
   apiPenghimpunanHarian: 1,
   apiSaldoKLPublik: 1,
-  apiSaldoKLRincian: 1
+  apiSaldoKLRincian: 1,
+  apiSinkronKLMuat: 1,
+  apiSinkronKLSimpan: 1
 };
 function _fnPublik(fn){ return Object.prototype.hasOwnProperty.call(PUBLIC_FN, fn); }
 function _wajibSesi(t){
