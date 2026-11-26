@@ -269,6 +269,13 @@
   .kl-simpan{height:40px;border:0;border-radius:10px;padding:0 22px;background:var(--grad-accent);color:#fff;
              font:800 13px var(--sans);cursor:pointer;box-shadow:0 8px 18px -10px rgba(242,112,79,.9);flex:none}
   .kl-simpan:disabled{opacity:.5;cursor:default}
+  /* --- pecahan pilar UMP: baris kecil bertumpuk di sel --- */
+  .kl-pec{display:flex;flex-direction:column;gap:6px;min-width:230px}
+  .kl-pec-baris{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .kl-pec-baris .kl-ambil{flex:1 1 90px;min-width:0;height:32px;font-size:11.5px}
+  .kl-pec-baris .kl-edit{flex:1 1 80px;min-width:0;height:32px;border:1px solid var(--border);background:var(--surface);font-size:12px}
+  .kl-pec-sum{font-size:11px;font-weight:700;color:var(--muted)}
+  .kl-pec-sum.more{color:var(--red)}
 
   @media (min-width:720px){
     .kl-stat{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
@@ -466,7 +473,7 @@ function gambarHasil(){
     +'</div></div>';
 
   h+='<div class="kl-tabs" role="tablist">'
-    +tabBtn('himpun','Penghimpunan')+tabBtn('ump','UMP &amp; LPJ')
+    +tabBtn('himpun','Penghimpunan')+tabBtn('ump','UMP')+tabBtn('lpj','LPJ')
     +tabBtn('ringkas','Ringkasan')+tabBtn('log','Log')
     +'</div><div id="klIsi">'+isiSekarang()+'</div>'
     +saveBar();
@@ -478,7 +485,7 @@ function tabBtn(k,label){
     +' aria-selected="'+(on?'true':'false')+'" onclick="klTab(\''+k+'\')">'+label+'</button>';
 }
 function klTab(t){
-  if(['himpun','ump','ringkas','log'].indexOf(t)<0) return;
+  if(['himpun','ump','lpj','ringkas','log'].indexOf(t)<0) return;
   if(t===TAB) return;
   TAB=t;
   var b=document.querySelectorAll('.kl-tab');
@@ -496,7 +503,8 @@ function gambarIsi(){
   if(bar) bar.outerHTML=saveBar();
 }
 function isiSekarang(){
-  if(TAB==='ump') return isiUmpLpj();
+  if(TAB==='ump') return isiUmp();
+  if(TAB==='lpj') return isiLpj();
   if(TAB==='ringkas') return isiRingkas();
   if(TAB==='log') return isiLog();
   return isiHimpun();
@@ -565,9 +573,9 @@ function sinkronHapus(jenis,kunci,kolom){
   if(bar) bar.outerHTML=saveBar();
 }
 
-/* ================= TAB 1: PENGHIMPUNAN =================
-   Setoran, UMP, dan LPJ dipisah; setoran punya kolom
-   "diambil amil" + rincian persen hak amil per baris. */
+/* ================= TAB: PENGHIMPUNAN =================
+   Setoran dengan kolom "diambil amil" + rincian persen hak amil
+   per baris. UMP dan LPJ punya tab sendiri. */
 var FILT='';
 function bulanDari(rows){
   var ada={};
@@ -621,133 +629,154 @@ function isiHimpun(){
       +'</tr></thead><tbody>';
     st.forEach(function(x){
       var kunci=x.kunci;
-      var ambil=nilaiEfektif('setoran',kunci,'diambilAmil',x.ambilTersimpan||'');
+      /* Status efektif: ajuan kantor menang; kalau tidak ada, aturan awal
+         dari daerah (semua 'Sudah', kecuali pilar kemanusiaan 'Belum'). */
       var ajuanA=ajuanBaris('setoran',kunci,'diambilAmil');
+      var ambil=ajuanA?ajuanA.nilai:(x.awalAmil||'sudah');
       if(ambil==='sudah') sudah+=x.amil; else if(ambil==='belum') belum+=x.amil;
       var persenTeks=x.bebas?'bebas amil':(x.persenAmil+'% amil · '+klRp(x.amil)+' · kantor '+(100-x.persenAmil)+'% · '+klRp(x.jumlah-x.amil));
       h+='<tr data-kunci="'+esc(kunci)+'"><td>'+klTgl(x.tanggal)+'</td>'
         +'<td class="pos">'+esc(String(x.dana||'Infak').replace(/_/g,' '))+(x.pilar?'<span class="sub">'+esc(x.pilar)+'</span>':'')+'</td>'
         +'<td>'+esc(x.metode||'—')+'</td>'
         +'<td class="n akhir">'+klRp(x.jumlah)+'<span class="sub">'+esc(persenTeks)+'</span></td>'
-        +'<td><span class="kl-ambilwrap"><select class="kl-ambil '+(ambil==='sudah'?'sudah':ambil==='belum'?'belum':'')+'"'
-          +' onchange="sinkronUbah(\'setoran\',\''+esc(kunci)+'\',\'diambilAmil\',this.value,this)" data-lama="">'
+        +'<td><span class="kl-ambilwrap"><select class="kl-ambil '+(ambil==='sudah'?'sudah':ambil==='belum'?'belum':'')+'" data-lama="'+esc(x.awalAmil||'')+'"'
+          +' onchange="sinkronUbahAmil(\''+esc(kunci)+'\',this.value,this)">'
           +'<option value=""'+(!ambil?' selected':'')+'>—</option>'
           +'<option value="sudah"'+(ambil==='sudah'?' selected':'')+'>Sudah</option>'
           +'<option value="belum"'+(ambil==='belum'?' selected':'')+'>Belum</option>'
-          +'</select>'+(ajuanA?'<button class="kl-batal" type="button" title="Batalkan ajuan" onclick="sinkronHapus(\'setoran\',\''+esc(kunci)+'\',\'diambilAmil\')">×</button>':'')+'</span></td></tr>';
+          +'</select>'+(ajuanA?'<button class="kl-batal" type="button" title="Kembalikan ke aturan awal" onclick="sinkronHapus(\'setoran\',\''+esc(kunci)+'\',\'diambilAmil\')">×</button>':'')+'</span></td></tr>';
     });
     h+='</tbody><tfoot><tr><td colspan="3">Total setoran</td><td class="n">'+klRp(st.reduce(function(a,x){return a+x.jumlah;},0))+'</td><td></td></tr></tfoot></table></div>';
-    h+='<ul class="kl-catatan"><li>Hak amil sudah diambil: <b>'+klRp(sudah)+'</b> · belum diambil: <b>'+klRp(belum)+'</b>. '
-      +'Status "Sudah/Belum" yang Anda pilih menjadi ajuan berlog untuk daerah.</li></ul>';
+    h+='<ul class="kl-catatan"><li>Aturan awal: <b>semua setoran diambil hak amilnya, kecuali pilar kemanusiaan</b> '
+      +'— pilihan Anda boleh mengubahnya, dan itu menjadi ajuan berlog untuk daerah.</li>'
+      +'<li>Hak amil sudah diambil: <b>'+klRp(sudah)+'</b> · belum diambil: <b>'+klRp(belum)+'</b>.</li></ul>';
   }
   h+='</div>';
-
-  var u=(DATA.ump||[]).filter(function(x){return lolosFilt(x.tanggal);});
-  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Uang muka (UMP) — catatan daerah'
-    +'<span class="n">'+u.length+' baris</span></div>';
-  if(!u.length){ h+='<div class="kl-kosong">Tidak ada uang muka.</div>'; }
-  else{
-    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-      +'<th>Tanggal</th><th>Jenis</th><th>Keterangan</th><th class="n">Jumlah</th></tr></thead><tbody>';
-    u.forEach(function(x){
-      var balik=x.arah==='kembali';
-      h+='<tr><td>'+klTgl(x.tanggal)+'</td>'
-        +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Dikembalikan':'Diserahkan')+'</span></td>'
-        +'<td class="w">'+esc(x.keterangan||x.dana||'—')+'</td>'
-        +'<td class="n akhir">'+klRp(x.nominal)+'</td></tr>';
-    });
-    h+='</tbody><tfoot><tr><td colspan="3">Total diserahkan</td><td class="n">'+klRp(r.umpKeluar)+'</td></tr></tfoot></table></div>';
-  }
-  h+='</div>';
-
-  var l=(DATA.lpj||[]).filter(function(x){return lolosFilt(x.tanggal);});
-  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> LPJ uang muka — catatan daerah'
-    +'<span class="n">'+l.length+' baris</span></div>';
-  if(!l.length){ h+='<div class="kl-kosong">Belum ada LPJ.</div>'; }
-  else{
-    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-      +'<th>Tanggal</th><th>Program</th><th class="n">Jumlah</th></tr></thead><tbody>';
-    l.forEach(function(x){
-      h+='<tr><td>'+klTgl(x.tanggal)+'</td><td class="pos w">'+esc(x.program||'—')+'</td>'
-        +'<td class="n akhir">'+klRp(x.jumlah)+'</td></tr>';
-    });
-    h+='</tbody><tfoot><tr><td colspan="2">Total LPJ</td><td class="n">'+klRp(r.lpj)+'</td></tr></tfoot></table></div>';
-  }
-  h+='<ul class="kl-catatan"><li>Untuk mengoreksi isi UMP/LPJ ini, buka tab <b>UMP &amp; LPJ</b> — '
-    +'setiap penyesuaian menjadi ajuan berlog yang dipakai daerah menyamakan catatannya.</li></ul>';
-  h+='</div>';
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> UMP dan LPJ kini punya tab sendiri</div>'
+    +'<div class="kl-kosong">Lihat tab <b>UMP</b> untuk uang muka &amp; pecahan pilar, tab <b>LPJ</b> untuk laporan penggunaannya.</div></div>';
   return h;
 }
 
-/* ================= TAB 2: UMP & LPJ (penyesuaian) ================= */
-function isiUmpLpj(){
+/* Status amil: pilihan kantor menimpa aturan awal; sumber nilai tetap satu. */
+function sinkronUbahAmil(kunci,nilai,el){
+  var x=(DATA.setoran||[]).find(function(s){return s.kunci===kunci;});
+  var awal=x?x.awalAmil:'';
+  if(nilai===awal){ sinkronHapus('setoran',kunci,'diambilAmil'); return; }
+  sinkronUbah('setoran',kunci,'diambilAmil',nilai,el);
+}
+
+/* ================= TAB: UMP (pecahan pilar & pindah kantor) =================
+   UMP bisa dipecah ke beberapa pos pilar yang dikehendaki, kepemilikannya
+   bisa dipindah ke kantor KL/UL lain bila salah bagi, dan perhitungan
+   otomatis mengikuti: kantor asal berkurang, kantor tujuan bertambah. */
+function umpPecahan(kunci){
+  var a=ajuanBaris('ump',kunci,'pecahan');
+  return a?a.nilai:null;
+}
+function isiUmp(){
   var r=DATA.ringkas||{};
-  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> UMP — sesuaikan catatan daerah'
-    +'<span class="n">'+(DATA.ump||[]).length+' baris</span></div>';
-  h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-    +'<th>Tanggal</th><th>Arah</th><th>Keterangan</th><th class="n">Jumlah</th><th></th>'
-    +'</tr></thead><tbody>';
   var u=DATA.ump||[];
-  if(!u.length) h+='</tbody></table></div><div class="kl-kosong">Tidak ada baris UMP.</div>';
+  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Uang muka (UMP) — catatan daerah'
+    +'<span class="n">'+u.length+' baris</span></div>';
+  /* UMP di sini membaca semua baris yang TIDAK ada kata LPJ-nya; LPJ ada di tabnya sendiri. */
+  if(!u.length){ h+='<div class="kl-kosong">Tidak ada uang muka.</div>'; }
   else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
+      +'<th>Tanggal</th><th>Arah</th><th>Keterangan</th><th class="n">Jumlah</th><th>Pecahan pilar &amp; pemilik</th><th></th>'
+      +'</tr></thead><tbody>';
     u.forEach(function(x){
-      var tglN=nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal);
-      var nomN=nilaiEfektif('ump',x.kunci,'nominal',x.nominal);
-      var ketN=nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||'');
-      var berajuan=ajuanBaris('ump',x.kunci,'nominal')||ajuanBaris('ump',x.kunci,'tanggal')||ajuanBaris('ump',x.kunci,'keterangan');
+      var balik=x.arah==='kembali';
+      var pec=umpPecahan(x.kunci);
+      var berajuan=pec||ajuanBaris('ump',x.kunci,'nominal')||ajuanBaris('ump',x.kunci,'tanggal')||ajuanBaris('ump',x.kunci,'keterangan');
+      var selPec;
+      if(pec){
+        var tot=pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0);
+        selPec='<div class="kl-pec">'
+          +pec.map(function(p,i2){
+            return '<div class="kl-pec-baris">'
+              +'<select class="kl-ambil" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'pilar\',this.value)">'
+              +pilarOpsi(p.pilar)+'</select>'
+              +'<select class="kl-ambil" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'kantor\',this.value)">'
+              +kantorOpsi(p.kantor)+'</select>'
+              +'<input class="kl-edit n" type="number" min="0" step="1000" value="'+Number(p.nominal)+'"'
+              +' onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'nominal\',this.value)">'
+              +'<button class="kl-batal" type="button" title="Hapus pecahan ini" onclick="umpPecHapus(\''+esc(x.kunci)+'\','+i2+')">×</button>'
+              +'</div>';
+          }).join('')
+          +'<div class="kl-pec-sum'+(tot>Number(x.nominal)?' more':'')+'">Total pecahan '+klRp(tot)+' dari '+klRp(x.nominal)+'</div>'
+          +'<button class="kl-ganti" type="button" style="margin-top:6px" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos pilar</button>'
+          +'</div>';
+      }else{
+        selPec='<button class="kl-ganti" type="button" onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar / pindahkan</button>';
+      }
       h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
-        +'<input class="kl-edit tanggal'+(ajuanBaris('ump',x.kunci,'tanggal')?' ajuan':'')+'" type="date" value="'+esc(tglN)+'" data-lama="'+esc(x.tanggal)+'"'
+        +'<input class="kl-edit tanggal'+(ajuanBaris('ump',x.kunci,'tanggal')?' ajuan':'')+'" type="date" value="'+esc(nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal))+'" data-lama="'+esc(x.tanggal)+'"'
         +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'tanggal\',this.value,this)"></td>'
-        +'<td><span class="kl-arah'+(x.arah==='kembali'?' kembali':'')+'">'+(x.arah==='kembali'?'Kembali':'Keluar')+'</span></td>'
-        +'<td class="w"><input class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(ketN)+'" data-lama="'+esc(x.keterangan||'')+'"'
+        +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Kembali':'Keluar')+'</span></td>'
+        +'<td class="w"><input class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||''))+'" data-lama="'+esc(x.keterangan||'')+'"'
         +' placeholder="'+esc(x.keterangan||'—')+'" onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'keterangan\',this.value,this)"></td>'
-        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('ump',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nomN)+'" data-lama="'+x.nominal+'"'
+        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('ump',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nilaiEfektif('ump',x.kunci,'nominal',x.nominal))+'" data-lama="'+x.nominal+'"'
         +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
-        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan ajuan baris ini" onclick="batalkanBaris(\'ump\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
+        +'<td class="w">'+selPec+'</td>'
+        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'ump\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
     });
-    h+='</tbody><tfoot><tr><td colspan="3">Total catatan daerah</td><td class="n">'+klRp(r.umpKeluar+r.umpKembali)+'</td><td></td></tr></tfoot></table></div>';
+    h+='</tbody><tfoot><tr><td colspan="3">Total catatan daerah</td><td class="n">'+klRp(r.umpKeluar+r.umpKembali)+'</td><td></td><td></td></tr></tfoot></table></div>';
   }
   h+='<div class="kl-tambah">'
     +'<input class="kl-edit" id="umpTgl" type="date" aria-label="Tanggal UMP baru">'
     +'<input class="kl-edit" id="umpNom" type="number" min="0" step="1000" placeholder="Nominal" aria-label="Nominal UMP baru">'
     +'<input class="kl-edit" id="umpKet" placeholder="Keterangan" aria-label="Keterangan UMP baru">'
     +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'ump\')">+ Usulkan baris UMP</button>'
-    +'</div></div>';
-
-  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> LPJ — sesuaikan catatan daerah'
-    +'<span class="n">'+(DATA.lpj||[]).length+' baris</span></div>';
-  h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-    +'<th>Tanggal</th><th>Program</th><th class="n">Jumlah</th><th></th>'
-    +'</tr></thead><tbody>';
-  var l=DATA.lpj||[];
-  if(!l.length) h+='</tbody></table></div><div class="kl-kosong">Tidak ada baris LPJ.</div>';
-  else{
-    l.forEach(function(x){
-      var tglN=nilaiEfektif('lpj',x.kunci,'tanggal',x.tanggal);
-      var nomN=nilaiEfektif('lpj',x.kunci,'nominal',x.jumlah);
-      var progN=nilaiEfektif('lpj',x.kunci,'program',x.program||'');
-      var berajuan=ajuanBaris('lpj',x.kunci,'nominal')||ajuanBaris('lpj',x.kunci,'tanggal')||ajuanBaris('lpj',x.kunci,'program');
-      h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
-        +'<input class="kl-edit tanggal'+(ajuanBaris('lpj',x.kunci,'tanggal')?' ajuan':'')+'" type="date" value="'+esc(tglN)+'" data-lama="'+esc(x.tanggal)+'"'
-        +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'tanggal\',this.value,this)"></td>'
-        +'<td class="w"><input class="kl-edit'+(ajuanBaris('lpj',x.kunci,'program')?' ajuan':'')+'" value="'+esc(progN)+'" data-lama="'+esc(x.program||'')+'"'
-        +' placeholder="'+esc(x.program||'—')+'" onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'program\',this.value,this)"></td>'
-        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('lpj',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nomN)+'" data-lama="'+x.jumlah+'"'
-        +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
-        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan ajuan baris ini" onclick="batalkanBaris(\'lpj\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
-    });
-    h+='</tbody><tfoot><tr><td colspan="2">Total catatan daerah</td><td class="n">'+klRp(r.lpj)+'</td><td></td></tr></tfoot></table></div>';
-  }
-  h+='<div class="kl-tambah">'
-    +'<input class="kl-edit" id="lpjTgl" type="date" aria-label="Tanggal LPJ baru">'
-    +'<input class="kl-edit" id="lpjNom" type="number" min="0" step="1000" placeholder="Nominal" aria-label="Nominal LPJ baru">'
-    +'<input class="kl-edit" id="lpjProg" placeholder="Program" aria-label="Program LPJ baru">'
-    +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'lpj\')">+ Usulkan baris LPJ</button>'
     +'</div>';
-  h+='<ul class="kl-catatan"><li>Sel yang bergaris oranye berarti ada ajuan; tanda × membatalkannya. '
-    +'Semua ajuan baru tercatat di log saat tombol <b>Simpan</b> ditekan.</li></ul>';
+  h+='<ul class="kl-catatan"><li><b>Pecah pilar</b>: satu UMP dipecah ke beberapa pos pilar; '
+    +'kepemilikannya bisa dipindah ke kantor KL/UL lain bila salah bagi — perhitungan otomatis berpindah: '
+    +'kantor asal berkurang, kantor tujuan bertambah.</li>'
+    +'<li>Sel bergaris oranye berarti ada ajuan; × membatalkannya. Semua ajuan masuk log saat <b>Simpan</b> ditekan.</li></ul>';
   h+='</div>';
   return h;
+}
+function pilarOpsi(pilih){
+  var ls=(DATA.pilarDaftar||[]);
+  if(pilih&&ls.indexOf(pilih)<0)ls=ls.concat([pilih]);
+  return '<option value="">— pilar —</option>'+ls.map(function(p){return '<option value="'+esc(p)+'"'+(pilih===p?' selected':'')+'>'+esc(p)+'</option>';}).join('');
+}
+function kantorOpsi(pilih){
+  var ls=(DATA.kantorDaftar||[]);
+  if(pilih&&ls.indexOf(pilih)<0)ls=ls.concat([pilih]);
+  return '<option value="">— kantor (KL/UL) —</option>'+ls.map(function(k){return '<option value="'+esc(k)+'"'+(pilih===k?' selected':'')+'>'+esc(k)+'</option>';}).join('');
+}
+/* Nama kantor ini di bentuk daftar (dengan awalan KLL/ULL). */
+function kantorSendiri(){
+  var ls=DATA.kantorDaftar||[],nm=DATA.nama||'';
+  for(var i=0;i<ls.length;i++) if(ls[i].indexOf(nm)>=0||nm.indexOf(ls[i])>=0) return ls[i];
+  return nm;
+}
+function umpPecMulai(kunci){
+  var x=(DATA.ump||[]).find(function(u2){return u2.kunci===kunci;});
+  if(!x)return;
+  var pec=[{pilar:'',kantor:kantorSendiri(),nominal:Number(x.nominal)||0}];
+  SINKRON.ajuan['ump|'+kunci+'|pecahan']={jenis:'ump',kunci:kunci,kolom:'pecahan',nilai:pec,catatan:'pecahan pilar',waktu:new Date().toISOString()};
+  draftSimpan(); gambarIsi();
+  var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+}
+function umpPecTambah(kunci){
+  var pec=umpPecahan(kunci); if(!pec)return;
+  pec.push({pilar:'',kantor:kantorSendiri(),nominal:0});
+  draftSimpan(); gambarIsi();
+  var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+}
+function umpPecHapus(kunci,i2){
+  var pec=umpPecahan(kunci); if(!pec)return;
+  pec.splice(i2,1);
+  if(!pec.length){ sinkronHapus('ump',kunci,'pecahan'); return; }
+  draftSimpan(); gambarIsi();
+  var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+}
+function umpPecUbah(kunci,i2,kolom,nilai){
+  var pec=umpPecahan(kunci); if(!pec||!pec[i2])return;
+  pec[i2][kolom]=kolom==='nominal'?(Number(nilai)||0):nilai;
+  draftSimpan(); gambarIsi();
+  var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
 }
 function batalkanBaris(jenis,kunci){
   ['nominal','tanggal','keterangan','program'].forEach(function(kolom){ delete SINKRON.ajuan[jenis+'|'+kunci+'|'+kolom]; });
@@ -772,7 +801,47 @@ function usulBaru(jenis){
   if(bar) bar.outerHTML=saveBar();
 }
 
-/* ================= TAB 3: RINGKASAN (hasil sementara) ================= */
+/* ================= TAB: LPJ (sendiri) ================= */
+function isiLpj(){
+  var r=DATA.ringkas||{};
+  var l=DATA.lpj||[];
+  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> LPJ uang muka — catatan daerah'
+    +'<span class="n">'+l.length+' baris</span></div>';
+  if(!l.length){ h+='<div class="kl-kosong">Tidak ada baris LPJ.</div>'; }
+  else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
+      +'<th>Tanggal</th><th>Program</th><th class="n">Jumlah</th><th></th>'
+      +'</tr></thead><tbody>';
+    l.forEach(function(x){
+      var tglN=nilaiEfektif('lpj',x.kunci,'tanggal',x.tanggal);
+      var nomN=nilaiEfektif('lpj',x.kunci,'nominal',x.jumlah);
+      var progN=nilaiEfektif('lpj',x.kunci,'program',x.program||'');
+      var berajuan=ajuanBaris('lpj',x.kunci,'nominal')||ajuanBaris('lpj',x.kunci,'tanggal')||ajuanBaris('lpj',x.kunci,'program');
+      h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
+        +'<input class="kl-edit tanggal'+(ajuanBaris('lpj',x.kunci,'tanggal')?' ajuan':'')+'" type="date" value="'+esc(tglN)+'" data-lama="'+esc(x.tanggal)+'"'
+        +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'tanggal\',this.value,this)"></td>'
+        +'<td class="w"><input class="kl-edit'+(ajuanBaris('lpj',x.kunci,'program')?' ajuan':'')+'" value="'+esc(progN)+'" data-lama="'+esc(x.program||'')+'"'
+        +' placeholder="'+esc(x.program||'—')+'" onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'program\',this.value,this)"></td>'
+        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('lpj',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nomN)+'" data-lama="'+x.jumlah+'"'
+        +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
+        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan ajuan baris ini" onclick="batalkanBaris(\'lpj\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="2">Total catatan daerah</td><td class="n">'+klRp(r.lpj)+'</td><td></td></tr></tfoot></table></div>';
+  }
+  h+='<div class="kl-tambah">'
+    +'<input class="kl-edit" id="lpjTgl" type="date" aria-label="Tanggal LPJ baru">'
+    +'<input class="kl-edit" id="lpjNom" type="number" min="0" step="1000" placeholder="Nominal" aria-label="Nominal LPJ baru">'
+    +'<input class="kl-edit" id="lpjProg" placeholder="Program" aria-label="Program LPJ baru">'
+    +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'lpj\')">+ Usulkan baris LPJ</button>'
+    +'</div>';
+  h+='<ul class="kl-catatan"><li>LPJ mengurangi sisa uang muka kantor; tanggal boleh disesuaikan bila '
+    +'pembukukuan daerah dan catatan kantor berbeda bulan.</li>'
+    +'<li>Sel bergaris oranye = ada ajuan; × membatalkan. Semuanya masuk log saat <b>Simpan</b>.</li></ul>';
+  h+='</div>';
+  return h;
+}
+
+/* ================= TAB: RINGKASAN (dua hasil) ================= */
 function isiRingkas(){
   var r=DATA.ringkas||{};
   var n=jumlahAjuan();
@@ -780,22 +849,24 @@ function isiRingkas(){
   var statusAmil={};
   daftarAjuan().forEach(function(a){ if(a.jenis==='setoran'&&a.kolom==='diambilAmil'&&a.nilai) statusAmil[a.kunci]=a.nilai; });
   (DATA.setoran||[]).forEach(function(s){ var v=statusAmil[s.kunci]; if(v==='sudah') sudah+=s.amil; else if(v==='belum') belum+=s.amil; });
-  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Ringkasan hasil sementara'
+  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Ringkasan hasil — dua hitungan'
     +'<span class="n">bukan penutupan pembukuan</span></div>';
   h+='<div class="kl-stat">'
-    +kartu('Saldo akhir',klRp(r.saldoAkhir),'per hari ini','')
+    +kartu('Hasil TANPA LPJ',klRp(r.saldoTanpaLpj),'seluruh UMP dipotong penuh','belum'+(r.saldoTanpaLpj<0?' minus':''))
+    +kartu('Hasil DENGAN LPJ',klRp(r.saldoDenganLpj),'UMP dikurangi LPJ &amp; pengembalian','belum'+(r.saldoDenganLpj<0?' minus':''))
+    +'</div>';
+  h+='<div class="kl-stat" style="margin-top:10px">'
     +kartu('Total setoran',klRp(r.himpun),(DATA.setoran||[]).length+' baris','')
-    +kartu('Hak amil diambil',klRp(sudah),'status pilihan Anda','')
-    +kartu('Hak amil belum diambil',klRp(belum),'status pilihan Anda','belum')
-    +kartu('UMP diserahkan',klRp(r.umpKeluar),'catatan daerah','')
-    +kartu('UMP dikembalikan',klRp(r.umpKembali),'catatan daerah','')
-    +kartu('LPJ diterima',klRp(r.lpj),'catatan daerah','')
-    +kartu('Belum LPJ',klRp(r.belumLPJ),'UMP − LPJ − kembali','belum'+(r.belumLPJ<0?' minus':''))
+    +kartu('Hak amil diambil',klRp(sudah),'belum diambil '+klRp(belum),'')
+    +kartu('UMP diserahkan',klRp(r.umpKeluar),'kembali '+klRp(r.umpKembali),'')
+    +kartu('LPJ diterima',klRp(r.lpj),'belum LPJ '+klRp(r.belumLPJ),'')
     +'</div>';
   h+='<ul class="kl-catatan">'
-    +'<li><b>Hasil sementara</b>: angka mengikuti pembukuan daerah hari ini dan ajuan Anda yang sudah disimpan.</li>'
+    +'<li><b>Mekanisme sama dengan awal</b>: setoran dipotong hak amil (diambil atau tidak), baru dikurangi UMP.</li>'
+    +'<li><b>Tanpa LPJ</b>: '+klRp(r.himpun)+' − amil '+klRp(r.hakAmil)+' − UMP '+klRp(r.umpKeluar)+' = <b>'+klRp(r.saldoTanpaLpj)+'</b>.</li>'
+    +'<li><b>Dengan LPJ</b>: sama, tetapi UMP dikembalikan sebesar LPJ ('+klRp(r.lpj)+') dan pengembalian ('+klRp(r.umpKembali)+') = <b>'+klRp(r.saldoDenganLpj)+'</b>.</li>'
     +'<li>'+(n?'Ada <b>'+n+' ajuan belum disimpan</b> — tekan Simpan agar masuk log daerah.':'Tidak ada ajuan yang menunggu.')+'</li>'
-    +'<li>Daerah memakai ajuan ini untuk menyamakan catatan KL/UL dengan pembukuan daerah.</li>'
+    +'<li>Angka sementara: mengikuti pembukuan daerah hari ini dan ajuan yang sudah disimpan.</li>'
     +'</ul></div>';
   return h;
 }

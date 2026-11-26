@@ -56,11 +56,12 @@ const srv = http.createServer(async (req, res) => {
   await p.click('#klBtn');
   await p.waitForSelector('.kl-hero', { timeout: 15000 });
   cek('Kode akses (yang sama dengan cek saldo) membuka halaman sinkron', await p.evaluate(() => !!document.querySelector('.kl-hero')));
-  cek('Empat tab tampil: Penghimpunan / UMP & LPJ / Ringkasan / Log', await p.evaluate(() => [...document.querySelectorAll('.kl-tab')].map((t) => t.getAttribute('data-t')).join(',') === 'himpun,ump,ringkas,log'));
+  cek('Lima tab tampil: Penghimpunan / UMP / LPJ / Ringkasan / Log', await p.evaluate(() => [...document.querySelectorAll('.kl-tab')].map((t) => t.getAttribute('data-t')).join(',') === 'himpun,ump,lpj,ringkas,log'));
   cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('.kl-ambil'); }));
+  cek('Aturan awal tertera: semua diambil amil kecuali kemanusiaan', await p.evaluate(() => /kecuali pilar kemanusiaan/i.test(document.getElementById('klIsi').textContent)));
 
-  await p.selectOption('.kl-ambil', 'sudah');
-  cek('Pilih "Sudah" membuat ajuan: tombol Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('sudah') >= 0; }));
+  await p.selectOption('.kl-ambil', 'belum');
+  cek('Pilih "Belum" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
   cek('Tanda ajuan: sel jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-ambil.ajuan, .kl-edit.ajuan')));
 
   await p.click('#klSimpanBtn');
@@ -68,10 +69,16 @@ const srv = http.createServer(async (req, res) => {
   cek('Simpan terkirim: savebar kembali "semua tersimpan"', await p.evaluate(() => { const bar = document.getElementById('klSavebar'); return bar && /sudah tersimpan/.test(bar.textContent); }), await p.evaluate(() => (document.getElementById('klSavebar') || {}).textContent));
   cek('Draft jaga-jaga dibersihkan setelah terkirim', await p.evaluate(() => !localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode'))));
 
-  await p.evaluate(() => document.querySelectorAll('.kl-tab')[3].click());
+  await p.evaluate(() => document.querySelectorAll('.kl-tab')[1].click());
+  cek('Tab UMP: tombol "Pecah pilar / pindahkan" tersedia per baris', await p.evaluate(() => /Pecah pilar/.test(document.getElementById('klIsi').textContent)));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('.kl-ganti')].find((x) => /Pecah pilar/.test(x.textContent)); if (b) b.click(); });
+  cek('Pecah UMP: baris pilar + kantor + nominal muncul dan Simpan menyala', await p.evaluate(() => { const pec = document.querySelector('.kl-pec'); const b = document.getElementById('klSimpanBtn'); return !!pec && pec.querySelectorAll('select').length >= 2 && b && !b.disabled; }));
+  cek('Pecah UMP: dropdown pilar & kantor (KL/UL) terisi', await p.evaluate(() => { const s = [...document.querySelectorAll('.kl-pec select')]; return s.length >= 2 && s.some((x) => [...x.options].some((o) => /Pendidikan|Kesehatan/.test(o.textContent))) && s.some((x) => [...x.options].some((o) => /Kota Contoh/.test(o.textContent))); }));
+
+  await p.evaluate(() => document.querySelectorAll('.kl-tab')[4].click());
   cek('Tab Log menampilkan catatan ajuan', await p.evaluate(() => /ajuan baru/.test(document.getElementById('klIsi').textContent)));
-  await p.evaluate(() => document.querySelectorAll('.kl-tab')[2].click());
-  cek('Tab Ringkasan: hasil sementara + pemisahan amil', await p.evaluate(() => /Hasil sementara|hasil sementara/.test(document.getElementById('klIsi').textContent) && /diambil/.test(document.getElementById('klIsi').textContent)));
+  await p.evaluate(() => document.querySelectorAll('.kl-tab')[3].click());
+  cek('Tab Ringkasan: DUA hasil - Tanpa LPJ & Dengan LPJ + pemisahan amil', await p.evaluate(() => /Hasil TANPA LPJ/.test(document.getElementById('klIsi').textContent) && /Hasil DENGAN LPJ/.test(document.getElementById('klIsi').textContent) && /diambil/.test(document.getElementById('klIsi').textContent)));
 
   cek('Tidak ada galat JS sepanjang alur', galat.length === 0, galat);
   console.log('\ntest_sinkron_kl_ui.js  ' + ok + '/' + (ok + g) + (g ? '  ADA YANG GAGAL' : '  SEMUA LULUS'));

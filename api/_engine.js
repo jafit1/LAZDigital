@@ -3336,12 +3336,21 @@ function apiSinkronKLMuat(kode){
     var dana = String(r.jenisDana || 'Infak').trim();
     var persen = bebas ? 0 : (cfg.persen[dana] === undefined ? (cfg.persen.Infak || 0) : cfg.persen[dana]);
     var amil = bebas ? 0 : Math.round(n * persen / 100);
+    var pilar = String(r.pilar || '');
+    /* Aturan awal pemilik (26 Nov 2026): SEMUA setoran dianggap sudah diambil
+       hak amilnya, KECUALI pilar kemanusiaan (belum). Status ini tetap bisa
+       diubah kantor lewat ajuan diambilAmil. */
+    var awalAmil = /kemanusiaan/i.test(pilar) ? 'belum' : 'sudah';
     setoran.push({ kunci:_kunciSinkron(r, 'jumlah'), tanggal:String(r.tanggal).slice(0, 10), dana:dana,
-      pilar:String(r.pilar || ''), metode:String(r.metode || ''), jumlah:n,
-      persenAmil:persen, amil:amil, bebas:bebas });
+      pilar:pilar, metode:String(r.metode || ''), jumlah:n,
+      persenAmil:persen, amil:amil, bebas:bebas, awalAmil:awalAmil });
   });
   (readAll(SHEETS.UANGMUKA) || []).forEach(function(r){
     if (!dalamTahun(r.tanggal)) return;
+    /* UMP membaca semua baris yang TIDAK ada kata LPJ-nya (pemilik, 26 Nov
+       2026): LPJ dicatat di Pentasyarufan section "UMP LPJ", jadi baris
+       UangMuka yang menyandang LPJ (data kirim ulang) bukan UMP. */
+    if (/LPJ/i.test(String(r.section || ''))) return;
     if (!cocokUmp(r)) return;
     ump.push({ kunci:_kunciSinkron(r, 'nominal'), tanggal:String(r.tanggal).slice(0, 10),
       arah:String(r.jenis) === 'kembali' ? 'kembali' : 'keluar', nominal:Number(r.nominal) || 0,
@@ -3369,38 +3378,93 @@ function apiSinkronKLMuat(kode){
   });
 
   var himpun = 0, amilSudah = 0, amilBelum = 0, umpKeluar = 0, umpKembali = 0, lpjJumlah = 0;
+  var efektifAmil = function(s){
+    var a = null;
+    for (var i = 0; i < ajuan.length; i++) if (ajuan[i].jenis === 'setoran' && ajuan[i].kunci === s.kunci && ajuan[i].kolom === 'diambilAmil') { a = ajuan[i].nilai; break; }
+    return a || s.awalAmil || '';
+  };
   setoran.forEach(function(s){
     himpun += s.jumlah;
-    var ambil = statusAmil[s.kunci];
+    var ambil = efektifAmil(s);
     if (ambil === 'sudah') amilSudah += s.amil; else if (ambil === 'belum') amilBelum += s.amil;
   });
   ump.forEach(function(u){ if (u.arah === 'kembali') umpKembali += u.nominal; else umpKeluar += u.nominal; });
   lpj.forEach(function(l){ lpjJumlah += l.jumlah; });
 
-  var saldoAkhir = 0;
+  var saldoAkhir = 0, pembuka = 0;
   try {
     var daftar = _saldoAnalisaUntuk(null, ini, '', true).daftar || [];
-    for (var i = 0; i < daftar.length; i++) if (_norm(daftar[i].nama) === _norm(e.nama)) { saldoAkhir = Number(daftar[i].total) || 0; break; }
+    for (var i = 0; i < daftar.length; i++) if (_norm(daftar[i].nama) === _norm(e.nama)) { saldoAkhir = Number(daftar[i].total) || 0; pembuka = Number(daftar[i].pembuka) || 0; break; }
   } catch (e2) {}
 
+  /* DUA HASIL (pemilik, 26 Nov 2026). Mekanisme sama dengan awal: setoran
+     dipotong hak amil (diambil atau tidak), baru dikurangi UMP.
+     - TANPA LPJ: seluruh UMP dianggap keluar penuh.
+     - DENGAN LPJ: UMP dikurangi yang sudah di-LPJ dan yang kembali. */
+  var bersih = pembuka + himpun - (amilSudah + amilBelum);
   var ringkas = {
     himpun:himpun, hakAmil:amilSudah + amilBelum,
     amilSudah:amilSudah, amilBelum:amilBelum,
     umpKeluar:umpKeluar, umpKembali:umpKembali, lpj:lpjJumlah,
     belumLPJ:umpKeluar - lpjJumlah - umpKembali,
+    saldoTanpaLpj:bersih - umpKeluar,
+    saldoDenganLpj:bersih - umpKeluar + lpjJumlah + umpKembali,
     ajuanMenunggu:ajuan.length, saldoAkhir:saldoAkhir
   };
+  /* Pilihan pecahan: daftar kantor (KL/UL aktif) dan daftar pilar umum +
+     pilar yang muncul pada setoran kantor ini. apiDaftarKantorUmp sudah
+     memublikasikan daftar kantor, jadi ini tidak menambah bocoran. */
+  var kantorDaftar = layList.filter(function(l){ return l && l.nama && String(l.aktif) !== 'false'; })
+    .map(function(l){ return (String(l.tipe || '').toUpperCase() === 'ULL' ? 'ULL ' : 'KLL ') + String(l.nama).trim(); })
+    .sort();
+  var pilarSet = {};
+  ['Pendidikan', 'Kesehatan', 'Ekonomi & Pemberdayaan', 'Dakwah & Advokasi', 'Sosial Kemanusiaan'].forEach(function(p){ pilarSet[p] = 1; });
+  setoran.forEach(function(s){ if (s.pilar) pilarSet[s.pilar] = 1; });
   return { nama:e.nama, tipe:e.tipe, sampai:ini, setoran:setoran, ump:ump, lpj:lpj,
     ringkas:ringkas, ajuan:ajuan, log:(milik.log || []).slice(0, 200),
+    kantorDaftar:kantorDaftar, pilarDaftar:Object.keys(pilarSet),
     diperbarui:new Date().toISOString() };
 }
-/* Kolom yang boleh diajukan per jenis - whitelist tangan, deny-by-default. */
+/* Kolom yang boleh diajukan per jenis - whitelist tangan, deny-by-default.
+   ump.pecahan: memecah satu UMP ke beberapa pos pilar + pindah kepemilikan
+   kantor (KL/UL) - nilainya array butir {pilar, kantor, nominal}. */
 var SINKRON_KOLOM = {
   setoran: { diambilAmil: 'pilihan' },
-  ump: { nominal: 'angka', tanggal: 'tanggal', keterangan: 'teks' },
+  ump: { nominal: 'angka', tanggal: 'tanggal', keterangan: 'teks', pecahan: 'pecahan' },
   lpj: { nominal: 'angka', tanggal: 'tanggal', program: 'teks' }
 };
 var SINKRON_AMIL = { 'sudah':1, 'belum':1, '':1 };
+/* UMP asal untuk membatasi total pecahan. */
+function _umpAsal(kunci){
+  var UM = readAll(SHEETS.UANGMUKA) || [];
+  for (var i = 0; i < UM.length; i++) if (_kunciSinkron(UM[i], 'nominal') === kunci) return UM[i];
+  return null;
+}
+function _validasiPecahan(nilai, nominalAsli){
+  if (!Array.isArray(nilai) || !nilai.length) throw new Error('Pecahan pilar kosong.');
+  if (nilai.length > 10) throw new Error('Pecahan terlalu banyak (maksimal 10 pos pilar).');
+  var total = 0, out = [];
+  nilai.forEach(function(p0){
+    p0 = p0 || {};
+    var pilar = String(p0.pilar == null ? '' : p0.pilar).trim().slice(0, 60);
+    var kantor = String(p0.kantor == null ? '' : p0.kantor).trim().slice(0, 80);
+    var n = Number(p0.nominal);
+    if (!pilar) throw new Error('Ada pecahan tanpa pilar.');
+    if (!kantor) throw new Error('Ada pecahan tanpa kantor pemiliknya.');
+    if (!isFinite(n) || n < 0 || n > 1e12) throw new Error('Nominal pecahan tidak wajar.');
+    total += Math.round(n);
+    out.push({ pilar:pilar, kantor:kantor, nominal:Math.round(n) });
+  });
+  if (nominalAsli != null && total > Math.round(nominalAsli) + 1) {
+    throw new Error('Total pecahan (' + total + ') melebihi nominal UMP asal (' + Math.round(nominalAsli) + ').');
+  }
+  return out;
+}
+/* Nilai ajuan untuk log: pecahan diringkas agar terbaca manusia. */
+function _ringkasNilaiAjuan(tipe, nilai){
+  if (tipe !== 'pecahan' || !Array.isArray(nilai)) return nilai;
+  return nilai.map(function(p){ return p.pilar + ' @' + p.kantor + ' ' + p.nominal; }).join(' + ');
+}
 function apiSinkronKLSimpan(kode, ajuanBaru){
   var e = _entriKodeKL(kode);
   if (!Array.isArray(ajuanBaru) || !ajuanBaru.length) throw new Error('Tidak ada perubahan yang disimpan.');
@@ -3430,6 +3494,9 @@ function apiSinkronKLSimpan(kode, ajuanBaru){
     } else if (tipe === 'pilihan') {
       nilai = String(nilai || '');
       if (!SINKRON_AMIL[nilai]) throw new Error('Pilihan diambil amil tidak dikenal.');
+    } else if (tipe === 'pecahan') {
+      var asal = _umpAsal(kunci);
+      nilai = _validasiPecahan(nilai, asal ? Number(asal.nominal) || 0 : null);
     } else {
       nilai = String(nilai == null ? '' : nilai).slice(0, 200);
     }
@@ -3445,8 +3512,8 @@ function apiSinkronKLSimpan(kode, ajuanBaru){
       jenis:jenis, kunci:kunci, kolom:kolom, nilai:nilai, catatan:catatan, waktu:new Date().toISOString() };
     var idx = -1;
     for (var i = 0; i < ajuan.length; i++) if (ajuan[i].jenis === jenis && ajuan[i].kunci === kunci && ajuan[i].kolom === kolom) { idx = i; break; }
-    if (idx >= 0) { baru.waktu = ajuan[idx].waktu; ajuan[idx] = baru; nAksi.ubah++; log.unshift({ waktu:baru.waktu, aksi:'ubah ajuan', rincian:jenis + ' ' + kunci + '.' + kolom + ' = ' + nilai }); }
-    else { ajuan.unshift(baru); nAksi.simpan++; log.unshift({ waktu:baru.waktu, aksi:'ajuan baru', rincian:jenis + ' ' + kunci + '.' + kolom + ' = ' + nilai + (catatan ? ' - ' + catatan : '') }); }
+    if (idx >= 0) { baru.waktu = ajuan[idx].waktu; ajuan[idx] = baru; nAksi.ubah++; log.unshift({ waktu:baru.waktu, aksi:'ubah ajuan', rincian:jenis + ' ' + kunci + '.' + kolom + ' = ' + _ringkasNilaiAjuan(tipe, nilai) }); }
+    else { ajuan.unshift(baru); nAksi.simpan++; log.unshift({ waktu:baru.waktu, aksi:'ajuan baru', rincian:jenis + ' ' + kunci + '.' + kolom + ' = ' + _ringkasNilaiAjuan(tipe, nilai) + (catatan ? ' - ' + catatan : '') }); }
   });
 
   if (ajuan.length > 500) ajuan = ajuan.slice(0, 500);

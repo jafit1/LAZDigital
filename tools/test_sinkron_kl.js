@@ -57,7 +57,15 @@ const cek = (n, sy, i) => { if (sy) { ok++; console.log('  OK   | ' + n); } else
   const palestina = d.setoran.find((x) => x.jumlah === 500000);
   cek('Muat: persen amil zakat 12,5% dan rupiahnya benar', zakat && zakat.persenAmil === 12.5 && zakat.amil === 125000, zakat);
   cek('Muat: bebas amil (Palestina, dari hakAmilKecuali) = 0% dan amil Rp0', palestina && palestina.bebas === true && palestina.amil === 0 && palestina.persenAmil === 0, palestina);
+  cek('Muat: ATURAN AWAL amil - semua "sudah" kecuali pilar kemanusiaan "belum"',
+    d.setoran.every((x) => x.awalAmil === (/kemanusiaan/i.test(x.pilar) ? 'belum' : 'sudah')), d.setoran.map((x) => [x.pilar, x.awalAmil]));
+  cek('Muat: UMP hanya baris TANPA kata LPJ di section (2 baris, bukan LPJ)', d.ump.length === 2, d.ump.map((x) => x.kunci));
   cek('Muat: ringkasan awal - belum LPJ = 5.000.000 - 1.200.000 - 250.000', d.ringkas.belumLPJ === 3550000, d.ringkas);
+  /* Dua hasil: tanpa LPJ = pembuka + himpunan - amil - UMP penuh; dengan LPJ = + LPJ + kembali. */
+  const pembuka = d.ringkas.saldoTanpaLpj + d.ringkas.hakAmil + d.ringkas.umpKeluar - d.ringkas.himpun;
+  cek('Muat: DUA HASIL - dengan LPJ lebih tinggi dari tanpa LPJ (LPJ+kembali)',
+    d.ringkas.saldoDenganLpj === d.ringkas.saldoTanpaLpj + 1200000 + 250000, { tanpa: d.ringkas.saldoTanpaLpj, dengan: d.ringkas.saldoDenganLpj, pembuka });
+  cek('Muat: pilihan pecahan tersedia - daftar kantor KL/UL + daftar pilar', Array.isArray(d.kantorDaftar) && d.kantorDaftar.some((k) => /Kota Contoh/.test(k)) && d.pilarDaftar.some((p) => /Kemanusiaan/.test(p)), { kantor: (d.kantorDaftar || []).length, pilar: d.pilarDaftar });
   cek('Muat: tidak ada nama donatur yang bocor (halaman publik)', !JSON.stringify(d).match(/Donatur Lain/), null);
 
   // ===== 2. Simpan: whitelist & validasi =====
@@ -101,20 +109,38 @@ const cek = (n, sy, i) => { if (sy) { ok++; console.log('  OK   | ' + n); } else
   out = await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [{ jenis: 'setoran', kunci: 'h2', kolom: 'diambilAmil', hapus: true }]]); DB = out.db;
   cek('Simpan: ajuan dibatalkan menyisakan 1 + log bertambah', out.result.ajuan.length === 1 && out.result.log[0].aksi === 'batalkan ajuan', out.result.log[0]);
 
-  // ===== 6. Penyesuaian UMP (nominal) - jalur fleksibel =====
+  // ===== 6. Penyesuaian UMP (nominal) + pecahan pilar - jalur fleksibel =====
   out = await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [
     { jenis: 'ump', kunci: 'u1', kolom: 'nominal', nilai: 5000000 },
     { jenis: 'ump', kunci: 'u1', kolom: 'keterangan', nilai: 'UMP Program Beasiswa (diperbaiki)' },
     { jenis: 'lpj', kunci: 'p1', kolom: 'nominal', nilai: 1300000 },
   ]]); DB = out.db;
-  cek('Simpan: penyesuaian UMP & LPJ tersimpan (3 ajuan)', out.result.ajuan.length === 4, out.result.ajuan.map((a) => a.jenis + '.' + a.kolom));
+  cek('Simpan: penyesuaian UMP & LPJ tersimpan (3 ajuan baru, total 4)', out.result.ajuan.length === 4, out.result.ajuan.map((a) => a.jenis + '.' + a.kolom));
+
+  // ===== 6b. Pecahan pilar UMP: pecah ke beberapa pos + pindah kantor =====
+  salah = 0;
+  try { await gagalDiHarapkan('apiSinkronKLSimpan', [KODE, [{ jenis: 'ump', kunci: 'u1', kolom: 'pecahan', nilai: [{ pilar: 'Pendidikan', kantor: 'KLL Kota Contoh', nominal: 99999999 }] }]], 'total pecahan > nominal asal'); } catch (e) { salah++; }
+  cek('Simpan: pecahan melebihi nominal UMP asal ditolak', salah === 1, null);
+  salah = 0;
+  try { await gagalDiHarapkan('apiSinkronKLSimpan', [KODE, [{ jenis: 'ump', kunci: 'u1', kolom: 'pecahan', nilai: [{ pilar: '', kantor: 'KLL Kota Contoh', nominal: 1000 }] }]], 'pecahan tanpa pilar'); } catch (e) { salah++; }
+  cek('Simpan: pecahan tanpa pilar ditolak', salah === 1, null);
+  out = await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [
+    { jenis: 'ump', kunci: 'u1', kolom: 'pecahan', nilai: [
+      { pilar: 'Pendidikan', kantor: 'KLL Kota Contoh', nominal: 3000000 },
+      { pilar: 'Kesehatan', kantor: 'KLL Kota Lain', nominal: 2000000 },
+    ] },
+  ]]); DB = out.db;
+  const pec = out.result.ajuan.find((a) => a.kolom === 'pecahan');
+  cek('Simpan: pecahan 2 pos pilar + pindah kantor tersimpan sebagai ajuan', out.result.ajuan.length === 5 && pec && pec.nilai.length === 2 && pec.nilai[1].kantor === 'KLL Kota Lain', out.result.ajuan.map((a) => a.jenis + '.' + a.kolom));
+  cek('Simpan: log pecahan terbaca manusia (pilar @kantor nominal)', /Pendidikan @KLL Kota Contoh 3000000 \+ Kesehatan @KLL Kota Lain 2000000/.test(out.result.log[0].rincian), out.result.log[0]);
 
   // ===== 7. Halaman sinkron-kl.html =====
   const html = fs.readFileSync(path.join(AKAR, 'src', 'public', 'sinkron-kl.html'), 'utf8');
   cek('Halaman: memakai loading logo yang sama (lz-logo.js + klMuat)', html.indexOf('/js/lz-logo.js') >= 0 && /LZLogo\.muat/.test(html));
   cek('Halaman: pintu kode persis saldo-kl (input klKode, placeholder KL-)', /id="klKode"/.test(html) && /KL-XXXXXXXX/.test(html));
-  cek('Halaman: empat tab - Penghimpunan, UMP & LPJ, Ringkasan, Log', ['himpun', 'ump', 'ringkas', 'log'].every((t) => html.indexOf("tabBtn('" + t + "'") >= 0));
+  cek('Halaman: LIMA tab - Penghimpunan, UMP, LPJ, Ringkasan, Log', ['himpun', 'ump', 'lpj', 'ringkas', 'log'].every((t) => html.indexOf("tabBtn('" + t + "'") >= 0));
   cek('Halaman: kolom Diambil amil + tombol Simpan + cadangan peramban', /Diambil amil/.test(html) && /klSimpan\(\)/.test(html) && /sinkronKLDraft_/.test(html));
+  cek('Halaman: pecahan pilar UMP - tombol pecah + pilih pilar & kantor + dua hasil', /umpPecMulai/.test(html) && /pilarOpsi/.test(html) && /kantorOpsi/.test(html) && /saldoTanpaLpj/.test(html) && /saldoDenganLpj/.test(html));
 
   console.log('\ntest_sinkron_kl.js  ' + ok + '/' + (ok + g) + (g ? '  ADA YANG GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);

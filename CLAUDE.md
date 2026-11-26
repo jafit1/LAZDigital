@@ -1138,16 +1138,30 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   MENGGANTI; hapus lewat `hapus:true` atau nilai kosong; log 200 terbaru per kantor; audit()
   aksi `sinkron_kl`. BUKU UTAMA (UangMuka/Pentasyarufan/Penghimpunan) TIDAK PERNAH ditulis
   dari halaman publik: penyesuaian KL/UL adalah AJUAN yang dipakai daerah menyamakan catatan.
+  Revisi pemilik 26 Nov 2026 (perluahan fitur): (a) UMP membaca semua baris UangMuka yang
+  TIDAK mengandung kata LPJ di `section` (LPJ tetap dari Pentasyarufan section "UMP LPJ");
+  (b) ATURAN AWAL hak amil: SEMUA setoran dianggap "sudah" diambil amilnya KECUALI pilar
+  kemanusiaan ("belum"), dikirim sebagai `awalAmil`, pilihan kantor tetap bisa menimpa
+  (ajuan diambilAmil, `sinkronUbahAmil` tidak membuat ajuan bila sama dengan aturan awal);
+  (c) PECAHAN PILAR UMP: ajuan `ump.pecahan` (tipe `pecahan` di whitelist) berisi array
+  maksimal 10 butir `{pilar, kantor, nominal}` — satu UMP dipecah ke beberapa pos pilar dan
+  kepemilikannya bisa dipindah ke kantor KL/UL lain (total divalidasi `_validasiPecahan`,
+  tidak boleh melebihi nominal asal via `_umpAsal`); UI-nya tombol "+ Pecah pilar /
+  pindahkan" di tab UMP (`umpPecMulai/Tambah/Hapus/Ubah`, dropdown `pilarOpsi`/`kantorOpsi`
+  dari `pilarDaftar`/`kantorDaftar` yang dikirim mesin); (d) Ringkasan DUA HASIL:
+  `saldoTanpaLpj` (UMP dipotong penuh) dan `saldoDenganLpj` (UMP + LPJ + pengembalian),
+  mekanisme perhitungan tetap setoran − hak amil (diambil/belum) − UMP.
   Halaman `src/public/sinkron-kl.html` desain persis saldo-kl.html (boot, tema, lz-logo loading,
-  kode akses KL-XXXXXXXX, hero, tab, kl-card/kl-tbl/kl-catatan): 4 tab - Penghimpunan (setoran
-  + UMP + LPJ terpisah, kolom "Diambil amil?" pilihan yang menjadi ajuan, rincian persen per
-  baris), UMP & LPJ (sel sunting tanggal/nominal/keterangan + usul baris baru, tanda oranye +
-  batalkan ×), Ringkasan (hasil sementara: saldo, setoran, amil diambil/belum, UMP, LPJ, belum
+  kode akses KL-XXXXXXXX, hero, tab, kl-card/kl-tbl/kl-catatan): 5 tab - Penghimpunan (kolom
+  "Diambil amil?" dengan aturan awal, rincian persen per baris), UMP (sel sunting + pecahan
+  pilar + usul baris baru), LPJ (sel sunting + usul baris baru, tanda oranye + batalkan ×),
+  Ringkasan (dua hasil: Tanpa LPJ / Dengan LPJ + setoran, amil diambil/belum, UMP, LPJ, belum
   LPJ), Log (server + draft belum terkirim bertanda "di peramban"); savebar sticky + tombol
   Simpan; draft jaga-jaga di localStorage `sinkronKLDraft_<kode>` per peramban, dibersihkan
-  setelah terkirim. Dijaga `tools/test_sinkron_kl.js` (23 cek mesin) dan
-  `tools/test_sinkron_kl_ui.js` (12 cek halaman: loading, kode sama, tab, ajuan, simpan, log),
-  keduanya terdaftar di jalankan-uji.js.
+  setelah terkirim. Dijaga `tools/test_sinkron_kl.js` (32 cek mesin, termasuk validasi
+  pecahan) dan `tools/test_sinkron_kl_ui.js` (16 cek halaman: loading, kode sama, 5 tab,
+  aturan awal, ajuan, pecahan UMP, dua hasil, simpan, log), keduanya terdaftar di
+  jalankan-uji.js.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama
