@@ -1101,16 +1101,20 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   salah menggambar blur). Dijaga `tools/test_dasbor_opsi10.js` (18 cek), ditambah
   `tools/test_dasbor_hp.js` (5 cek, layout uji memakai `ver:3`) dan cek kelas bersyarat KPI di
   `tools/test_sinkron_ui.js`.
-- **Perbaikan seret Atur Layout (26 November 2026, commit kedua):** pemilik melaporkan kartu
-  "tidak bisa dipindahkan dengan fleksibel". Diukur dengan `tools/test_dasbor_drag.js` (baru):
-  pointerdown pada teks judul kartu TIDAK memulai seretan karena listener hanya dipasang di
-  grip mungil `.drag-handle`, dan kejadian dari induk (`.wc` atau padding kartu) tidak pernah
-  sampai ke listener anak. Perbaikan: listener dipasang di seluruh kartu (penjaga tetap
-  mengecualikan tombol ✕, isi `.wc-b`, dan `.rz`), plus auto-scroll saat pointer dekat tepi
-  atas/bawah layar supaya kartu bisa dipindah ke baris jauh, dan `.dash-edit .wc-h`
-  `{cursor:grab; touch-action:none}` agar seretan jari di HP tidak kalah sama gulir. Uji 6/6:
-  seret dari judul mengubah urutan, seret dari grip tetap jalan, simpanan bersih tanpa null,
-  urutan bertahan setelah muat ulang.
+- **Perbaikan seret Atur Layout (26 November 2026, commit kedua-ketiga):** pemilik melaporkan kartu
+  "tidak bisa dipindahkan dengan fleksibel" lalu "loncat-loncat". Diukur dengan
+  `tools/test_dasbor_drag.js` (6 cek) dan `tools/test_dasbor_drag_stabil.js` (3 cek), keduanya baru:
+  (1) pointerdown pada teks judul kartu TIDAK memulai seretan karena listener hanya dipasang di
+  grip mungil `.drag-handle` - kini listener di seluruh kartu (penjaga tetap mengecualikan tombol ✕,
+  isi `.wc-b`, dan `.rz`); (2) algoritma slot lama menebak dari tetangga terdekat yang posisinya
+  berubah tiap mikro-gerakan dan kartu di baris bawah "di kiri pointer" terus menaikkan slot -
+  placeholder bergetar TERUKUR 9 kali dalam 10 langkah dan kartu terlempar ke indeks 8. Algoritma
+  baru: kartu PERTAMA yang lintasannya (baris) memuat pointer menentukan slot lalu berhenti; kartu
+  penuh dibanding titik tengah Y, kartu dinding titik tengah X; batas "sebelum kartu i" ==
+  "setelah kartu i-1" sehingga mulus tanpa getar; sisipan memakai `statis[slot]` sebagai acuan
+  (insertBefore ke grid.children melenceng satu bila placeholder di depan); (3) auto-scroll saat
+  pointer dekat tepi atas/bawah layar, dan `.dash-edit .wc-h{cursor:grab;touch-action:none}`
+  agar seretan jari di HP tidak kalah sama gulir.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama

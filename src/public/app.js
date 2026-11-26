@@ -5032,20 +5032,47 @@ function wireDashDrag(){
         var vh=window.innerHeight;
         if(ev.clientY>vh-70)window.scrollBy(0,14);
         else if(ev.clientY<130)window.scrollBy(0,-14);
-        var cards=Array.prototype.filter.call(grid.querySelectorAll('.wc'),function(c){return c!==card&&c!==placeholder;});
-        var closest=null;var closestDist=Infinity;
-        cards.forEach(function(c){
-          var r=c.getBoundingClientRect();
-          var cx=r.left+r.width/2;
-          var cy=r.top+r.height/2;
-          var dist=Math.hypot(ev.clientX-cx,ev.clientY-cy);
-          if(dist<closestDist){closestDist=dist;closest=c;}
-        });
-        if(closest&&closest!==placeholder){
-          var r=closest.getBoundingClientRect();
-          var isAfter=ev.clientX>(r.left+r.width/2)||(Math.abs(ev.clientX-(r.left+r.width/2))<40&&ev.clientY>(r.top+r.height/2));
-          if(isAfter){grid.insertBefore(placeholder,closest.nextSibling);}
-          else{grid.insertBefore(placeholder,closest);}
+        /* Titik sisip dihitung dari posisi kartu-kartu STatis (bukan dari
+           placeholder yang ikut berpindah). Penyisipan lama menebak dari
+           tetangga terdekat yang posisinya berubah tiap mikro-gerakan, dan
+           placeholder yang bergeser menggerakkan tetangga kembali - hasilnya
+           placeholder bergetar bolak-balik (terukur 9 kali dalam 10 langkah)
+           dan kartu tampak melompat-lompat. Sekarang: pilih slot STABIL dari
+           sela tengah kartu statis; kalau slotnya sama dengan sebelumnya,
+           JANGAN disentuh. */
+        var statis=Array.prototype.filter.call(grid.querySelectorAll('.wc'),function(c){return c!==card&&c!==placeholder;});
+        if(!statis.length)return;
+        var px=ev.clientX, py=ev.clientY;
+        /* Slot ditentukan kartu PERTAMA yang lintasannya (baris) memuat
+           pointer, lalu berhenti - kartu di baris bawah tidak ikut mengangkat
+           slot (dulu: "di kiri pointer" terus menaikkan slot sampai ke akhir
+           grid, kartu terlempar ke bawah sendirian).
+           - Kartu penuh (lebar >= 90% grid): bandingkan titik tengah Y.
+           - Kartu dinding: bandingkan titik tengah X (kiri/kanan).
+           Batasnya mulus: "sebelum kartu i" == "setelah kartu i-1", jadi
+           pointer di sela dua kartu tidak membuat placeholder bergetar. */
+        var slot=statis.length;
+        for(var i=0;i<statis.length;i++){
+          var r=statis[i].getBoundingClientRect();
+          if(py<r.top){slot=i;break;}
+          if(py<=r.bottom){
+            var setelah=(r.width>=grid.clientWidth*0.9)?(py>r.top+r.height/2):(px>r.left+r.width/2);
+            slot=setelah?i+1:i;
+            break;
+          }
+        }
+        /* Indeks placeholder saat ini di ruang STATis: berapa kartu statis
+           yang berada di depannya. Sisipan memakai statis[slot] sebagai
+           acuan - insertBefore ke grid.children melenceng satu bila
+           placeholder ada di depan titik sisip. */
+        var sekarang=0;
+        for(var j=0;j<grid.children.length;j++){
+          if(grid.children[j]===placeholder)break;
+          if(statis.indexOf(grid.children[j])>=0)sekarang++;
+        }
+        if(slot!==sekarang){
+          if(slot>=statis.length)grid.appendChild(placeholder);
+          else grid.insertBefore(placeholder,statis[slot]);
         }
       }
       function onUp(ev){

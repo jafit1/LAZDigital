@@ -64,10 +64,19 @@ const srv = http.createServer(async (req, res) => {
   await p.waitForTimeout(300);
 
   const seret = async (dariJudul, keJudul, tekanJudul) => {
-    const r = await p.evaluate(({ a, b, t }) => {
-      const ka = [...document.querySelectorAll('.dgrid .wc')].find((w) => (w.querySelector('.wc-t') || {}).textContent.indexOf(a) >= 0);
+    /* Auto-scroll seretan sebelumnya bisa meninggalkan halaman tergulir;
+     * kembalikan ke atas dulu supaya getBoundingClientRect (koordinat
+     * viewport) valid untuk mouse.move. */
+    await p.evaluate(() => window.scrollTo(0, 0));
+    await p.waitForTimeout(150);
+    const r = await p.evaluate(({ a, b, t }) => {      const ka = [...document.querySelectorAll('.dgrid .wc')].find((w) => (w.querySelector('.wc-t') || {}).textContent.indexOf(a) >= 0);
       const kb = [...document.querySelectorAll('.dgrid .wc')].find((w) => (w.querySelector('.wc-t') || {}).textContent.indexOf(b) >= 0);
       if (!ka || !kb) return null;
+      /* Kartu sasaran bisa berada jauh di bawah (di luar viewport); gulirkan
+       * ke tengah dulu supaya getBoundingClientRect (koordinat viewport)
+       * valid untuk mouse.move. */
+      kb.scrollIntoView({ block: 'center' });
+      ka.scrollIntoView({ block: 'center' });
       const ra = ka.getBoundingClientRect(), rb = kb.getBoundingClientRect();
       const grip = ka.querySelector('.drag-handle'); const rg = grip && grip.getBoundingClientRect();
       const wt = ka.querySelector('.wc-t'); const rt = wt && wt.getBoundingClientRect();
@@ -78,20 +87,24 @@ const srv = http.createServer(async (req, res) => {
     if (!r) return false;
     await p.mouse.move(r.sx, r.sy);
     await p.mouse.down();
+    await p.waitForTimeout(80);
+    const mulaiJalan = await p.evaluate(() => !!document.querySelector('.wc-placeholder'));
     for (let i = 1; i <= 12; i++) await p.mouse.move(r.sx + (r.tx - r.sx) * i / 12, r.sy + (r.ty - r.sy) * i / 12);
     await p.waitForTimeout(120);
     const jalan = await p.evaluate(() => !!document.querySelector('.wc-placeholder'));
     await p.mouse.up();
     await p.waitForTimeout(250);
-    return jalan;
+    return { mulai: mulaiJalan, jalan: jalan };
   };
 
   const awal = await urutan();
   const posPilarSebelum = await posisi('pilar');
 
-  /* 1. Seret dari TEKS JUDUL: Pilar (baris 1) ke Monitoring (baris 2). */
-  const jalanJudul = await seret('Pilar Program', 'Monitoring Kantor Layanan', true);
-  cek('Seret dari teks judul kartu memulai seretan (placeholder muncul)', jalanJudul === true, { jalanJudul });
+  /* 1. Seret dari TEKS JUDUL: Pilar (baris 1 kanan) ke atas Sebaran Dana
+   *    (baris 2 kanan) - jatuh di seperempat atas kartu berarti "sisip
+   *    sebelum kartu ini", jadi Pilar pindah ke posisinya. */
+  const jalanJudul = await seret('Pilar Program', 'Sebaran Dana', true);
+  cek('Seret dari teks judul kartu memulai seretan (placeholder muncul)', jalanJudul && jalanJudul.jalan === true, { jalanJudul });
   const sesudahJudul = await urutan();
   cek('Pindah kartu dari judul mengubah urutan', JSON.stringify(sesudahJudul) !== JSON.stringify(awal), { awal, sesudahJudul });
   const posPilarSesudah = await posisi('pilar');
@@ -99,7 +112,7 @@ const srv = http.createServer(async (req, res) => {
 
   /* 2. Seret dari GRIP tetap bekerja (jalan lama tidak rusak). */
   const jalanGrip = await seret('Pilar Program', 'Tren Arus Dana', false);
-  cek('Seret dari grip tetap bekerja', jalanGrip === true, { jalanGrip });
+  cek('Seret dari grip tetap bekerja', jalanGrip && jalanGrip.jalan === true, { jalanGrip });
 
   /* 3. Simpanan bersih: tanpa entri null/undefined dari placeholder. */
   const tersimpan = await p.evaluate(() => { try { return JSON.parse(localStorage.getItem('laz_dashlayout') || 'null'); } catch (e) { return { RUSAK: e.message }; } });

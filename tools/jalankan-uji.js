@@ -127,6 +127,7 @@ const DAFTAR = [
   { label: 'Dasbor di HP: ukuran widget tersimpan tidak ikut', berkas: 'test_dasbor_hp.js' },
   { label: 'Dasbor Opsi 10 Hybrid: tata baru, Monitoring KLL, lipatan HP', berkas: 'test_dasbor_opsi10.js' },
   { label: 'Atur Layout: seret kartu dari seluruh kepala kartu', berkas: 'test_dasbor_drag.js' },
+  { label: 'Atur Layout: seretan stabil tanpa lompatan', berkas: 'test_dasbor_drag_stabil.js' },
   { label: 'Teks terbaca di tema gelap', berkas: 'test_kontras_gelap.js' },
   /* sendiri: mengukur milidetik hitung tata letak, gagal palsu kalau prosesor
      dibagi dengan uji lain (terukur 78 ms lawan batas 45 ms saat bersamaan,
