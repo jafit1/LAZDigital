@@ -64,6 +64,7 @@ const srv = http.createServer(async (req, res) => {
   cek('Pilih "Belum" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
   cek('Tanda ajuan: sel jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-ambil.ajuan, .kl-edit.ajuan')));
 
+  await p.evaluate(() => { Object.keys(SINKRON.ajuan).forEach((k) => { if (/\|pecahan$/.test(k)) delete SINKRON.ajuan[k]; }); draftSimpan(); gambarIsi(); const b = document.getElementById('klSavebar'); if (b) b.outerHTML = saveBar(); });
   await p.click('#klSimpanBtn');
   await p.waitForFunction(() => { const bar = document.getElementById('klSavebar'); return !bar || /sudah tersimpan/.test(bar.textContent) || /Gagal/.test(bar.textContent); }, null, { timeout: 15000 });
   cek('Simpan terkirim: savebar kembali "semua tersimpan"', await p.evaluate(() => { const bar = document.getElementById('klSavebar'); return bar && /sudah tersimpan/.test(bar.textContent); }), await p.evaluate(() => (document.getElementById('klSavebar') || {}).textContent));
@@ -79,6 +80,53 @@ const srv = http.createServer(async (req, res) => {
   cek('Tab Log menampilkan catatan ajuan', await p.evaluate(() => /ajuan baru/.test(document.getElementById('klIsi').textContent)));
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[3].click());
   cek('Tab Ringkasan: DUA hasil - Tanpa LPJ & Dengan LPJ + pemisahan amil', await p.evaluate(() => /Hasil TANPA LPJ/.test(document.getElementById('klIsi').textContent) && /Hasil DENGAN LPJ/.test(document.getElementById('klIsi').textContent) && /diambil/.test(document.getElementById('klIsi').textContent)));
+
+  /* --- pemilih tanggal bertema di tab UMP & LPJ --- */
+  await p.evaluate(() => document.querySelectorAll('.kl-tab')[1].click());
+  cek('Tab UMP: tanggal memakai pemilih bertema (bukan input date bawaan)', await p.evaluate(() =>
+    !!document.querySelector('#klIsi .kl-tgl .kl-tgl-btn') && !document.querySelector('#klIsi input[type="date"]')));
+  await p.click('#klIsi .kl-tgl-btn');
+  await p.waitForSelector('.kl-kal', { timeout: 4000 });
+  cek('Kalender bertema terbuka (bukan popup peramban)', await p.evaluate(() => !!document.querySelector('.kl-kal .kl-kal-grid .kl-kal-tgl')));
+  await p.click('.kl-kal .kl-kal-aksi');
+  cek('Pilih tanggal membuat ajuan & tombol Simpan menyala', await p.evaluate(() => {
+    const b = document.querySelector('#klIsi .kl-tgl-btn');
+    const simpan = document.getElementById('klSimpanBtn');
+    return !!(b && b.classList.contains('ajuan') && simpan && !simpan.disabled);
+  }));
+
+  cek('Scrollbar halaman diberi gaya tema (webkit + firefox)', await p.evaluate(() => {
+    const aturan = [];
+    for (const lembar of [...document.styleSheets]) {
+      try { for (const r of [...lembar.cssRules]) aturan.push(String(r.cssText || '')); } catch (e) {}
+    }
+    return aturan.some((x) => x.indexOf('::-webkit-scrollbar-thumb') >= 0) && aturan.some((x) => /scrollbar-color/.test(x));
+  }));
+
+  await p.evaluate(() => document.querySelectorAll('.kl-tab')[2].click());
+  cek('Tab LPJ: tanggal juga memakai pemilih bertema', await p.evaluate(() =>
+    !!document.querySelector('#klIsi .kl-tgl .kl-tgl-btn') && !document.querySelector('#klIsi input[type="date"]')));
+
+  /* --- sinkron otomatis: kode yang sama di dua sesi --- */
+  const p2 = await ctx.newPage();
+  const galat2 = [];
+  p2.on('pageerror', (e) => galat2.push(String(e).slice(0, 140)));
+  await p2.goto(A + '/sinkron-kl.html', { waitUntil: 'domcontentloaded' });
+  await p2.fill('#klKode', kd);
+  await p2.click('#klBtn');
+  await p2.waitForSelector('.kl-hero', { timeout: 15000 });
+  await p.evaluate(() => { Object.keys(SINKRON.ajuan).forEach((k) => { if (/\|pecahan$/.test(k)) delete SINKRON.ajuan[k]; }); draftSimpan(); gambarIsi(); const b = document.getElementById('klSavebar'); if (b) b.outerHTML = saveBar(); });
+  await p.click('#klSimpanBtn');
+  await p.waitForFunction(() => { const bar = document.getElementById('klSavebar'); return !bar || /sudah tersimpan/.test(bar.textContent) || /Gagal/.test(bar.textContent); }, null, { timeout: 15000 });
+    await p2.bringToFront();
+  await p2.waitForFunction(() => {
+    const t = document.querySelector('.kl-toast');
+    return !!(t && /diperbarui dari sesi lain/i.test(t.textContent));
+  }, null, { timeout: 20000 });
+  cek('Sesi kedua (kode sama) tersinkron otomatis setelah sesi pertama menyimpan', true);
+  cek('Sesi kedua tanpa galat JS', galat2.length === 0, galat2);
+  await p2.close();
+  await p.bringToFront();
 
   cek('Tidak ada galat JS sepanjang alur', galat.length === 0, galat);
   console.log('\ntest_sinkron_kl_ui.js  ' + ok + '/' + (ok + g) + (g ? '  ADA YANG GAGAL' : '  SEMUA LULUS'));

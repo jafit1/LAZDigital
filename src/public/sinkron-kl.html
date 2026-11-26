@@ -277,6 +277,72 @@
   .kl-pec-sum{font-size:11px;font-weight:700;color:var(--muted)}
   .kl-pec-sum.more{color:var(--red)}
 
+  /* --- scrollbar bertema: seluruh halaman, tabel, & daftar gulir --- */
+  *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--accent) 42%,var(--border)) transparent}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{
+    background:color-mix(in srgb,var(--accent) 42%,var(--border));
+    border-radius:99px;border:2px solid transparent;background-clip:content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--accent) 62%,var(--border))}
+  ::-webkit-scrollbar-corner{background:transparent}
+
+  /* --- pemilih tanggal bertema (pengganti input date bawaan peramban) --- */
+  .kl-tgl{display:block;position:relative;min-width:0}
+  .kl-tgl-btn{
+    display:inline-flex;align-items:center;gap:7px;text-align:left;cursor:pointer;
+    font-variant-numeric:tabular-nums;
+  }
+  .kl-tgl-btn svg{width:13px;height:13px;flex:none;color:var(--muted)}
+  .kl-tgl-btn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kl-tgl-btn:focus-visible{border-color:var(--accent);outline:none}
+  .kl-tambah .kl-tgl{display:flex;min-width:0}
+  .kl-tambah .kl-tgl .kl-tgl-btn{
+    flex:1 1 auto;min-width:0;height:38px;border:1px solid var(--border);
+    background:var(--surface);border-radius:8px;padding:0 10px;justify-content:flex-start;
+  }
+  .kl-kal{
+    position:absolute;z-index:80;width:268px;max-width:calc(100vw - 16px);
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    box-shadow:0 22px 50px -22px rgba(0,0,0,.55);padding:10px;
+  }
+  .kl-kal-kepala{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
+  .kl-kal-judul{font-family:var(--head);font-size:13px;font-weight:800;color:var(--text)}
+  .kl-kal-nav{
+    width:30px;height:30px;flex:none;border:1px solid var(--border);border-radius:9px;background:var(--surface);
+    color:var(--text2);cursor:pointer;font-size:14px;line-height:1;
+    display:flex;align-items:center;justify-content:center;padding:0;
+  }
+  .kl-kal-nav:hover{border-color:var(--accent);color:var(--accent)}
+  .kl-kal-hari{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+  .kl-kal-hari span{text-align:center;font-size:9.5px;font-weight:800;color:var(--muted);text-transform:uppercase;padding:3px 0}
+  .kl-kal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .kl-kal-tgl{
+    height:32px;border:0;border-radius:8px;background:transparent;color:var(--text2);
+    font:600 12.5px var(--sans);cursor:pointer;padding:0;
+  }
+  .kl-kal-tgl:hover{background:var(--surface2);color:var(--text)}
+  .kl-kal-tgl.today{box-shadow:inset 0 0 0 1px var(--border)}
+  .kl-kal-tgl.on{background:var(--grad-accent);color:#fff;font-weight:800}
+  .kl-kal-tgl.kosong{cursor:default;background:transparent}
+  .kl-kal-tgl.kosong:hover{background:transparent}
+  .kl-kal-kaki{display:flex;gap:6px;margin-top:8px}
+  .kl-kal-aksi{
+    flex:1 1 0;height:32px;border:1px solid var(--border);border-radius:9px;background:var(--surface2);
+    color:var(--text2);font:700 11.5px var(--sans);cursor:pointer;
+  }
+  .kl-kal-aksi:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* --- pemberitahuan sinkron otomatis --- */
+  .kl-toast{
+    position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);z-index:90;
+    background:var(--text);color:var(--bg);font:700 12px var(--sans);padding:10px 16px;border-radius:999px;
+    box-shadow:0 14px 34px -16px rgba(0,0,0,.6);opacity:0;transition:opacity .2s,transform .2s;
+    pointer-events:none;max-width:calc(100vw - 24px);text-align:center;
+  }
+  .kl-toast.on{opacity:1;transform:translate(-50%,0)}
+
   @media (min-width:720px){
     .kl-stat{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
   }
@@ -372,6 +438,189 @@ function klTgl(s){
   return Number(t.slice(8,10))+' '+NS[Number(t.slice(5,7))-1];
 }
 
+/* ================= PEMILIH TANGGAL BERTEMA =================
+   Pengganti input type="date" bawaan peramban di tab UMP & LPJ: tombol
+   berikon kalender + popover kalender bergaya web utama (mengikuti tema
+   terang/gelap). Nilai asli tetap disimpan di input tersembunyi supaya
+   usulBaru() dan sinkronUbah() bekerja tanpa perubahan. */
+function tglPanjang(s){
+  var t=String(s||'').slice(0,10);
+  if(t.length<10) return 'Pilih tanggal';
+  return Number(t.slice(8,10))+' '+NS[Number(t.slice(5,7))-1]+' '+t.slice(0,4);
+}
+function klTglHTML(o){
+  var id=o.id?' id="'+esc(o.id)+'"':'';
+  var klik=o.jenis?"klTglBuka(this,'"+esc(o.jenis)+"','"+esc(o.kunci)+"')":'klTglBuka(this)';
+  return '<span class="kl-tgl"><input type="hidden"'+id+' value="'+esc(o.nilai||'')+'">'
+    +'<button type="button" class="kl-edit tanggal kl-tgl-btn'+(o.ajuan?' ajuan':'')+'" data-lama="'+esc(o.lama||'')+'"'
+    +' aria-haspopup="dialog" aria-label="Pilih tanggal" onclick="'+klik+'">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>'
+    +'<span>'+esc(tglPanjang(o.nilai))+'</span></button></span>';
+}
+var KL_KAL=null, KL_KAL_BTN=null, KL_KAL_JENIS='', KL_KAL_KUNCI='', KL_KAL_BULAN='';
+function waktuJakarta(){ return new Date(Date.now()+7*3600e3).toISOString().slice(0,10); }
+function klTglBuka(btn,jenis,kunci){
+  if(KL_KAL && KL_KAL_BTN===btn){ klTglTutup(); return; }
+  klTglTutup();
+  KL_KAL_BTN=btn; KL_KAL_JENIS=jenis||''; KL_KAL_KUNCI=kunci||'';
+  var inp=btn.parentNode.querySelector('input');
+  var nilai=(inp&&inp.value)||'';
+  KL_KAL_BULAN=(nilai||'').slice(0,7)||waktuJakarta().slice(0,7);
+  KL_KAL=document.createElement('div');
+  KL_KAL.className='kl-kal'; KL_KAL.setAttribute('role','dialog');
+  document.body.appendChild(KL_KAL);
+  klKalGambar(); klKalPosisi();
+  setTimeout(function(){
+    document.addEventListener('pointerdown',klKalLuar,true);
+    document.addEventListener('keydown',klKalTombol);
+    window.addEventListener('resize',klKalPosisi);
+    window.addEventListener('scroll',klKalPosisi,true);
+  },0);
+}
+function klKalLuar(e){
+  if(!KL_KAL) return;
+  if(KL_KAL.contains(e.target)||(KL_KAL_BTN&&KL_KAL_BTN.contains(e.target))) return;
+  klTglTutup();
+}
+function klKalTombol(e){
+  if(!KL_KAL) return;
+  if(e.key==='Escape'){ klTglTutup(); if(KL_KAL_BTN){ try{KL_KAL_BTN.focus();}catch(err){} } KL_KAL_BTN=null; }
+}
+function klTglTutup(){
+  if(KL_KAL){ KL_KAL.remove(); KL_KAL=null; }
+  document.removeEventListener('pointerdown',klKalLuar,true);
+  document.removeEventListener('keydown',klKalTombol);
+  window.removeEventListener('resize',klKalPosisi);
+  window.removeEventListener('scroll',klKalPosisi,true);
+}
+function klKalPosisi(){
+  if(!KL_KAL||!KL_KAL_BTN) return;
+  var r=KL_KAL_BTN.getBoundingClientRect();
+  var w=KL_KAL.offsetWidth||268, h=KL_KAL.offsetHeight||330;
+  var sx=window.scrollX||document.documentElement.scrollLeft;
+  var sy=window.scrollY||document.documentElement.scrollTop;
+  var lebar=document.documentElement.clientWidth;
+  var kiri=Math.min(Math.max(8,r.left+sx),sx+lebar-w-8);
+  var atas=r.bottom+sy+6;
+  if(r.bottom+h+14>window.innerHeight) atas=r.top+sy-h-6;
+  KL_KAL.style.left=Math.max(8,kiri)+'px';
+  KL_KAL.style.top=Math.max(sy+8,atas)+'px';
+}
+function klKalGambar(){
+  if(!KL_KAL) return;
+  var th=Number(KL_KAL_BULAN.slice(0,4)), bl=Number(KL_KAL_BULAN.slice(5,7));
+  var inp=KL_KAL_BTN?KL_KAL_BTN.parentNode.querySelector('input'):null;
+  var nilai=(inp&&inp.value)||'';
+  var ini=waktuJakarta();
+  var awal=new Date(Date.UTC(th,bl-1,1));
+  var geser=(awal.getUTCDay()+6)%7;
+  var jml=new Date(Date.UTC(th,bl,0)).getUTCDate();
+  var h='<div class="kl-kal-kepala">'
+    +'<button type="button" class="kl-kal-nav" aria-label="Bulan sebelumnya" onclick="klKalNav(-1)">&#8249;</button>'
+    +'<div class="kl-kal-judul">'+NB[bl-1]+' '+th+'</div>'
+    +'<button type="button" class="kl-kal-nav" aria-label="Bulan berikutnya" onclick="klKalNav(1)">&#8250;</button>'
+    +'</div><div class="kl-kal-hari">'+['Sen','Sel','Rab','Kam','Jum','Sab','Min'].map(function(x){return '<span>'+x+'</span>';}).join('')+'</div><div class="kl-kal-grid">';
+  for(var k=0;k<geser;k++) h+='<button type="button" class="kl-kal-tgl kosong" tabindex="-1" disabled></button>';
+  for(var d=1;d<=jml;d++){
+    var iso=KL_KAL_BULAN+'-'+String(d).padStart(2,'0');
+    h+='<button type="button" class="kl-kal-tgl'+(iso===nilai?' on':'')+(iso===ini?' today':'')+'" onclick="klKalPilih(\''+iso+'\')">'+d+'</button>';
+  }
+  h+='</div><div class="kl-kal-kaki">'
+    +'<button type="button" class="kl-kal-aksi" onclick="klKalPilih(\''+ini+'\')">Hari ini</button>'
+    +'<button type="button" class="kl-kal-aksi" onclick="klTglTutup()">Tutup</button>'
+    +'</div>';
+  KL_KAL.innerHTML=h;
+  klKalPosisi();
+}
+function klKalNav(arah){
+  if(!KL_KAL) return;
+  var th=Number(KL_KAL_BULAN.slice(0,4)), bl=Number(KL_KAL_BULAN.slice(5,7))+arah;
+  if(bl<1){ bl=12; th--; } else if(bl>12){ bl=1; th++; }
+  KL_KAL_BULAN=th+'-'+String(bl).padStart(2,'0');
+  klKalGambar();
+}
+function klKalPilih(iso){
+  var btn=KL_KAL_BTN;
+  if(!btn) return;
+  var inp=btn.parentNode.querySelector('input');
+  var jenis=KL_KAL_JENIS, kunci=KL_KAL_KUNCI;
+  if(inp) inp.value=iso;
+  var lbl=btn.querySelector('span');
+  if(lbl) lbl.textContent=tglPanjang(iso);
+  klTglTutup();
+  if(jenis&&kunci) sinkronUbah(jenis,kunci,'tanggal',iso,btn);
+}
+
+/* ================= SINKRON OTOMATIS ANTAR SESI =================
+   Satu kode akses bisa dibuka beberapa perangkat/tab sekaligus. Tiap 12
+   detik (dan saat tab kembali aktif) halaman memeriksa sidik data dari
+   server; kalau berbeda karena sesi lain menyimpan, tampilan dimuat ulang
+   tanpa menyentuh ajuan lokal. Bila pengguna sedang mengetik di sel, muat
+   ulang ditunda sampai kursor meninggalkan sel supaya tidak ada ketikan
+   yang hilang. */
+var SIDIK='', SINKRON_TERTUNDA=null, SINKRON_CEK_TERAKHIR=0, TOAST_T=null;
+function sidikData(d){
+  if(!d) return '';
+  var r=d.ringkas||{}, log0=(d.log&&d.log[0]&&d.log[0].waktu)?String(d.log[0].waktu):'';
+  return [d.nama,(d.setoran||[]).length,(d.ump||[]).length,(d.lpj||[]).length,(d.ajuan||[]).length,
+    r.himpun,r.hakAmil,r.umpKeluar,r.umpKembali,r.lpj,r.saldoTanpaLpj,r.saldoDenganLpj,log0].join('|');
+}
+function klToast(pesan){
+  var lama=document.getElementById('klToast');
+  if(lama) lama.remove();
+  var el=document.createElement('div');
+  el.id='klToast'; el.className='kl-toast'; el.textContent=pesan;
+  document.body.appendChild(el);
+  requestAnimationFrame(function(){ el.classList.add('on'); });
+  clearTimeout(TOAST_T);
+  TOAST_T=setTimeout(function(){
+    el.classList.remove('on');
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); },250);
+  },4200);
+}
+function sinkronTerapkan(d){
+  if(!d) return;
+  SINKRON_TERTUNDA=null;
+  klTglTutup();
+  DATA=d; SIDIK=sidikData(d);
+  gambarHasil();
+  klToast(jumlahAjuan()
+    ? 'Data diperbarui dari sesi lain — '+jumlahAjuan()+' ajuan Anda tetap dipertahankan dan belum tersimpan.'
+    : 'Data diperbarui dari sesi lain (kode ini terbuka di perangkat lain).');
+}
+function sinkronCekPaksa(){
+  SINKRON_CEK_TERAKHIR=0;
+  sinkronCek();
+}
+function sinkronCek(){
+  if(!KODE||!DATA||MUAT) return;
+  if(Date.now()-SINKRON_CEK_TERAKHIR<10000) return;
+  if(document.visibilityState && document.visibilityState!=='visible') return;
+  SINKRON_CEK_TERAKHIR=Date.now();
+  rpc('apiSinkronKLMuat',[KODE]).then(function(d){
+    if(!d) return;
+    if(sidikData(d)===SIDIK) return;
+    var f=document.activeElement, box=document.getElementById('klHasil');
+    var menyunting=f && box && box.contains(f) && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName);
+    if(menyunting || KL_KAL){ SINKRON_TERTUNDA=d; return; }
+    sinkronTerapkan(d);
+  }).catch(function(){});
+}
+document.addEventListener('focusout',function(){
+  if(!SINKRON_TERTUNDA) return;
+  setTimeout(function(){
+    var f=document.activeElement;
+    if(f && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName)) return;
+    if(KL_KAL) return;
+    sinkronTerapkan(SINKRON_TERTUNDA);
+  },150);
+});
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible') sinkronCekPaksa();
+});
+window.addEventListener('focus',sinkronCekPaksa);
+setInterval(sinkronCek,12000);
+
 /* Layar muat & logo bergerak memakai js/lz-logo.js yang sama dengan web asli
    dan saldo-kl.html — desainnya persis. */
 function klMuat(tahan){
@@ -428,9 +677,12 @@ function klCari(){
   localStorage.setItem('klKode',kode);
   btn.disabled=true; btn.textContent='Memuat...';
   var muat=klMuat(true);
+  MUAT=true;
   rpc('apiSinkronKLMuat',[kode])
     .then(function(d){
       KODE=kode; DATA=d; TAB='himpun';
+      SIDIK=sidikData(d);
+      SINKRON_TERTUNDA=null;
       SINKRON.ajuan=draftMuat(kode);
       document.getElementById('klKodeCard').classList.add('hidden');
       document.getElementById('klKodeTampil').textContent=kode;
@@ -444,7 +696,7 @@ function klCari(){
       err.style.display='block';
       muat.selesai();
     })
-    .then(function(){btn.disabled=false;btn.textContent='Buka Sinkronisasi';});
+    .then(function(){MUAT=false;btn.disabled=false;btn.textContent='Buka Sinkronisasi';});
 }
 
 function klGanti(){
@@ -529,6 +781,7 @@ function klSimpan(){
   btn.disabled=true; btn.textContent='Menyimpan...';
   bar.classList.remove('err','terkirim');
   var muat=klMuat(true);
+  MUAT=true;
   rpc('apiSinkronKLSimpan',[KODE,kirim])
     .then(function(res){
       draftBersih();
@@ -536,6 +789,8 @@ function klSimpan(){
       /* Muat ulang data: ajuan & log terbaru dari server. */
       return rpc('apiSinkronKLMuat',[KODE]).then(function(d){
         DATA=d;
+        SIDIK=sidikData(d);
+        SINKRON_TERTUNDA=null;
         bar.classList.add('terkirim');
         gambarHasil();
       });
@@ -546,6 +801,7 @@ function klSimpan(){
       if(info) info.innerHTML='<b>Gagal menyimpan:</b> '+esc((e&&e.message)||'coba lagi')+' — ajuan tetap tersimpan di peramban ini (jaga-jaga).';
     })
     .then(function(){
+      MUAT=false;
       muat.selesai();
       if(btn){btn.disabled=false;btn.textContent='Simpan';}
     });
@@ -555,7 +811,7 @@ function klSimpan(){
 function sinkronUbah(jenis,kunci,kolom,nilai,el){
   var sebelum=ajuanBaris(jenis,kunci,kolom);
   if(sebelum){ delete SINKRON.ajuan[jenis+'|'+kunci+'|'+kolom]; }
-  var samaLama=String(nilai)===String(sebelum?sebelum.nilaiLama:'');
+  var samaLama=String(nilai)===String(sebelum?sebelum.nilaiLama:(el?el.getAttribute('data-lama'):''));
   if(!samaLama && !(nilai===''||nilai===null||nilai===undefined)){
     SINKRON.ajuan[jenis+'|'+kunci+'|'+kolom]={jenis:jenis,kunci:kunci,kolom:kolom,nilai:nilai,
       nilaiLama:sebelum?sebelum.nilaiLama:el.getAttribute('data-lama'),catatan:'',waktu:new Date().toISOString()};
@@ -710,8 +966,7 @@ function isiUmp(){
         selPec='<button class="kl-ganti" type="button" onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar / pindahkan</button>';
       }
       h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
-        +'<input class="kl-edit tanggal'+(ajuanBaris('ump',x.kunci,'tanggal')?' ajuan':'')+'" type="date" value="'+esc(nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal))+'" data-lama="'+esc(x.tanggal)+'"'
-        +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'tanggal\',this.value,this)"></td>'
+        +klTglHTML({nilai:nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal), lama:x.tanggal, jenis:'ump', kunci:x.kunci, ajuan:!!ajuanBaris('ump',x.kunci,'tanggal')})+'</td>'
         +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Kembali':'Keluar')+'</span></td>'
         +'<td class="w"><input class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||''))+'" data-lama="'+esc(x.keterangan||'')+'"'
         +' placeholder="'+esc(x.keterangan||'—')+'" onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'keterangan\',this.value,this)"></td>'
@@ -723,7 +978,7 @@ function isiUmp(){
     h+='</tbody><tfoot><tr><td colspan="3">Total catatan daerah</td><td class="n">'+klRp(r.umpKeluar+r.umpKembali)+'</td><td></td><td></td></tr></tfoot></table></div>';
   }
   h+='<div class="kl-tambah">'
-    +'<input class="kl-edit" id="umpTgl" type="date" aria-label="Tanggal UMP baru">'
+    +klTglHTML({id:'umpTgl'})
     +'<input class="kl-edit" id="umpNom" type="number" min="0" step="1000" placeholder="Nominal" aria-label="Nominal UMP baru">'
     +'<input class="kl-edit" id="umpKet" placeholder="Keterangan" aria-label="Keterangan UMP baru">'
     +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'ump\')">+ Usulkan baris UMP</button>'
@@ -818,8 +1073,7 @@ function isiLpj(){
       var progN=nilaiEfektif('lpj',x.kunci,'program',x.program||'');
       var berajuan=ajuanBaris('lpj',x.kunci,'nominal')||ajuanBaris('lpj',x.kunci,'tanggal')||ajuanBaris('lpj',x.kunci,'program');
       h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
-        +'<input class="kl-edit tanggal'+(ajuanBaris('lpj',x.kunci,'tanggal')?' ajuan':'')+'" type="date" value="'+esc(tglN)+'" data-lama="'+esc(x.tanggal)+'"'
-        +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'tanggal\',this.value,this)"></td>'
+        +klTglHTML({nilai:tglN, lama:x.tanggal, jenis:'lpj', kunci:x.kunci, ajuan:!!ajuanBaris('lpj',x.kunci,'tanggal')})+'</td>'
         +'<td class="w"><input class="kl-edit'+(ajuanBaris('lpj',x.kunci,'program')?' ajuan':'')+'" value="'+esc(progN)+'" data-lama="'+esc(x.program||'')+'"'
         +' placeholder="'+esc(x.program||'—')+'" onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'program\',this.value,this)"></td>'
         +'<td class="n"><input class="kl-edit n'+(ajuanBaris('lpj',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nomN)+'" data-lama="'+x.jumlah+'"'
@@ -829,7 +1083,7 @@ function isiLpj(){
     h+='</tbody><tfoot><tr><td colspan="2">Total catatan daerah</td><td class="n">'+klRp(r.lpj)+'</td><td></td></tr></tfoot></table></div>';
   }
   h+='<div class="kl-tambah">'
-    +'<input class="kl-edit" id="lpjTgl" type="date" aria-label="Tanggal LPJ baru">'
+    +klTglHTML({id:'lpjTgl'})
     +'<input class="kl-edit" id="lpjNom" type="number" min="0" step="1000" placeholder="Nominal" aria-label="Nominal LPJ baru">'
     +'<input class="kl-edit" id="lpjProg" placeholder="Program" aria-label="Program LPJ baru">'
     +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'lpj\')">+ Usulkan baris LPJ</button>'
