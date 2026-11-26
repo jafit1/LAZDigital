@@ -8666,6 +8666,34 @@ async function apiSelaraskanJurnal(t, daftar) {
   return { ok: true, ubah: ubah, dilewati: lewati.length, contohDilewati: lewati.slice(0, 10), bulan: daftarBulan };
 }
 
+/* HAPUS MASSAL per id - satu panggilan untuk ribuan baris (mis. mengganti
+ * seluruh penghimpunan tunai dengan jurnal kas terbaru). Tabel terbatas
+ * daftar putih, tiap id wajib ada, bulan yang tersentuh disinkronkan sekali. */
+var HAPUS_TABEL = { Penghimpunan: null, Pentasyarufan: null };
+async function apiHapusBaris(t, d) {
+  var u = _requirePerm(t, 'settings', 'delete');
+  d = d || {};
+  var namaTabel = d.tabel === 'Penghimpunan' ? SHEETS.PENGHIMPUNAN
+    : (d.tabel === 'Pentasyarufan' ? SHEETS.PENTASYARUFAN : null);
+  if (!namaTabel) throw new Error('Tabel tidak dikenal: ' + (d.tabel || '(kosong)'));
+  if (!Array.isArray(d.ids) || !d.ids.length) throw new Error('Daftar id kosong.');
+  if (d.ids.length > 5000) throw new Error('Terlalu banyak id sekali panggil (maks 5000).');
+  var bulan = {}, hapus = 0, hilang = [];
+  for (var i = 0; i < d.ids.length; i++) {
+    var lama = findById(namaTabel, d.ids[i]);
+    if (!lama) { hilang.push(d.ids[i]); continue; }
+    var bl = String(lama.tanggal || '').slice(0, 7);
+    if (bl) bulan[bl] = true;
+    deleteRowById(namaTabel, d.ids[i]);
+    hapus++;
+  }
+  var daftarBulan = Object.keys(bulan).sort();
+  for (var j = 0; j < daftarBulan.length; j++) await syncMonthlySpreadsheet(daftarBulan[j]);
+  audit(u.id, u.username, 'hapus_baris', d.tabel + ' ' + hapus + ' baris',
+    { modul: 'settings', ringkas: hapus + ' baris ' + d.tabel + ' dihapus, ' + hilang.length + ' tidak ditemukan' });
+  return { ok: true, hapus: hapus, hilang: hilang.length, bulan: daftarBulan };
+}
+
 async function apiHapusRentang(t, d){
   var u = _requirePerm(t, 'settings', 'delete');
   d = d || {};
@@ -10207,6 +10235,7 @@ REGISTRY['apiHapusRentang']=apiHapusRentang;
 REGISTRY['apiDeleteUangMuka']=apiDeleteUangMuka;
 REGISTRY['apiDeleteTransfer']=apiDeleteTransfer;
 REGISTRY['apiSelaraskanJurnal']=apiSelaraskanJurnal;
+REGISTRY['apiHapusBaris']=apiHapusBaris;
 REGISTRY['apiListAudit']=apiListAudit;
 REGISTRY['apiLaporanHarian']=apiLaporanHarian;
 REGISTRY['apiSimpanTandaTanganA2']=apiSimpanTandaTanganA2;

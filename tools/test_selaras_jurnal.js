@@ -103,6 +103,14 @@ const baris = (tabel, id) => {
   cek('hapus transfer ok', r.ok === true, r);
   cek('t1 hilang', !baris('Transfer', 't1'));
 
+  /* 5. hapus massal per id */
+  r = await rpc('apiHapusBaris', [TOKEN, { tabel: 'Penghimpunan', ids: ['h1', 'hx', 'h3'] }]);
+  cek('hapus massal: hapus=2, hilang=1', r.hapus === 2 && r.hilang === 1, r);
+  cek('h1 & h3 hilang, h2 tetap', !baris('Penghimpunan', 'h1') && !baris('Penghimpunan', 'h3') && !!baris('Penghimpunan', 'h2'));
+  let gagalTabel = null;
+  try { await rpc('apiHapusBaris', [TOKEN, { tabel: 'UangMuka', ids: ['u2'] }]); } catch (e) { gagalTabel = e.message; }
+  cek('hapus massal menolak tabel di luar daftar putih', !!gagalTabel, gagalTabel);
+
   console.log('\n' + ok + ' OK, ' + gagal + ' GAGAL');
   process.exit(gagal ? 1 : 0);
 })().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
