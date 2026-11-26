@@ -1710,8 +1710,7 @@ html[data-theme="dark"] .kll-pct{color:#94a3b8}
 
 /* Lipatan HP: .hp-lipat dipasang JS hanya di bawah 1024 px dan di luar mode
    Atur Layout. Kartu non-inti tinggal baris judul; menekan judulnya membuka
-   isinya. Chevron di ujung judul menandai kartu mana yang bisa dibuka. */
-.dgrid.hp-lipat .wc-b{display:none}
+   isinya. Chevron di ujung judul menandai kartu mana yang bisa dibuka. */.dgrid.hp-lipat .wc-b{display:none}
 .dgrid.hp-lipat .wc.hp-buka .wc-b{display:block}
 /* Kartu terlipat ramping: min-height 160 milik grid membuat baris judul
    membongkong ruang kosong di bawahnya. */
@@ -1720,6 +1719,10 @@ html[data-theme="dark"] .kll-pct{color:#94a3b8}
 .dgrid.hp-lipat .wc-t::after{content:"\25BE";margin-left:auto;color:var(--muted);font-size:13px;transition:transform .18s ease}
 .dgrid.hp-lipat .wc.hp-buka .wc-t::after{transform:rotate(180deg)}
 .dash-edit .dgrid.hp-lipat .wc-b{display:block}
+/* Mode Atur Layout: seluruh kepala kartu terlihat bisa ditekan, dan di layar
+   sentuh gerakan jari di kepala kartu menyeret kartu — bukan menggulir
+   halaman (tanpa ini, seretan di HP selalu kalah sama scroll). */
+.dash-edit .wc-h{cursor:grab;touch-action:none}
 /* Separempat tetap selebar layar di HP — aturan ini harus datang sesudah
    aturan kuart di atas supaya tidak ditimpanya (dua-duanya !important). */
 @media (max-width:1023px){

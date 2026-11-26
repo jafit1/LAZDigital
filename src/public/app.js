@@ -4992,7 +4992,12 @@ function dashShow(id){var lay=getDashLayout();lay.vis=lay.vis||{};lay.vis[id]=tr
 function wireDashDrag(){
   var grid=el('dgrid');if(!grid)return;
   grid.querySelectorAll('.wc').forEach(function(card){
-    var handle=card.querySelector('.drag-handle')||card.querySelector('.wc-h');
+    /* Seluruh kartu bisa ditekan untuk menyeret — kepala, teks judul, atau
+       padding kartu (kejadian dari anak seperti .wc-t mendengar di sini).
+       Tombol (✕), isi kartu (.wc-b), dan pegangan resize (.rz) tetap
+       dikecualikan oleh penjaga di bawah, jadi yang bisa menyeret hanya
+       bagian "kulit" kartu. */
+    var handle=card;
     if(!handle)return;
     handle.addEventListener('pointerdown',function(e){
       if(e.target.closest('.cbtn')||e.target.closest('.btn-dropdown')||e.target.closest('.dropdown-popover')||e.target.closest('button')||e.target.closest('a')||e.target.closest('.wc-b')||e.target.closest('.resize-handle')||e.target.closest('.rz')){
@@ -5021,6 +5026,12 @@ function wireDashDrag(){
       function onMove(ev){
         card.style.left=(ev.clientX-offsetX)+'px';
         card.style.top=(ev.clientY-offsetY)+'px';
+        /* Dekat tepi atas/bawah layar: halaman ikut digulir, supaya kartu
+           bisa dipindah ke baris yang jauh di luar layar tanpa melepas
+           tekanan. Tanpa ini, seretan ke bawah "tidak bisa". */
+        var vh=window.innerHeight;
+        if(ev.clientY>vh-70)window.scrollBy(0,14);
+        else if(ev.clientY<130)window.scrollBy(0,-14);
         var cards=Array.prototype.filter.call(grid.querySelectorAll('.wc'),function(c){return c!==card&&c!==placeholder;});
         var closest=null;var closestDist=Infinity;
         cards.forEach(function(c){
