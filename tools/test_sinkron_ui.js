@@ -82,13 +82,15 @@ cek('styles.css: .tn-brand (margin-bottom:0) dan .tn-right (border-top:none) dij
 const lencanaMobile = /@media\s*\(\s*max-width\s*:\s*1023px\s*\)[\s\S]*?#lencanaPeran[\s\S]*?#lencanaLingkup[\s\S]*?#lencanaDriver[^}]*display\s*:\s*none\s*!important/.test(cssBersih);
 cek('styles.css: #lencanaPeran, #lencanaLingkup, #lencanaDriver disembunyikan seragam di < 1024px', lencanaMobile);
 
-// 4. Grid KPI 3 kartu (Dashboard, Saldo, Saldo KL publik)
+// 4. Grid KPI (Dashboard, Saldo, Saldo KL publik)
 cek('styles.css: aturan 4 kolom .kpis-v2 mengecualikan .saldo-kpi dan .is-tiga',
   /\.kpis-v2:not\(\.kpi-media\):not\(\.kpi-surat\):not\(\.is-lima\):not\(\.is-tiga\):not\(\.saldo-kpi\)/.test(cssBersih));
 cek('styles.css: .kpis-v2.is-tiga mendefinisikan 3 kolom minmax(0,...) di layar lebar',
   /\.kpis-v2\.is-tiga\s*\{[^}]*grid-template-columns\s*:[^}]*minmax\(0\s*,/.test(cssBersih));
-cek('app.js: dashboard utama 3 kartu memakai kelas .kpis-v2.is-tiga',
-  /var kpis\s*=\s*['"]<div class="kpis-v2 is-tiga">['"]/.test(app));
+/* Opsi 10 (25 November 2026): dashboard utama 4 kartu — kelasnya .kpis-v2 polos,
+   dan .is-tiga tinggal jalan cadangan bila data RAPB tak tersedia. */
+cek('app.js: dashboard utama memakai .kpis-v2 dengan kelas bersyarat (4 kartu, cadangan .is-tiga)',
+  /var kpis='<div class="kpis-v2'\+\(rapbPct\?'':' is-tiga'\)/.test(app));
 cek('saldo-kl.html: kartu Belum LPJ tetap disembunyikan (tidak aktif)',
   !/\+kartu\(\s*['"]Belum LPJ['"]/.test(saldoKl));
 cek('saldo-kl.html: .kl-stat pada >= 720px memakai repeat(auto-fit, minmax(180px, 1fr)) bukan 4 kolom kaku',

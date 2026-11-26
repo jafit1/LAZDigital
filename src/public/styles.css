@@ -1670,6 +1670,83 @@ img, video { max-width: 100%; height: auto; }
   .resize-handle{display:none !important;}
 }
 
+/* ===== OPSI 10 HYBRID (keputusan pemilik, 25 November 2026) =====
+   Tata bawaan dasbor: baris berpasangan 62/38 yang konsisten di semua baris
+   (dulu lebar kartunya 455/809, 416x3, 632x2 — tak ada dua baris yang
+   kembar), satu kartu penuh (RAPB), dan satu baris empat kartu seperempat.
+   `flex-grow` disamakan 1 di semua berat supaya lebar kartu sebaris dan
+   ANTLAR BARIS tidak bergeser oleh sisa ruang. */
+.dgrid .wc[data-asym="kuart"]{
+  /* -13 px, bukan -12: 4x(25%-12)+gap=100% persis, dan pembulatan subpiksel
+     peramban memaksa kartu keempat turun baris. Empat kartu disisakan sisa
+     4 px yang dibagi rata oleh flex-grow, jadi lebar mereka tetap sama. */
+  flex:1 1 calc(25% - 13px) !important;
+  /* min-width 300 milik .dgrid .wc memaksa kartu keempat turun baris (basis
+     seperempat di grid 1240 px hanya ~298 px); yang dijaga cukup lebar isi. */
+  min-width:0 !important;
+}
+/* Basis PERSENTASE untuk pasangan 62/38 — menggantikan basis piksel 580/340
+   dengan grow 2:1 milik aturan lama di atas: lebar kartu kini proporsional,
+   konsisten di semua baris, dan kartu med tidak menumpang baris seperempat. */
+.dgrid .wc[data-asym="large"]{flex:1 1 calc(62% - 10px) !important}
+.dgrid .wc[data-asym="med"]{flex:1 1 calc(38% - 10px) !important}
+.dgrid .wc[data-asym="full"]{flex:1 1 100% !important}
+/* Layar sempit: SEMUA berat kembali selebar layar. Aturan ini harus sesudah
+   aturan berat di atas (sama-sama !important, urutan yang menang) —
+   kalaupun tidak, aturan 62/38 barunya akan ikut terbawa ke HP. */
+@media (max-width:1023px){
+  .dgrid .wc[data-asym="large"],.dgrid .wc[data-asym="med"],
+  .dgrid .wc[data-asym="kuart"],.dgrid .wc[data-asym="full"]{
+    flex-basis:100% !important;width:100% !important;min-width:0 !important;
+  }
+}
+/* Kartu monitoring dijamin punya tubuh: 7 kantor + tombol rincian. */
+.dgrid .wc[data-id="kll"]{min-height:240px}
+.kll-bar-track{height:5px;border-radius:99px;background:var(--surface2);margin-top:5px;overflow:hidden}
+.kll-bar-track span{display:block;height:100%;border-radius:99px;background:var(--accent);opacity:.75}
+.kll-pct{display:block;font-size:10.5px;font-weight:700;color:var(--muted);margin-top:1px}
+html[data-theme="dark"] .kll-bar-track{background:rgba(255,255,255,.08)}
+html[data-theme="dark"] .kll-pct{color:#94a3b8}
+
+/* Lipatan HP: .hp-lipat dipasang JS hanya di bawah 1024 px dan di luar mode
+   Atur Layout. Kartu non-inti tinggal baris judul; menekan judulnya membuka
+   isinya. Chevron di ujung judul menandai kartu mana yang bisa dibuka. */
+.dgrid.hp-lipat .wc-b{display:none}
+.dgrid.hp-lipat .wc.hp-buka .wc-b{display:block}
+/* Kartu terlipat ramping: min-height 160 milik grid membuat baris judul
+   membongkong ruang kosong di bawahnya. */
+.dgrid.hp-lipat .wc{min-height:0}
+.dgrid.hp-lipat .wc-h{cursor:pointer}
+.dgrid.hp-lipat .wc-t::after{content:"\25BE";margin-left:auto;color:var(--muted);font-size:13px;transition:transform .18s ease}
+.dgrid.hp-lipat .wc.hp-buka .wc-t::after{transform:rotate(180deg)}
+.dash-edit .dgrid.hp-lipat .wc-b{display:block}
+/* Separempat tetap selebar layar di HP — aturan ini harus datang sesudah
+   aturan kuart di atas supaya tidak ditimpanya (dua-duanya !important). */
+@media (max-width:1023px){
+  .dgrid .wc[data-asym="kuart"]{flex-basis:100% !important;width:100% !important;}
+}
+
+/* KPI dasbor di layar kecil: dua kolom, bukan satu kolom panjang. Hanya
+   milik .dash-wrap (dashboard); modul lain memakai aturan .kpis-v2 yang
+   sudah ada dan tidak ikut berubah. Grafik mini dikorbankan di sini supaya
+   kartunya pendek dan nominalnya tetap terbaca. */
+@media (max-width:640px){
+  .dash-wrap .kpis-v2{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .dash-wrap .kpi-v2{padding:14px 12px;border-radius:14px}
+  .dash-wrap .kpi-v2-value{font-size:20px;margin-bottom:6px}
+  .dash-wrap .kpi-v2:first-child .kpi-v2-value{font-size:24px}
+  .dash-wrap .kpi-v2-label{font-size:10px;letter-spacing:.2px}
+  .dash-wrap .kpi-v2-icon{width:28px;height:28px;border-radius:8px;font-size:13px}
+  .dash-wrap .kpi-v2-bottom{display:none}
+}
+/* Nominal KPI dasbor kembali ukuran desainnya (26 px, kartu utama 28).
+   Aturan seragam .kpi-v2-value{font-size:var(--u-nilai)} (20-22 px) memang
+   mengecilkan kartu angka di modul lain, tetapi di dasbor nominalnya justru
+   bacaan pertama - mengecil itulah yang terasa "fontnya berbeda". Keluarga
+   hurufnya dikunci eksplisit: sama dengan judul kartu (Plus Jakarta Sans). */
+.dash-wrap .kpi-v2-value{font-family:var(--head);font-size:26px;font-weight:800}
+.dash-wrap .kpi-v2:first-child .kpi-v2-value{font-size:28px}
+
 /* ===== DROPDOWN POPOVER FLEXIBILITY & CLIPPING FIX ===== */
 .toolbar, .dash-filters, .filter-box, .filter-row, .card-header, .custom-dropdown, .field, .opt-row, .table-controls, .card {
   overflow: visible !important;

@@ -3270,7 +3270,8 @@ var WIDGETS={
   activity:{t:'Aktivitas Transaksi Terakhir',dot:'#059669'},
   rhimpun:{t:'Penghimpunan Terbaru',dot:'#10b981'},
   rtasyaruf:{t:'Pentasyarufan Terbaru',dot:'#ec4899'},
-  rapb:{t:'Target & Realisasi RAPB 2026',dot:'#ea6a1e'}
+  rapb:{t:'Target & Realisasi RAPB 2026',dot:'#ea6a1e'},
+  kll:{t:'Monitoring Kantor Layanan',dot:'#f59e0b'}
 };
 function dashGreeting(){var h=new Date().getHours();return h<11?'Selamat pagi':h<15?'Selamat siang':h<19?'Selamat sore':'Selamat malam';}
 
@@ -3539,6 +3540,37 @@ function setDashLayananMode(mode) {
   var host = document.querySelector('.wc[data-id="program"] .wc-b');
   if (host) { host.innerHTML = layananWidget(window.DASH || {}); host.classList.remove('swap-in'); void host.offsetWidth; host.classList.add('swap-in'); }
   else renderDashboard(window.DASH);
+}
+
+/* ===== MONITORING KANTOR LAYANAN (Opsi 10; keputusan pemilik, 25 Nov 2026) =====
+   Setoran per kantor pada periode terpilih, dari d.detailLayanan — sumber yang
+   sama dengan hitungan dasbor, tanpa panggilan tambahan. "Penghimpunan Daerah"
+   bukan kantor sehingga tidak ikut. Status LPJ sengaja belum ditampilkan:
+   angka Belum LPJ masih menunggu koreksi kredit UMP tanpa nama kantor
+   (Rp536,3 juta) dan 147 baris LPJ DATA yang belum bertanggal. */
+function monitoringKllWidget(d){
+  var det=d.detailLayanan||{};var rows=[];
+  Object.keys(det).forEach(function(k){
+    if(k===LAYANAN_DAERAH)return;
+    var v=(det[k]&&det[k].himpun)||{};
+    if((v.total||0)>0||(v.n||0)>0)rows.push({nama:k,total:v.total||0,n:v.n||0});
+  });
+  if(!rows.length)return '<div class="muted" style="padding:18px 0;text-align:center">Belum ada setoran kantor pada periode ini.</div>';
+  rows.sort(function(a,b){return b.total-a.total||a.nama.localeCompare(b.nama);});
+  var tot=rows.reduce(function(s,r){return s+r.total;},0)||1;
+  var maks=rows[0].total||1;
+  var list=rows.slice(0,7).map(function(r){
+    var w=Math.round(r.total/maks*100);
+    var pct=Math.round(r.total/tot*100);
+    return '<div class="lrow baris-klik" onclick="go(\'kll\')" role="button" tabindex="0" title="Klik untuk Saldo KLL &amp; ULL">'+
+      '<div class="lav" style="background:'+avColor(r.nama)+'">'+(r.nama.trim()[0]||'?').toUpperCase()+'</div>'+
+      '<div class="lmain"><div class="lnm">'+esc(r.nama)+'</div>'+
+      '<div class="kll-bar-track"><span style="width:'+w+'%"></span></div></div>'+
+      '<div class="lamt">'+rp(r.total)+'<span class="kll-pct">'+pct+'%</span></div></div>';
+  }).join('');
+  var lain=rows.length-7;
+  return list+(lain>0?'<div class="muted" style="font-size:11.5px;text-align:center;padding:6px 0 0">+'+lain+' kantor lain pada periode ini</div>':'')+
+    '<button class="lay-more" onclick="go(\'kll\')">Saldo per kantor layanan &rarr;</button>';
 }
 
 /* Aturan penentuan KLL/ULL — HARUS sama persis dengan resolveLayananName()
@@ -4557,6 +4589,7 @@ function widgetBody(id,d){
   if(id==='fundraising')return barsWidget(d.byFundraising);
   if(id==='activity')return activityFeedWidget(d);
   if(id==='rapb')return renderRAPBWidget(d.rapb);
+  if(id==='kll')return monitoringKllWidget(d);
   if(id==='rhimpun')return listWidget(d.recentHimpun,'himpun');
   if(id==='rtasyaruf')return listWidget(d.recentTasyaruf,'tasyaruf');
   return '';
@@ -4648,9 +4681,10 @@ function renderRAPBWidget(rapb) {
     'style="transform:rotate(-90deg);transform-origin:center;transition:stroke-dasharray 1.5s ease"/>'+
     '<text x="50" y="47" text-anchor="middle" class="rapb-gauge-center">'+overallPct+'%</text>'+
     '<text x="50" y="62" text-anchor="middle" font-size="9" fill="'+gaugeCol+'" font-weight="600">Tercapai</text></svg>';
+  /* Judul kartu dan lencana "Tahun ..." dihilangkan: widget ini kini selalu
+     berada di dalam kartu dasbor ber-judul (.wc-h) atau modal ber-judul, dan
+     dulu judulnya muncul DOA KALI bertumpuk. Yang tersisa gauge dan barisnya. */
   return '<div class="rapb-widget">'+
-    '<div class="rapb-header"><div class="rapb-title">' + (typeof SVG_ICONS !== 'undefined' ? SVG_ICONS.target : '') + ' Target & Realisasi RAPB ' + rapb.year + '</div>'+
-    '<span class="rapb-badge">Tahun ' + rapb.year + '</span></div>'+
     '<div class="rapb-gauge-area">'+gaugeSvg+'<div class="rapb-bars">'+rows+'</div></div></div>';
 }
 
@@ -4739,25 +4773,39 @@ function renderDashboard(d){
   /* Saldo Kas & Bank sengaja tidak ditampilkan di ringkasan dasbor.
      Angkanya tetap bisa dilihat lewat menu Saldo Kas & Bank, dan widget
      Bank & Kas / Tunai & Non Tunai bisa dinyalakan lagi dari Atur Layout. */
-  var kpis='<div class="kpis-v2 is-tiga">'+
+
+  /* EMPAT KPI ala Opsi 10 (mockup rekomendasi-dashboard.html): Penghimpunan,
+     Pentasyarufan, Donatur & Mustahik, dan Target RAPB sebagai persentase
+     (pemilik, 25 Nov 2026). Kartu saldo tetap ditunda — angka saldo web masih
+     memakai lampiran dan belum benar. Bila data RAPB tidak tersedia (server
+     gagal / target kosong), baris kembali menjadi tiga kartu (.is-tiga). */
+  var rapbPct='';
+  if(d.rapb&&d.rapb.targetHimpun){
+    var _tt=0,_tr=0;
+    Object.keys(d.rapb.targetHimpun).forEach(function(k){_tt+=d.rapb.targetHimpun[k]||0;_tr+=(d.rapb.realisasiHimpun&&d.rapb.realisasiHimpun[k])||0;});
+    if(_tt>0)rapbPct=Math.round(_tr/_tt*100)+'%';
+  }
+  var kpis='<div class="kpis-v2'+(rapbPct?'':' is-tiga')+'">'+
     kpiCardV2('himpun','Total Penghimpunan',rp(d.totalHimpun),SVG_ICONS.arrowUp,'#ea6a1e',kpiSpark(d.series,'himpun'))+
     kpiCardV2('tasyaruf','Total Pentasyarufan',rp(d.totalTasyaruf),SVG_ICONS.arrowDown,'#3b82f6',kpiSpark(d.series,'tasyaruf'))+
     kpiCardV2('donatur','Donatur & Mustahik',totalPeople,SVG_ICONS.users,'#8b5cf6','')+
+    (rapbPct?kpiCardV2('rapb','Target RAPB '+((d.rapb&&d.rapb.year)||new Date().getFullYear()),rapbPct,SVG_ICONS.target,'#9333ea',''):'')+
     '</div>';
 
   var hint=window.DASH_EDIT?'<div class="edit-hint"><b>Mode Atur Layout Aktif</b> — Tarik <b>tepi atau sudut</b> kartu untuk mengubah lebar dan tinggi ke segala arah — klik ganda pada pegangan untuk mengembalikan ukuran asal. Seret header kartu (<b>⋮⋮</b>) untuk menyusun posisi, dan <b>✕</b> untuk menyembunyikan.</div>':'';
 
-  var cells=lay.order.filter(function(id){return WIDGETS[id]&&(!lay.vis||lay.vis[id]!==false);}).map(function(id){
+  /* Berat grid Opsi 10 (keputusan pemilik, 25 Nov 2026): pasangan 62/38 yang
+     konsisten di semua baris, satu kartu penuh (RAPB), dan satu baris empat
+     kartu seperempat. Setiap kelompok berjumlah pas satu baris, jadi tata
+     bawaan tidak menyisakan lubang bolong-bolong seperti tata lama.
+     Kartu RAPB yang datanya kosong tidak digambar sama sekali. */
+  var ASYM={tren:'large',kll:'large',activity:'large',pilar:'med',program:'med',jenis:'med',ashnaf:'kuart',rapb:'full',bank:'med',rekening:'med',fundraising:'kuart',rhimpun:'kuart',rtasyaruf:'kuart'};
+  var cells=lay.order.filter(function(id){return WIDGETS[id]&&(!lay.vis||lay.vis[id]!==false);}).filter(function(id){return id!=='rapb'||(d.rapb&&d.rapb.targetHimpun);}).map(function(id){
     var w=WIDGETS[id];
     var sz=(lay.size&&lay.size[id])||'md';
     var hz=(lay.height&&lay.height[id])||'auto';
-    
-    var asymWeight = 'med';
-    if (id === 'tren' || id === 'rekening' || id === 'pilar' || id === 'program' || id === 'fundraising' || id === 'activity' || id === 'rapb') {
-      asymWeight = 'large';
-    } else {
-      asymWeight = 'med';
-    }
+
+    var asymWeight=ASYM[id]||'med';
 
     /* Panah pindah kiri/kanan dan pill 33/50/66/100% dihapus: posisi kini diatur
        dengan menyeret header, ukuran dengan menarik tepi/sudut kartu.
@@ -4790,6 +4838,23 @@ function renderDashboard(d){
   var hiddenBar=(window.DASH_EDIT&&hidden.length)?'<div class="edit-hint" style="background:rgba(100,116,139,.08);border-color:rgba(100,116,139,.2);color:var(--ink2)">Tersembunyi: '+hidden.map(function(id){return '<button class="cbtn" style="width:auto;padding:0 8px;margin:0 3px" onclick="dashShow(\''+id+'\')">+ '+WIDGETS[id].t+'</button>';}).join('')+'</div>':'';
 
   el('content').innerHTML='<div class="dash-wrap view-anim'+(window.DASH_EDIT?' dash-edit':'')+'">'+hero+kpis+hint+hiddenBar+'<div class="dgrid" id="dgrid">'+cells+'</div></div>';
+  /* Opsi 10 di layar sempit: kartu non-inti terlipat jadi baris judul yang
+     diketuk (pemilik, 25 Nov 2026) — sepuluh kartu penuh bersusun membuat
+     halaman sangat panjang. Yang tetap terbuka: Tren Arus Dana, Pilar Program,
+     dan Monitoring Kantor Layanan. Mode Atur Layout di HP tidak melipat,
+     supaya kartu tetap bisa dilihat dan disusun. */
+  if(dashSempit()&&!window.DASH_EDIT){
+    var _grid=el('dgrid');
+    if(_grid){
+      _grid.classList.add('hp-lipat');
+      var BUKA={tren:1,pilar:1,kll:1};
+      _grid.querySelectorAll('.wc').forEach(function(w){
+        if(BUKA[w.getAttribute('data-id')])w.classList.add('hp-buka');
+        var h=w.querySelector('.wc-h');
+        if(h)h.addEventListener('click',function(){w.classList.toggle('hp-buka');});
+      });
+    }
+  }
   /* Kalender rekap dibangun ulang tiap render, jadi pemilih rentang dipasang lagi. */
   if (el('dash_rt_btn')){
     rentangPasang('dash_rt', {
@@ -4814,6 +4879,7 @@ function playAsymmetricalAnimation() {
   
   var largeEls = grid.querySelectorAll('.wc[data-asym="large"], .asym-large');
   var medEls = grid.querySelectorAll('.wc[data-asym="med"], .asym-med');
+  var kuartEls = grid.querySelectorAll('.wc[data-asym="kuart"], .asym-kuart');
   
   largeEls.forEach(function(el) {
     el.style.transition = 'none';
@@ -4840,6 +4906,14 @@ function playAsymmetricalAnimation() {
         el.style.transform = 'translateY(0)';
       });
     }, 100);
+
+    setTimeout(function() {
+      kuartEls.forEach(function(el) {
+        el.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease';
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      });
+    }, 150);
   });
 }
 
@@ -4848,48 +4922,31 @@ function dashSempit(){ try{ return window.matchMedia('(max-width:1023px)').match
 /* Memutar layar atau mengubah lebar jendela melewati 1024 px: dasbor digambar ulang agar ukuran tersimpan dipakai atau dilepas. */
 (function(){ try{ var mq=window.matchMedia('(max-width:1023px)'); var f=function(){ if(window.DASH && document.getElementById('dgrid') && !window.DASH_EDIT) renderDashboard(window.DASH); }; if(mq.addEventListener) mq.addEventListener('change',f); }catch(e){} })();
 function getDashLayout(){
+  /* Opsi 10 Hybrid (keputusan pemilik, 25 Nov 2026): tata bawaan baru dengan
+     pasangan 62/38, empat kartu seperempat, dan panel Monitoring Kantor
+     Layanan. `ver` menandai generasi tata; layout tersimpan dari generasi
+     lain DIBIARKAN pergi — tata baru berlaku untuk semua sekali, lalu Atur
+     Layout bekerja normal di atasnya (tersimpanannya kini memakai ver yang
+     sama). Urutan paksa lama (tren selalu ke akhir, rekening di depan)
+     tidak diperlukan lagi karena tren kini di depan dan rekening tersembunyi. */
+  var VER=3;
   var def={
-    order:['rekening','jenis','activity','pilar','bank','ashnaf','program','fundraising','rhimpun','rtasyaruf','tren','rapb'],
+    ver:VER,
+    order:['tren','pilar','kll','program','jenis','activity','ashnaf','fundraising','rhimpun','rtasyaruf','rapb','bank','rekening'],
     vis:{bank:false,rekening:false},
-    size:{rekening:'full',tren:'full',rapb:'full',jenis:'md',activity:'lg',pilar:'md',bank:'md',ashnaf:'md',program:'md',fundraising:'md',rhimpun:'md',rtasyaruf:'md'},
-    height:{rekening:'auto',tren:'auto',rapb:'auto',jenis:'auto',activity:'auto',pilar:'auto',bank:'auto',ashnaf:'auto',program:'auto',fundraising:'auto',rhimpun:'auto',rtasyaruf:'auto'},
+    size:{rekening:'med',tren:'full',rapb:'full',jenis:'md',activity:'lg',pilar:'md',bank:'md',ashnaf:'md',program:'md',fundraising:'md',rhimpun:'md',rtasyaruf:'md',kll:'lg'},
+    height:{kll:'sm'},
     dimensions:{}
   };
   try{
     var raw=localStorage.getItem('laz_dashlayout')||(typeof SETTINGS!=='undefined'&&SETTINGS.dashLayout)||'';
     if(raw){
       var s=(typeof raw==='string')?JSON.parse(raw):raw;
-      if(s&&s.order){
-        if(s.order.indexOf('rekening') === -1) {
-          s.order.unshift('rekening');
-        }
-        if(s.order.indexOf('fundraising') === -1) {
-          s.order.push('fundraising');
-        }
-        if(s.order.indexOf('pilar') === -1) {
-          s.order.push('pilar');
-        }
-        if(s.order.indexOf('rapb') === -1) {
-          s.order.push('rapb');
-        }
-        var trenIdx = s.order.indexOf('tren');
-        if(trenIdx >= 0) {
-          s.order.splice(trenIdx, 1);
-          s.order.push('tren');
-        }
-        
-        // Populate missing properties
-        s.size = s.size || {};
-        s.height = s.height || {};
-        s.dimensions = s.dimensions || {};
-        s.vis = s.vis || {};
-        
-        def.order.forEach(function(k) {
-          if (s.size[k] === undefined) s.size[k] = def.size[k] || 'md';
-          if (s.height[k] === undefined) s.height[k] = def.height[k] || 'auto';
-          if (s.vis[k] === undefined && def.vis[k] !== undefined) s.vis[k] = def.vis[k];
-        });
-        
+      if(s&&s.order&&s.ver===VER){
+        /* Widget yang baru ada di tata bawaan tapi belum ada di urutan
+           tersimpan ditambahkan di akhir, bukan hilang. */
+        def.order.forEach(function(k){ if(s.order.indexOf(k)<0)s.order.push(k); });
+        s.size=s.size||{};s.height=s.height||{};s.dimensions=s.dimensions||{};s.vis=s.vis||{};
         return s;
       }
     }
@@ -5104,6 +5161,7 @@ function openDashDetail(key){
   else if(key==='tren'){t='Tren Arus Dana (12 bulan)';c=areaChart(d.series);}
   else if(key==='jenis'){t='Jenis Dana Terhimpun';c=barsWidget(d.byJenis);}
   else if(key==='bank'){t='Bank & Kas';c=barsWidget(d.byBank);}
+  else if(key==='rapb'){t='Target & Realisasi RAPB '+((d.rapb&&d.rapb.year)||new Date().getFullYear());c=d.rapb?renderRAPBWidget(d.rapb):'<div class="muted" style="padding:20px 0;text-align:center">Belum ada data RAPB.</div>';}
   else if(key==='rhimpun'){t='Penghimpunan Terbaru';c=listWidget(d.recentHimpun,'himpun');}
   else if(key==='rtasyaruf'){t='Pentasyarufan Terbaru';c=listWidget(d.recentTasyaruf,'tasyaruf');}
   if(typeof openModal==='function')openModal(t,c,'<button class="btn btn-primary" onclick="closeModal()">Tutup</button>');

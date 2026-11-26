@@ -658,6 +658,7 @@ chromium`); pelarinya menampilkannya sebagai LEWAT beserta alasannya.
 | `test_toast_di_atas_modal.js` | z-index toast (10001) di atas modal-bg (10000), supaya pesan seperti "File terbaca" tidak tertutup modal impor |
 | `test_ump.js` | halaman `/ump.html?t=<token link KLL/ULL>` (Pengajuan UMP, acuan F-08-C dan F-08-D, baris Nomor dibuang): tiga langkah (kantor dan formulir, rincian, tanda tangan dan kirim); tanda tangan basah atau digital (gambar di layar, atau foto yang latar putihnya dihapus `bersihkanLatar`, disimpan sebagai PNG bening yang lolos `sahTtd`); kertas A4 digambar di kanvas dan dirakit `LZPdf` (diperkecil sendiri bila isinya melebihi satu lembar), lalu Simpan PDF atau Kirim lewat WhatsApp (`navigator.share` berkas, cadangan unduh plus `wa.me/?text=` tanpa nomor); formulir C dan D dipilih sendiri-sendiri di langkah pertama, VA BPD DIY Syariah pilihan bawaan tanpa nomor, rekening manual wajib lengkap, nominal dan teks dibersihkan, isian di-escape, penyimpanan hanya `localStorage` (kunci `laz_ump_v1`) dan tahan rusak, tanggal tidak terbawa dari draf lama; `apiDaftarKantorUmp` hanya menerima token `lhTokenKantor` dan hanya mengirim jenis dan nama kantor aktif; satu-satunya `fetch` halaman itu adalah daftar kantor, isian pengajuan tidak pernah dikirim |
 | `test_dash_fundraising_daerah.js` | "Capaian Fundraising" di dasbor hanya menghitung transaksi tingkat daerah; KLL/ULL tidak masuk |
+| `test_dasbor_opsi10.js` | dasbor Opsi 10 Hybrid: tata bawaan bergenerasi (Monitoring Kantor Layanan tampil walau layout tersimpan lama), pasangan 62/38 konsisten antar baris, empat kartu seperempat sebaris, RAPB penuh, HP 390 KPI dua kolom dan kartu non-inti terlipat jadi baris judul, tanpa luber |
 | `test_impor_lewati_duplikat.js` | bar "Lewati semua yang sudah ada" di pratinjau impor untuk baris duplikat; pesan sumber kosong tampil di dalam modal, bukan toast yang tertutup modal |
 | `test_link_harian.js` (bagian rekap) | link KLL/ULL punya tampilan Harian dan Bulanan (27 Oktober 2026): `apiPenghimpunanHarian` jenis kantor mengirim `rekap` satu bulan (bulan yang dipilih) per kantor, dirinci `zakat`/`infakTerikat`/`infakUmum`/`total`/`n`/`terakhir`/`terdaftar`, tanpa telepon/penanggung jawab; Lazismu Daerah Bantul ikut (urutan teratas, bukan "belum setor"), kantor lain diurut total tertinggi; layar Bulanan: bawaannya daftar baris ke bawah (kolom Zakat, Infak Terikat, Infak Umum, Total; di HP tiap kantor jadi kartu berlabel) dengan opsi Grid (`TAMPIL`, bertahan saat refresh), kantor belum setor di bawah dengan shortcut di atas, bulan dipilih lewat `<select id="lhBulan">` yang di-enhance `lz-ui.js` (bertema, bukan `input type="month"` bawaan browser); refresh 15 detik disamarkan lewat sidik isi (`SIDIK_ISI`), DOM tidak digambar ulang kalau data tak berubah, tetap di Bulanan saat halaman memperbarui sendiri |
 | `test_impor_tab_reset.js` | tab impor kembali ke Unggah File setiap modal dibuka; tab Tempel Teks atau Link yang terakhir dipakai tidak terbawa, sehingga unggah file tidak lagi ditolak dengan pesan "Masukkan teks data spreadsheet terlebih dahulu" |
@@ -1076,6 +1077,30 @@ Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
   sengaja tetap menyalin kode yang sudah ada, jadi jangan dipakai untuk
   rotasi. Daftar kode baru ada di `Downloads/kode-akses-kl-rotasi-2026-11-23.csv`
   dan TIDAK boleh masuk repo publik. Dijaga `tools/test_rotasi_kode.js`.
+
+- **Opsi 10 Hybrid di dasbor (25 November 2026, BELUM di-commit):** tata bawaan dasbor diganti
+  mengikuti `rekomendasi-dashboard.html` Opsi 10 yang dipilih pemilik. `getDashLayout` bergenerasi
+  (`ver:3`): layout tersimpan generasi lama DIBIARKAN pergi sekali (tata baru berlaku untuk semua,
+  keputusan pemilik), lalu Atur Layout bekerja normal di atasnya. Baris KPI jadi EMPAT kartu
+  (Penghimpunan, Pentasyarufan, Donatur & Mustahik, Target RAPB berupa persen; kelas `.kpis-v2`
+  polos, `.is-tiga` tinggal cadangan bila data RAPB kosong) — KPI "Saldo Kas & Bank" SENGAJA
+  belum dipasang karena saldo web masih memakai lampiran (Rp3.009.680.081) dan belum benar.
+  Widget baru `kll` "Monitoring Kantor Layanan" menampilkan setoran per kantor dari
+  `d.detailLayanan` TANPA status LPJ (angka Belum LPJ menunggu koreksi kredit UMP tanpa kantor
+  Rp536,3 juta dan 147 baris LPJ DATA tanpa tanggal). Berat grid: pasangan 62/38 dengan basis
+  PERSENTASE (menggantikan basis piksel 580/340 grow 2:1 yang membuat lebar antar baris tidak
+  konsisten: 455/809, 416x3, 632x2), empat kartu seperempat `[data-asym="kuart"]` dengan
+  `min-width:0 !important` dan basis `-13px` (bukan -12: pembulatan subpiksel memaksa kartu
+  keempat turun baris), RAPB `[data-asym="full"]`. Di layar sempit kartu non-inti TERLIPAT jadi
+  baris judul yang diketuk (`.dgrid.hp-lipat`, dibuka: Tren, Pilar, Monitoring; Atur Layout di
+  HP tidak melipat) dan KPI dasbor jadi DUA kolom (`@media 640px .dash-wrap .kpis-v2`, hanya
+  milik dashboard; grafik mini dikorbankan). Judul RAPB ganda di kartu dihilangkan
+  (`renderRAPBWidget` tanpa `rapb-header`). Alat potret `tools/potret_dasbor_hp.js` kini
+  mengukur `atas`, `isiTampil`, dan baris `kpi`, serta menerima `LZ_EXE` (peramban tertentu —
+  cache Playwright 1243 tidak ada di mesin pemilik; pakai chrome.exe, salinan headless shell
+  salah menggambar blur). Dijaga `tools/test_dasbor_opsi10.js` (18 cek), ditambah
+  `tools/test_dasbor_hp.js` (5 cek, layout uji memakai `ver:3`) dan cek kelas bersyarat KPI di
+  `tools/test_sinkron_ui.js`.
 
 **Sudah beres:** impor jurnal, modul Media, pemecahan izin Dashboard, deteksi
 kantor kembar beserta rincian transaksinya, pembersihan broadcast lama

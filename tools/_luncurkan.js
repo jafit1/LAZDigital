@@ -26,6 +26,10 @@ function internetBaik() {
 
 module.exports = function luncurkan(opsi) {
   const o = Object.assign({}, opsi || {});
+  /* LZ_EXE: bila cache Playwright di mesin ini tidak memuat versi yang diminta
+   * (mis. hanya ada chromium_headless_shell-1234/1248 padahal diminta 1243),
+   * semua uji tampilan bisa memakai peramban tertentu tanpa diubah satu-satu. */
+  if (process.env.LZ_EXE && !o.executablePath) o.executablePath = process.env.LZ_EXE;
   if (internetBaik()) return o;
   o.args = (o.args || []).concat(['--host-resolver-rules=' + HOST_LUAR.map((h) => 'MAP ' + h + ' ~NOTFOUND').join(', ')]);
   return o;

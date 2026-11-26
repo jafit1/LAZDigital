@@ -125,6 +125,7 @@ const DAFTAR = [
   { label: 'Logo SVG bilah menu, bergerak sekali per menu', berkas: 'test_logo_ui.js' },
   { label: 'Layar loading logo SVG (link publik dan setelah login)', berkas: 'test_muat_logo.js' },
   { label: 'Dasbor di HP: ukuran widget tersimpan tidak ikut', berkas: 'test_dasbor_hp.js' },
+  { label: 'Dasbor Opsi 10 Hybrid: tata baru, Monitoring KLL, lipatan HP', berkas: 'test_dasbor_opsi10.js' },
   { label: 'Teks terbaca di tema gelap', berkas: 'test_kontras_gelap.js' },
   /* sendiri: mengukur milidetik hitung tata letak, gagal palsu kalau prosesor
      dibagi dengan uji lain (terukur 78 ms lawan batas 45 ms saat bersamaan,

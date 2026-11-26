@@ -3,11 +3,13 @@
  * tinggi terkunci, isinya meluber. Penyebab: dimensions tersimpan ditulis sebagai gaya sebaris ber-!important, menang
  * atas aturan HP di stylesheet. Yang dijaga: di 390 px semua widget selebar layar tanpa tinggi terkunci dan tanpa
  * geser samping; di 1280 px ukuran tersimpan tetap dipakai; angka kartu Tunai turun ke baris sendiri di HP.
+ * Diperbarui 25 November 2026 (Opsi 10 Hybrid): tata bawaan baru bergenerasi (ver:3) dan Rekening yang semula
+ * tersembunyi kini diset tampil dalam layout uji — yang diuji tetap perilaku ukurannya, bukan visibilitas bawaan.
  *   node tools/test_dasbor_hp.js   (memakai tools/potret_dasbor_hp.js, engine asli atas data tiruan) */
 'use strict';
 const { spawnSync } = require('child_process');
 const path = require('path');
-const LAY = JSON.stringify({ order: ['rekening', 'jenis', 'activity', 'pilar', 'bank', 'ashnaf', 'program', 'fundraising', 'rhimpun', 'rtasyaruf', 'tren', 'rapb'], vis: {}, size: {}, height: {}, dimensions: { rekening: { pct: 60, height: 300 }, program: { pct: 60, height: 360 } } });
+const LAY = JSON.stringify({ ver: 3, order: ['tren', 'pilar', 'kll', 'program', 'rekening', 'jenis', 'activity', 'ashnaf', 'rapb', 'fundraising', 'rhimpun', 'rtasyaruf', 'bank'], vis: { bank: false }, size: {}, height: {}, dimensions: { rekening: { pct: 60, height: 300 } } });
 function potret(lebar) {
   const r = spawnSync(process.execPath, [path.join(__dirname, 'potret_dasbor_hp.js'), String(lebar), require('os').tmpdir()], { env: Object.assign({}, process.env, { LZ_LAY: LAY }), encoding: 'utf8', timeout: 90000 });
   if (r.status === 2) { console.log('Playwright belum ada, dilewati.'); process.exit(2); }
