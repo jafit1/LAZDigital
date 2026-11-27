@@ -370,7 +370,28 @@
   }
   .kl-kal-aksi:hover{border-color:var(--accent);color:var(--accent)}
 
-  /* --- dropdown dapat dicari: Tom Select, satu tema dengan halaman --- */
+  /* --- dropdown dapat dicari: Tom Select, satu tema dengan halaman.
+     Dropdown pendek (Ya/Tidak) TIDAK dipakaikan Tom Select — tetap tampil
+     sebagai kontrol jelas, bukan disembunyikan pustaka. --- */
+  select.kl-sel{
+    appearance:none;-webkit-appearance:none;height:30px;max-width:100%;
+    border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);
+    font:600 12px var(--sans);padding:0 24px 0 9px;cursor:pointer;outline:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa0a8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 7px center;background-size:10px;
+  }
+  select.kl-sel:hover{border-color:var(--accent)}
+  select.kl-sel.sudah{color:var(--green);border-color:rgba(26,162,96,.45);font-weight:800}
+  select.kl-sel.belum{color:var(--red);border-color:rgba(220,60,60,.4);font-weight:800}
+  select.kl-sel.ajuan{border-style:dashed;border-color:var(--accent)}
+  /* Status amil: dua tombol Ya/Tidak selalu tampak (tanpa dropdown). */
+  .kl-duo{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .kl-duo-b{height:30px;padding:0 12px;border:0;background:var(--surface);color:var(--text2);
+    font:700 12px var(--sans);cursor:pointer}
+  .kl-duo-b+.kl-duo-b{border-left:1px solid var(--border)}
+  .kl-duo-b.on{background:color-mix(in srgb,var(--green) 16%,var(--surface));color:var(--green)}
+  .kl-duo-b.on.belum{background:color-mix(in srgb,var(--red) 14%,var(--surface));color:var(--red)}
+  .kl-duo.ajuan{border-style:dashed;border-color:var(--accent)}
   .kl-ts{min-width:96px;font-family:var(--sans)}
   .kl-ts .ts-control,.ts-wrapper.single .ts-control{background:var(--surface);border:1px solid var(--border);
     border-radius:8px;color:var(--text);font:600 12px var(--sans);min-height:30px;padding:2px 9px;cursor:pointer}
@@ -390,6 +411,9 @@
   .ts-dropdown .no-results{color:var(--muted);font-size:12px}
   .kl-pec-baris .kl-ts{flex:1 1 90px;min-width:0}
   .kl-pec-baris .kl-ts .ts-control{min-height:32px;font-size:11.5px}
+  /* Pecahan UMP tampil sebagai baris penuh di bawah transaksinya. */
+  .kl-pec-row td{background:color-mix(in srgb,var(--accent) 3%,var(--surface));padding:10px 14px 12px}
+  .kl-pec-row .kl-pec-baris .kl-ts{flex:1 1 120px}
 
   /* --- editor tujuan UMP di tab LPJ: baris alokasi + pencari UMP --- */
   .kl-tujuan{margin-top:12px;padding:12px 14px;border:1px dashed var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
@@ -973,9 +997,7 @@ function isiHimpun(){
         +'<td>'+esc(x.metode||'—')+'</td>'
         +'<td class="n akhir">'+klRp(x.jumlah)+'<span class="sub">'+esc(persenTeks)+'</span></td>'
         +'<td><span class="kl-ambilwrap">'
-          +klSel([{v:'sudah',t:'Ya'},{v:'belum',t:'Tidak'}],ambil,
-            function(v,btn){ sinkronUbahAmil(kunci,v,btn); gambarIsi(); },
-            ambil==='sudah'?'sudah':ambil==='belum'?'belum':'',x.awalAmil||'',!!ajuanA)
+          +klDuo(kunci,ambil,x.awalAmil||'',!!ajuanA)
           +(ajuanA?'<button class="kl-batal" type="button" title="Kembalikan ke aturan awal" onclick="sinkronHapus(\'setoran\',\''+esc(kunci)+'\',\'diambilAmil\')">×</button>':'')+'</span></td></tr>';
     });
     h+='</tbody><tfoot><tr><td colspan="3">Total setoran</td><td class="n">'+klRp(st.reduce(function(a,x){return a+x.jumlah;},0))+'</td><td></td></tr></tfoot></table></div>';
@@ -989,7 +1011,19 @@ function isiHimpun(){
   return h;
 }
 
-/* Status amil: pilihan kantor menimpa aturan awal; sumber nilai tetap satu. */
+/* Status amil: pilihan kantor menimpa aturan awal; sumber nilai tetap satu.
+   Ya/Tidak ditampilkan sebagai dua tombol yang selalu tampak — lebih jelas
+   daripada dropdown untuk dua pilihan. */
+function klDuo(kunci,ambil,lama,ajuan){
+  return '<span class="kl-duo'+(ajuan?' ajuan':'')+'" data-lama="'+esc(lama)+'" data-kunci="'+esc(kunci)+'">'
+    +'<button type="button" class="kl-duo-b'+(ambil==='sudah'?' on':'')+'" data-lama="'+esc(lama)+'" onclick="klDuoTekan(\'sudah\',this)">Ya</button>'
+    +'<button type="button" class="kl-duo-b'+(ambil==='belum'?' on belum':'')+'" data-lama="'+esc(lama)+'" onclick="klDuoTekan(\'belum\',this)">Tidak</button></span>';
+}
+function klDuoTekan(v,btn){
+  var b=btn.parentNode;
+  sinkronUbahAmil(b.getAttribute('data-kunci'),v,btn);
+  gambarIsi();
+}
 function sinkronUbahAmil(kunci,nilai,el){
   var x=(DATA.setoran||[]).find(function(s){return s.kunci===kunci;});
   var awal=x?x.awalAmil:'';
@@ -1014,16 +1048,29 @@ function isiUmp(){
   if(!u.length){ h+='<div class="kl-kosong">Tidak ada uang muka.</div>'; }
   else{
     h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-      +'<th>Tanggal</th><th>Arah</th><th>Keterangan</th><th class="n">Jumlah</th><th>Pecahan pilar &amp; pemilik</th><th></th>'
+      +'<th>Tanggal</th><th>Arah</th><th>Keterangan</th><th class="n">Jumlah</th><th>Pecahan pilar</th><th></th>'
       +'</tr></thead><tbody>';
     u.forEach(function(x){
       var balik=x.arah==='kembali';
       var pec=umpPecahan(x.kunci);
       var berajuan=pec||ajuanBaris('ump',x.kunci,'nominal')||ajuanBaris('ump',x.kunci,'tanggal')||ajuanBaris('ump',x.kunci,'keterangan');
-      var selPec;
+      var ket=ketTampil(nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||''),x.layanan);
+      var tombolPec=pec
+        ?'<button class="kl-ganti" type="button" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos</button>'
+        :'<button class="kl-ganti" type="button" onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar</button>';
+      h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
+        +klTglHTML({nilai:nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal), lama:x.tanggal, jenis:'ump', kunci:x.kunci, ajuan:!!ajuanBaris('ump',x.kunci,'tanggal')})+'</td>'
+        +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Kembali':'Keluar')+'</span></td>'
+        +'<td class="w"><input class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(ket)+'" data-lama="'+esc(x.keterangan||'')+'"'
+        +' title="'+esc(x.keterangan||'')+'" placeholder="Uang muka&hellip;" onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'keterangan\',this.value,this)"></td>'
+        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('ump',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nilaiEfektif('ump',x.kunci,'nominal',x.nominal))+'" data-lama="'+x.nominal+'"'
+        +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
+        +'<td class="w">'+(pec?'<span class="sub">'+pec.length+' pos &middot; '+klRp(pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0))+'</span> ':'')+tombolPec+'</td>'
+        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'ump\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
+      /* Pos pecahan tampil di baris penuh DI BAWAH transaksinya — lega, mudah dibaca. */
       if(pec){
         var tot=pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0);
-        selPec='<div class="kl-pec">'
+        h+='<tr class="kl-pec-row"><td colspan="6"><div class="kl-pec">'
           +pec.map(function(p,i2){
             return '<div class="kl-pec-baris">'
               +klSel(pilarOpsi(p.pilar),p.pilar,function(v){umpPecUbah(x.kunci,i2,'pilar',v);})
@@ -1034,20 +1081,8 @@ function isiUmp(){
               +'</div>';
           }).join('')
           +'<div class="kl-pec-sum'+(tot>Number(x.nominal)?' more':'')+'">Total pecahan '+klRp(tot)+' dari '+klRp(x.nominal)+'</div>'
-          +'<button class="kl-ganti" type="button" style="margin-top:6px" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos pilar</button>'
-          +'</div>';
-      }else{
-        selPec='<button class="kl-ganti" type="button" onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar / pindahkan</button>';
+          +'</div></td></tr>';
       }
-      h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
-        +klTglHTML({nilai:nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal), lama:x.tanggal, jenis:'ump', kunci:x.kunci, ajuan:!!ajuanBaris('ump',x.kunci,'tanggal')})+'</td>'
-        +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Kembali':'Keluar')+'</span></td>'
-        +'<td class="w"><input class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||''))+'" data-lama="'+esc(x.keterangan||'')+'"'
-        +' placeholder="'+esc(x.keterangan||'—')+'" onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'keterangan\',this.value,this)"></td>'
-        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('ump',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nilaiEfektif('ump',x.kunci,'nominal',x.nominal))+'" data-lama="'+x.nominal+'"'
-        +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
-        +'<td class="w">'+selPec+'</td>'
-        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'ump\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
     });
     h+='</tbody><tfoot><tr><td colspan="3">Total catatan daerah</td><td class="n">'+klRp(r.umpKeluar+r.umpKembali)+'</td><td></td><td></td></tr></tfoot></table></div>';
   }
@@ -1057,15 +1092,22 @@ function isiUmp(){
     +'<input class="kl-edit" id="umpKet" placeholder="Keterangan" aria-label="Keterangan UMP baru">'
     +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'ump\')">+ Usulkan baris UMP</button>'
     +'</div>';
-  h+='<ul class="kl-catatan"><li><b>Pecah pilar</b>: satu UMP dipecah ke beberapa pos pilar; '
-    +'kepemilikannya bisa dipindah ke kantor KL/UL lain bila salah bagi — perhitungan otomatis berpindah: '
-    +'kantor asal berkurang, kantor tujuan bertambah.</li>'
+  h+='<ul class="kl-catatan"><li><b>Pecah pilar</b>: pos pecahan langsung terisi di bawah transaksinya — pilar &amp; kantor bisa diubah, nominal terisi otomatis sebesar UMP itu.</li>'
     +'<li>Sel bergaris oranye berarti ada ajuan; × membatalkannya. Semua ajuan masuk log saat <b>Simpan</b> ditekan.</li></ul>';
   h+='</div>';
   return h;
 }
+/* Keterangan untuk TAMPILAN: nama kantor di depan dilewati (data asli tetap
+   utuh) — "KLL Bambanglipuro Uang Muka Program Zakat" tampil "Uang Muka Program Zakat". */
+function ketTampil(ket,layanan){
+  var t=String(ket==null?'':ket);
+  if(layanan){ try{ t=t.replace(new RegExp('^\\s*'+String(layanan).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*','i'),''); }catch(e){} }
+  t=t.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i,'').trim();
+  return t;
+}
 function pilarOpsi(pilih){
   var ls=(DATA.pilarDaftar||[]).slice();
+  ['Zakat','Infak Umum','Amil'].forEach(function(p){ if(ls.indexOf(p)<0) ls.push(p); });
   if(pilih&&ls.indexOf(pilih)<0)ls.push(pilih);
   return [{v:'',t:'- pilar -'}].concat(ls.map(function(p){return {v:p,t:p};}));
 }
@@ -1100,9 +1142,13 @@ function aktifkanSel(akar){
     el.setAttribute('data-aktif','1');
     var reg=KL_OPSI[el.getAttribute('data-id')];
     el.addEventListener('change',(function(el,reg){ return function(){ if(reg&&reg.fn) reg.fn(el.value,el); }; })(el,reg));
-    if(window.TomSelect){
+    /* Dropdown pendek (Ya/Tidak) tetap select biasa yang jelas tampak;
+       yang panjang dipakaikan Tom Select dengan bar pencarian. Pencari
+       (kl-cari) selalu Tom Select supaya bar ketik & batas 10 usulan jalan. */
+    if(window.TomSelect && (el.classList.contains('kl-cari') || el.options.length>=5)){
       try{
-        new TomSelect(el,{ maxOptions:300, closeAfterSelect:true, hideSelected:false, placeholder:'- pilih -' });
+        new TomSelect(el,{ maxOptions:Number(el.getAttribute('data-max'))||300, closeAfterSelect:true,
+          hideSelected:false, placeholder:'- pilih -' });
       }catch(err){}
     }
   }
@@ -1117,11 +1163,12 @@ function pasangKelasTS(){
     ts.wrapper.classList.add('kl-ts');
   });
 }
-/* Pencari UMP untuk editor tujuan LPJ: dropdown + bar pencarian. */
-function klSelCari(idTeks,opsiCari,fn){
+/* Pencari UMP untuk editor tujuan LPJ: dropdown + bar pencarian, maksimal
+   10 usulan tampil (sisanya lewat ketik), bisa discroll. */
+function klSelCari(idTeks,opsiCari,fn,maks){
   var id='c'+(++KL_SEL_N);
   KL_OPSI[id]={opsi:opsiCari,fn:fn};
-  var h='<select class="kl-sel kl-cari" data-id="'+id+'">';
+  var h='<select class="kl-sel kl-cari" data-id="'+id+'"'+(maks?' data-max="'+maks+'"':'')+' aria-label="Cari UMP">';
   opsiCari.forEach(function(o){ h+='<option value="'+esc(o.v==null?'':o.v)+'">'+esc(o.t)+'</option>'; });
   return h+'</select>';
 }
@@ -1132,17 +1179,24 @@ function kantorSendiri(){
   for(var i=0;i<ls.length;i++) if(ls[i].indexOf(nm)>=0||nm.indexOf(ls[i])>=0) return ls[i];
   return nm;
 }
+/* Pilar default sesuai dana UMP: Zakat → Zakat, selainnya → Infak Umum. */
+function pilarDariDana(dana){
+  return String(dana||'')==='Zakat'?'Zakat':'Infak Umum';
+}
 function umpPecMulai(kunci){
   var x=(DATA.ump||[]).find(function(u2){return u2.kunci===kunci;});
   if(!x)return;
-  var pec=[{pilar:'',kantor:kantorSendiri(),nominal:Number(x.nominal)||0}];
+  var pec=[{pilar:pilarDariDana(x.dana),kantor:kantorSendiri(),nominal:Number(x.nominal)||0}];
   SINKRON.ajuan['ump|'+kunci+'|pecahan']={jenis:'ump',kunci:kunci,kolom:'pecahan',nilai:pec,catatan:'pecahan pilar',waktu:new Date().toISOString()};
   draftSimpan(); gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
 }
 function umpPecTambah(kunci){
   var pec=umpPecahan(kunci); if(!pec)return;
-  pec.push({pilar:'',kantor:kantorSendiri(),nominal:0});
+  var x=(DATA.ump||[]).find(function(u2){return u2.kunci===kunci;});
+  var tot=pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0);
+  var sisa=Math.max(0,(Number(x&&x.nominal)||0)-tot);
+  pec.push({pilar:pilarDariDana(x&&x.dana),kantor:kantorSendiri(),nominal:sisa});
   draftSimpan(); gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
 }
@@ -1249,11 +1303,13 @@ function hitungSemua(){
   var belumLPJ=(Number(r.umpKeluar)||0)-(Number(r.lpj)||0)-(Number(r.umpKembali)||0);
   var statusAmil={};
   daftarAjuan().forEach(function(a){ if(a.jenis==='setoran'&&a.kolom==='diambilAmil'&&a.nilai) statusAmil[a.kunci]=a.nilai; });
-  /* UMP per pilar: dari pecahan yang diajukan (tersimpan atau draft). */
+  /* UMP per pilar: dari pecahan yang diajukan (tersimpan atau draft).
+     Yang belum dipecah pilar dianggap sesuai dananya: Zakat → pilar Zakat,
+     selainnya → Infak Umum. */
   var umpPilar={};
-  var masukkanUmp=function(kunci,pec){
+  var masukkanUmp=function(dana,pec){
     (pec||[]).forEach(function(p){
-      var pl=p.pilar||'(belum ditetapkan)';
+      var pl=p.pilar||pilarDariDana(dana);
       if(!umpPilar[pl]) umpPilar[pl]=0;
       umpPilar[pl]+=(Number(p.nominal)||0);
     });
@@ -1262,11 +1318,12 @@ function hitungSemua(){
     if(u.arah==='kembali') return;
     var a=null;
     daftarAjuan().concat(DATA.ajuan||[]).forEach(function(x){ if(x.jenis==='ump'&&x.kolom==='pecahan'&&x.kunci===u.kunci) a=x.nilai; });
-    masukkanUmp(u.kunci,a);
+    masukkanUmp(u.dana,a);
   });
   var pilar={}, urutP=[];
   (DATA.setoran||[]).forEach(function(s){
-    var p=s.pilar||'(tanpa pilar)';
+    /* Tanpa pilar: masuk kelompok dananya — Zakat ke Zakat, sisanya Infak Umum. */
+    var p=s.pilar||pilarDariDana(s.dana);
     if(!pilar[p]){ pilar[p]={pilar:p,setoran:0,amil:0,sudah:0,belum:0,ump:0,n:0}; urutP.push(pilar[p]); }
     var b=pilar[p];
     var v=statusAmil[s.kunci]||s.awalAmil||'';
@@ -1274,10 +1331,15 @@ function hitungSemua(){
     if(v==='sudah') b.sudah+=s.amil; else if(v==='belum') b.belum+=s.amil;
     if(umpPilar[p]){ b.ump=umpPilar[p]; delete umpPilar[p]; }
   });
-  Object.keys(umpPilar).forEach(function(p){ if(p!=='(belum ditetapkan)'){ pilar[p]={pilar:p,setoran:0,amil:0,sudah:0,belum:0,ump:umpPilar[p],n:0}; urutP.push(pilar[p]); } });
-  var umpTanpaPilar=umpPilar['(belum ditetapkan)']||0;
+  /* Amil diperlakukan sebagai pilar sendiri, diletakkan paling bawah:
+     isinya hak amil yang diambil, dikurangi UMP yang mengambil porsi amil. */
+  var amilSudahTot=0;
+  urutP.forEach(function(b){ amilSudahTot+=b.sudah; });
+  var barisAmil={pilar:'Amil',setoran:0,amil:0,sudah:amilSudahTot,belum:0,ump:umpPilar['Amil']||0,n:0,barisAmil:true};
+  delete umpPilar['Amil'];
+  Object.keys(umpPilar).forEach(function(p){ pilar[p]={pilar:p,setoran:0,amil:0,sudah:0,belum:0,ump:umpPilar[p],n:0}; urutP.push(pilar[p]); });
   urutP.sort(function(a,b){ return b.setoran-a.setoran || b.pilar.localeCompare(a.pilar); });
-  return { r:r, umpNet:umpNet, saldoAkhir:saldoAkhir, belumLPJ:belumLPJ, pilar:urutP, umpTanpaPilar:umpTanpaPilar };
+  return { r:r, umpNet:umpNet, saldoAkhir:saldoAkhir, belumLPJ:belumLPJ, pilar:urutP, barisAmil:barisAmil };
 }
 function isiLpj(){
   var r=DATA.ringkas||{};
@@ -1410,21 +1472,22 @@ function editorTujuan(x){
     hub.urut.forEach(function(z){ if(z.kunci===k) u=z; });
     if(!u) return;
     baris++;
-    h+='<div class="kl-tujuan-baris"><span class="kl-tujuan-nm">'+klTgl(u.tanggal)+' &middot; '+esc(u.keterangan||'UMP')+'</span>'
+    h+='<div class="kl-tujuan-baris"><span class="kl-tujuan-nm">'+klTgl(u.tanggal)+' &middot; '+esc(ketTampil(u.keterangan,u.layanan))+'</span>'
       +'<input class="kl-edit n" type="number" min="0" step="1000" value="'+alok[k]+'" data-ump="'+esc(k)+'"'
       +' onchange="lpjTujuanUbah(\''+esc(kunci)+'\',\''+esc(k)+'\',this.value)" aria-label="Nominal alokasi">'
       +'<button class="kl-batal" type="button" title="Hapus alokasi ini" onclick="lpjTujuanUbah(\''+esc(kunci)+'\',\''+esc(k)+'\',\'\')">&times;</button></div>';
   });
-  /* Pencari UMP yang belum dialokasikan: dropdown + bar pencarian. */
+  /* Pencari UMP: hanya yang BELUM LENGKAP LPJ-nya (sisa > 0), maksimal 10
+     usulan tampil sekaligus (sisanya diketik), detail kekurangannya di opsi. */
   var sisa=totalLpj-jum;
-  var opsiU=hub.urut.filter(function(u){ return alok[u.kunci]===undefined; });
+  var opsiU=hub.urut.filter(function(u){ return (Number(hub.sisa[u.kunci])||0)>0; }).slice(0,20);
   if(opsiU.length){
     h+='<div class="kl-tujuan-tambah">'+klSelCari('ump',opsiU.map(function(u){
-      return { v:u.kunci, t:klTgl(u.tanggal)+' · '+esc(u.keterangan||'UMP')+' · '+klRp(u.nominal) };
+      return { v:u.kunci, t:klTgl(u.tanggal)+' · '+ketTampil(u.keterangan,u.layanan)+' · '+klRp(u.nominal)+' — sisa belum LPJ '+klRp(hub.sisa[u.kunci]) };
     }),function(v){
       if(!v) return;
       lpjTujuanTambah(kunci,v,sisa>0?sisa:0);
-    })+'</div>';
+    },10)+'</div>';
   }
   h+='<div class="kl-tujuan-aksi">'
     +'<button class="kl-batal" type="button" onclick="lpjTujuanOtomatis(\''+esc(kunci)+'\')">Pakai otomatis (urut tanggal)</button>'
@@ -1476,36 +1539,38 @@ function isiRingkas(){
     +'<span class="kl-alur-v">'+klRp(belumLPJ)+'</span></div></div>'
     +'<ul class="kl-catatan"><li>Artinya: uang muka sebesar ini <b>belum punya pertanggungjawaban (LPJ)</b>. Kalau LPJ datang, angka ini turun.</li></ul></div>';
 
-  /* ===== 3. DETAIL PER PILAR - amil + UMP pilar yang diajukan ===== */
+  /* ===== 3. DETAIL PER PILAR - Pilar, Setoran, Amil diambil, UMP, Saldo Akhir.
+     Amil diperlakukan seperti pilar dan diletakkan di baris paling bawah. ===== */
   var urut=H.pilar;
-  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Detail per pilar - amil &amp; UMP'
-    +'<span class="n">'+urut.length+' pilar</span></div>';
-  if(!urut.length && !H.umpTanpaPilar){ h+='<div class="kl-kosong">Belum ada setoran.</div>'; }
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Detail per pilar - setoran, amil &amp; UMP'
+    +'<span class="n">'+(urut.length+(H.barisAmil.sudah||H.barisAmil.ump?1:0))+' baris</span></div>';
+  if(!urut.length && !H.barisAmil.sudah && !H.barisAmil.ump){ h+='<div class="kl-kosong">Belum ada setoran.</div>'; }
   else{
     h+='<div class="kl-tw"><table class="kl-tbl kecil kl-pilar"><thead><tr>'
-      +'<th>Pilar</th><th class="n">Setoran</th><th class="n">Hak amil</th><th class="n">Amil diambil</th><th class="n">Amil belum diambil</th><th class="n">UMP pilar</th><th class="n">Saldo pilar</th>'
+      +'<th>Pilar</th><th class="n">Setoran</th><th class="n">Amil diambil</th><th class="n">UMP</th><th class="n">Saldo akhir</th>'
       +'</tr></thead><tbody>';
-    urut.forEach(function(b){
+    var tampilPilar=urut.slice();
+    if(H.barisAmil.sudah||H.barisAmil.ump) tampilPilar.push(H.barisAmil);
+    tampilPilar.forEach(function(b){
       var sub=b.n?'<span class="sub">'+b.n+' setoran</span>':'';
-      var sisa=b.setoran-b.amil-b.ump;
-      h+='<tr><td class="pil">'+esc(b.pilar)+sub+'</td>'
-        +'<td class="n">'+klRp(b.setoran)+'</td>'
-        +'<td class="n">'+klRp(b.amil)+'</td>'
+      var sisa=b.setoran-b.sudah-b.ump;
+      h+='<tr'+(b.barisAmil?' class="kl-amil-row"':'')+'><td class="pil">'+esc(b.pilar)+sub+'</td>'
+        +'<td class="n">'+(b.setoran?klRp(b.setoran):(b.barisAmil?'<span style="color:var(--muted)">—</span>':'0'))+'</td>'
         +'<td class="n" style="color:var(--green)">'+klRp(b.sudah)+'</td>'
-        +'<td class="n" style="color:'+(b.belum?'var(--red)':'var(--muted)')+'">'+klRp(b.belum)+'</td>'
         +'<td class="n"'+(b.ump?'':' style="color:var(--muted)"')+'>'+klRp(b.ump)+'</td>'
         +'<td class="n akhir">'+klRp(sisa)+'</td></tr>';
     });
-    var tS=0,tA=0,tSd=0,tBl=0,tU=0;
-    urut.forEach(function(b){ tS+=b.setoran; tA+=b.amil; tSd+=b.sudah; tBl+=b.belum; tU+=b.ump; });
-    var tUmpTanpa=H.umpTanpaPilar;
-    h+='</tbody><tfoot><tr><td>Total</td><td class="n">'+klRp(tS)+'</td><td class="n">'+klRp(tA)+'</td>'
-      +'<td class="n">'+klRp(tSd)+'</td><td class="n">'+klRp(tBl)+'</td><td class="n">'+klRp(tU+tUmpTanpa)+'</td><td class="n">'+klRp(tS-tA-tU-tUmpTanpa)+'</td></tr>';
-    if(tUmpTanpa)
-      h+='<tr><td colspan="5">UMP yang belum dipecah ke pilar</td><td class="n" style="color:var(--red);font-weight:800">'+klRp(tUmpTanpa)+'</td><td class="n"></td></tr>';
+    var tS=0,tSd=0,tU=0;
+    tampilPilar.forEach(function(b){ tS+=b.setoran; tSd+=b.sudah; tU+=b.ump; });
+    h+='</tbody><tfoot><tr><td>Total</td><td class="n">'+klRp(tS)+'</td><td class="n">'+klRp(tSd)+'</td><td class="n">'+klRp(tU)+'</td>'
+      +'<td class="n">'+klRp(tS-tSd-tU)+'</td></tr>';
     h+='</tfoot></table></div>';
-    h+='<ul class="kl-catatan"><li><b>Saldo pilar</b> = setoran &minus; hak amil &minus; UMP pilar itu. UMP masuk pilar hanya jika sudah dipecah lewat <b>Pecah pilar</b> di tab UMP (sesuai ajuan kantor/daerah).</li>'
-      +'<li>Hijau = hak amil sudah diambil, merah = belum diambil (aturan awal + ajuan kantor).</li></ul>';
+    h+='<ul class="kl-catatan"><li><b>Saldo akhir pilar</b> = setoran &minus; amil yang diambil &minus; UMP pilar itu. '
+      +'Hak amil yang belum diambil tidak dipisahkan di sini — mengikuti keputusan penghimpunan awal (aturan awal + ajuan kantor).</li>'
+      +'<li><b>Amil</b> di baris paling bawah: hak amil yang sudah diambil, dikurangi UMP yang mengambil porsi amil. '
+      +'Setoran tanpa pilar masuk kelompok dananya: Zakat ke <b>Zakat</b>, sisanya ke <b>Infak Umum</b>. '
+      +'Karena kolom di sini memakai amil yang <i>sudah diambil</i>, penjumlahannya bisa berbeda dengan SALDO AKHIR di atas '
+      +'(yang memotong seluruh hak amil sejak awal) — selisihnya tepat hak amil yang belum diambil.</li></ul>';
   }
   h+='</div>';
   return h;

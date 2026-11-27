@@ -57,14 +57,17 @@ const srv = http.createServer(async (req, res) => {
   await p.waitForSelector('.kl-hero', { timeout: 15000 });
   cek('Kode akses (yang sama dengan cek saldo) membuka halaman sinkron', await p.evaluate(() => !!document.querySelector('.kl-hero')));
   cek('Lima tab tampil: Penghimpunan / UMP / LPJ / Ringkasan / Log', await p.evaluate(() => [...document.querySelectorAll('.kl-tab')].map((t) => t.getAttribute('data-t')).join(',') === 'himpun,ump,lpj,ringkas,log'));
-  cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('select.kl-sel'); }));
+  cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('.kl-duo'); }));
   cek('Aturan awal tertera: semua diambil amil kecuali kemanusiaan', await p.evaluate(() => /kecuali pilar kemanusiaan/i.test(document.getElementById('klIsi').textContent)));
 
-  const tsAmil = await p.evaluate(() => { const s = document.querySelector('select.kl-sel'); return !!s && !!s.tomselect && s.tomselect.options ? Object.keys(s.tomselect.options).length : 0; });
-  cek('Dropdown amil memakai Tom Select (dropdown + bar cari): hanya Ya dan Tidak', tsAmil === 2, tsAmil);
-  await p.evaluate(() => document.querySelector('select.kl-sel').tomselect.setValue('belum'));
+  const tsAmil = await p.evaluate(() => { const s = document.querySelector('select.kl-sel'); return s ? 'ada' : 'tidak'; });
+  cek('Status amil kembali tampil jelas: dua tombol Ya/Tidak (tanpa dropdown, tanpa Tom Select)', await p.evaluate(() => {
+    const duo = document.querySelectorAll('.kl-duo .kl-duo-b');
+    return duo.length >= 2 && duo[0].textContent === 'Ya' && duo[1].textContent === 'Tidak' && !document.querySelector('#klIsi select.kl-sel');
+  }), tsAmil);
+  await p.evaluate(() => document.querySelector('#klIsi .kl-duo-b:last-child').click());
   cek('Pilih "Tidak" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
-  cek('Tanda ajuan: sel jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-ts.ajuan, .kl-sel.ajuan, .kl-edit.ajuan')));
+  cek('Tanda ajuan: kelompok tombol jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-duo.ajuan, .kl-ts.ajuan, .kl-sel.ajuan, .kl-edit.ajuan')));
 
   await p.evaluate(() => { Object.keys(SINKRON.ajuan).forEach((k) => { if (/\|pecahan$/.test(k)) delete SINKRON.ajuan[k]; }); draftSimpan(); gambarIsi(); const b = document.getElementById('klSavebar'); if (b) b.outerHTML = saveBar(); });
   await p.click('#klSimpanBtn');
@@ -76,13 +79,12 @@ const srv = http.createServer(async (req, res) => {
   cek('Tab UMP: tombol "Pecah pilar / pindahkan" tersedia per baris', await p.evaluate(() => /Pecah pilar/.test(document.getElementById('klIsi').textContent)));
   await p.evaluate(() => { const b = [...document.querySelectorAll('.kl-ganti')].find((x) => /Pecah pilar/.test(x.textContent)); if (b) b.click(); });
   cek('Pecah UMP: baris pilar + kantor + nominal muncul dan Simpan menyala', await p.evaluate(() => { const pec = document.querySelector('.kl-pec'); const b = document.getElementById('klSimpanBtn'); return !!pec && pec.querySelectorAll('select.kl-sel').length >= 2 && b && !b.disabled; }));
-  cek('Pecah UMP: dropdown pilar & kantor (KL/UL) Tom Select dengan bar cari & terisi', await p.evaluate(() => {
+  cek('Pecah UMP: dropdown pilar & kantor (KL/UL) terisi, yang panjang pakai Tom Select bar cari', await p.evaluate(() => {
     const b = [...document.querySelectorAll('.kl-pec select.kl-sel')];
     if (b.length < 2) return false;
-    const pilar = Object.keys(b[0].tomselect.options).map((k) => b[0].tomselect.options[k].text).join('|');
-    const kantor = Object.keys(b[1].tomselect.options).map((k) => b[1].tomselect.options[k].text).join('|');
-    const adaCari = b[0].tomselect.control_input || b[0].tomselect.control_input === null;
-    return /Pendidikan|Kesehatan/.test(pilar) && /Kota Contoh/.test(kantor) && !!b[0].tomselect;
+    const teks = (s) => s.tomselect ? Object.keys(s.tomselect.options).map((k) => s.tomselect.options[k].text).join('|') : [...s.options].map((o) => o.text).join('|');
+    const pilar = teks(b[0]), kantor = teks(b[1]);
+    return /Pendidikan|Kesehatan/.test(pilar) && /Kota Contoh/.test(kantor) && (b[0].tomselect ? true : b[0].options.length < 5);
   }));
 
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[4].click());
@@ -127,10 +129,12 @@ const srv = http.createServer(async (req, res) => {
   cek('Tab LPJ: kolom kiri "Hubungkan UMP" ada di tabel catatan', await p.evaluate(() =>
     [...document.querySelectorAll('#klIsi th')].some((t) => /Hubungkan UMP/.test(t.textContent))));
   await p.evaluate(() => { const b = [...document.querySelectorAll('#klIsi .kl-ganti')].find((x) => /Ubah tujuan/.test(x.textContent)); if (b) b.click(); });
-  cek('Tab LPJ: editor "Ubah tujuan UMP" terbuka dengan pencari UMP (dropdown + bar cari)', await p.evaluate(() => {
+  cek('Tab LPJ: editor "Ubah tujuan UMP" membuka pencari dengan maksimal 10 usulan UMP yang belum lengkap LPJ-nya', await p.evaluate(() => {
     const ed = document.querySelector('.kl-tujuan');
     const sel = ed && ed.querySelector('.kl-tujuan-tambah select');
-    return !!ed && !!sel && !!sel.tomselect && /Pakai otomatis/.test(ed.textContent);
+    if (!ed || !sel || !sel.tomselect) return false;
+    const n = Object.keys(sel.tomselect.options).length;
+    return n <= 10 && n >= 1 && sel.getAttribute('data-max') === '10' && /sisa belum LPJ/.test(sel.tomselect.options[Object.keys(sel.tomselect.options)[0]].text) && /Pakai otomatis/.test(ed.textContent);
   }));
   await p.evaluate(() => {
     const sel = document.querySelector('.kl-tujuan-tambah select');
@@ -156,15 +160,18 @@ const srv = http.createServer(async (req, res) => {
     const hasil = [...document.querySelectorAll('#klIsi .kl-alur-hasil .kl-alur-v')].map((e) => e.textContent.replace(/\D/g, ''));
     return hasil.includes(angka);
   }));
-  cek('Ringkasan: tabel pilar punya kolom UMP pilar & Saldo pilar', await p.evaluate(() => {
-    const th = [...document.querySelectorAll('#klIsi .kl-pilar th')].map((e) => e.textContent);
-    return th.some((x) => /UMP pilar/.test(x)) && th.some((x) => /Saldo pilar/.test(x));
-  }));
+  const thPilar = await p.evaluate(() => [...document.querySelectorAll('#klIsi .kl-pilar th')].map((e) => e.textContent).join('|'));
+  cek('Ringkasan: tabel pilar punya kolom Setoran, Amil diambil, UMP, Saldo akhir (tanpa kolom belum diambil)',
+    thPilar === 'Pilar|Setoran|Amil diambil|UMP|Saldo akhir', thPilar);
+  const pilBaris = await p.evaluate(() => [...document.querySelectorAll('#klIsi .kl-pilar tbody td.pil')].map((e) => e.textContent));
+  const adaInfakUmum = await p.evaluate(() => /Infak Umum/.test(document.getElementById('klIsi').textContent));
+  cek('Ringkasan: baris Amil di bawah + tanpa pilar masuk Infak Umum/Zakat',
+    pilBaris.some((x) => /^Amil/.test(x)) && adaInfakUmum, pilBaris);
   cek('Ringkasan: bagian merah "Belum LPJ" tersendiri (LPJ tidak mengurangi saldo)',
     tR2.split('Belum LPJ').length > 1 && /BELUM LPJ/.test(tR2) && /LPJ tidak mengurangi saldo/.test(tR2), tR2.slice(0, 900));
-  cek('Ringkasan: detail per pilar termasuk bagian amil (diambil / belum)', await p.evaluate(() => {
+  cek('Ringkasan: detail per pilar - amil yang diambil saja, tanpa kolom "belum diambil"', await p.evaluate(() => {
     const t = document.getElementById('klIsi').textContent;
-    return /Amil diambil/.test(t) && /Amil belum diambil/.test(t) && /Saldo pilar/.test(t) && !!document.querySelector('#klIsi .kl-pilar tbody tr');
+    return /Amil diambil/.test(t) && !/Amil belum diambil/.test(t) && !!document.querySelector('#klIsi .kl-pilar tbody tr');
   }));
 
   /* --- sinkron otomatis: kode yang sama di dua sesi --- */
