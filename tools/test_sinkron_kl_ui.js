@@ -57,12 +57,15 @@ const srv = http.createServer(async (req, res) => {
   await p.waitForSelector('.kl-hero', { timeout: 15000 });
   cek('Kode akses (yang sama dengan cek saldo) membuka halaman sinkron', await p.evaluate(() => !!document.querySelector('.kl-hero')));
   cek('Lima tab tampil: Penghimpunan / UMP / LPJ / Ringkasan / Log', await p.evaluate(() => [...document.querySelectorAll('.kl-tab')].map((t) => t.getAttribute('data-t')).join(',') === 'himpun,ump,lpj,ringkas,log'));
-  cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('.kl-ambil'); }));
+  cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('.kl-sel'); }));
   cek('Aturan awal tertera: semua diambil amil kecuali kemanusiaan', await p.evaluate(() => /kecuali pilar kemanusiaan/i.test(document.getElementById('klIsi').textContent)));
 
-  await p.selectOption('.kl-ambil', 'belum');
-  cek('Pilih "Belum" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
-  cek('Tanda ajuan: sel jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-ambil.ajuan, .kl-edit.ajuan')));
+  await p.click('#klIsi .kl-tbl .kl-sel');
+  await p.waitForSelector('.kl-selmenu', { timeout: 4000 });
+  cek('Dropdown amil bertema: pilihan hanya Ya dan Tidak', await p.evaluate(() => { const o = [...document.querySelectorAll('.kl-selopsi')]; return o.length === 2 && /Ya/.test(o[0].textContent) && /Tidak/.test(o[1].textContent); }));
+  await p.click('.kl-selopsi[data-v="belum"]');
+  cek('Pilih "Tidak" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
+  cek('Tanda ajuan: sel jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-sel.ajuan, .kl-edit.ajuan')));
 
   await p.evaluate(() => { Object.keys(SINKRON.ajuan).forEach((k) => { if (/\|pecahan$/.test(k)) delete SINKRON.ajuan[k]; }); draftSimpan(); gambarIsi(); const b = document.getElementById('klSavebar'); if (b) b.outerHTML = saveBar(); });
   await p.click('#klSimpanBtn');
@@ -73,8 +76,18 @@ const srv = http.createServer(async (req, res) => {
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[1].click());
   cek('Tab UMP: tombol "Pecah pilar / pindahkan" tersedia per baris', await p.evaluate(() => /Pecah pilar/.test(document.getElementById('klIsi').textContent)));
   await p.evaluate(() => { const b = [...document.querySelectorAll('.kl-ganti')].find((x) => /Pecah pilar/.test(x.textContent)); if (b) b.click(); });
-  cek('Pecah UMP: baris pilar + kantor + nominal muncul dan Simpan menyala', await p.evaluate(() => { const pec = document.querySelector('.kl-pec'); const b = document.getElementById('klSimpanBtn'); return !!pec && pec.querySelectorAll('select').length >= 2 && b && !b.disabled; }));
-  cek('Pecah UMP: dropdown pilar & kantor (KL/UL) terisi', await p.evaluate(() => { const s = [...document.querySelectorAll('.kl-pec select')]; return s.length >= 2 && s.some((x) => [...x.options].some((o) => /Pendidikan|Kesehatan/.test(o.textContent))) && s.some((x) => [...x.options].some((o) => /Kota Contoh/.test(o.textContent))); }));
+  cek('Pecah UMP: baris pilar + kantor + nominal muncul dan Simpan menyala', await p.evaluate(() => { const pec = document.querySelector('.kl-pec'); const b = document.getElementById('klSimpanBtn'); return !!pec && pec.querySelectorAll('.kl-sel').length >= 2 && b && !b.disabled; }));
+  cek('Pecah UMP: dropdown pilar & kantor (KL/UL) bertema & terisi', await p.evaluate(() => {
+    const b = [...document.querySelectorAll('.kl-pec .kl-sel')];
+    if (b.length < 2) return false;
+    b[0].click();
+    const pilar = [...document.querySelectorAll('.kl-selopsi')].map((o) => o.textContent).join('|');
+    klMenuTutup();
+    b[1].click();
+    const kantor = [...document.querySelectorAll('.kl-selopsi')].map((o) => o.textContent).join('|');
+    klMenuTutup();
+    return /Pendidikan|Kesehatan/.test(pilar) && /Kota Contoh/.test(kantor);
+  }));
 
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[4].click());
   cek('Tab Log menampilkan catatan ajuan', await p.evaluate(() => /ajuan baru/.test(document.getElementById('klIsi').textContent)));
