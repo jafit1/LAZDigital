@@ -85,12 +85,27 @@ const srv = http.createServer(async (req, res) => {
     const teks = s.tomselect ? Object.keys(s.tomselect.options).map((k) => s.tomselect.options[k].text).join('|') : [...s.options].map((o) => o.text).join('|');
     return /Pendidikan|Kesehatan/.test(teks) && /Lainnya/.test(teks) && !document.querySelector('.kl-pec-kantor');
   }));
+  cek('Pecah UMP: kolom Keterangan dengan dropdown "Uang Muka Program" untuk semua pilar + Lainnya', await p.evaluate(() => {
+    const s = document.querySelector('.kl-pec-ket select.kl-sel'); if (!s) return false;
+    const teks = s.tomselect ? Object.keys(s.tomselect.options).map((k) => s.tomselect.options[k].text).join('|') : [...s.options].map((o) => o.text).join('|');
+    return /Uang Muka Program Pendidikan/.test(teks) && /Uang Muka Program Kesehatan/.test(teks) && /Uang Muka Program Zakat/.test(teks) && /Lainnya/.test(teks);
+  }));
+  await p.evaluate(() => { const s = document.querySelector('.kl-pec-ket select.kl-sel'); if (s.tomselect) s.tomselect.setValue('__ketlain'); else { s.value = '__ketlain'; s.dispatchEvent(new Event('change')); } });
+  await p.waitForTimeout(300);
+  await p.fill('.kl-pec-ket-lain', 'Keterangan Pecahan Manual');
+  await p.evaluate(() => document.querySelector('.kl-pec-ket-lain').dispatchEvent(new Event('change')));
+  cek('Pecah UMP: keterangan tulisan sendiri tersimpan di ajuan pecahan', await p.evaluate(() => { const a = SINKRON.ajuan[Object.keys(SINKRON.ajuan).find((k) => /\|pecahan$/.test(k))]; return !!a && a.nilai[0].ket === 'Keterangan Pecahan Manual'; }));
   await p.evaluate(() => { const s = document.querySelector('.kl-pec-baris select.kl-sel'); if (s.tomselect) s.tomselect.setValue('__lain'); else { s.value = '__lain'; s.dispatchEvent(new Event('change')); } });
   await p.waitForTimeout(300);
   cek('Pecah UMP: pilih "Lainnya" memunculkan kolom tulis manual', await p.evaluate(() => !!document.querySelector('.kl-pec-lain')));
   await p.fill('.kl-pec-lain', 'Pos Uji Manual'); await p.evaluate(() => document.querySelector('.kl-pec-lain').dispatchEvent(new Event('change')));
   cek('Pecah UMP: nama pilar tulisan sendiri tersimpan di ajuan pecahan', await p.evaluate(() => { const a = SINKRON.ajuan[Object.keys(SINKRON.ajuan).find((k) => /\|pecahan$/.test(k))]; return !!a && a.nilai[0].pilar === 'Pos Uji Manual'; }));
-  cek('Pecah UMP: kepala kantor besar + waktu tertata (kl-hero-top)', await p.evaluate(() => { const k = document.querySelector('.kl-hero-kantor .kn'); return !!k && parseFloat(getComputedStyle(k).fontSize) >= 20 && !!document.querySelector('.kl-hero-waktu .wt b'); }));
+  cek('Hero: kantor + tanggal samping nominal saldo akhir, ukuran kecil', await p.evaluate(() => {
+    const saldo = document.querySelector('.kl-hero-saldo'); const k = document.querySelector('.kl-hero-kantor .kn'); const v = document.querySelector('.kl-hero .v');
+    if (!saldo || !k || !v || document.querySelector('.kl-hero-top')) return false;
+    const ks = parseFloat(getComputedStyle(k).fontSize), vs = parseFloat(getComputedStyle(v).fontSize);
+    return !!document.querySelector('.kl-hero-waktu .wt b') && ks < vs && saldo.contains(k) && saldo.contains(v);
+  }));
 
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[4].click());
   cek('Tab Log menampilkan catatan ajuan', await p.evaluate(() => /ajuan baru/.test(document.getElementById('klIsi').textContent)));

@@ -131,12 +131,13 @@ const cek = (n, sy, i) => { if (sy) { ok++; console.log('  OK   | ' + n); } else
   out = await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [
     { jenis: 'ump', kunci: 'u1', kolom: 'pecahan', nilai: [
       { pilar: 'Pendidikan', kantor: 'KLL Kota Contoh', nominal: 3000000 },
-      { pilar: 'Kesehatan', kantor: 'KLL Kota Lain', nominal: 2000000 },
+      { pilar: 'Kesehatan', kantor: 'KLL Kota Lain', nominal: 2000000, ket: 'Uang Muka Program Kesehatan' },
     ] },
   ]]); DB = out.db;
   const pec = out.result.ajuan.find((a) => a.kolom === 'pecahan');
   cek('Simpan: pecahan 2 pos pilar + pindah kantor tersimpan sebagai ajuan', out.result.ajuan.length === 5 && pec && pec.nilai.length === 2 && pec.nilai[1].kantor === 'KLL Kota Lain', out.result.ajuan.map((a) => a.jenis + '.' + a.kolom));
   cek('Simpan: log pecahan terbaca manusia (pilar @kantor nominal)', /Pendidikan @KLL Kota Contoh 3000000 \+ Kesehatan @KLL Kota Lain 2000000/.test(out.result.log[0].rincian), out.result.log[0]);
+  cek('Simpan: keterangan pecahan (ket) ikut tersimpan', pec && pec.nilai[1].ket === 'Uang Muka Program Kesehatan' && !pec.nilai[0].ket, pec && pec.nilai);
 
   // ===== 8b. LPJ menunjuk UMP (lpj.tujuan) - setelah semua cek jumlah ajuan =====
   let dT = await engine.runRPC(DB, 'apiSinkronKLMuat', [KODE]); DB = dT.db;

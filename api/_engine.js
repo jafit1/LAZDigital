@@ -3449,12 +3449,15 @@ function _validasiPecahan(nilai, nominalAsli){
     p0 = p0 || {};
     var pilar = String(p0.pilar == null ? '' : p0.pilar).trim().slice(0, 60);
     var kantor = String(p0.kantor == null ? '' : p0.kantor).trim().slice(0, 80);
+    var ket = String(p0.ket == null ? '' : p0.ket).trim().slice(0, 160);
     var n = Number(p0.nominal);
     if (!pilar) throw new Error('Ada pecahan tanpa pilar.');
     if (!kantor) throw new Error('Ada pecahan tanpa kantor pemiliknya.');
     if (!isFinite(n) || n < 0 || n > 1e12) throw new Error('Nominal pecahan tidak wajar.');
     total += Math.round(n);
-    out.push({ pilar:pilar, kantor:kantor, nominal:Math.round(n) });
+    var item = { pilar:pilar, kantor:kantor, nominal:Math.round(n) };
+    if (ket) item.ket = ket;
+    out.push(item);
   });
   if (nominalAsli != null && total > Math.round(nominalAsli) + 1) {
     throw new Error('Total pecahan (' + total + ') melebihi nominal UMP asal (' + Math.round(nominalAsli) + ').');
@@ -3487,7 +3490,7 @@ function _validasiTujuan(nilai, cocokUmp){
 }
 /* Nilai ajuan untuk log: pecahan diringkas agar terbaca manusia. */
 function _ringkasNilaiAjuan(tipe, nilai){
-  if (tipe === 'pecahan' && Array.isArray(nilai)) return nilai.map(function(p){ return p.pilar + ' @' + p.kantor + ' ' + p.nominal; }).join(' + ');
+  if (tipe === 'pecahan' && Array.isArray(nilai)) return nilai.map(function(p){ return p.pilar + ' @' + p.kantor + ' ' + p.nominal + (p.ket ? ' ' + p.ket : ''); }).join(' + ');
   if (tipe === 'tujuan' && Array.isArray(nilai)) return nilai.map(function(b){ return 'UMP ' + b.kunci.slice(0, 8) + ' ' + b.nominal; }).join(' + ');
   return nilai;
 }
