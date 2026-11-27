@@ -8677,6 +8677,9 @@ async function apiDeleteTransfer(t, id) {
 var SELARAS_KOLOM = {
   Penghimpunan: ['tanggal', 'jenisDana', 'subJenis', 'pilar', 'program'],
   Pentasyarufan: ['tanggal', 'ashnaf', 'sumberDana', 'program'],
+  /* UMP & transfer: hanya tanggal - untuk koreksi geser tanggal ke jurnal asli. */
+  UangMuka: ['tanggal'],
+  Transfer: ['tanggal'],
 };
 async function apiSelaraskanJurnal(t, daftar) {
   var u = _requirePerm(t, 'settings', 'edit');
@@ -8686,7 +8689,9 @@ async function apiSelaraskanJurnal(t, daftar) {
   for (var i = 0; i < daftar.length; i++) {
     var e = daftar[i] || {};
     var namaTabel = e.tabel === 'Penghimpunan' ? SHEETS.PENGHIMPUNAN
-      : (e.tabel === 'Pentasyarufan' ? SHEETS.PENTASYARUFAN : null);
+      : (e.tabel === 'Pentasyarufan' ? SHEETS.PENTASYARUFAN
+      : (e.tabel === 'UangMuka' ? SHEETS.UANGMUKA
+      : (e.tabel === 'Transfer' ? SHEETS.TRANSFER : null)));
     if (!namaTabel) { lewati.push({ id: e.id, alasan: 'tabel tidak dikenal' }); continue; }
     var kolomBoleh = SELARAS_KOLOM[e.tabel], patch = {}, ada = false;
     kolomBoleh.forEach(function (k) { if (e.kolom && e.kolom[k] !== undefined) { patch[k] = e.kolom[k]; ada = true; } });
