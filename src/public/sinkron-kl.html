@@ -164,6 +164,35 @@
   .kl-st.belum .v{color:var(--accent)}
   .kl-st.belum.minus .v{color:var(--red)}
 
+  /* --- alur perhitungan saldo akhir: langkah besar & mudah dibaca --- */
+  .kl-alur{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+  .kl-alur-baris{display:flex;align-items:baseline;gap:10px;padding:9px 4px;border-bottom:1px dashed var(--border)}
+  .kl-alur-baris:last-child{border-bottom:0}
+  .kl-alur-no{flex:none;width:26px;height:26px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);
+              color:var(--text2);font:800 12.5px var(--sans);display:flex;align-items:center;justify-content:center}
+  .kl-alur-l{font:600 13.5px var(--sans);color:var(--text);line-height:1.4}
+  .kl-alur-l .s{display:block;font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+  .kl-alur-v{margin-left:auto;text-align:right;font:800 15px var(--head);font-variant-numeric:tabular-nums;
+             color:var(--text);white-space:nowrap}
+  .kl-alur-hasil{background:color-mix(in srgb,var(--accent) 10%,var(--surface));border:1px solid var(--accent);
+                 border-radius:12px;padding:10px 12px;margin-top:8px}
+  .kl-alur-hasil .kl-alur-baris{border-bottom:0;padding:2px}
+  .kl-alur-hasil .kl-alur-l{font-family:var(--head);font-weight:800;font-size:14.5px}
+  .kl-alur-hasil .kl-alur-v{font-size:21px;color:var(--accent)}
+
+  /* --- kartu / bagian "Belum LPJ" berwarna merah --- */
+  .kl-merah{border-color:rgba(220,60,60,.5);background:color-mix(in srgb,var(--red) 5%,var(--surface))}
+  .kl-merah .kl-label .dot{background:var(--red)}
+  .kl-merah .kl-alur-v{color:var(--red)}
+  .kl-merah .kl-alur-hasil{background:color-mix(in srgb,var(--red) 9%,var(--surface));border-color:var(--red)}
+  .kl-merah .kl-alur-hasil .kl-alur-v{color:var(--red)}
+
+  /* --- tabel pilar di ringkasan --- */
+  .kl-pilar th{font-size:10.5px}
+  .kl-pilar td,.kl-pilar th{padding-top:9px;padding-bottom:9px}
+  .kl-pilar .pil{font-weight:800;color:var(--text)}
+  .kl-pilar tfoot td{font-weight:800;color:var(--text);border-top:2px solid var(--border2)}
+
   .kl-note{margin:12px 0 0;font-size:11.5px;line-height:1.65;color:var(--muted)}
   .kl-note b{color:var(--text2);font-weight:700}
 
@@ -1159,22 +1188,83 @@ function usulBaru(jenis){
 }
 
 /* ================= TAB: LPJ (sendiri) ================= */
+/* Hubungkan LPJ ke UMP: setiap catatan LPJ (dan pengembalian) menutup UMP
+   tertua yang belum tertutup (urut tanggal). Dipakai dua tempat: kolom
+   "Hubungkan UMP" di tabel LPJ, dan kartu "Belum LPJ" di ringkasan. */
+function hubungkanUmpLpj(){
+  var urut=(DATA.ump||[]).filter(function(u){ return u.arah!=='kembali'; })
+    .slice().sort(function(a,b){ return String(a.tanggal).localeCompare(String(b.tanggal)); });
+  var sisa={};
+  urut.forEach(function(u){ sisa[u.kunci]=Number(u.nominal)||0; });
+  var sumber=(DATA.lpj||[]).map(function(l){ return { kunci:l.kunci, jenis:'LPJ', jumlah:Number(l.jumlah)||0, tanggal:l.tanggal, program:l.program||'' }; });
+  (DATA.ump||[]).filter(function(u){ return u.arah==='kembali'; }).forEach(function(u){
+    sumber.push({ kunci:'kembali|'+u.kunci, jenis:'Kembali', jumlah:Number(u.nominal)||0, tanggal:u.tanggal, program:u.keterangan||'' });
+  });
+  sumber.sort(function(a,b){ return String(a.tanggal).localeCompare(String(b.tanggal)); });
+  var tertutup={};
+  sumber.forEach(function(s){
+    var j=s.jumlah;
+    for(var i=0;i<urut.length&&j>0;i++){
+      var u=urut[i], sisaU=sisa[u.kunci];
+      if(sisaU<=0) continue;
+      var pot=Math.min(sisaU,j);
+      sisa[u.kunci]-=pot;
+      tertutup[u.kunci]=(tertutup[u.kunci]||0)+pot;
+      j-=pot;
+      (s.ump=s.ump||[]).push({ kunci:u.kunci, tanggal:u.tanggal, nominal:u.nominal, keterangan:u.keterangan, pot:pot });
+    }
+  });
+  return { urut:urut, sumber:sumber, sisa:sisa, tertutup:tertutup };
+}
 function isiLpj(){
   var r=DATA.ringkas||{};
   var l=DATA.lpj||[];
-  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> LPJ uang muka — catatan daerah'
+  var hub=hubungkanUmpLpj();
+  var belumLPJ=(Number(r.umpKeluar)||0)-(Number(r.lpj)||0)-(Number(r.umpKembali)||0);
+
+  /* Panel cakupan: tiap UMP sudah tertutup LPJ berapa, sisanya berapa. */
+  var h='<div class="kl-card kl-merah"><div class="kl-label"><span class="dot"></span> Cakupan UMP oleh LPJ'
+    +'<span class="n">sisa belum LPJ: '+esc(klRp(belumLPJ))+'</span></div>';
+  if(!hub.urut.length){ h+='<div class="kl-kosong">Tidak ada UMP.</div>'; }
+  else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
+      +'<th>Tanggal UMP</th><th>Keterangan</th><th class="n">UMP</th><th class="n">Sudah LPJ</th><th class="n">Sisa belum LPJ</th>'
+      +'</tr></thead><tbody>';
+    hub.urut.forEach(function(u){
+      var pot=hub.tertutup[u.kunci]||0, sisaU=hub.sisa[u.kunci]||0;
+      h+='<tr><td>'+klTgl(u.tanggal)+'</td><td class="w">'+esc(u.keterangan||'—')+'</td>'
+        +'<td class="n">'+klRp(u.nominal)+'</td>'
+        +'<td class="n" style="color:var(--green)">'+(pot?klRp(pot):'—')+'</td>'
+        +'<td class="n"'+(sisaU>0?' style="color:var(--red);font-weight:800"':'')+'>'+klRp(sisaU)+'</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td colspan="2">Total</td><td class="n">'+klRp(r.umpKeluar)+'</td>'
+      +'<td class="n">'+klRp((Number(r.lpj)||0)+(Number(r.umpKembali)||0))+'</td>'
+      +'<td class="n">'+klRp(belumLPJ)+'</td></tr></tfoot></table></div>';
+  }
+  h+='</div>';
+
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> LPJ uang muka — catatan daerah'
     +'<span class="n">'+l.length+' baris</span></div>';
   if(!l.length){ h+='<div class="kl-kosong">Tidak ada baris LPJ.</div>'; }
   else{
     h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-      +'<th>Tanggal</th><th>Program</th><th class="n">Jumlah</th><th></th>'
+      +'<th>Hubungkan UMP</th><th>Tanggal</th><th>Program</th><th class="n">Jumlah</th><th></th>'
       +'</tr></thead><tbody>';
     l.forEach(function(x){
       var tglN=nilaiEfektif('lpj',x.kunci,'tanggal',x.tanggal);
       var nomN=nilaiEfektif('lpj',x.kunci,'nominal',x.jumlah);
       var progN=nilaiEfektif('lpj',x.kunci,'program',x.program||'');
       var berajuan=ajuanBaris('lpj',x.kunci,'nominal')||ajuanBaris('lpj',x.kunci,'tanggal')||ajuanBaris('lpj',x.kunci,'program');
-      h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
+      var sumber=null;
+      hub.sumber.forEach(function(s){ if(s.kunci===x.kunci) sumber=s; });
+      var cakup=(sumber&&sumber.ump)||[];
+      var hubTeks='—';
+      if(cakup.length===1) hubTeks='UMP '+klTgl(cakup[0].tanggal)+' · '+klRp(cakup[0].pot);
+      else if(cakup.length>1){
+        var tot=0; cakup.forEach(function(c){ tot+=c.pot; });
+        hubTeks='UMP '+klTgl(cakup[0].tanggal)+' · '+klRp(cakup[0].pot)+'<span class="sub">+'+(cakup.length-1)+' UMP lagi · total '+klRp(tot)+'</span>';
+      }
+      h+='<tr data-kunci="'+esc(x.kunci)+'"><td class="w" style="font-size:11.5px;line-height:1.5">'+hubTeks+'</td><td>'
         +klTglHTML({nilai:tglN, lama:x.tanggal, jenis:'lpj', kunci:x.kunci, ajuan:!!ajuanBaris('lpj',x.kunci,'tanggal')})+'</td>'
         +'<td class="w"><input class="kl-edit'+(ajuanBaris('lpj',x.kunci,'program')?' ajuan':'')+'" value="'+esc(progN)+'" data-lama="'+esc(x.program||'')+'"'
         +' placeholder="'+esc(x.program||'—')+'" onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'program\',this.value,this)"></td>'
@@ -1182,7 +1272,7 @@ function isiLpj(){
         +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
         +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan ajuan baris ini" onclick="batalkanBaris(\'lpj\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
     });
-    h+='</tbody><tfoot><tr><td colspan="2">Total catatan daerah</td><td class="n">'+klRp(r.lpj)+'</td><td></td></tr></tfoot></table></div>';
+    h+='</tbody><tfoot><tr><td colspan="3">Total catatan daerah</td><td class="n">'+klRp(r.lpj)+'</td><td></td></tr></tfoot></table></div>';
   }
   h+='<div class="kl-tambah">'
     +klTglHTML({id:'lpjTgl'})
@@ -1201,29 +1291,83 @@ function isiLpj(){
 function isiRingkas(){
   var r=DATA.ringkas||{};
   var n=jumlahAjuan();
-  var sudah=0,belum=0;
+  /* Status amil efektif per baris (ajuan menimpa aturan awal). */
   var statusAmil={};
   daftarAjuan().forEach(function(a){ if(a.jenis==='setoran'&&a.kolom==='diambilAmil'&&a.nilai) statusAmil[a.kunci]=a.nilai; });
-  (DATA.setoran||[]).forEach(function(s){ var v=statusAmil[s.kunci]; if(v==='sudah') sudah+=s.amil; else if(v==='belum') belum+=s.amil; });
-  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Ringkasan hasil — dua hitungan'
+  var umpNet=(Number(r.umpKeluar)||0)-(Number(r.umpKembali)||0);
+  var saldoAkhir=(Number(r.himpun)||0)-(Number(r.hakAmil)||0)-umpNet;
+  var belumLPJ=(Number(r.umpKeluar)||0)-(Number(r.lpj)||0)-(Number(r.umpKembali)||0);
+
+  /* ===== 1. SALDO AKHIR - satu angka, dihitung dengan langkah terbaca ===== */
+  var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Saldo akhir - cara menghitungnya'
     +'<span class="n">bukan penutupan pembukuan</span></div>';
-  h+='<div class="kl-stat">'
-    +kartu('Hasil TANPA LPJ',klRp(r.saldoTanpaLpj),'seluruh UMP dipotong penuh','belum'+(r.saldoTanpaLpj<0?' minus':''))
-    +kartu('Hasil DENGAN LPJ',klRp(r.saldoDenganLpj),'UMP dikurangi LPJ &amp; pengembalian','belum'+(r.saldoDenganLpj<0?' minus':''))
-    +'</div>';
-  h+='<div class="kl-stat" style="margin-top:10px">'
-    +kartu('Total setoran',klRp(r.himpun),(DATA.setoran||[]).length+' baris','')
-    +kartu('Hak amil diambil',klRp(sudah),'belum diambil '+klRp(belum),'')
-    +kartu('UMP diserahkan',klRp(r.umpKeluar),'kembali '+klRp(r.umpKembali),'')
-    +kartu('LPJ diterima',klRp(r.lpj),'belum LPJ '+klRp(r.belumLPJ),'')
-    +'</div>';
-  h+='<ul class="kl-catatan">'
-    +'<li><b>Mekanisme sama dengan awal</b>: setoran dipotong hak amil (diambil atau tidak), baru dikurangi UMP.</li>'
-    +'<li><b>Tanpa LPJ</b>: '+klRp(r.himpun)+' − amil '+klRp(r.hakAmil)+' − UMP '+klRp(r.umpKeluar)+' = <b>'+klRp(r.saldoTanpaLpj)+'</b>.</li>'
-    +'<li><b>Dengan LPJ</b>: sama, tetapi UMP dikembalikan sebesar LPJ ('+klRp(r.lpj)+') dan pengembalian ('+klRp(r.umpKembali)+') = <b>'+klRp(r.saldoDenganLpj)+'</b>.</li>'
-    +'<li>'+(n?'Ada <b>'+n+' ajuan belum disimpan</b> — tekan Simpan agar masuk log daerah.':'Tidak ada ajuan yang menunggu.')+'</li>'
-    +'<li>Angka sementara: mengikuti pembukuan daerah hari ini dan ajuan yang sudah disimpan.</li>'
+  h+='<div class="kl-alur">'
+    +'<div class="kl-alur-baris"><span class="kl-alur-no">1</span><span class="kl-alur-l">Total setoran tahun ini'
+    +'<span class="s">'+((DATA.setoran||[]).length)+' setoran dari semua bulan</span></span>'
+    +'<span class="kl-alur-v">'+klRp(r.himpun)+'</span></div>'
+    +'<div class="kl-alur-baris"><span class="kl-alur-no">2</span><span class="kl-alur-l">dikurangi hak amil'
+    +'<span class="s">sudah diambil '+klRp(r.amilSudah)+' &middot; belum diambil '+klRp(r.amilBelum)+' &mdash; keduanya tetap dipotong</span></span>'
+    +'<span class="kl-alur-v">&minus; '+klRp(r.hakAmil)+'</span></div>'
+    +'<div class="kl-alur-baris"><span class="kl-alur-no">3</span><span class="kl-alur-l">dikurangi uang muka (UMP)'
+    +'<span class="s">keluar '+klRp(r.umpKeluar)+' &minus; kembali '+klRp(r.umpKembali)+'</span></span>'
+    +'<span class="kl-alur-v">&minus; '+klRp(umpNet)+'</span></div>'
+    +'</div>'
+    +'<div class="kl-alur-hasil"><div class="kl-alur-baris"><span class="kl-alur-l">SALDO AKHIR</span>'
+    +'<span class="kl-alur-v">'+klRp(saldoAkhir)+'</span></div></div>'
+    +'<ul class="kl-catatan"><li>Rumus: setoran &minus; hak amil &minus; UMP = saldo akhir. LPJ tidak mengurangi saldo ini &mdash; LPJ dipantau di bagiannya sendiri di bawah.</li>'
+    +(n?'<li>Ada <b>'+n+' ajuan belum disimpan</b> - tekan Simpan agar masuk log daerah.</li>':'')
     +'</ul></div>';
+
+  /* ===== 2. BELUM LPJ - bagian tersendiri, merah ===== */
+  h+='<div class="kl-card kl-merah"><div class="kl-label"><span class="dot"></span> Belum LPJ'
+    +'<span class="n">pantauan uang muka</span></div>';
+  h+='<div class="kl-alur">'
+    +'<div class="kl-alur-baris"><span class="kl-alur-l">UMP diserahkan ke kantor'
+    +'<span class="s">dikembalikan tanpa LPJ: '+klRp(r.umpKembali)+'</span></span>'
+    +'<span class="kl-alur-v">'+klRp(r.umpKeluar)+'</span></div>'
+    +'<div class="kl-alur-baris"><span class="kl-alur-l">dikurangi LPJ yang sudah diterima daerah'
+    +'<span class="s">'+((DATA.lpj||[]).length)+' catatan LPJ</span></span>'
+    +'<span class="kl-alur-v">&minus; '+klRp(r.lpj)+'</span></div>'
+    +'</div>'
+    +'<div class="kl-alur-hasil"><div class="kl-alur-baris"><span class="kl-alur-l">BELUM LPJ</span>'
+    +'<span class="kl-alur-v">'+klRp(belumLPJ)+'</span></div></div>'
+    +'<ul class="kl-catatan"><li>Artinya: uang muka sebesar ini <b>belum punya pertanggungjawaban (LPJ)</b>. Kalau LPJ datang, angka ini turun.</li></ul></div>';
+
+  /* ===== 3. DETAIL PER PILAR - termasuk bagian amil ===== */
+  var pilar={}, urut=[];
+  (DATA.setoran||[]).forEach(function(s){
+    var p=s.pilar||'(tanpa pilar)';
+    if(!pilar[p]){ pilar[p]={pilar:p,setoran:0,amil:0,sudah:0,belum:0,n:0}; urut.push(pilar[p]); }
+    var b=pilar[p];
+    var v=statusAmil[s.kunci]||s.awalAmil||'';
+    b.setoran+=s.jumlah; b.amil+=s.amil; b.n++;
+    if(v==='sudah') b.sudah+=s.amil; else if(v==='belum') b.belum+=s.amil;
+  });
+  urut.sort(function(a,b){ return b.setoran-a.setoran; });
+  h+='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Detail per pilar - termasuk hak amil'
+    +'<span class="n">'+urut.length+' pilar</span></div>';
+  if(!urut.length){ h+='<div class="kl-kosong">Belum ada setoran.</div>'; }
+  else{
+    h+='<div class="kl-tw"><table class="kl-tbl kecil kl-pilar"><thead><tr>'
+      +'<th>Pilar</th><th class="n">Setoran</th><th class="n">Hak amil</th><th class="n">Amil diambil</th><th class="n">Amil belum diambil</th><th class="n">Bersih</th>'
+      +'</tr></thead><tbody>';
+    urut.forEach(function(b){
+      var sub=b.amil?'<span class="sub">'+b.n+' setoran</span>':'';
+      h+='<tr><td class="pil">'+esc(b.pilar)+sub+'</td>'
+        +'<td class="n">'+klRp(b.setoran)+'</td>'
+        +'<td class="n">'+klRp(b.amil)+'</td>'
+        +'<td class="n" style="color:var(--green)">'+klRp(b.sudah)+'</td>'
+        +'<td class="n" style="color:'+(b.belum?'var(--red)':'var(--muted)')+'">'+klRp(b.belum)+'</td>'
+        +'<td class="n akhir">'+klRp(b.setoran-b.amil)+'</td></tr>';
+    });
+    var tSetoran=0,tAmil=0,tSudah=0,tBelum=0;
+    urut.forEach(function(b){ tSetoran+=b.setoran; tAmil+=b.amil; tSudah+=b.sudah; tBelum+=b.belum; });
+    h+='</tbody><tfoot><tr><td>Total</td><td class="n">'+klRp(tSetoran)+'</td><td class="n">'+klRp(tAmil)+'</td>'
+      +'<td class="n">'+klRp(tSudah)+'</td><td class="n">'+klRp(tBelum)+'</td><td class="n">'+klRp(tSetoran-tAmil)+'</td></tr></tfoot></table></div>';
+    h+='<ul class="kl-catatan"><li><b>Bersih</b> = setoran dikurangi hak amil pilar itu (diambil atau tidak).</li>'
+      +'<li>Warna hijau = hak amil sudah diambil, merah = belum diambil (mengikuti aturan awal + ajuan kantor).</li></ul>';
+  }
+  h+='</div>';
   return h;
 }
 
