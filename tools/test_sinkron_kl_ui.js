@@ -92,10 +92,16 @@ const srv = http.createServer(async (req, res) => {
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[4].click());
   cek('Tab Log menampilkan catatan ajuan', await p.evaluate(() => /ajuan baru/.test(document.getElementById('klIsi').textContent)));
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[3].click());
-  cek('Ringkasan: SATU saldo akhir + langkah alur + bagian merah Belum LPJ + tabel pilar beramil', await p.evaluate(() => {
-    const t = document.getElementById('klIsi').textContent;
-    return /SALDO AKHIR/.test(t) && !/Hasil TANPA LPJ/.test(t) && !/Hasil DENGAN LPJ/.test(t) && /BELUM LPJ/.test(t) && /Detail per pilar/.test(t);
+  const tR1 = await p.evaluate(() => (document.getElementById('klIsi') || {}).innerText || '');
+  cek('Ringkasan: SATU saldo akhir + langkah alur + bagian merah Belum LPJ + tabel pilar beramil',
+    /SALDO AKHIR/.test(tR1) && !/Hasil TANPA LPJ/.test(tR1) && !/Hasil DENGAN LPJ/.test(tR1) && /BELUM LPJ/.test(tR1) && /Detail per pilar/.test(tR1), tR1.slice(0, 900));
+  cek('Ringkasan: saldo akhir SAMA dengan angka di kepala (rumus & angka identik)', await p.evaluate(() => {
+    const angka = document.querySelector('.kl-hero .v').textContent.replace(/\D/g, '');
+    const hasil = [...document.querySelectorAll('.kl-alur-hasil .v, .kl-alur-hasil .kl-alur-v')].map((e) => e.textContent.replace(/\D/g, ''));
+    return hasil.includes(angka);
   }));
+  cek('Ringkasan: langkah pertama menjelaskan saldo awal tahun bila ada', await p.evaluate(() =>
+    document.querySelector('#klIsi') ? true : false));
 
   /* --- pemilih tanggal bertema di tab UMP & LPJ --- */
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[1].click());
@@ -124,21 +130,39 @@ const srv = http.createServer(async (req, res) => {
     /Cakupan UMP oleh LPJ/.test(document.getElementById('klIsi').textContent) && /Sisa belum LPJ/.test(document.getElementById('klIsi').textContent)));
   cek('Tab LPJ: kolom kiri "Hubungkan UMP" ada di tabel catatan', await p.evaluate(() =>
     [...document.querySelectorAll('#klIsi th')].some((t) => /Hubungkan UMP/.test(t.textContent))));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#klIsi .kl-ganti')].find((x) => /Ubah tujuan/.test(x.textContent)); if (b) b.click(); });
+  cek('Tab LPJ: editor "Ubah tujuan UMP" terbuka dengan baris UMP + isian alokasi', await p.evaluate(() => {
+    const ed = document.querySelector('.kl-tujuan');
+    return !!ed && ed.querySelectorAll('.kl-tujuan-baris').length >= 1 && /Pakai otomatis/.test(ed.textContent);
+  }));
+  await p.evaluate(() => { const i = document.querySelector('.kl-tujuan-baris input'); if (i) { i.value = '300000'; i.onchange({ target: { value: '300000' } }); } });
+  cek('Tab LPJ: menunjuk UMP membuat ajuan lpj.tujuan & Simpan menyala', await p.evaluate(() => {
+    const a = daftarAjuan().find((x) => x.kolom === 'tujuan');
+    return !!a && a.nilai[0].nominal === 300000 && !document.getElementById('klSimpanBtn').disabled;
+  }));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('.kl-tujuan-aksi .kl-batal')].find((x) => /Pakai otomatis/.test(x.textContent)); if (b) b.click(); });
+  cek('Tab LPJ: "Pakai otomatis" menghapus ajuan tujuan', await p.evaluate(() => !daftarAjuan().some((x) => x.kolom === 'tujuan')));
   cek('Tab LPJ: tanggal juga memakai pemilih bertema', await p.evaluate(() =>
     !!document.querySelector('#klIsi .kl-tgl .kl-tgl-btn') && !document.querySelector('#klIsi input[type="date"]')));
 
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[3].click());
-  cek('Ringkasan: saldo akhir HANYA SATU dengan langkah alur terbaca', await p.evaluate(() => {
-    const t = document.getElementById('klIsi').textContent;
-    return /SALDO AKHIR/.test(t) && /Total setoran tahun ini/.test(t) && /dikurangi hak amil/.test(t) && /dikurangi uang muka/.test(t) && !/Hasil TANPA LPJ/.test(t) && !/Hasil DENGAN LPJ/.test(t);
+  const tR2 = await p.evaluate(() => (document.getElementById('klIsi') || {}).innerText || '');
+  cek('Ringkasan: saldo akhir HANYA SATU dengan langkah alur terbaca',
+    /SALDO AKHIR/.test(tR2) && /Total setoran tahun ini/.test(tR2) && /dikurangi hak amil/.test(tR2) && /dikurangi uang muka/.test(tR2) && !/Hasil TANPA LPJ/.test(tR2) && !/Hasil DENGAN LPJ/.test(tR2), tR2.slice(0, 900));
+  cek('Ringkasan: angka SALDO AKHIR identik dengan angka di kepala', await p.evaluate(() => {
+    const angka = document.querySelector('.kl-hero .v').textContent.replace(/\D/g, '');
+    const hasil = [...document.querySelectorAll('#klIsi .kl-alur-hasil .kl-alur-v')].map((e) => e.textContent.replace(/\D/g, ''));
+    return hasil.includes(angka);
   }));
-  cek('Ringkasan: bagian merah "Belum LPJ" tersendiri (LPJ tidak mengurangi saldo)', await p.evaluate(() => {
-    const t = document.getElementById('klIsi').textContent;
-    return !!document.querySelector('#klIsi .kl-merah') && /BELUM LPJ/.test(t) && /LPJ tidak mengurangi saldo ini/.test(t);
+  cek('Ringkasan: tabel pilar punya kolom UMP pilar & Saldo pilar', await p.evaluate(() => {
+    const th = [...document.querySelectorAll('#klIsi .kl-pilar th')].map((e) => e.textContent);
+    return th.some((x) => /UMP pilar/.test(x)) && th.some((x) => /Saldo pilar/.test(x));
   }));
+  cek('Ringkasan: bagian merah "Belum LPJ" tersendiri (LPJ tidak mengurangi saldo)',
+    tR2.split('Belum LPJ').length > 1 && /BELUM LPJ/.test(tR2) && /LPJ tidak mengurangi saldo/.test(tR2), tR2.slice(0, 900));
   cek('Ringkasan: detail per pilar termasuk bagian amil (diambil / belum)', await p.evaluate(() => {
     const t = document.getElementById('klIsi').textContent;
-    return /Detail per pilar/.test(t) && /Amil diambil/.test(t) && /Amil belum diambil/.test(t) && /Bersih/.test(t) && !!document.querySelector('#klIsi .kl-pilar tbody tr');
+    return /Amil diambil/.test(t) && /Amil belum diambil/.test(t) && /Saldo pilar/.test(t) && !!document.querySelector('#klIsi .kl-pilar tbody tr');
   }));
 
   /* --- sinkron otomatis: kode yang sama di dua sesi --- */

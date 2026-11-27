@@ -3409,6 +3409,7 @@ function apiSinkronKLMuat(kode){
     belumLPJ:umpKeluar - lpjJumlah - umpKembali,
     saldoTanpaLpj:bersih - umpKeluar,
     saldoDenganLpj:bersih - umpKeluar + lpjJumlah + umpKembali,
+    pembuka:pembuka,
     ajuanMenunggu:ajuan.length, saldoAkhir:saldoAkhir
   };
   /* Pilihan pecahan: daftar kantor (KL/UL aktif) dan daftar pilar umum +
@@ -3431,7 +3432,7 @@ function apiSinkronKLMuat(kode){
 var SINKRON_KOLOM = {
   setoran: { diambilAmil: 'pilihan' },
   ump: { nominal: 'angka', tanggal: 'tanggal', keterangan: 'teks', pecahan: 'pecahan' },
-  lpj: { nominal: 'angka', tanggal: 'tanggal', program: 'teks' }
+  lpj: { nominal: 'angka', tanggal: 'tanggal', program: 'teks', tujuan: 'tujuan' }
 };
 var SINKRON_AMIL = { 'sudah':1, 'belum':1, '':1 };
 /* UMP asal untuk membatasi total pecahan. */
@@ -3460,13 +3461,48 @@ function _validasiPecahan(nilai, nominalAsli){
   }
   return out;
 }
+/* Validasi ajuan lpj.tujuan: nilai array butir {kunci, nominal} — LPJ ini
+   dialokasikan ke UMP yang dikehendaki (bisa lebih dari satu). Kunci UMP
+   harus milik kantor ini; nominal 0..1e12. */
+function _validasiTujuan(nilai, cocokUmp){
+  if (!Array.isArray(nilai) || !nilai.length) throw new Error('Tujuan UMP kosong.');
+  if (nilai.length > 10) throw new Error('Terlalu banyak tujuan UMP (maksimal 10).');
+  var total = 0, out = [], ada = {};
+  nilai.forEach(function(b0){
+    b0 = b0 || {};
+    var k = String(b0.kunci == null ? '' : b0.kunci).slice(0, 64);
+    var n = Number(b0.nominal);
+    if (!k) throw new Error('Ada tujuan tanpa UMP.');
+    if (!isFinite(n) || n < 0 || n > 1e12) throw new Error('Nominal alokasi tidak wajar.');
+    n = Math.round(n);
+    if (n > 0 && !cocokUmp(_umpAsal(k))) throw new Error('UMP tidak dikenal di kantor ini.');
+    if (ada[k]) throw new Error('UMP yang sama ditulis dua kali.');
+    ada[k] = 1;
+    total += n;
+    if (n > 0) out.push({ kunci:k, nominal:n });
+  });
+  if (!out.length) throw new Error('Semua alokasi nihil.');
+  if (total > 1e12) throw new Error('Total alokasi tidak wajar.');
+  return out;
+}
 /* Nilai ajuan untuk log: pecahan diringkas agar terbaca manusia. */
 function _ringkasNilaiAjuan(tipe, nilai){
-  if (tipe !== 'pecahan' || !Array.isArray(nilai)) return nilai;
-  return nilai.map(function(p){ return p.pilar + ' @' + p.kantor + ' ' + p.nominal; }).join(' + ');
+  if (tipe === 'pecahan' && Array.isArray(nilai)) return nilai.map(function(p){ return p.pilar + ' @' + p.kantor + ' ' + p.nominal; }).join(' + ');
+  if (tipe === 'tujuan' && Array.isArray(nilai)) return nilai.map(function(b){ return 'UMP ' + b.kunci.slice(0, 8) + ' ' + b.nominal; }).join(' + ');
+  return nilai;
 }
 function apiSinkronKLSimpan(kode, ajuanBaru){
   var e = _entriKodeKL(kode);
+  /* UMP pemilik ajuan dibatasi kantor ini sendiri (untuk lpj.tujuan). */
+  var layListS = readAll(SHEETS.LAYANAN) || [];
+  var kunciLay = _kunciKantor(e.nama, layListS);
+  var intiS = function(n){ return _norm(String(n == null ? '' : n).replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i, '')); };
+  var cocokS = function(nama){
+    var k = _kunciKantor(nama, layListS);
+    if (k && kunciLay && k === kunciLay) return true;
+    return intiS(nama) === intiS(e.nama);
+  };
+  var cocokUmpS = function(r){ var k = _kunciBarisKantor(r.layanan, r.keterangan, layListS); return (k && kunciLay) ? k === kunciLay : cocokS(r.layanan); };
   if (!Array.isArray(ajuanBaru) || !ajuanBaru.length) throw new Error('Tidak ada perubahan yang disimpan.');
   if (ajuanBaru.length > 50) throw new Error('Terlalu banyak perubahan sekaligus (maksimal 50).');
   var peta = _bacaSinkronKL();
@@ -3484,7 +3520,8 @@ function apiSinkronKLSimpan(kode, ajuanBaru){
     if (!kunci) throw new Error('Ajuan tanpa baris tujuan.');
     var tipe = SINKRON_KOLOM[jenis][kolom];
     var nilai = a0.nilai;
-    if (tipe === 'angka') {
+    if (a0.hapus) nilai = (tipe === 'pilihan') ? '' : null;
+    else if (tipe === 'angka') {
       nilai = Number(nilai);
       if (!isFinite(nilai) || nilai < 0 || nilai > 1e12) throw new Error('Nominal tidak wajar.');
       nilai = Math.round(nilai);
@@ -3494,6 +3531,8 @@ function apiSinkronKLSimpan(kode, ajuanBaru){
     } else if (tipe === 'pilihan') {
       nilai = String(nilai || '');
       if (!SINKRON_AMIL[nilai]) throw new Error('Pilihan diambil amil tidak dikenal.');
+    } else if (tipe === 'tujuan') {
+      nilai = _validasiTujuan(nilai, cocokUmpS);
     } else if (tipe === 'pecahan') {
       var asal = _umpAsal(kunci);
       nilai = _validasiPecahan(nilai, asal ? Number(asal.nominal) || 0 : null);

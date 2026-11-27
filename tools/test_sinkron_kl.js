@@ -99,6 +99,10 @@ const cek = (n, sy, i) => { if (sy) { ok++; console.log('  OK   | ' + n); } else
   out = await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [{ jenis: 'setoran', kunci: kunciZakat, kolom: 'diambilAmil', nilai: 'belum' }]]); DB = out.db;
   cek('Simpan: ajuan ulang kunci sama MENGGANTI (tetap 2)', out.result.ajuan.length === 2, out.result.ajuan.map((a) => a.jenis + '|' + a.kunci + '|' + a.kolom));
 
+  // ===== 3b. Simpan: ajuan lpj.tujuan (LPJ menunjuk UMP yang dikehendaki) =====
+  let d0 = await engine.runRPC(DB, 'apiSinkronKLMuat', [KODE]); DB = d0.db;
+  cek('Muat: ringkasan memuat saldo awal (pembuka) supaya kepala & ringkasan sama', typeof d.ringkas.pembuka === 'number', d.ringkas.pembuka);
+
   // ===== 4. Muat ulang: status amil ikut =====
   out = await engine.runRPC(DB, 'apiSinkronKLMuat', [KODE]); DB = out.db;
   d = out.result;
@@ -134,13 +138,27 @@ const cek = (n, sy, i) => { if (sy) { ok++; console.log('  OK   | ' + n); } else
   cek('Simpan: pecahan 2 pos pilar + pindah kantor tersimpan sebagai ajuan', out.result.ajuan.length === 5 && pec && pec.nilai.length === 2 && pec.nilai[1].kantor === 'KLL Kota Lain', out.result.ajuan.map((a) => a.jenis + '.' + a.kolom));
   cek('Simpan: log pecahan terbaca manusia (pilar @kantor nominal)', /Pendidikan @KLL Kota Contoh 3000000 \+ Kesehatan @KLL Kota Lain 2000000/.test(out.result.log[0].rincian), out.result.log[0]);
 
+  // ===== 8b. LPJ menunjuk UMP (lpj.tujuan) - setelah semua cek jumlah ajuan =====
+  let dT = await engine.runRPC(DB, 'apiSinkronKLMuat', [KODE]); DB = dT.db;
+  const kunciLpj = (dT.result.lpj || [])[0]?.kunci;
+  const kunciUmp = (dT.result.ump || []).find((u) => u.arah !== 'kembali')?.kunci;
+  salah = 0;
+  try { await gagalDiHarapkan('apiSinkronKLSimpan', [KODE, [{ jenis: 'lpj', kunci: kunciLpj, kolom: 'tujuan', nilai: [{ kunci: 'UMP-KANTOR-LAIN-000', nominal: 500000 }] }]], 'UMP kantor lain ditolak'); } catch (e) { salah++; }
+  cek('Simpan: LPJ menunjuk UMP kantor lain ditolak', salah === 1, null);
+  out = await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [{ jenis: 'lpj', kunci: kunciLpj, kolom: 'tujuan', nilai: [{ kunci: kunciUmp, nominal: 500000 }] }]]); DB = out.db;
+  cek('Simpan: LPJ menunjuk UMP sendiri diterima, nilai array tersimpan & log terbaca manusia', (out.result.ajuan.find((a) => a.kolom === 'tujuan') || {}).nilai?.[0]?.nominal === 500000 && /UMP/.test(out.result.log[0].rincian), out.result.log[0]);
+  // bersihkan supaya keadaan tidak menggantung
+  await engine.runRPC(DB, 'apiSinkronKLSimpan', [KODE, [{ jenis: 'lpj', kunci: kunciLpj, kolom: 'tujuan', hapus: true }]]);
+
   // ===== 7. Halaman sinkron-kl.html =====
   const html = fs.readFileSync(path.join(AKAR, 'src', 'public', 'sinkron-kl.html'), 'utf8');
   cek('Halaman: memakai loading logo yang sama (lz-logo.js + klMuat)', html.indexOf('/js/lz-logo.js') >= 0 && /LZLogo\.muat/.test(html));
   cek('Halaman: pintu kode persis saldo-kl (input klKode, placeholder KL-)', /id="klKode"/.test(html) && /KL-XXXXXXXX/.test(html));
   cek('Halaman: LIMA tab - Penghimpunan, UMP, LPJ, Ringkasan, Log', ['himpun', 'ump', 'lpj', 'ringkas', 'log'].every((t) => html.indexOf("tabBtn('" + t + "'") >= 0));
   cek('Halaman: kolom Diambil amil + tombol Simpan + cadangan peramban', /Diambil amil/.test(html) && /klSimpan\(\)/.test(html) && /sinkronKLDraft_/.test(html));
-  cek('Halaman: pecahan pilar UMP - tombol pecah + pilih pilar & kantor + dua hasil', /umpPecMulai/.test(html) && /pilarOpsi/.test(html) && /kantorOpsi/.test(html) && /saldoTanpaLpj/.test(html) && /saldoDenganLpj/.test(html));
+  cek('Halaman: pecahan pilar UMP - tombol pecah + pilih pilar & kantor + hasil baru bertahap', /umpPecMulai/.test(html) && /pilarOpsi/.test(html) && /kantorOpsi/.test(html) && /hitungSemua/.test(html) && /SALDO AKHIR/.test(html) && /BELUM LPJ/.test(html));
+  cek('Halaman: LPJ bisa menunjuk UMP (editor tujuan + ajuan lpj.tujuan)', /lpjEditor/.test(html) && /lpjTujuanUbah/.test(html) && /kolom:.tujuan|'tujuan'/.test(html));
+  cek('Halaman: lebarkan di laptop/desktop, tetap otomatis di HP', /data-perangkat="laptop".*kl-wrap|max-width:1560px/.test(html));
 
   console.log('\ntest_sinkron_kl.js  ' + ok + '/' + (ok + g) + (g ? '  ADA YANG GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);
