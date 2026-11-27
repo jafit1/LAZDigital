@@ -385,12 +385,12 @@
   select.kl-sel.belum{color:var(--red);border-color:rgba(220,60,60,.4);font-weight:800}
   select.kl-sel.ajuan{border-style:dashed;border-color:var(--accent)}
   /* Status amil: dua tombol Ya/Tidak selalu tampak (tanpa dropdown). */
-  .kl-duo{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
-  .kl-duo-b{height:30px;padding:0 12px;border:0;background:var(--surface);color:var(--text2);
-    font:700 12px var(--sans);cursor:pointer}
-  .kl-duo-b+.kl-duo-b{border-left:1px solid var(--border)}
-  .kl-duo-b.on{background:color-mix(in srgb,var(--green) 16%,var(--surface));color:var(--green)}
-  .kl-duo-b.on.belum{background:color-mix(in srgb,var(--red) 14%,var(--surface));color:var(--red)}
+  .kl-duo{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--border);border-radius:10px;background:var(--surface2)}
+  .kl-duo-b{height:26px;min-width:44px;padding:0 11px;border:0;border-radius:7px;background:transparent;color:var(--muted);
+    font:700 12px var(--sans);cursor:pointer;transition:background .15s,color .15s}
+  .kl-duo-b:hover{color:var(--text)}
+  .kl-duo-b.on{background:var(--green);color:#fff;box-shadow:0 4px 10px -6px rgba(26,162,96,.9)}
+  .kl-duo-b.on.belum{background:var(--red);color:#fff;box-shadow:0 4px 10px -6px rgba(220,60,60,.9)}
   .kl-duo.ajuan{border-style:dashed;border-color:var(--accent)}
   .kl-ts{min-width:96px;font-family:var(--sans)}
   .kl-ts .ts-control,.ts-wrapper.single .ts-control{background:var(--surface);border:1px solid var(--border);
@@ -420,8 +420,19 @@
   .kl-tujuan-baris{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);min-width:0;padding:5px 0}
   .kl-tujuan-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:700}
   .kl-tujuan-baris .kl-edit{width:118px;flex:none;height:30px;text-align:right}
-  .kl-tujuan-tambah{margin-top:8px}
-  .kl-tujuan-tambah .ts-control{background:var(--surface2)}
+  .kl-tujuan-tambah{margin-top:10px}
+  .kl-cari-in{display:block;width:100%;height:42px;border:1px solid var(--accent);border-radius:10px;background:var(--surface);
+    color:var(--text);font:600 13.5px var(--sans);padding:0 14px;outline:none;box-shadow:0 0 0 3px rgba(242,112,79,.14)}
+  .kl-cari-in::placeholder{color:var(--muted);font-weight:500}
+  .kl-cari-list{margin-top:6px;border:1px solid var(--border);border-radius:10px;background:var(--surface);
+    max-height:min(440px,60vh);overflow-y:auto;padding:4px}
+  .kl-cari-opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;
+    border:0;border-radius:8px;background:transparent;padding:9px 12px;cursor:pointer;font-family:var(--sans);color:var(--text)}
+  .kl-cari-opt+.kl-cari-opt{border-top:1px solid var(--border);border-radius:0}
+  .kl-cari-opt b{font-size:13px;font-weight:700;line-height:1.4}
+  .kl-cari-opt span{font-size:12px;color:var(--muted);font-weight:600}
+  .kl-cari-opt:hover,.kl-cari-opt:focus-visible{background:color-mix(in srgb,var(--accent) 10%,var(--surface));outline:none}
+  .kl-cari-kosong{padding:12px;color:var(--muted);font-size:12.5px;text-align:center}
   .kl-tujuan-aksi{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
 
   /* --- pemberitahuan sinkron otomatis --- */  .kl-toast{
@@ -1426,6 +1437,30 @@ function lpjEditor(kunci){
   LPJ_TUJUAN_EDITOR=(LPJ_TUJUAN_EDITOR===kunci?'':kunci);
   gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+  /* Begitu dibuka: kolom cari langsung aktif dan daftar UMP terlihat. */
+  if(LPJ_TUJUAN_EDITOR){
+    var ed=document.querySelector('.kl-tujuan');
+    if(ed&&ed.scrollIntoView) ed.scrollIntoView({block:'center',behavior:'smooth'});
+    var inp=document.getElementById('klCariIn');
+    if(inp){ try{ inp.focus({preventScroll:true}); }catch(e){ inp.focus(); } }
+  }
+}
+function klCariSaring(q){
+  var kata=String(q||'').toLowerCase().split(/\s+/).filter(Boolean);
+  var opt=document.querySelectorAll('#klCariList .kl-cari-opt'), n=0;
+  for(var i=0;i<opt.length;i++){
+    var t=opt[i].getAttribute('data-q')||'';
+    var cocok=kata.every(function(k){ return t.indexOf(k)>=0; });
+    opt[i].style.display=cocok?'':'none';
+    if(cocok) n++;
+  }
+  var k=document.getElementById('klCariKosong'); if(k) k.style.display=n?'none':'';
+}
+function klCariKey(e){
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  var opt=document.querySelectorAll('#klCariList .kl-cari-opt');
+  for(var i=0;i<opt.length;i++) if(opt[i].style.display!=='none'){ opt[i].click(); return; }
 }
 function lpjTujuanNilai(kunci){
   var n=null;
@@ -1480,14 +1515,22 @@ function editorTujuan(x){
   /* Pencari UMP: hanya yang BELUM LENGKAP LPJ-nya (sisa > 0), maksimal 10
      usulan tampil sekaligus (sisanya diketik), detail kekurangannya di opsi. */
   var sisa=totalLpj-jum;
-  var opsiU=hub.urut.filter(function(u){ return (Number(hub.sisa[u.kunci])||0)>0; }).slice(0,20);
+  var opsiU=hub.urut.filter(function(u){ return (Number(hub.sisa[u.kunci])||0)>0 && !alok.hasOwnProperty(u.kunci); });
   if(opsiU.length){
-    h+='<div class="kl-tujuan-tambah">'+klSelCari('ump',opsiU.map(function(u){
-      return { v:u.kunci, t:klTgl(u.tanggal)+' · '+ketTampil(u.keterangan,u.layanan)+' · '+klRp(u.nominal)+' — sisa belum LPJ '+klRp(hub.sisa[u.kunci]) };
-    }),function(v){
-      if(!v) return;
-      lpjTujuanTambah(kunci,v,sisa>0?sisa:0);
-    },10)+'</div>';
+    h+='<div class="kl-tujuan-tambah"><input type="search" class="kl-cari-in" id="klCariIn" autocomplete="off"'
+      +' placeholder="Cari UMP: ketik tanggal, keterangan, atau nominal" aria-label="Cari UMP"'
+      +' oninput="klCariSaring(this.value)" onkeydown="klCariKey(event)">'
+      +'<div class="kl-cari-list" id="klCariList">';
+    opsiU.forEach(function(u){
+      var judul=klTgl(u.tanggal)+' · '+ketTampil(u.keterangan,u.layanan);
+      var rinci=klRp(u.nominal)+' · sisa belum LPJ '+klRp(hub.sisa[u.kunci]);
+      h+='<button type="button" class="kl-cari-opt" data-q="'+esc((judul+' '+rinci+' '+u.nominal).toLowerCase())+'"'
+        +' onclick="lpjTujuanTambah(\''+esc(kunci)+'\',\''+esc(u.kunci)+'\','+(sisa>0?sisa:0)+')">'
+        +'<b>'+esc(judul)+'</b><span>'+esc(rinci)+'</span></button>';
+    });
+    h+='<div class="kl-cari-kosong" id="klCariKosong" style="display:none">UMP tidak ditemukan</div></div></div>';
+  }else{
+    h+='<div class="kl-cari-kosong">Tidak ada UMP lain yang belum lengkap LPJ-nya.</div>';
   }
   h+='<div class="kl-tujuan-aksi">'
     +'<button class="kl-batal" type="button" onclick="lpjTujuanOtomatis(\''+esc(kunci)+'\')">Pakai otomatis (urut tanggal)</button>'

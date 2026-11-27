@@ -131,16 +131,16 @@ const srv = http.createServer(async (req, res) => {
   await p.evaluate(() => { const b = [...document.querySelectorAll('#klIsi .kl-ganti')].find((x) => /Ubah tujuan/.test(x.textContent)); if (b) b.click(); });
   cek('Tab LPJ: editor "Ubah tujuan UMP" membuka pencari dengan maksimal 10 usulan UMP yang belum lengkap LPJ-nya', await p.evaluate(() => {
     const ed = document.querySelector('.kl-tujuan');
-    const sel = ed && ed.querySelector('.kl-tujuan-tambah select');
-    if (!ed || !sel || !sel.tomselect) return false;
-    const n = Object.keys(sel.tomselect.options).length;
-    return n <= 10 && n >= 1 && sel.getAttribute('data-max') === '10' && /sisa belum LPJ/.test(sel.tomselect.options[Object.keys(sel.tomselect.options)[0]].text) && /Pakai otomatis/.test(ed.textContent);
+    const inp = ed && ed.querySelector('#klCariIn');
+    const opt = ed ? ed.querySelectorAll('#klCariList .kl-cari-opt') : [];
+    if (!ed || !inp || !opt.length) return false;
+    return document.activeElement === inp && /sisa belum LPJ/.test(opt[0].textContent) && /Pakai otomatis/.test(ed.textContent);
   }));
-  await p.evaluate(() => {
-    const sel = document.querySelector('.kl-tujuan-tambah select');
-    const opsi = Object.keys(sel.tomselect.options).find((k) => k);
-    sel.tomselect.setValue(opsi);
-  });
+  await p.fill('#klCariIn', 'zzzz');
+  cek('Pencari UMP: ketik menyaring daftar, tak ada hasil menampilkan pesan', await p.evaluate(() =>
+    [...document.querySelectorAll('#klCariList .kl-cari-opt')].every((o) => o.style.display === 'none') && document.getElementById('klCariKosong').style.display !== 'none'));
+  await p.fill('#klCariIn', '');
+  await p.evaluate(() => { document.querySelector('#klCariList .kl-cari-opt').click(); });
   cek('Tab LPJ: menunjuk UMP lewat pencari membuat alokasi (nominal = sisa LPJ) & Simpan menyala', await p.evaluate(() => {
     const a = daftarAjuan().find((x) => x.kolom === 'tujuan');
     const inp = document.querySelector('.kl-tujuan-baris input.kl-edit');
