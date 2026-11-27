@@ -97,12 +97,11 @@
     background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:0;overflow:hidden;
     margin-bottom:14px;box-shadow:var(--shadow);
   }
-  .kl-hero-kantor{min-width:0}
-  .kl-hero .ml{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-  .kl-hero .kn{display:block;font-family:var(--head);font-size:clamp(13.5px,3vw,16px);font-weight:700;line-height:1.3;
-    letter-spacing:-.01em;color:var(--text);margin-top:3px;overflow-wrap:anywhere}
-  .kl-hero-waktu{min-width:0}
-  .kl-hero-waktu .wt{display:flex;align-items:baseline;justify-content:flex-end;gap:8px;margin-top:3px;white-space:nowrap}
+  .kl-hero-kantor,.kl-hero-waktu{display:flex;align-items:baseline;justify-content:flex-end;gap:10px;min-width:0}
+  .kl-hero .ml{display:inline;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+  .kl-hero .kn{display:inline;font-family:var(--head);font-size:clamp(13.5px,3vw,16px);font-weight:700;line-height:1.3;
+    letter-spacing:-.01em;color:var(--text);overflow-wrap:anywhere}
+  .kl-hero-waktu .wt{display:inline;white-space:nowrap}
   .kl-hero-waktu .wt b{font-size:12.5px;font-weight:700;color:var(--text)}
   .kl-hero-waktu .wt i{font-style:normal;font-size:11.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
   .kl-hero-main{padding:16px 22px 18px;min-width:0}
@@ -387,14 +386,19 @@
   select.kl-sel.sudah{color:var(--green);border-color:rgba(26,162,96,.45);font-weight:800}
   select.kl-sel.belum{color:var(--red);border-color:rgba(220,60,60,.4);font-weight:800}
   select.kl-sel.ajuan{border-style:dashed;border-color:var(--accent)}
-  /* Status amil: dua tombol Ya/Tidak selalu tampak (tanpa dropdown). */
-  .kl-duo{display:inline-flex;gap:4px;padding:3px;border:1px solid var(--border);border-radius:10px;background:var(--surface2)}
-  .kl-duo-b{height:26px;min-width:44px;padding:0 11px;border:0;border-radius:7px;background:transparent;color:var(--muted);
-    font:700 12px var(--sans);cursor:pointer;transition:background .15s,color .15s}
-  .kl-duo-b:hover{color:var(--text)}
-  .kl-duo-b.on{background:var(--green);color:#fff;box-shadow:0 4px 10px -6px rgba(26,162,96,.9)}
-  .kl-duo-b.on.belum{background:var(--red);color:#fff;box-shadow:0 4px 10px -6px rgba(220,60,60,.9)}
-  .kl-duo.ajuan{border-style:dashed;border-color:var(--accent)}
+  /* Status amil: sakelar geser Ya/Tidak — klik hanya mengubah sakelar,
+     halaman tidak digambar ulang sehingga tidak ikut bergulir. */
+  .kl-amil-switch{display:inline-block;position:relative;vertical-align:middle}
+  .kl-amil-switch input[type=checkbox]{cursor:pointer;width:54px;height:26px;opacity:0;position:absolute;top:0;left:0;z-index:1;margin:0}
+  .kl-amil-switch .track{display:block;position:relative;width:110px;height:28px;border-radius:26px;overflow:hidden;
+    background:var(--surface2);border:1px solid var(--border);transition:background .3s ease,border-color .3s ease;box-sizing:border-box}
+  .kl-amil-switch .track:before{content:attr(data-tidak);position:absolute;font:600 11px var(--sans);top:6px;right:16px;color:var(--muted)}
+  .kl-amil-switch .track:after{content:'';width:52px;height:18px;background:#fff;border-radius:26px;position:absolute;left:3px;top:3px;
+    transition:left .3s ease;box-shadow:0 0 6px -2px #111}
+  .kl-amil-switch input:checked+.track{background:var(--green);border-color:var(--green)}
+  .kl-amil-switch input:checked+.track:before{content:attr(data-ya);right:auto;left:18px;color:#fff}
+  .kl-amil-switch input:checked+.track:after{left:calc(100% - 55px)}
+  .kl-amil-switch.ajuan .track{border-style:dashed;border-color:var(--accent)}
   .kl-ts{min-width:96px;font-family:var(--sans)}
   .kl-ts .ts-control,.ts-wrapper.single .ts-control{background:var(--surface);border:1px solid var(--border);
     border-radius:8px;color:var(--text);font:600 12px var(--sans);min-height:30px;padding:2px 9px;cursor:pointer}
@@ -968,10 +972,10 @@ function sinkronUbah(jenis,kunci,kolom,nilai,el){
   var bar=document.getElementById('klSavebar');
   if(bar) bar.outerHTML=saveBar();
 }
-function sinkronHapus(jenis,kunci,kolom){
+function sinkronHapus(jenis,kunci,kolom,diam){
   delete SINKRON.ajuan[jenis+'|'+kunci+'|'+kolom];
   draftSimpan();
-  gambarIsi();
+  if(!diam) gambarIsi();
   var bar=document.getElementById('klSavebar');
   if(bar) bar.outerHTML=saveBar();
 }
@@ -1061,19 +1065,21 @@ function isiHimpun(){
    Ya/Tidak ditampilkan sebagai dua tombol yang selalu tampak — lebih jelas
    daripada dropdown untuk dua pilihan. */
 function klDuo(kunci,ambil,lama,ajuan){
-  return '<span class="kl-duo'+(ajuan?' ajuan':'')+'" data-lama="'+esc(lama)+'" data-kunci="'+esc(kunci)+'">'
-    +'<button type="button" class="kl-duo-b'+(ambil==='sudah'?' on':'')+'" data-lama="'+esc(lama)+'" onclick="klDuoTekan(\'sudah\',this)">Ya</button>'
-    +'<button type="button" class="kl-duo-b'+(ambil==='belum'?' on belum':'')+'" data-lama="'+esc(lama)+'" onclick="klDuoTekan(\'belum\',this)">Tidak</button></span>';
+  var on=ambil==='sudah';
+  return '<span class="kl-amil-switch'+(ajuan?' ajuan':'')+'" data-kunci="'+esc(kunci)+'" data-lama="'+esc(lama)+'">'
+    +'<input type="checkbox" '+(on?'checked':'')+' aria-label="Diambil amil"'
+    +' onchange="klDuoTekan(this.checked?\'sudah\':\'belum\',this)">'
+    +'<span class="track" data-ya="Ya" data-tidak="Tidak"></span></span>';
 }
-function klDuoTekan(v,btn){
-  var b=btn.parentNode;
-  sinkronUbahAmil(b.getAttribute('data-kunci'),v,btn);
-  gambarIsi();
+function klDuoTekan(v,el){
+  var wrap=el.parentNode;
+  sinkronUbahAmil(wrap.getAttribute('data-kunci'),v,el);
+  wrap.classList.toggle('ajuan',!!ajuanBaris('setoran',wrap.getAttribute('data-kunci'),'diambilAmil'));
 }
 function sinkronUbahAmil(kunci,nilai,el){
   var x=(DATA.setoran||[]).find(function(s){return s.kunci===kunci;});
   var awal=x?x.awalAmil:'';
-  if(nilai===awal){ sinkronHapus('setoran',kunci,'diambilAmil'); return; }
+  if(nilai===awal){ sinkronHapus('setoran',kunci,'diambilAmil',true); return; }
   sinkronUbah('setoran',kunci,'diambilAmil',nilai,el);
 }
 
