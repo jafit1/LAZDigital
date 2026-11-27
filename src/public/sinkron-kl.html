@@ -94,24 +94,28 @@
 
   /* --- ringkasan: satu kartu saldo akhir + keterangan kantor --- */
   .kl-hero{
-    background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:0;overflow:hidden;
     margin-bottom:14px;box-shadow:var(--shadow);
-    display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 26px;
   }
-  .kl-hero-main{flex:1 1 260px;min-width:0}
+  .kl-hero-top{
+    display:flex;align-items:center;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;
+    padding:16px 22px;border-bottom:1px solid var(--border2);background:var(--surface2);
+  }
+  .kl-hero-kantor{min-width:0;flex:1 1 260px}
+  .kl-hero .ml{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .kl-hero .kn{display:block;font-family:var(--head);font-size:clamp(21px,4.4vw,28px);font-weight:800;line-height:1.2;
+    letter-spacing:-.01em;color:var(--text);margin-top:3px;overflow-wrap:anywhere}
+  .kl-hero-waktu{flex:none;text-align:right}
+  .kl-hero-waktu .wt{display:flex;align-items:baseline;justify-content:flex-end;gap:8px;margin-top:3px;white-space:nowrap}
+  .kl-hero-waktu .wt b{font-size:15px;font-weight:700;color:var(--text)}
+  .kl-hero-waktu .wt i{font-style:normal;font-size:12.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+  .kl-hero-main{padding:16px 22px 18px;min-width:0}
   .kl-hero .l{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   .kl-hero .v{
     font-family:var(--head);font-size:clamp(26px,5.4vw,34px);font-weight:800;line-height:1.12;
     color:var(--green);margin-top:6px;word-break:break-word;font-variant-numeric:tabular-nums;
   }
   .kl-hero .v.minus{color:var(--red)}
-  .kl-hero-meta{
-    flex:0 1 340px;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 18px;
-    padding-left:22px;border-left:1px solid var(--border2);
-  }
-  .kl-hero-meta .ml{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-  .kl-hero-meta .mv{display:block;font-size:13px;font-weight:600;line-height:1.45;margin-top:2px;color:var(--text);overflow-wrap:anywhere}
-
   /* --- tab --- */
   /* --- tab: desktop menempel di atas saat digulir; di HP turun ke bawah
      (zona jempol), posisi paling nyaman dioperasikan satu tangan. --- */
@@ -412,7 +416,32 @@
   .kl-pec-baris .kl-ts{flex:1 1 90px;min-width:0}
   .kl-pec-baris .kl-ts .ts-control{min-height:32px;font-size:11.5px}
   /* Pecahan UMP tampil sebagai baris penuh di bawah transaksinya. */
-  .kl-pec-row td{background:color-mix(in srgb,var(--accent) 3%,var(--surface));padding:10px 14px 12px}
+  .kl-pec-judul{font-size:12px;font-weight:700;color:var(--text2)}
+  .kl-pec-row .kl-pec{min-width:0;gap:8px}
+  .kl-pec-row .kl-pec-baris{display:grid;grid-template-columns:26px minmax(0,1fr) 190px 30px;gap:8px;align-items:center}
+  .kl-pec-no{width:24px;height:24px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+    font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .kl-pec-pilar{min-width:0;display:flex;gap:6px;align-items:center}
+  .kl-pec-pilar .kl-ts,.kl-pec-pilar select.kl-sel{flex:1 1 auto;min-width:0;width:100%}
+  .kl-pec-pilar .kl-ts .ts-control{min-height:38px;font-size:13px}
+  .kl-pec-pilar .kl-pec-lain{flex:1 1 auto;height:38px;font-size:13px;border:1px solid var(--accent);background:var(--surface)}
+  .kl-pec-tbl{flex:none;border:0;background:transparent;color:var(--accent);font:700 11.5px var(--sans);cursor:pointer;text-decoration:underline;padding:4px}
+  .kl-pec-nom{display:flex;align-items:center;gap:6px}
+  .kl-pec-nom span{font-size:12px;font-weight:700;color:var(--muted)}
+  .kl-pec-row .kl-pec-nom .kl-edit{height:38px;font-size:13.5px;font-weight:700;text-align:right}
+  .kl-pec-kantor{grid-column:2 / 4;display:flex;align-items:center;gap:8px}
+  .kl-pec-kantor>span{flex:none;font-size:11.5px;font-weight:700;color:var(--muted)}
+  .kl-pec-kantor .kl-ts,.kl-pec-kantor select.kl-sel{flex:1 1 auto;min-width:0}
+  .kl-pec-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+  .kl-pec-foot .kl-ganti{margin-top:0}
+  .kl-pec-foot .kl-ganti-pel{background:transparent}
+  .kl-pec-sum.sisa{color:var(--accent)}
+  @media (max-width:620px){
+    .kl-pec-row .kl-pec-baris{grid-template-columns:24px minmax(0,1fr) 30px}
+    .kl-pec-row .kl-pec-nom{grid-column:2}
+    .kl-pec-row .kl-batal{grid-row:1;grid-column:3}
+    .kl-pec-kantor{grid-column:2 / 4;flex-wrap:wrap}
+  }  .kl-pec-row td{background:color-mix(in srgb,var(--accent) 3%,var(--surface));padding:10px 14px 12px}
   .kl-pec-row .kl-pec-baris .kl-ts{flex:1 1 120px}
 
   /* --- editor tujuan UMP di tab LPJ: baris alokasi + pencari UMP --- */
@@ -453,11 +482,11 @@
     .kl-form{gap:8px}
     .kl-input,.kl-btn{height:44px;font-size:15px}
     .kl-btn{flex:1 1 100%}
-    .kl-hero{padding:15px 16px;border-radius:14px;gap:13px}
-    .kl-hero-meta{
-      flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;
-      padding-left:0;padding-top:13px;border-left:0;border-top:1px solid var(--border2);
-    }
+    .kl-hero{border-radius:14px}
+    .kl-hero-top{padding:13px 16px}
+    .kl-hero-main{padding:13px 16px 15px}
+    .kl-hero-waktu{text-align:left}
+    .kl-hero-waktu .wt{justify-content:flex-start}
     table.kl-tbl{font-size:12px;min-width:520px}
     table.kl-tbl th,table.kl-tbl td{padding:8px 9px}
     table.kl-tbl.kecil{min-width:0}
@@ -824,15 +853,14 @@ function gambarHasil(){
   var d=DATA, waktu=klWaktu(d.diperbarui);
   var H=hitungSemua();
   var h='<div class="kl-hero">'
+    +'<div class="kl-hero-top">'
+    +'<div class="kl-hero-kantor"><span class="ml">Kantor</span><span class="kn">'+esc(d.nama)+'</span></div>'
+    +'<div class="kl-hero-waktu"><span class="ml">Diperbarui</span><span class="wt"><b>'+esc(waktu.tgl)+'</b>'+(waktu.jam?'<i>'+esc(waktu.jam)+'</i>':'')+'</span></div>'
+    +'</div>'
     +'<div class="kl-hero-main">'
     +'<div class="l">Saldo akhir &middot; <span style="text-transform:none;letter-spacing:0">saldo awal + setoran &minus; hak amil &minus; UMP</span></div>'
     +'<div class="v'+(H.saldoAkhir<0?' minus':'')+'">'+klRp(H.saldoAkhir)+'</div>'
-    +'</div>'
-    +'<div class="kl-hero-meta">'
-    +'<div><span class="ml">Kantor</span><span class="mv">'+esc(d.nama)+'</span></div>'
-    +'<div><span class="ml">Diperbarui</span><span class="mv">'+esc(waktu.tgl)+(waktu.jam?' · '+esc(waktu.jam):'')+'</span></div>'
     +'</div></div>';
-
   h+='<div class="kl-tabs" role="tablist">'
     +tabBtn('himpun','Penghimpunan')+tabBtn('ump','UMP')+tabBtn('lpj','LPJ')
     +tabBtn('ringkas','Ringkasan')+tabBtn('log','Log')
@@ -860,6 +888,9 @@ function klTab(t){
 }
 function gambarIsi(){
   var box=document.getElementById('klIsi');
+  /* Lepas Tom Select lama dulu: kalau tidak, blur/tutup-nya bentrok dengan penggantian isi. */
+  try{ if(document.activeElement&&document.activeElement!==document.body&&box&&box.contains(document.activeElement)) document.activeElement.blur(); }catch(e){}
+  if(box){ box.querySelectorAll('select.kl-sel').forEach(function(s){ if(s.tomselect){ try{ s.tomselect.destroy(); }catch(e){} } }); }
   if(box) box.innerHTML=isiSekarang();
   aktifkanSel(box); pasangKelasTS();
   var bar=document.getElementById('klSavebar');
@@ -1067,7 +1098,7 @@ function isiUmp(){
       var berajuan=pec||ajuanBaris('ump',x.kunci,'nominal')||ajuanBaris('ump',x.kunci,'tanggal')||ajuanBaris('ump',x.kunci,'keterangan');
       var ket=ketTampil(nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||''),x.layanan);
       var tombolPec=pec
-        ?'<button class="kl-ganti" type="button" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos</button>'
+        ?''
         :'<button class="kl-ganti" type="button" onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar</button>';
       h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
         +klTglHTML({nilai:nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal), lama:x.tanggal, jenis:'ump', kunci:x.kunci, ajuan:!!ajuanBaris('ump',x.kunci,'tanggal')})+'</td>'
@@ -1082,16 +1113,35 @@ function isiUmp(){
       if(pec){
         var tot=pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0);
         h+='<tr class="kl-pec-row"><td colspan="6"><div class="kl-pec">'
+          +'<div class="kl-pec-judul">Pecah pilar &middot; pilih pilar lalu isi nominalnya</div>'
           +pec.map(function(p,i2){
+            var kk=x.kunci+'|'+i2, lain=!!PEC_LAIN[kk];
+            var kantorBeda=p.kantor&&p.kantor!==kantorSendiri();
+            var pilarIsi=lain
+              ?'<input class="kl-edit kl-pec-lain" type="text" maxlength="60" value="'+esc(p.pilar)+'" placeholder="Tulis nama pilar / pos sendiri"'
+                +' aria-label="Pilar tulis sendiri" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'pilar\',this.value.trim())">'
+                +'<button class="kl-pec-tbl" type="button" onclick="umpPecLain(\''+esc(x.kunci)+'\','+i2+',false)">Pilih dari daftar</button>'
+              :klSel(pilarOpsi(p.pilar,true),p.pilar,function(v){
+                  /* Gambar ulang ditunda: Tom Select masih memproses pilihan ini. */
+                  setTimeout(function(){
+                    if(v==='__lain') umpPecLain(x.kunci,i2,true); else umpPecUbah(x.kunci,i2,'pilar',v);
+                  },80);
+                },'kl-pilih-pilar');
             return '<div class="kl-pec-baris">'
-              +klSel(pilarOpsi(p.pilar),p.pilar,function(v){umpPecUbah(x.kunci,i2,'pilar',v);})
-              +klSel(kantorOpsi(p.kantor),p.kantor,function(v){umpPecUbah(x.kunci,i2,'kantor',v);})
-              +'<input class="kl-edit n" type="number" min="0" step="1000" value="'+Number(p.nominal)+'"'
-              +' onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'nominal\',this.value)">'
-              +'<button class="kl-batal" type="button" title="Hapus pecahan ini" onclick="umpPecHapus(\''+esc(x.kunci)+'\','+i2+')">×</button>'
+              +'<span class="kl-pec-no">'+(i2+1)+'</span>'
+              +'<div class="kl-pec-pilar">'+pilarIsi+'</div>'
+              +'<div class="kl-pec-nom"><span>Rp</span><input class="kl-edit n" type="number" min="0" step="1000" value="'+Number(p.nominal)+'"'
+              +' aria-label="Nominal pos '+(i2+1)+'" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'nominal\',this.value)"></div>'
+              +'<button class="kl-batal" type="button" title="Hapus pos ini" onclick="umpPecHapus(\''+esc(x.kunci)+'\','+i2+')">&times;</button>'
+              +(kantorBeda||PEC_KANTOR[kk]
+                ?'<div class="kl-pec-kantor"><span>Milik kantor</span>'+klSel(kantorOpsi(p.kantor),p.kantor,function(v){umpPecUbah(x.kunci,i2,'kantor',v);})+'</div>'
+                :'')
               +'</div>';
           }).join('')
-          +'<div class="kl-pec-sum'+(tot>Number(x.nominal)?' more':'')+'">Total pecahan '+klRp(tot)+' dari '+klRp(x.nominal)+'</div>'
+          +'<div class="kl-pec-foot"><button class="kl-ganti" type="button" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos</button>'
+          +'<button class="kl-ganti kl-ganti-pel" type="button" onclick="umpPecKantor(\''+esc(x.kunci)+'\')">Pindah kantor</button>'
+          +'<div class="kl-pec-sum'+(tot>Number(x.nominal)?' more':(tot<Number(x.nominal)?' sisa':''))+'">Total '+klRp(tot)+' dari '+klRp(x.nominal)
+          +(tot<Number(x.nominal)?' &middot; sisa '+klRp(Number(x.nominal)-tot):'')+(tot>Number(x.nominal)?' &middot; melebihi '+klRp(tot-Number(x.nominal)):'')+'</div></div>'
           +'</div></td></tr>';
       }
     });
@@ -1113,14 +1163,20 @@ function isiUmp(){
 function ketTampil(ket,layanan){
   var t=String(ket==null?'':ket);
   if(layanan){ try{ t=t.replace(new RegExp('^\\s*'+String(layanan).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*','i'),''); }catch(e){} }
-  t=t.replace(/^\s*(KLL|ULL|KL)\b[\s:.\-]*/i,'').trim();
-  return t;
+  t=t.replace(/^\s*(KLL|ULL|KL|UL)\b[\s:.\-]*/i,'');
+  var nm=String((typeof DATA!=='undefined'&&DATA&&DATA.nama)||'').replace(/^\s*(KLL|ULL|KL|UL)\b[\s:.\-]*/i,'').trim();
+  if(nm){ try{ t=t.replace(new RegExp('^\\s*'+nm.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[\\s:.\\-]*','i'),''); }catch(e){} }
+  t=t.trim();
+  return t.charAt(0).toUpperCase()+t.slice(1);
 }
-function pilarOpsi(pilih){
+var PEC_LAIN={}, PEC_KANTOR={};
+function pilarOpsi(pilih,denganLain){
   var ls=(DATA.pilarDaftar||[]).slice();
   ['Zakat','Infak Umum','Amil'].forEach(function(p){ if(ls.indexOf(p)<0) ls.push(p); });
   if(pilih&&ls.indexOf(pilih)<0)ls.push(pilih);
-  return [{v:'',t:'- pilar -'}].concat(ls.map(function(p){return {v:p,t:p};}));
+  var o=[{v:'',t:'- pilih pilar -'}].concat(ls.map(function(p){return {v:p,t:p};}));
+  if(denganLain) o.push({v:'__lain',t:'Lainnya (tulis sendiri)'});
+  return o;
 }
 function kantorOpsi(pilih){
   var ls=(DATA.kantorDaftar||[]).slice();
@@ -1194,6 +1250,27 @@ function kantorSendiri(){
 function pilarDariDana(dana){
   return String(dana||'')==='Zakat'?'Zakat':'Infak Umum';
 }
+function umpPecLain(kunci,i2,nyala){
+  var kk=kunci+'|'+i2; if(nyala) PEC_LAIN[kk]=true; else delete PEC_LAIN[kk];
+  var pec=umpPecahan(kunci);
+  if(nyala&&pec&&pec[i2]) pec[i2].pilar='';
+  draftSimpan(); gambarIsi();
+  var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+  if(nyala){ var r=document.querySelectorAll('tr[data-kunci="'+kunci+'"]'); var b=document.querySelectorAll('.kl-pec-lain'); if(b.length) b[b.length-1].focus(); }
+}
+/* Setelah baris baru tampil: dropdown pilar baris itu langsung terbuka. */
+function umpPecBukaTerakhir(){
+  var s=document.querySelectorAll('.kl-pec-baris select.kl-pilih-pilar'), el=s[s.length-1];
+  if(!el) return;
+  var row=el.closest('.kl-pec-baris'); if(row&&row.scrollIntoView) row.scrollIntoView({block:'center',behavior:'smooth'});
+  if(el.tomselect){ el.tomselect.focus(); el.tomselect.open(); }
+  else{ try{ el.focus(); }catch(e){} }
+}
+function umpPecKantor(kunci){
+  var pec=umpPecahan(kunci)||[], buka=!(pec.length&&PEC_KANTOR[kunci+'|0']);
+  pec.forEach(function(p,i){ if(buka) PEC_KANTOR[kunci+'|'+i]=true; else delete PEC_KANTOR[kunci+'|'+i]; });
+  gambarIsi();
+}
 function umpPecMulai(kunci){
   var x=(DATA.ump||[]).find(function(u2){return u2.kunci===kunci;});
   if(!x)return;
@@ -1201,6 +1278,7 @@ function umpPecMulai(kunci){
   SINKRON.ajuan['ump|'+kunci+'|pecahan']={jenis:'ump',kunci:kunci,kolom:'pecahan',nilai:pec,catatan:'pecahan pilar',waktu:new Date().toISOString()};
   draftSimpan(); gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+  umpPecBukaTerakhir();
 }
 function umpPecTambah(kunci){
   var pec=umpPecahan(kunci); if(!pec)return;
@@ -1210,10 +1288,12 @@ function umpPecTambah(kunci){
   pec.push({pilar:pilarDariDana(x&&x.dana),kantor:kantorSendiri(),nominal:sisa});
   draftSimpan(); gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+  umpPecBukaTerakhir();
 }
 function umpPecHapus(kunci,i2){
   var pec=umpPecahan(kunci); if(!pec)return;
   pec.splice(i2,1);
+  Object.keys(PEC_LAIN).forEach(function(k){ if(k.indexOf(kunci+'|')===0) delete PEC_LAIN[k]; });
   if(!pec.length){ sinkronHapus('ump',kunci,'pecahan'); return; }
   draftSimpan(); gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
@@ -1368,7 +1448,7 @@ function isiLpj(){
       +'</tr></thead><tbody>';
     hub.urut.forEach(function(u){
       var pot=hub.tertutup[u.kunci]||0, sisaU=hub.sisa[u.kunci]||0;
-      h+='<tr><td>'+klTgl(u.tanggal)+'</td><td class="w">'+esc(u.keterangan||'—')+'</td>'
+      h+='<tr><td>'+klTgl(u.tanggal)+'</td><td class="w">'+esc(ketTampil(u.keterangan,u.layanan)||'-')+'</td>'
         +'<td class="n">'+klRp(u.nominal)+'</td>'
         +'<td class="n" style="color:var(--green)">'+(pot?klRp(pot):'—')+'</td>'
         +'<td class="n"'+(sisaU>0?' style="color:var(--red);font-weight:800"':'')+'>'+klRp(sisaU)+'</td></tr>';
