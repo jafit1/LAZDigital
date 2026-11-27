@@ -158,7 +158,8 @@ const cek = (n, sy, i) => { if (sy) { ok++; console.log('  OK   | ' + n); } else
   cek('Halaman: kolom Diambil amil + tombol Simpan + cadangan peramban', /Diambil amil/.test(html) && /klSimpan\(\)/.test(html) && /sinkronKLDraft_/.test(html));
   cek('Halaman: pecahan pilar UMP - tombol pecah + pilih pilar & kantor + hasil baru bertahap', /umpPecMulai/.test(html) && /pilarOpsi/.test(html) && /kantorOpsi/.test(html) && /hitungSemua/.test(html) && /SALDO AKHIR/.test(html) && /BELUM LPJ/.test(html));
   cek('Halaman: LPJ bisa menunjuk UMP (editor tujuan + ajuan lpj.tujuan)', /lpjEditor/.test(html) && /lpjTujuanUbah/.test(html) && /kolom:.tujuan|'tujuan'/.test(html));
-  cek('Halaman: lebarkan di laptop/desktop, tetap otomatis di HP', /data-perangkat="laptop".*kl-wrap|max-width:1560px/.test(html));
+  cek('Halaman: menu tab ergonomis - sticky di atas (desktop), tab bawah di HP, dan dropdown dapat dicari (Tom Select)', /position:sticky;top:8px/.test(html) && /bottom:calc\(8px \+ env\(safe-area-inset-bottom/.test(html) && html.indexOf('tom-select.complete.min.js') >= 0);
+  cek('Halaman: editor tujuan LPJ memakai pencari UMP (klSelCari), bukan deretan panjang', /klSelCari/.test(html) && /kl-tujuan-tambah/.test(html));
 
   console.log('\ntest_sinkron_kl.js  ' + ok + '/' + (ok + g) + (g ? '  ADA YANG GAGAL' : '  SEMUA LULUS'));
   process.exit(g ? 1 : 0);

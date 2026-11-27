@@ -14,6 +14,8 @@
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"></noscript>
 <link rel="stylesheet" href="/styles.css">
 <script src="/js/lz-perangkat.js"></script>
+<link rel="stylesheet" href="/js/vendor/tom-select/tom-select.css">
+<script src="/js/vendor/tom-select/tom-select.complete.min.js" defer></script>
 <script src="/js/lz-tema.js"></script>
 <script>
 /* Tema dipasang sebelum isi halaman digambar: kalau menunggu lz-tema.js,
@@ -29,11 +31,6 @@
   body{padding:0;margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
        -webkit-text-size-adjust:100%;}
   .kl-wrap{max-width:1040px;margin:0 auto;padding:20px 14px 40px;}
-  /* Laptop/desktop: halaman dilebarkan supaya tabel tidak sesak. */
-  @media(min-width:1100px){
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .kl-wrap{max-width:1560px;padding:28px 24px 48px}
-    html:is([data-perangkat="laptop"],[data-perangkat="desktop"]) .kl-tw table{font-size:12.5px}
-  }
 
   /* --- kepala --- */
   .kl-head{
@@ -116,8 +113,11 @@
   .kl-hero-meta .mv{display:block;font-size:13px;font-weight:600;line-height:1.45;margin-top:2px;color:var(--text);overflow-wrap:anywhere}
 
   /* --- tab --- */
-  .kl-tabs{display:flex;gap:4px;padding:4px;background:var(--surface2);border:1px solid var(--border);
-           border-radius:12px;margin-bottom:14px;flex-wrap:wrap}
+  /* --- tab: desktop menempel di atas saat digulir; di HP turun ke bawah
+     (zona jempol), posisi paling nyaman dioperasikan satu tangan. --- */
+  .kl-tabs{display:flex;gap:4px;padding:4px;background:color-mix(in srgb,var(--surface2) 92%,transparent);
+           border:1px solid var(--border);border-radius:12px;margin-bottom:14px;flex-wrap:wrap;
+           position:sticky;top:8px;z-index:40;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
   .kl-tab{
     flex:1 1 0;min-width:0;border:0;background:transparent;color:var(--muted);
     font-family:var(--sans);font-size:12.5px;font-weight:700;padding:9px 8px;border-radius:9px;
@@ -370,42 +370,35 @@
   }
   .kl-kal-aksi:hover{border-color:var(--accent);color:var(--accent)}
 
-  /* --- dropdown pilih kustom (pengganti select bawaan) --- */
-  .kl-sel{
-    display:inline-flex;align-items:center;gap:6px;height:30px;max-width:100%;
-    border:1px solid var(--border);border-radius:8px;background:var(--surface);
-    color:var(--text);font:600 12px var(--sans);padding:0 9px;outline:none;cursor:pointer;
-  }
-  .kl-sel span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .kl-sel svg{width:12px;height:12px;flex:none;color:var(--muted);transition:transform .15s}
-  .kl-sel:hover{border-color:var(--accent)}
-  .kl-sel:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px rgba(242,112,79,.14)}
-  .kl-sel[aria-expanded="true"] svg{transform:rotate(180deg)}
-  .kl-sel.sudah{color:var(--green);border-color:rgba(26,162,96,.45);font-weight:800}
-  .kl-sel.belum{color:var(--red);border-color:rgba(220,60,60,.4);font-weight:800}
-  .kl-sel.ajuan{border-style:dashed;border-color:var(--accent)}
-  .kl-selmenu{
-    position:absolute;z-index:85;min-width:110px;max-width:290px;max-height:min(340px,55vh);
-    overflow:auto;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:12px;
-    box-shadow:0 18px 42px -18px rgba(0,0,0,.5);
-  }
-  .kl-selopsi{
-    display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:34px;
-    padding:7px 10px;border:0;border-radius:8px;background:transparent;color:var(--text2);
-    font:600 12.5px var(--sans);text-align:left;cursor:pointer;
-  }
-  .kl-selopsi:hover,.kl-selopsi:focus-visible{background:var(--surface2);color:var(--text);outline:none}
-  .kl-selopsi.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:800}
-  .kl-selopsi svg{width:13px;height:13px;flex:none;color:var(--accent)}
-  .kl-pec-baris .kl-sel{flex:1 1 90px;min-width:0;height:32px;font-size:11.5px}
+  /* --- dropdown dapat dicari: Tom Select, satu tema dengan halaman --- */
+  .kl-ts{min-width:96px;font-family:var(--sans)}
+  .kl-ts .ts-control,.ts-wrapper.single .ts-control{background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;color:var(--text);font:600 12px var(--sans);min-height:30px;padding:2px 9px;cursor:pointer}
+  .ts-wrapper.single .ts-control{padding-right:26px}
+  .ts-wrapper.single .ts-control:after{border-top-color:var(--muted)}
+  .ts-wrapper.focus .ts-control{border-color:var(--accent);box-shadow:0 0 0 3px rgba(242,112,79,.14)}
+  .kl-ts .ts-control input{font-size:12px}
+  .kl-ts.ajuan .ts-control{border-style:dashed;border-color:var(--accent)}
+  .kl-ts.sudah .ts-control{color:var(--green);border-color:rgba(26,162,96,.45);font-weight:800}
+  .kl-ts.belum .ts-control{color:var(--red);border-color:rgba(220,60,60,.4);font-weight:800}
+  .ts-dropdown{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    box-shadow:0 18px 42px -18px rgba(0,0,0,.5);font-family:var(--sans);font-size:12.5px;color:var(--text2);
+    max-height:min(340px,55vh);overflow:auto}
+  .ts-dropdown .option{padding:7px 10px;border-radius:8px;font-weight:600}
+  .ts-dropdown .option:hover{background:var(--surface2);color:var(--text)}
+  .ts-dropdown .active{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:800}
+  .ts-dropdown .no-results{color:var(--muted);font-size:12px}
+  .kl-pec-baris .kl-ts{flex:1 1 90px;min-width:0}
+  .kl-pec-baris .kl-ts .ts-control{min-height:32px;font-size:11.5px}
 
-  /* --- editor tujuan UMP di tab LPJ --- */
+  /* --- editor tujuan UMP di tab LPJ: baris alokasi + pencari UMP --- */
   .kl-tujuan{margin-top:12px;padding:12px 14px;border:1px dashed var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
-  .kl-tujuan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-top:8px}
-  .kl-tujuan-baris{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);min-width:0}
-  .kl-tujuan-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .kl-tujuan-baris .kl-edit{width:120px;flex:none;height:30px;text-align:right}
-  .kl-tujuan-aksi{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .kl-tujuan-baris{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);min-width:0;padding:5px 0}
+  .kl-tujuan-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-weight:700}
+  .kl-tujuan-baris .kl-edit{width:118px;flex:none;height:30px;text-align:right}
+  .kl-tujuan-tambah{margin-top:8px}
+  .kl-tujuan-tambah .ts-control{background:var(--surface2)}
+  .kl-tujuan-aksi{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
 
   /* --- pemberitahuan sinkron otomatis --- */  .kl-toast{
     position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);z-index:90;
@@ -435,6 +428,12 @@
     table.kl-tbl.kecil{min-width:0}
     table.kl-tbl.kecil th,table.kl-tbl.kecil td{padding:7px 8px}
     .kl-tab{font-size:11.5px;padding:8px 6px}
+    /* HP: tab pindah ke bawah layar (dijangkau jempol), isi diberi ruang di bawah. */
+    .kl-tabs{position:fixed;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom,0px));top:auto;z-index:60;
+             border-radius:16px;box-shadow:0 14px 34px -14px rgba(0,0,0,.55);margin:0;flex-wrap:nowrap}
+    .kl-tab{flex-direction:column;gap:2px;font-size:10.5px;padding:8px 2px;border-radius:11px}
+    .kl-wrap{padding-bottom:110px}
+    .kl-savebar{bottom:calc(64px + env(safe-area-inset-bottom,0px))}
   }
   @media print{
     .kl-tema{display:none!important}
@@ -805,6 +804,7 @@ function gambarHasil(){
     +'</div><div id="klIsi">'+isiSekarang()+'</div>'
     +saveBar();
   document.getElementById('klHasil').innerHTML=h;
+  aktifkanSel(); pasangKelasTS();
 }
 function tabBtn(k,label){
   var on=TAB===k;
@@ -826,6 +826,7 @@ function klTab(t){
 function gambarIsi(){
   var box=document.getElementById('klIsi');
   if(box) box.innerHTML=isiSekarang();
+  aktifkanSel(box); pasangKelasTS();
   var bar=document.getElementById('klSavebar');
   if(bar) bar.outerHTML=saveBar();
 }
@@ -1075,75 +1076,56 @@ function kantorOpsi(pilih){
 }
 
 /* ================= DROPDOWN PILIH KUSTOM =================
-   Pengganti <select> bawaan peramban (status amil, pecahan pilar & kantor).
-   Tampilannya satu tema dengan kalender: tombol + menu melayang berkas
-   ceklis. Nilai yang dikirim ke mesin tetap 'sudah'/'belum' agar mesin &
-   log daerah tidak berubah — yang berganti hanya label Ya/Tidak. */
+   Pengganti <select> bawaan peramban: tampilan Tom Select (MIT) yang
+   membawa bar pencarian ketik di dalam dropdown, satu tema dengan halaman.
+   Nilai yang dikirim ke mesin tetap 'sudah'/'belum' agar mesin & log daerah
+   tidak berubah — yang berganti hanya label Ya/Tidak. Kalau pustaka gagal
+   dimuat, <select> asli tetap berfungsi. */
 var KL_OPSI={}, KL_SEL_N=0;
-var SVG_CHEV='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
-var SVG_CEKLIS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 7"/></svg>';
 function klSel(opsi,nilai,fn,kelas,lama,ajuan){
   var id='s'+(++KL_SEL_N);
   KL_OPSI[id]={opsi:opsi,fn:fn};
-  var cur=null;
-  opsi.forEach(function(o){ if(String(o.v)===String(nilai)) cur=o; });
-  return '<button type="button" class="kl-sel'+(kelas?' '+kelas:'')+(ajuan?' ajuan':'')
-    +'" data-id="'+id+'" data-nilai="'+esc(nilai==null?'':nilai)+'"'
-    +(lama!=null?' data-lama="'+esc(lama)+'"':'')
-    +' aria-haspopup="listbox" aria-expanded="false" onclick="klSelBuka(this,\''+id+'\')">'
-    +'<span>'+esc(cur?cur.t:'- pilih -')+'</span>'+SVG_CHEV+'</button>';
+  var h='<select class="kl-sel'+(kelas?' '+kelas:'')+(ajuan?' ajuan':'')+'" data-id="'+id+'" data-nilai="'+esc(nilai==null?'':nilai)+'"'
+    +(lama!=null?' data-lama="'+esc(lama)+'"':'')+' aria-label="Pilihan">';
+  opsi.forEach(function(o){ h+='<option value="'+esc(o.v==null?'':o.v)+'"'+(String(o.v)===String(nilai)?' selected':'')+'>'+esc(o.t)+'</option>'; });
+  return h+'</select>';
 }
-var KL_MENU=null,KL_MENU_BTN=null;
-function klMenuTutup(){
-  if(KL_MENU){ KL_MENU.remove(); KL_MENU=null; }
-  if(KL_MENU_BTN) KL_MENU_BTN.setAttribute('aria-expanded','false');
-  KL_MENU_BTN=null;
-  document.removeEventListener('pointerdown',klMenuLuar,true);
-  document.removeEventListener('keydown',klMenuTombol);
-  window.removeEventListener('resize',klMenuPos);
-  window.removeEventListener('scroll',klMenuPos,true);
+/* Pasang Tom Select pada <select> yang belum aktif. Dipanggil setiap isi
+   halaman digambar ulang (render, ganti tab, buka editor). */
+function aktifkanSel(akar){
+  var daftar=(akar||document).querySelectorAll('select.kl-sel');
+  for(var i=0;i<daftar.length;i++){
+    var el=daftar[i];
+    if(el.getAttribute('data-aktif')) continue;
+    el.setAttribute('data-aktif','1');
+    var reg=KL_OPSI[el.getAttribute('data-id')];
+    el.addEventListener('change',(function(el,reg){ return function(){ if(reg&&reg.fn) reg.fn(el.value,el); }; })(el,reg));
+    if(window.TomSelect){
+      try{
+        new TomSelect(el,{ maxOptions:300, closeAfterSelect:true, hideSelected:false, placeholder:'- pilih -' });
+      }catch(err){}
+    }
+  }
 }
-function klMenuLuar(e){
-  if(!KL_MENU) return;
-  if(KL_MENU.contains(e.target)||(KL_MENU_BTN&&KL_MENU_BTN.contains(e.target))) return;
-  klMenuTutup();
-}
-function klMenuTombol(e){
-  if(!KL_MENU) return;
-  if(e.key==='Escape'){ var b=KL_MENU_BTN; klMenuTutup(); if(b){try{b.focus();}catch(err){}} }
-}
-function klMenuPos(){ if(KL_MENU&&KL_MENU_BTN) klPopPosisi(KL_MENU,KL_MENU_BTN); }
-function klSelBuka(btn,id){
-  klTglTutup();
-  if(KL_MENU_BTN===btn){ klMenuTutup(); return; }
-  klMenuTutup();
-  var reg=KL_OPSI[id]; if(!reg) return;
-  KL_MENU_BTN=btn;
-  KL_MENU=document.createElement('div');
-  KL_MENU.className='kl-selmenu'; KL_MENU.setAttribute('role','listbox');
-  var nilai=btn.getAttribute('data-nilai');
-  KL_MENU.innerHTML=reg.opsi.map(function(o){
-    var on=String(o.v)===String(nilai);
-    return '<button type="button" role="option" class="kl-selopsi'+(on?' on':'')+'" data-v="'+esc(o.v==null?'':o.v)+'">'+esc(o.t)+(on?SVG_CEKLIS:'')+'</button>';
-  }).join('');
-  document.body.appendChild(KL_MENU);
-  try{ KL_MENU.style.minWidth=Math.max(110,btn.getBoundingClientRect().width)+'px'; }catch(err){}
-  KL_MENU.addEventListener('click',function(e){
-    var b=e.target&&e.target.closest?e.target.closest('.kl-selopsi'):null;
-    if(!b) return;
-    var v=b.getAttribute('data-v');
-    klMenuTutup();
-    reg.fn(v,btn);
+/* Tom Select menyembunyikan <select> asli; kelas khusus (sudah/belum/ajuan)
+   dipindah ke selubungnya supaya gaya lama tetap jalan. */
+function pasangKelasTS(){
+  document.querySelectorAll('select.kl-sel').forEach(function(el){
+    var ts=el.tomselect; if(!ts||!ts.wrapper||ts.wrapper.getAttribute('data-beri-kelas')) return;
+    ts.wrapper.setAttribute('data-beri-kelas','1');
+    el.classList.forEach(function(k){ if(k!=='kl-sel') ts.wrapper.classList.add(k); });
+    ts.wrapper.classList.add('kl-ts');
   });
-  btn.setAttribute('aria-expanded','true');
-  klPopPosisi(KL_MENU,btn);
-  setTimeout(function(){
-    document.addEventListener('pointerdown',klMenuLuar,true);
-    document.addEventListener('keydown',klMenuTombol);
-    window.addEventListener('resize',klMenuPos);
-    window.addEventListener('scroll',klMenuPos,true);
-  },0);
 }
+/* Pencari UMP untuk editor tujuan LPJ: dropdown + bar pencarian. */
+function klSelCari(idTeks,opsiCari,fn){
+  var id='c'+(++KL_SEL_N);
+  KL_OPSI[id]={opsi:opsiCari,fn:fn};
+  var h='<select class="kl-sel kl-cari" data-id="'+id+'">';
+  opsiCari.forEach(function(o){ h+='<option value="'+esc(o.v==null?'':o.v)+'">'+esc(o.t)+'</option>'; });
+  return h+'</select>';
+}
+function klMenuTutup(){}
 /* Nama kantor ini di bentuk daftar (dengan awalan KLL/ULL). */
 function kantorSendiri(){
   var ls=DATA.kantorDaftar||[],nm=DATA.nama||'';
@@ -1407,6 +1389,11 @@ function lpjTujuanOtomatis(kunci){
   draftSimpan(); gambarIsi();
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
 }
+function lpjTujuanTambah(kunci,umpKunci,nominal){
+  var butir=(lpjTujuanNilai(kunci)||[]).filter(function(b){ return b.kunci!==umpKunci; });
+  butir.push({kunci:umpKunci,nominal:Math.max(0,Number(nominal)||0)});
+  lpjTujuanSimpan(kunci,butir);
+}
 function editorTujuan(x){
   var hub=hubungkanUmpLpj();
   var kunci=x.kunci;
@@ -1417,14 +1404,29 @@ function editorTujuan(x){
   Object.keys(alok).forEach(function(k){ jum+=alok[k]; });
   var h='<div class="kl-tujuan"><div class="kl-label" style="font-size:12px"><span class="dot"></span> Tujuan UMP untuk LPJ '+esc(klTgl(x.tanggal))
     +'<span class="n">'+(jum>totalLpj?'alokasi melebihi LPJ':'total alokasi '+esc(klRp(jum)))+'</span></div>';
-  h+='<div class="kl-tujuan-grid">';
-  hub.urut.forEach(function(u,i2){
-    var v=alok[u.kunci]!==undefined?alok[u.kunci]:'';
-    h+='<label class="kl-tujuan-baris"><span class="kl-tujuan-nm">'+klTgl(u.tanggal)+' · '+esc(u.keterangan||'UMP')+'</span>'
-      +'<input class="kl-edit n" type="number" min="0" step="1000" value="'+(v===''?'':v)+'" placeholder="0"'
-      +' onchange="lpjTujuanUbah(\''+esc(kunci)+'\',\''+esc(u.kunci)+'\',this.value)"></label>';
+  var baris=0;
+  Object.keys(alok).forEach(function(k){
+    var u=null;
+    hub.urut.forEach(function(z){ if(z.kunci===k) u=z; });
+    if(!u) return;
+    baris++;
+    h+='<div class="kl-tujuan-baris"><span class="kl-tujuan-nm">'+klTgl(u.tanggal)+' &middot; '+esc(u.keterangan||'UMP')+'</span>'
+      +'<input class="kl-edit n" type="number" min="0" step="1000" value="'+alok[k]+'" data-ump="'+esc(k)+'"'
+      +' onchange="lpjTujuanUbah(\''+esc(kunci)+'\',\''+esc(k)+'\',this.value)" aria-label="Nominal alokasi">'
+      +'<button class="kl-batal" type="button" title="Hapus alokasi ini" onclick="lpjTujuanUbah(\''+esc(kunci)+'\',\''+esc(k)+'\',\'\')">&times;</button></div>';
   });
-  h+='</div><div class="kl-tujuan-aksi">'
+  /* Pencari UMP yang belum dialokasikan: dropdown + bar pencarian. */
+  var sisa=totalLpj-jum;
+  var opsiU=hub.urut.filter(function(u){ return alok[u.kunci]===undefined; });
+  if(opsiU.length){
+    h+='<div class="kl-tujuan-tambah">'+klSelCari('ump',opsiU.map(function(u){
+      return { v:u.kunci, t:klTgl(u.tanggal)+' · '+esc(u.keterangan||'UMP')+' · '+klRp(u.nominal) };
+    }),function(v){
+      if(!v) return;
+      lpjTujuanTambah(kunci,v,sisa>0?sisa:0);
+    })+'</div>';
+  }
+  h+='<div class="kl-tujuan-aksi">'
     +'<button class="kl-batal" type="button" onclick="lpjTujuanOtomatis(\''+esc(kunci)+'\')">Pakai otomatis (urut tanggal)</button>'
     +'<button class="kl-simpan" type="button" style="height:30px;padding:0 14px;font-size:12px" onclick="lpjEditor(\''+esc(kunci)+'\')">Tutup</button></div></div>';
   return h;
