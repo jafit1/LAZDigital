@@ -257,6 +257,9 @@ const srv = http.createServer(async (req, res) => {
       console.log('\n=== F. HALAMAN KLL & ULL ===');
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(A + '/harian.html?t=' + lK.token);
+      /* Sejak 4d784d7 link kantor dibuka langsung di tampilan Bulanan;
+         untuk menguji tampilan harian, pindah ke tab Harian dulu. */
+      await page.evaluate(() => { const b = document.getElementById('lhModeH'); if (b) b.click(); });
       await page.waitForSelector('.lh-kantor-kartu', { timeout: 15000 });
       const isiK = await page.evaluate(() => document.body.innerText);
       cek('ringkasan per kantor tampil', /KLL Kota Contoh/.test(isiK) && /ULL Masjid Contoh/.test(isiK));
@@ -352,7 +355,9 @@ const srv = http.createServer(async (req, res) => {
       const adm = await page.evaluate(() => [...document.querySelectorAll('.lh-admin-kartu')].map((x) => x.innerText));
       cek('jendela admin menampilkan dua link: donatur dan KLL/ULL', adm.length === 2 && /Donatur/i.test(adm[0]) && /KLL/.test(adm[1]), adm);
       const nilaiUrl = await page.evaluate(() => [...document.querySelectorAll('.lh-admin-kartu input')].map((i) => i.value).join(' '));
-      cek('alamat link memuat token yang aktif dan menuju harian.html', nilaiUrl.includes(lD2.token) && nilaiUrl.includes(lK.token) && /harian\.html\?t=/.test(nilaiUrl), nilaiUrl);
+      /* Alamat pendek (20 Nov 2026): donatur & kantor memakai /h/<kode>,
+         kartu KL juga menampung tautan UMP /u/<kode>. */
+      cek('alamat link memuat kode pendek yang aktif: donatur & KLL/ULL di /h/, UMP di /u/', nilaiUrl.includes('/h/' + lD2.kode) && nilaiUrl.includes('/h/' + lK.kode) && nilaiUrl.includes('/u/'), nilaiUrl);
       cek('tidak ada galat JavaScript', galatHal.length === 0, galatHal);
     } finally {
       await browser.close();
