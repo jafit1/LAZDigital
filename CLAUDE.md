@@ -799,6 +799,30 @@ dibuat ulang, hasil basi dianggap sah. Penanda harus acak.
 masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
 `pakaiPostgres()`, jangan percaya nama.
 
+**`apiSavePentasyarufan` selalu INSERT, juga saat argumennya membawa `d.id`.**
+Maksud hati menyunting baris, yang terjadi menambah baris kembar. Pernah dipakai
+untuk relabel 4 baris "KLL Bnatul Kota" dan melahirkan 4 duplikat yang harus
+dihapus satu per satu. Untuk mengubah isi baris pakai `apiSelaraskanJurnal`,
+bukan `apiSave*` dengan id.
+
+**`apiSelaraskanJurnal` menerima `UangMuka` dan `Transfer` juga.** Tabel yang
+dikenal: `Penghimpunan`, `Pentasyarufan`, `UangMuka`, `Transfer`. Bentuk
+panggilan `apiSelaraskanJurnal(token, [{tabel, id, kolom}])`, hasilnya
+`{ok, ubah, dilewati, bulan}`. Kalau `dilewati` bukan nol, periksa `contohDilewati`
+— biasanya kolom yang diminta tidak ada di tabel itu. `Transfer` hanya punya
+kolom `tanggal` di jalur ini.
+
+**Rekonsiliasi jurnal vs app: pakai bucket kasar, jangan baris-per-baris.**
+Kunci `tanggal|nama huruf kecil|nominal bulat`. Kalau bucketnya seimbang, artinya
+barisnya cuma salah tanggal atau salah ejaan — geser atau relabel. Jangan
+insert. Insert hanya kalau jurnal memang punya baris yang tidak ada di app.
+Tanpa aturan ini, rekonsiliasi 2026 sempat membuat ratusan baris kembar.
+
+**Tanggal jurnal adalah tanggal transaksi, bukan tanggal input.** Baris yang
+dibuat 31 Okt bisa bertanggal 22 Okt. Kalau ragu mana yang dobel, bandingkan
+`dibuat`: yang dibuat belakangan pada kasus UMP/transfer yang nominal dan
+akunnya sama persis hampir selalu baris impor ulang, bukan transaksi kedua.
+
 ---
 
 ## 9. Aturan bisnis yang tidak boleh ditebak
@@ -974,7 +998,30 @@ masih menyebut Redis/Upstash padahal sudah PostgreSQL. Periksa
 
 ## 10. Keadaan sekarang dan pekerjaan tertunda
 
-Per 29 September 2026, dengan tambahan terakhir 23 November 2026 di bawah.
+Per 29 September 2026, dengan tambahan terakhir 27 November 2026 di bawah.
+
+**Ditambahkan 27 November 2026: impor jurnal bank/tunai/UMP/transfer, keputusan pemilik.**
+
+- **Sumber kebenaran = jurnal Excel.** Perintah pemilik: semua yang ada di
+  jurnal masuk app, tanpa kecuali, dengan tanggal jurnal. Baris app tanpa
+  pasangan jurnal tidak dihapus otomatis — dilaporkan, hapus hanya bila
+  terbukti salah input (nominal, akun, dana sama; baris berdekatan).
+- **Alur:** jurnal diurai ke `Downloads/jurnal-bank-26nov/parse-produksi-dump.json`
+  (himpun 2618, salur 4000, ump 616, transfer 396) + `tsv-tunai-*.tsv`.
+  Bandingkan dengan bucket kasar (bagian 8). Geser tanggal / relabel lewat
+  `apiSelaraskanJurnal`; hapus lewat `apiDeleteUangMuka`, `apiDeleteTransfer`,
+  `apiHapusBaris`. Skrip cek: `cek-kasar.js` di folder temp opencode.
+- **Hasil 27 Nov:** 969 UMP/transfer digeser −1 hari, 81 baris himpun/UMP/
+  transfer digeser, 245 relabel, typo "KLL Bnatul Kota" → KLL Bantul Kota.
+  Jumlah baris: penghimpunan 5.322, salur 4.027, UMP 617, transfer 399.
+- **Dobel dihapus atas izin pemilik:** UMP Pundong 20 jt `652c701e` (kembar
+  `aacb8e2d` 22 Okt), tiga transfer "Stor tunai BDW" 2 Okt tanpa akun sumber
+  (kembar setor tunai sah 1 Okt). UMP Bantul Kota 20 jt Infak `a1c55ff2`
+  digeser ke 10 Nov — bukan dobel; pasangannya baris Amil 20 jt yang di jurnal
+  dipecah 17 jt + 3 jt.
+- **Masih terbuka:** 24 himpun dan 27 salur di app tanpa pasangan jurnal
+  (dibiarkan); Rp536,3 jt kredit UMP jurnal tanpa nama kantor, sengaja tanpa
+  kantor sampai dikoreksi lebih dalam — jangan tutup rekonsiliasi sebelum itu.
 
 **Ditambahkan 23 November 2026: rekonsiliasi saldo, sisir duplikat, dan dua rekomendasi audit keamanan.**
 
