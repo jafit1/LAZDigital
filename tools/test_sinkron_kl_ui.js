@@ -57,17 +57,30 @@ const srv = http.createServer(async (req, res) => {
   await p.waitForSelector('.kl-hero', { timeout: 15000 });
   cek('Kode akses (yang sama dengan cek saldo) membuka halaman sinkron', await p.evaluate(() => !!document.querySelector('.kl-hero')));
   cek('Lima tab tampil: Penghimpunan / UMP / LPJ / Ringkasan / Log', await p.evaluate(() => [...document.querySelectorAll('.kl-tab')].map((t) => t.getAttribute('data-t')).join(',') === 'himpun,ump,lpj,ringkas,log'));
-  cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('.kl-duo'); }));
+  cek('Tabel setoran punya kolom Diambil amil dengan persen amil di sub', await p.evaluate(() => { const ada = [...document.querySelectorAll('.kl-tbl .sub')].some((s) => /amil/.test(s.textContent)); return ada && !!document.querySelector('.kl-amil-switch'); }));
   cek('Aturan awal tertera: semua diambil amil kecuali kemanusiaan', await p.evaluate(() => /kecuali pilar kemanusiaan/i.test(document.getElementById('klIsi').textContent)));
 
   const tsAmil = await p.evaluate(() => { const s = document.querySelector('select.kl-sel'); return s ? 'ada' : 'tidak'; });
-  cek('Status amil kembali tampil jelas: dua tombol Ya/Tidak (tanpa dropdown, tanpa Tom Select)', await p.evaluate(() => {
-    const duo = document.querySelectorAll('.kl-duo .kl-duo-b');
-    return duo.length >= 2 && duo[0].textContent === 'Ya' && duo[1].textContent === 'Tidak' && !document.querySelector('#klIsi select.kl-sel');
+  cek('Status amil: sakelar Ya/Tidak + catatan nilai efektif di bawahnya (tanpa dropdown)', await p.evaluate(() => {
+    const sw = document.querySelector('.kl-amil-switch input[type="checkbox"]');
+    const note = document.querySelector('.kl-amil-note');
+    return !!sw && !!note && /amil|ambil/.test(note.textContent) && !document.querySelector('#klIsi select.kl-sel');
   }), tsAmil);
-  await p.evaluate(() => document.querySelector('#klIsi .kl-duo-b:last-child').click());
+  /* Klik sakelar yang sedang "Ya" → "Tidak": halaman tidak boleh digambar ulang / bergeser. */
+  const geser = await p.evaluate(() => {
+    const sw = [...document.querySelectorAll('.kl-amil-switch input')].find((i) => i.checked);
+    if (!sw) return { ada: false };
+    sw.scrollIntoView({ block: 'center' });
+    const y0 = window.scrollY, tabel = document.querySelector('#klIsi .kl-tbl');
+    const kunci = sw.parentNode.getAttribute('data-kunci');
+    sw.click();
+    const note = document.querySelector('.kl-amil-note[data-kunci="' + kunci + '"]');
+    return { ada: true, sama: tabel === document.querySelector('#klIsi .kl-tbl') && sw.isConnected, dy: Math.abs(window.scrollY - y0), note: note ? note.textContent + '|' + note.className : '' };
+  });
+  cek('Klik sakelar amil: tabel tidak digambar ulang & gulir tidak bergeser', geser.ada && geser.sama && geser.dy === 0, JSON.stringify(geser));
+  cek('Klik sakelar amil: catatan berubah ke "amil Rp 0" bertanda diubah', /amil Rp 0/.test(geser.note) && /diubah/.test(geser.note), geser.note);
   cek('Pilih "Tidak" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
-  cek('Tanda ajuan: kelompok tombol jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-duo.ajuan, .kl-ts.ajuan, .kl-sel.ajuan, .kl-edit.ajuan')));
+  cek('Tanda ajuan: kelompok tombol jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-amil-switch.ajuan, .kl-ts.ajuan, .kl-sel.ajuan, .kl-edit.ajuan')));
 
   await p.evaluate(() => { Object.keys(SINKRON.ajuan).forEach((k) => { if (/\|pecahan$/.test(k)) delete SINKRON.ajuan[k]; }); draftSimpan(); gambarIsi(); const b = document.getElementById('klSavebar'); if (b) b.outerHTML = saveBar(); });
   await p.click('#klSimpanBtn');
@@ -78,24 +91,50 @@ const srv = http.createServer(async (req, res) => {
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[1].click());
   cek('Tab UMP: tombol "Pecah pilar / pindahkan" tersedia per baris', await p.evaluate(() => /Pecah pilar/.test(document.getElementById('klIsi').textContent)));
   await p.evaluate(() => { const b = [...document.querySelectorAll('.kl-ganti')].find((x) => /Pecah pilar/.test(x.textContent)); if (b) b.click(); });
-  cek('Pecah UMP: baris baru langsung muncul dengan pilar (dropdown lengkap), nominal, dan Simpan menyala', await p.evaluate(() => { const pec = document.querySelector('.kl-pec'); const b = document.getElementById('klSimpanBtn'); return !!pec && pec.querySelectorAll('.kl-pec-baris select.kl-sel').length >= 1 && !!pec.querySelector('.kl-pec-nom input') && b && !b.disabled; }));
-  cek('Pecah UMP: dropdown pilar terisi daftar lengkap + opsi "Lainnya (tulis sendiri)"; kantor tersembunyi sampai dibutuhkan', await p.evaluate(() => {
-    const s = document.querySelector('.kl-pec-baris select.kl-sel');
+  cek('Pecah UMP: panel detail terbuka di bawah kartunya dengan pilar, nominal, dan Simpan menyala', await p.evaluate(() => { const pec = document.querySelector('.kl-ump-item.buka .kl-pec-panel .kl-pec'); const b = document.getElementById('klSimpanBtn'); return !!pec && pec.querySelectorAll('.kl-pec-baris select.kl-pilih-pilar').length >= 1 && !!pec.querySelector('.kl-pec-nom input') && b && !b.disabled; }));
+  cek('Pecah UMP: tiap pos punya empat kolom berlabel (Pilar, Keterangan, Nominal, Kantor)', await p.evaluate(() => {
+    const l = [...document.querySelectorAll('.kl-pec-baris')[0].querySelectorAll('.kl-f-l')].map((e) => e.textContent).join('|');
+    return /Pilar/.test(l) && /Keterangan/.test(l) && /Nominal/.test(l) && /Kantor/.test(l);
+  }));
+  cek('Pecah UMP: dropdown Tom Select tidak kolaps (ts-hidden-accessible tidak bocor ke pembungkus)', await p.evaluate(() => {
+    const w = [...document.querySelectorAll('.kl-pec .ts-wrapper')];
+    return w.length >= 1 && w.every((x) => !x.classList.contains('ts-hidden-accessible') && x.getBoundingClientRect().height > 20 && x.getBoundingClientRect().width > 60);
+  }));
+  cek('Pecah UMP: dropdown pilar terisi daftar lengkap + opsi "Lainnya (tulis sendiri)"', await p.evaluate(() => {
+    const s = document.querySelector('.kl-pec-baris select.kl-pilih-pilar');
     if (!s) return false;
     const teks = s.tomselect ? Object.keys(s.tomselect.options).map((k) => s.tomselect.options[k].text).join('|') : [...s.options].map((o) => o.text).join('|');
-    return /Pendidikan|Kesehatan/.test(teks) && /Lainnya/.test(teks) && !document.querySelector('.kl-pec-kantor');
+    return /Pendidikan|Kesehatan/.test(teks) && /Lainnya/.test(teks);
   }));
+  const ubahNom = await p.evaluate(() => {
+    const inp = document.querySelector('.kl-pec-nom input'); const panel = document.querySelector('.kl-pec-panel');
+    inp.value = 1000; inp.dispatchEvent(new Event('change'));
+    return { sama: panel === document.querySelector('.kl-pec-panel') && inp.isConnected, sum: (document.querySelector('.kl-pec-sum') || {}).textContent || '' };
+  });
+  cek('Pecah UMP: ubah nominal pos memperbarui ringkasan tanpa menggambar ulang panel', ubahNom.sama && /total pos/.test(ubahNom.sum), JSON.stringify(ubahNom));
+  await p.evaluate(() => { const b = document.querySelector('.kl-ump-item.buka .pec-btn'); b.click(); });
+  cek('Pecah UMP: "Tutup detail" menutup panel tapi ajuan pecahan tetap ada', await p.evaluate(() =>
+    !document.querySelector('.kl-pec-panel') && /Pecahan pilar/.test(document.querySelector('.pec-btn[aria-expanded="false"]').textContent) && Object.keys(SINKRON.ajuan).some((k) => /\|pecahan$/.test(k))));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('.pec-btn')].find((x) => /Pecahan pilar/.test(x.textContent)); b.click(); });
+  cek('Pecah UMP: dibuka lagi, panel kembali', await p.evaluate(() => !!document.querySelector('.kl-pec-panel')));
+  for (const w of [1280, 980, 390]) {
+    await p.setViewportSize({ width: w, height: 900 });
+    await p.waitForTimeout(150);
+    const ov = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+    cek('Tab UMP lebar ' + w + 'px: tidak ada gulir samping', ov.sw <= ov.cw + 1, JSON.stringify(ov));
+  }
+  await p.setViewportSize({ width: 1280, height: 900 });
   cek('Pecah UMP: kolom Keterangan dengan dropdown "Uang Muka Program" untuk semua pilar + Lainnya', await p.evaluate(() => {
-    const s = document.querySelector('.kl-pec-ket select.kl-sel'); if (!s) return false;
+    const s = document.querySelector('.kl-pec-baris select.kl-pilih-ket'); if (!s) return false;
     const teks = s.tomselect ? Object.keys(s.tomselect.options).map((k) => s.tomselect.options[k].text).join('|') : [...s.options].map((o) => o.text).join('|');
     return /Uang Muka Program Pendidikan/.test(teks) && /Uang Muka Program Kesehatan/.test(teks) && /Uang Muka Program Zakat/.test(teks) && /Lainnya/.test(teks);
   }));
-  await p.evaluate(() => { const s = document.querySelector('.kl-pec-ket select.kl-sel'); if (s.tomselect) s.tomselect.setValue('__ketlain'); else { s.value = '__ketlain'; s.dispatchEvent(new Event('change')); } });
+  await p.evaluate(() => { const s = document.querySelector('.kl-pec-baris select.kl-pilih-ket'); if (s.tomselect) s.tomselect.setValue('__ketlain'); else { s.value = '__ketlain'; s.dispatchEvent(new Event('change')); } });
   await p.waitForTimeout(300);
   await p.fill('.kl-pec-ket-lain', 'Keterangan Pecahan Manual');
   await p.evaluate(() => document.querySelector('.kl-pec-ket-lain').dispatchEvent(new Event('change')));
   cek('Pecah UMP: keterangan tulisan sendiri tersimpan di ajuan pecahan', await p.evaluate(() => { const a = SINKRON.ajuan[Object.keys(SINKRON.ajuan).find((k) => /\|pecahan$/.test(k))]; return !!a && a.nilai[0].ket === 'Keterangan Pecahan Manual'; }));
-  await p.evaluate(() => { const s = document.querySelector('.kl-pec-baris select.kl-sel'); if (s.tomselect) s.tomselect.setValue('__lain'); else { s.value = '__lain'; s.dispatchEvent(new Event('change')); } });
+  await p.evaluate(() => { const s = document.querySelector('.kl-pec-baris select.kl-pilih-pilar'); if (s.tomselect) s.tomselect.setValue('__lain'); else { s.value = '__lain'; s.dispatchEvent(new Event('change')); } });
   await p.waitForTimeout(300);
   cek('Pecah UMP: pilih "Lainnya" memunculkan kolom tulis manual', await p.evaluate(() => !!document.querySelector('.kl-pec-lain')));
   await p.fill('.kl-pec-lain', 'Pos Uji Manual'); await p.evaluate(() => document.querySelector('.kl-pec-lain').dispatchEvent(new Event('change')));

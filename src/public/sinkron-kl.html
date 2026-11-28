@@ -289,6 +289,13 @@
             padding:4px 7px;border-radius:6px;flex:none}
   .kl-batal:hover{color:var(--red);background:var(--surface2)}
   .kl-ambilwrap{display:flex;align-items:center;gap:6px}
+.kl-amilcell{min-width:190px}
+.kl-amil-note{display:block;margin-top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kl-amil-note.sudah{color:var(--green)}
+.kl-amil-note.belum{color:var(--muted)}
+.kl-amil-note.diubah{color:var(--accent)}
+.kl-amil-note.diubah::after{content:' · diubah'}
   .kl-tambah{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
   .kl-tambah .kl-edit{border:1px solid var(--border);background:var(--surface);height:38px}
   .kl-tambah .kl-tambahbtn{height:38px;border:0;border-radius:10px;padding:0 16px;background:var(--grad-accent);
@@ -305,13 +312,61 @@
   .kl-simpan{height:40px;border:0;border-radius:10px;padding:0 22px;background:var(--grad-accent);color:#fff;
              font:800 13px var(--sans);cursor:pointer;box-shadow:0 8px 18px -10px rgba(242,112,79,.9);flex:none}
   .kl-simpan:disabled{opacity:.5;cursor:default}
-  /* --- pecahan pilar UMP: baris kecil bertumpuk di sel --- */
-  .kl-pec{display:flex;flex-direction:column;gap:6px;min-width:230px}
-  .kl-pec-baris{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-  .kl-pec-baris .kl-ambil{flex:1 1 90px;min-width:0;height:32px;font-size:11.5px}
-  .kl-pec-baris .kl-edit{flex:1 1 80px;min-width:0;height:32px;border:1px solid var(--border);background:var(--surface);font-size:12px}
-  .kl-pec-sum{font-size:11px;font-weight:700;color:var(--muted)}
+  /* --- UMP: satu transaksi satu kartu (bukan baris tabel), supaya panel
+     pecah pilar punya lebar penuh dan tidak perlu digeser ke samping. --- */
+  .kl-ump{display:flex;flex-direction:column;gap:9px}
+  .kl-ump-item{border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+  .kl-ump-item.buka{border-color:rgba(242,112,79,.45);box-shadow:0 0 0 3px rgba(242,112,79,.07)}
+  .kl-ump-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) auto;gap:10px 14px;
+    align-items:end;padding:11px 13px}
+  .kl-ump-kiri{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .kl-ump-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11px;font-weight:600;color:var(--muted);min-width:0}
+  .kl-ump-meta .kl-ump-akun{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .kl-ump-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .kl-ump-field>label{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .kl-ump-field .kl-edit{height:36px;font-size:13.5px;border:1px solid var(--border);background:var(--surface)}
+  .kl-ump-kanan{display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0}
+  .kl-ump-nom{display:flex;align-items:center;gap:6px}
+  .kl-ump-nom>span{font-size:12px;font-weight:700;color:var(--muted)}
+  .kl-ump-nom .kl-edit{width:150px;height:36px;font-size:14px;font-weight:800;text-align:right;
+    border:1px solid var(--border);background:var(--surface);font-variant-numeric:tabular-nums}
+  .kl-ump-aksi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .kl-ump-aksi .kl-ganti{margin-top:0;padding:6px 13px;font-size:11.5px}
+  .kl-pec-panel{border-top:1px solid var(--border);background:color-mix(in srgb,var(--accent) 3%,var(--surface));
+    padding:12px 13px 13px;display:flex;flex-direction:column;gap:10px}
+  .kl-pec{display:flex;flex-direction:column;gap:10px;min-width:0}
+  .kl-pec-kepala{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .kl-pec-judul{font-size:12px;font-weight:800;color:var(--text2)}
+  .kl-pec-kepala .kl-pec-sum{margin-left:auto}
+  .kl-pec-baris{position:relative;display:grid;grid-template-columns:26px minmax(0,1fr) 30px;gap:8px 10px;
+    align-items:start;padding:11px 12px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+  .kl-pos-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 12px;min-width:0}
+  .kl-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .kl-f-l{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .kl-f-c{min-width:0;display:flex;gap:6px;align-items:center}
+  .kl-pec-baris .kl-ts,.kl-pec-baris select.kl-sel{flex:1 1 auto;min-width:0;width:100%}
+  .kl-pec-baris .kl-ts .ts-control{min-height:38px;font-size:13px}
+  .kl-pec-baris select.kl-sel{height:38px;font-size:13px}
+  .kl-pec-lain,.kl-pec-ket-lain{flex:1 1 auto;height:38px;font-size:13px;border:1px solid var(--accent);background:var(--surface)}
+  .kl-pec-tbl{flex:none;border:0;background:transparent;color:var(--accent);font:700 11.5px var(--sans);
+    cursor:pointer;text-decoration:underline;padding:4px 2px}
+  .kl-pec-no{width:24px;height:24px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);
+    color:var(--muted);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .kl-pec-nom{display:flex;align-items:center;gap:6px;min-width:0}
+  .kl-pec-nom>span{font-size:12px;font-weight:700;color:var(--muted)}
+  .kl-pec-nom .kl-edit{height:38px;font-size:13.5px;font-weight:700;text-align:right;
+    border:1px solid var(--border);background:var(--surface);font-variant-numeric:tabular-nums}
+  .kl-pec-kantor{display:flex;gap:6px;align-items:center;min-width:0}
+  .kl-pec-kantor .kl-ts,.kl-pec-kantor select.kl-sel{flex:1 1 auto;min-width:0;width:100%}
+  .kl-pec-baris>.kl-batal{grid-row:1;grid-column:3;justify-self:center}
+  .kl-pec-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+  .kl-pec-foot .kl-ganti{margin-top:0;padding:7px 14px;font-size:11.5px}
+  .kl-pec-foot .kl-ganti-pel{background:transparent}
+  .kl-pec-sum{font-size:11.5px;font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums}
   .kl-pec-sum.more{color:var(--red)}
+  .kl-pec-sum.sisa{color:var(--accent)}
+  .kl-pec-sum.pas{color:var(--green)}
+  .kl-pec-galat{font-size:11.5px;font-weight:700;color:var(--red);line-height:1.5}
 
   /* --- scrollbar bertema: seluruh halaman, tabel, & daftar gulir ---
      styles.css global menyembunyikan scrollbar (width:0 !important);
@@ -416,42 +471,20 @@
   .ts-dropdown .option:hover{background:var(--surface2);color:var(--text)}
   .ts-dropdown .active{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:800}
   .ts-dropdown .no-results{color:var(--muted);font-size:12px}
-  .kl-pec-baris .kl-ts{flex:1 1 90px;min-width:0}
-  .kl-pec-baris .kl-ts .ts-control{min-height:32px;font-size:11.5px}
-  /* Pecahan UMP tampil sebagai baris penuh di bawah transaksinya. */
-  .kl-pec-judul{font-size:12px;font-weight:700;color:var(--text2)}
-  .kl-pec-row .kl-pec{min-width:0;gap:8px}
-  .kl-pec-row .kl-pec-baris{display:grid;grid-template-columns:26px minmax(0,1.1fr) minmax(0,1.1fr) 170px 30px;gap:8px;align-items:center}
-  .kl-pec-no{width:24px;height:24px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);color:var(--muted);
-    font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
-  .kl-pec-pilar{min-width:0;display:flex;gap:6px;align-items:center}
-  .kl-pec-pilar .kl-ts,.kl-pec-pilar select.kl-sel{flex:1 1 auto;min-width:0;width:100%}
-  .kl-pec-pilar .kl-ts .ts-control{min-height:38px;font-size:13px}
-  .kl-pec-pilar .kl-pec-lain{flex:1 1 auto;height:38px;font-size:13px;border:1px solid var(--accent);background:var(--surface)}
-  .kl-pec-ket{min-width:0;display:flex;gap:6px;align-items:center}
-  .kl-pec-ket-label{flex:none;font-size:11px;font-weight:700;color:var(--muted)}
-  .kl-pec-ket .kl-ts,.kl-pec-ket select.kl-sel{flex:1 1 auto;min-width:0;width:100%}
-  .kl-pec-ket .kl-ts .ts-control{min-height:38px;font-size:13px}
-  .kl-pec-ket .kl-pec-ket-lain{flex:1 1 auto;height:38px;font-size:13px;border:1px solid var(--accent);background:var(--surface)}
-  .kl-pec-tbl{flex:none;border:0;background:transparent;color:var(--accent);font:700 11.5px var(--sans);cursor:pointer;text-decoration:underline;padding:4px}
-  .kl-pec-nom{display:flex;align-items:center;gap:6px}
-  .kl-pec-nom span{font-size:12px;font-weight:700;color:var(--muted)}
-  .kl-pec-row .kl-pec-nom .kl-edit{height:38px;font-size:13.5px;font-weight:700;text-align:right}
-  .kl-pec-kantor{grid-column:2 / -1;display:flex;align-items:center;gap:8px}
-  .kl-pec-kantor>span{flex:none;font-size:11.5px;font-weight:700;color:var(--muted)}
-  .kl-pec-kantor .kl-ts,.kl-pec-kantor select.kl-sel{flex:1 1 auto;min-width:0}
-  .kl-pec-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
-  .kl-pec-foot .kl-ganti{margin-top:0}
-  .kl-pec-foot .kl-ganti-pel{background:transparent}
-  .kl-pec-sum.sisa{color:var(--accent)}
+  /* --- HP: kartu UMP menumpuk, panel pecahan jadi satu kolom penuh --- */
+  @media (max-width:820px){
+    .kl-ump-head{grid-template-columns:minmax(0,1fr);gap:9px}
+    .kl-ump-kanan{align-items:stretch}
+    .kl-ump-nom .kl-edit{width:100%;flex:1 1 auto}
+    .kl-ump-aksi{justify-content:flex-start}
+  }
   @media (max-width:620px){
-    .kl-pec-row .kl-pec-baris{grid-template-columns:24px minmax(0,1fr) 30px}
-    .kl-pec-pilar,.kl-pec-ket{grid-column:2}
-    .kl-pec-row .kl-pec-nom{grid-column:2}
-    .kl-pec-row .kl-batal{grid-row:1;grid-column:3}
-    .kl-pec-kantor{grid-column:2 / -1;flex-wrap:wrap}
-  }  .kl-pec-row td{background:color-mix(in srgb,var(--accent) 3%,var(--surface));padding:10px 14px 12px}
-  .kl-pec-row .kl-pec-baris .kl-ts{flex:1 1 120px}
+    .kl-pos-grid{grid-template-columns:minmax(0,1fr)}
+    .kl-pec-baris{grid-template-columns:24px minmax(0,1fr) 30px}
+    .kl-pec-panel{padding:11px 10px 12px}
+    .kl-pec-kepala{gap:6px}
+    .kl-pec-kepala .kl-pec-sum{margin-left:0;width:100%}
+  }
 
   /* --- editor tujuan UMP di tab LPJ: baris alokasi + pencari UMP --- */
   .kl-tujuan{margin-top:12px;padding:12px 14px;border:1px dashed var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
@@ -1046,9 +1079,11 @@ function isiHimpun(){
         +'<td class="pos">'+esc(String(x.dana||'Infak').replace(/_/g,' '))+(x.pilar?'<span class="sub">'+esc(x.pilar)+'</span>':'')+'</td>'
         +'<td>'+esc(x.metode||'—')+'</td>'
         +'<td class="n akhir">'+klRp(x.jumlah)+'<span class="sub">'+esc(persenTeks)+'</span></td>'
-        +'<td><span class="kl-ambilwrap">'
+        +'<td class="kl-amilcell"><span class="kl-ambilwrap">'
           +klDuo(kunci,ambil,x.awalAmil||'',!!ajuanA)
-          +(ajuanA?'<button class="kl-batal" type="button" title="Kembalikan ke aturan awal" onclick="sinkronHapus(\'setoran\',\''+esc(kunci)+'\',\'diambilAmil\')">×</button>':'')+'</span></td></tr>';
+          +(ajuanA?'<button class="kl-batal" type="button" title="Kembalikan ke aturan awal" onclick="sinkronHapus(\'setoran\',\''+esc(kunci)+'\',\'diambilAmil\')">×</button>':'')+'</span>'
+          +'<span class="kl-amil-note'+(ambil==='sudah'?' sudah':' belum')+(ajuanA?' diubah':'')+'" data-kunci="'+esc(kunci)+'">'
+          +klAmilTeks(ambil,x)+'</span></td></tr>';
     });
     h+='</tbody><tfoot><tr><td colspan="3">Total setoran</td><td class="n">'+klRp(st.reduce(function(a,x){return a+x.jumlah;},0))+'</td><td></td></tr></tfoot></table></div>';
     h+='<ul class="kl-catatan"><li>Aturan awal: <b>semua setoran diambil hak amilnya, kecuali pilar kemanusiaan</b> '
@@ -1071,10 +1106,26 @@ function klDuo(kunci,ambil,lama,ajuan){
     +' onchange="klDuoTekan(this.checked?\'sudah\':\'belum\',this)">'
     +'<span class="track" data-ya="Ya" data-tidak="Tidak"></span></span>';
 }
+/* Teks pendamping sakelar: nilai efektif yang dipakai mesin, bukan cuma
+   label Ya/Tidak. Satu baris pendek supaya lebar kolom tidak bergeser. */
+function klAmilTeks(ambil,x){
+  if(!x) return '';
+  if(ambil==='belum') return 'amil Rp 0 · dana utuh';
+  return 'ambil '+klRp(x.amil)+(x.bebas?' (bebas amil)':' ('+x.persenAmil+'%)');
+}
 function klDuoTekan(v,el){
-  var wrap=el.parentNode;
-  sinkronUbahAmil(wrap.getAttribute('data-kunci'),v,el);
-  wrap.classList.toggle('ajuan',!!ajuanBaris('setoran',wrap.getAttribute('data-kunci'),'diambilAmil'));
+  var wrap=el.parentNode, kunci=wrap.getAttribute('data-kunci');
+  sinkronUbahAmil(kunci,v,el);
+  var a=ajuanBaris('setoran',kunci,'diambilAmil');
+  wrap.classList.toggle('ajuan',!!a);
+  /* Catatan di bawah sakelar diperbarui langsung — tanpa gambar ulang, jadi
+     halaman tetap diam di posisinya. */
+  var note=document.querySelector('.kl-amil-note[data-kunci="'+kunci+'"]');
+  if(note){
+    var x=(DATA.setoran||[]).find(function(s){return s.kunci===kunci;});
+    note.className='kl-amil-note '+(v==='sudah'?'sudah':'belum')+(a?' diubah':'');
+    note.textContent=klAmilTeks(v,x);
+  }
 }
 function sinkronUbahAmil(kunci,nilai,el){
   var x=(DATA.setoran||[]).find(function(s){return s.kunci===kunci;});
@@ -1096,41 +1147,66 @@ function isiUmp(){
   var u=DATA.ump||[];
   var h='<div class="kl-card"><div class="kl-label"><span class="dot"></span> Uang muka (UMP) — catatan daerah'
     +'<span class="n">'+u.length+' baris</span></div>';
-  /* UMP di sini membaca semua baris yang TIDAK ada kata LPJ-nya; LPJ ada di tabnya sendiri. */
   if(!u.length){ h+='<div class="kl-kosong">Tidak ada uang muka.</div>'; }
   else{
-    h+='<div class="kl-tw"><table class="kl-tbl kecil"><thead><tr>'
-      +'<th>Tanggal</th><th>Arah</th><th>Keterangan</th><th class="n">Jumlah</th><th>Pecahan pilar</th><th></th>'
-      +'</tr></thead><tbody>';
+    var totSemua=0;
+    h+='<div class="kl-ump">';
     u.forEach(function(x){
+      totSemua+=Number(x.nominal)||0;
       var balik=x.arah==='kembali';
       var pec=umpPecahan(x.kunci);
       var berajuan=pec||ajuanBaris('ump',x.kunci,'nominal')||ajuanBaris('ump',x.kunci,'tanggal')||ajuanBaris('ump',x.kunci,'keterangan');
       var ket=ketTampil(nilaiEfektif('ump',x.kunci,'keterangan',x.keterangan||''),x.layanan);
-      var tombolPec=pec
-        ?''
-        :'<button class="kl-ganti" type="button" onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar</button>';
-      h+='<tr data-kunci="'+esc(x.kunci)+'"><td>'
-        +klTglHTML({nilai:nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal), lama:x.tanggal, jenis:'ump', kunci:x.kunci, ajuan:!!ajuanBaris('ump',x.kunci,'tanggal')})+'</td>'
-        +'<td><span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Kembali':'Keluar')+'</span></td>'
-        +'<td class="w"><input class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(ket)+'" data-lama="'+esc(x.keterangan||'')+'"'
-        +' title="'+esc(x.keterangan||'')+'" placeholder="Uang muka&hellip;" onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'keterangan\',this.value,this)"></td>'
-        +'<td class="n"><input class="kl-edit n'+(ajuanBaris('ump',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000" value="'+Number(nilaiEfektif('ump',x.kunci,'nominal',x.nominal))+'" data-lama="'+x.nominal+'"'
-        +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></td>'
-        +'<td class="w">'+(pec?'<span class="sub">'+pec.length+' pos &middot; '+klRp(pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0))+'</span> ':'')+tombolPec+'</td>'
-        +'<td>'+(berajuan?'<button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'ump\',\''+esc(x.kunci)+'\')">×</button>':'')+'</td></tr>';
-      /* Pos pecahan tampil di baris penuh DI BAWAH transaksinya — lega, mudah dibaca. */
-      if(pec){
-        var tot=pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0);
-        h+='<tr class="kl-pec-row"><td colspan="6"><div class="kl-pec">'
-          +'<div class="kl-pec-judul">Pecah pilar &middot; pilih pilar lalu isi nominalnya</div>'
+      var buka=!!pec&&!PEC_TUTUP[x.kunci];
+      var jml=pec?pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0):0;
+      h+='<div class="kl-ump-item'+(buka?' buka':'')+'" data-kunci="'+esc(x.kunci)+'">'
+        +'<div class="kl-ump-head">'
+          +'<div class="kl-ump-kiri">'
+            +'<div class="kl-ump-meta">'
+              +klTglHTML({nilai:nilaiEfektif('ump',x.kunci,'tanggal',x.tanggal), lama:x.tanggal, jenis:'ump', kunci:x.kunci, ajuan:!!ajuanBaris('ump',x.kunci,'tanggal')})
+              +'<span class="kl-arah'+(balik?' kembali':'')+'">'+(balik?'Kembali':'Keluar')+'</span>'
+            +'</div>'
+            +'<div class="kl-ump-meta"><span class="kl-ump-dana">'+esc(String(x.dana||'Dana').replace(/_/g,' '))+'</span>'
+              +(x.akun?'<span class="kl-ump-akun">&middot; '+esc(x.akun)+'</span>':'')+'</div>'
+          +'</div>'
+          +'<div class="kl-ump-field"><label for="uk-'+esc(x.kunci)+'">Keterangan</label>'
+            +'<input id="uk-'+esc(x.kunci)+'" class="kl-edit'+(ajuanBaris('ump',x.kunci,'keterangan')?' ajuan':'')+'" value="'+esc(ket)+'"'
+            +' data-lama="'+esc(x.keterangan||'')+'" title="'+esc(x.keterangan||'')+'" placeholder="Uang muka&hellip;"'
+            +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'keterangan\',this.value,this)"></div>'
+          +'<div class="kl-ump-kanan">'
+            +'<div class="kl-ump-nom"><span>Rp</span>'
+              +'<input class="kl-edit n'+(ajuanBaris('ump',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000"'
+              +' aria-label="Nominal UMP" value="'+Number(nilaiEfektif('ump',x.kunci,'nominal',x.nominal))+'" data-lama="'+x.nominal+'"'
+              +' onchange="sinkronUbah(\'ump\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></div>'
+            +'<div class="kl-ump-aksi">'
+              +(pec
+                ?'<button class="kl-ganti pec-btn" type="button" aria-expanded="'+(buka?'true':'false')+'"'
+                  +' onclick="umpPecTutup(\''+esc(x.kunci)+'\')">'
+                  +(buka?'Tutup detail':'Pecahan pilar &middot; '+pec.length+' pos &middot; '+klRp(jml))+'</button>'
+                :'<button class="kl-ganti pec-btn" type="button" aria-expanded="false"'
+                  +' onclick="umpPecMulai(\''+esc(x.kunci)+'\')">+ Pecah pilar</button>')
+              +(berajuan?'<button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'ump\',\''+esc(x.kunci)+'\')">&times;</button>':'')
+            +'</div>'
+          +'</div>'
+        +'</div>';
+      /* Panel detail pecahan: kolom penuh di bawah kartunya, terbuka saat
+         tombol pecah pilar ditekan. Tiap pos punya empat kolom isian
+         (pilar, keterangan, nominal, kantor pemilik) yang jelas berlabel. */
+      if(buka){
+        h+='<div class="kl-pec-panel"><div class="kl-pec">'
+          +'<div class="kl-pec-kepala">'
+            +'<div class="kl-pec-judul">Detail pecahan pilar</div>'
+            +'<div class="kl-pec-sum'+(jml>Number(x.nominal)?' more':(jml<Number(x.nominal)?' sisa':' pas'))+'">'
+              +'total pos '+klRp(jml)+(jml<Number(x.nominal)?' &middot; sisa '+klRp(Number(x.nominal)-jml):'')
+              +(jml>Number(x.nominal)?' &middot; melebihi '+klRp(jml-Number(x.nominal)):'')
+              +(jml===Number(x.nominal)?' &middot; pas':'')+'</div>'
+          +'</div>'
           +pec.map(function(p,i2){
             var kk=x.kunci+'|'+i2, lain=!!PEC_LAIN[kk];
-            var kantorBeda=p.kantor&&p.kantor!==kantorSendiri();
             var pilarIsi=lain
               ?'<input class="kl-edit kl-pec-lain" type="text" maxlength="60" value="'+esc(p.pilar)+'" placeholder="Tulis nama pilar / pos sendiri"'
                 +' aria-label="Pilar tulis sendiri" onchange="umpPecPilar(\''+esc(x.kunci)+'\','+i2+',this.value.trim())">'
-                +'<button class="kl-pec-tbl" type="button" onclick="umpPecLain(\''+esc(x.kunci)+'\','+i2+',false)">Pilih dari daftar</button>'
+                +'<button class="kl-pec-tbl" type="button" onclick="umpPecLain(\''+esc(x.kunci)+'\','+i2+',false)">Daftar</button>'
               :klSel(pilarOpsi(p.pilar,true),p.pilar,function(v){
                   /* Gambar ulang ditunda: Tom Select masih memproses pilihan ini. */
                   setTimeout(function(){
@@ -1142,31 +1218,37 @@ function isiUmp(){
             var ketIsi=ketLain
               ?'<input class="kl-edit kl-pec-ket-lain" type="text" maxlength="160" value="'+esc(p.ket||'')+'" placeholder="Keterangan pos ini"'
                 +' aria-label="Keterangan tulis sendiri" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'ket\',this.value.trim())">'
-                +'<button class="kl-pec-tbl" type="button" onclick="umpPecKetLain(\''+esc(x.kunci)+'\','+i2+',false)">Pilih dari daftar</button>'
+                +'<button class="kl-pec-tbl" type="button" onclick="umpPecKetLain(\''+esc(x.kunci)+'\','+i2+',false)">Daftar</button>'
               :klSel(ketPecOpsi(ketCur),ketCur,function(v){
                   /* Gambar ulang ditunda: Tom Select masih memproses pilihan ini. */
                   setTimeout(function(){ umpPecKet(x.kunci,i2,v); },80);
                 },'kl-pilih-ket');
             return '<div class="kl-pec-baris">'
               +'<span class="kl-pec-no">'+(i2+1)+'</span>'
-              +'<div class="kl-pec-pilar">'+pilarIsi+'</div>'
-              +'<div class="kl-pec-ket"><span class="kl-pec-ket-label">Keterangan</span>'+ketIsi+'</div>'
-              +'<div class="kl-pec-nom"><span>Rp</span><input class="kl-edit n" type="number" min="0" step="1000" value="'+Number(p.nominal)+'"'
-              +' aria-label="Nominal pos '+(i2+1)+'" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'nominal\',this.value)"></div>'
+              +'<div class="kl-pos-grid">'
+                +'<div class="kl-f"><span class="kl-f-l">Pilar</span><div class="kl-f-c">'+pilarIsi+'</div></div>'
+                +'<div class="kl-f"><span class="kl-f-l">Keterangan pos</span><div class="kl-f-c">'+ketIsi+'</div></div>'
+                +'<div class="kl-f"><span class="kl-f-l">Nominal</span><div class="kl-f-c kl-pec-nom"><span>Rp</span>'
+                  +'<input class="kl-edit n" type="number" min="0" step="1000" value="'+Number(p.nominal)+'"'
+                  +' aria-label="Nominal pos '+(i2+1)+'" onchange="umpPecUbah(\''+esc(x.kunci)+'\','+i2+',\'nominal\',this.value)"></div></div>'
+                +'<div class="kl-f"><span class="kl-f-l">Kantor pemilik</span><div class="kl-f-c">'
+                  +klSel(kantorOpsi(p.kantor),p.kantor,function(v){umpPecUbah(x.kunci,i2,'kantor',v);})+'</div></div>'
+              +'</div>'
               +'<button class="kl-batal" type="button" title="Hapus pos ini" onclick="umpPecHapus(\''+esc(x.kunci)+'\','+i2+')">&times;</button>'
-              +(kantorBeda||PEC_KANTOR[kk]
-                ?'<div class="kl-pec-kantor"><span>Milik kantor</span>'+klSel(kantorOpsi(p.kantor),p.kantor,function(v){umpPecUbah(x.kunci,i2,'kantor',v);})+'</div>'
-                :'')
               +'</div>';
           }).join('')
-          +'<div class="kl-pec-foot"><button class="kl-ganti" type="button" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos</button>'
-          +'<button class="kl-ganti kl-ganti-pel" type="button" onclick="umpPecKantor(\''+esc(x.kunci)+'\')">Pindah kantor</button>'
-          +'<div class="kl-pec-sum'+(tot>Number(x.nominal)?' more':(tot<Number(x.nominal)?' sisa':''))+'">Total '+klRp(tot)+' dari '+klRp(x.nominal)
-          +(tot<Number(x.nominal)?' &middot; sisa '+klRp(Number(x.nominal)-tot):'')+(tot>Number(x.nominal)?' &middot; melebihi '+klRp(tot-Number(x.nominal)):'')+'</div></div>'
-          +'</div></td></tr>';
+          +'<div class="kl-pec-foot">'
+            +'<button class="kl-ganti" type="button" onclick="umpPecTambah(\''+esc(x.kunci)+'\')">+ Tambah pos</button>'
+            +'<button class="kl-ganti kl-ganti-pel" type="button" onclick="umpPecTutup(\''+esc(x.kunci)+'\')">Tutup detail</button>'
+            +'<button class="kl-pec-tbl" type="button" onclick="umpPecBatal(\''+esc(x.kunci)+'\')">Hapus pecahan</button>'
+          +'</div>'
+          +'</div></div>';
       }
+      h+='</div>';
     });
-    h+='</tbody><tfoot><tr><td colspan="3">Total catatan daerah</td><td class="n">'+klRp(r.umpKeluar+r.umpKembali)+'</td><td></td><td></td></tr></tfoot></table></div>';
+    h+='</div>';
+    h+='<div class="kl-label" style="margin-top:14px"><span class="dot"></span> Total catatan daerah'
+      +'<span class="n">'+klRp(totSemua)+'</span></div>';
   }
   h+='<div class="kl-tambah">'
     +klTglHTML({id:'umpTgl'})
@@ -1174,8 +1256,8 @@ function isiUmp(){
     +'<input class="kl-edit" id="umpKet" placeholder="Keterangan" aria-label="Keterangan UMP baru">'
     +'<button class="kl-tambahbtn" type="button" onclick="usulBaru(\'ump\')">+ Usulkan baris UMP</button>'
     +'</div>';
-  h+='<ul class="kl-catatan"><li><b>Pecah pilar</b>: pos pecahan langsung terisi di bawah transaksinya — pilar &amp; kantor bisa diubah, nominal terisi otomatis sebesar UMP itu.</li>'
-    +'<li>Sel bergaris oranye berarti ada ajuan; × membatalkannya. Semua ajuan masuk log saat <b>Simpan</b> ditekan.</li></ul>';
+  h+='<ul class="kl-catatan"><li><b>Pecah pilar</b>: tekan tombolnya, lalu isi pilar, keterangan, nominal, dan kantor pemilik tiap pos. Total pos dibandingkan langsung dengan nominal UMP.</li>'
+    +'<li>Kolom bergaris oranye berarti ada ajuan; × membatalkannya. Semua ajuan masuk log saat <b>Simpan</b> ditekan.</li></ul>';
   h+='</div>';
   return h;
 }
@@ -1190,7 +1272,7 @@ function ketTampil(ket,layanan){
   t=t.trim();
   return t.charAt(0).toUpperCase()+t.slice(1);
 }
-var PEC_LAIN={}, PEC_KANTOR={}, PEC_KET_LAIN={};
+var PEC_LAIN={}, PEC_TUTUP={}, PEC_KET_LAIN={};
 function pilarOpsi(pilih,denganLain){
   var ls=(DATA.pilarDaftar||[]).slice();
   ['Zakat','Infak Umum','Amil'].forEach(function(p){ if(ls.indexOf(p)<0) ls.push(p); });
@@ -1241,13 +1323,18 @@ function aktifkanSel(akar){
     }
   }
 }
-/* Tom Select menyembunyikan <select> asli; kelas khusus (sudah/belum/ajuan)
-   dipindah ke selubungnya supaya gaya lama tetap jalan. */
+/* Tom Select menyembunyikan <select> aslinya (position:absolute, 1px) dan
+   menaruh kelas penanda di elemen itu. Kalau SEMUA kelas disalin ke
+   pembungkus, 'ts-hidden-accessible' ikut terbawa dan seluruh dropdown jadi
+   kotak 1px bertumpuk — itu yang dulu membuat panel pecah pilar kolaps.
+   Jadi hanya kelas tema milik kita yang dipindah. */
+var TS_KELAS_PINDAH={ajuan:1,sudah:1,belum:1};
 function pasangKelasTS(){
   document.querySelectorAll('select.kl-sel').forEach(function(el){
     var ts=el.tomselect; if(!ts||!ts.wrapper||ts.wrapper.getAttribute('data-beri-kelas')) return;
     ts.wrapper.setAttribute('data-beri-kelas','1');
-    el.classList.forEach(function(k){ if(k!=='kl-sel') ts.wrapper.classList.add(k); });
+    el.classList.forEach(function(k){ if(TS_KELAS_PINDAH[k]) ts.wrapper.classList.add(k); });
+    ts.wrapper.classList.remove('ts-hidden-accessible');
     ts.wrapper.classList.add('kl-ts');
   });
 }
@@ -1311,22 +1398,47 @@ function umpPecLain(kunci,i2,nyala){
   var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
   if(nyala){ var r=document.querySelectorAll('tr[data-kunci="'+kunci+'"]'); var b=document.querySelectorAll('.kl-pec-lain'); if(b.length) b[b.length-1].focus(); }
 }
-/* Setelah baris baru tampil: dropdown pilar baris itu langsung terbuka. */
+/* Setelah panel dibuka: gulir ke pos terakhir & fokuskan kolom pilarnya.
+   Tidak membuka dropdown sendiri — staf yang memutuskan kapan memilih. */
 function umpPecBukaTerakhir(){
   var s=document.querySelectorAll('.kl-pec-baris select.kl-pilih-pilar'), el=s[s.length-1];
   if(!el) return;
-  var row=el.closest('.kl-pec-baris'); if(row&&row.scrollIntoView) row.scrollIntoView({block:'center',behavior:'smooth'});
-  if(el.tomselect){ el.tomselect.focus(); el.tomselect.open(); }
-  else{ try{ el.focus(); }catch(e){} }
+  var row=el.closest('.kl-pec-baris'); if(row&&row.scrollIntoView) row.scrollIntoView({block:'nearest',behavior:'smooth'});
+  try{ el.focus({preventScroll:true}); }catch(e){ try{ el.focus(); }catch(e2){} }
 }
-function umpPecKantor(kunci){
-  var pec=umpPecahan(kunci)||[], buka=!(pec.length&&PEC_KANTOR[kunci+'|0']);
-  pec.forEach(function(p,i){ if(buka) PEC_KANTOR[kunci+'|'+i]=true; else delete PEC_KANTOR[kunci+'|'+i]; });
+/* Buka/tutup panel detail tanpa menyentuh ajuan — data pecahan tetap utuh. */
+function umpPecTutup(kunci){
+  if(PEC_TUTUP[kunci]) delete PEC_TUTUP[kunci]; else PEC_TUTUP[kunci]=true;
   gambarIsi();
+}
+function umpPecBatal(kunci){
+  delete PEC_TUTUP[kunci];
+  sinkronHapus('ump',kunci,'pecahan');
+}
+/* Segarkan ringkasan pecahan & label tombol kartu tanpa menggambar ulang
+   seluruh halaman — supaya posisi gulir & fokus tidak melompat. */
+function umpPecRingkas(kunci){
+  var card=document.querySelector('.kl-ump-item[data-kunci="'+kunci+'"]'); if(!card) return;
+  var x=(DATA.ump||[]).find(function(u2){return u2.kunci===kunci;}); if(!x) return;
+  var pec=umpPecahan(kunci)||[];
+  var jml=pec.reduce(function(a,p){return a+(Number(p.nominal)||0);},0);
+  var asal=Number(x.nominal)||0;
+  var sum=card.querySelector('.kl-pec-sum');
+  if(sum){
+    sum.className='kl-pec-sum'+(jml>asal?' more':(jml<asal?' sisa':' pas'));
+    sum.innerHTML='total pos '+klRp(jml)
+      +(jml<asal?' &middot; sisa '+klRp(asal-jml):'')
+      +(jml>asal?' &middot; melebihi '+klRp(jml-asal):'')
+      +(jml===asal?' &middot; pas':'');
+  }
+  var btn=card.querySelector('.pec-btn');
+  if(btn&&!PEC_TUTUP[kunci]) btn.innerHTML='Tutup detail';
+  else if(btn) btn.innerHTML='Pecahan pilar &middot; '+pec.length+' pos &middot; '+klRp(jml);
 }
 function umpPecMulai(kunci){
   var x=(DATA.ump||[]).find(function(u2){return u2.kunci===kunci;});
   if(!x)return;
+  delete PEC_TUTUP[kunci];
   var pilAwal=pilarDariDana(x.dana);
   var ketAwal=ketTampil(x.keterangan||'',x.layanan)||ketPecAuto(pilAwal);
   var pec=[{pilar:pilAwal,kantor:kantorSendiri(),nominal:Number(x.nominal)||0,ket:ketAwal}];
@@ -1358,8 +1470,9 @@ function umpPecHapus(kunci,i2){
 function umpPecUbah(kunci,i2,kolom,nilai){
   var pec=umpPecahan(kunci); if(!pec||!pec[i2])return;
   pec[i2][kolom]=kolom==='nominal'?(Number(nilai)||0):nilai;
-  draftSimpan(); gambarIsi();
-  var bar=document.getElementById('klSavebar'); if(bar)bar.outerHTML=saveBar();
+  draftSimpan(); umpPecRingkas(kunci);
+  var bar=document.getElementById('klSavebar');
+  if(bar) bar.outerHTML=saveBar();
 }
 function batalkanBaris(jenis,kunci){
   ['nominal','tanggal','keterangan','program'].forEach(function(kolom){ delete SINKRON.ajuan[jenis+'|'+kunci+'|'+kolom]; });
