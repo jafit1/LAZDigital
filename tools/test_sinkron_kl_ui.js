@@ -79,6 +79,14 @@ const srv = http.createServer(async (req, res) => {
   });
   cek('Klik sakelar amil: tabel tidak digambar ulang & gulir tidak bergeser', geser.ada && geser.sama && geser.dy === 0, JSON.stringify(geser));
   cek('Klik sakelar amil: catatan berubah ke "amil Rp 0" bertanda diubah', /amil Rp 0/.test(geser.note) && /diubah/.test(geser.note), geser.note);
+  /* Checkbox tak terlihat harus menutup seluruh track (110px) supaya sisi "Tidak" (kanan) bisa diklik. */
+  cek('Sakelar amil: area klik (checkbox) selebar track penuh — sisi Ya & Tidak keduanya bisa ditekan', await p.evaluate(() => {
+    const sw = document.querySelector('.kl-amil-switch input[type="checkbox"]');
+    const trk = document.querySelector('.kl-amil-switch .track');
+    if (!sw || !trk) return false;
+    const a = sw.getBoundingClientRect(), b = trk.getBoundingClientRect();
+    return Math.abs(a.width - b.width) <= 1 && a.width >= 100;
+  }));
   cek('Pilih "Tidak" (berbeda dari aturan awal) membuat ajuan: Simpan menyala + draft masuk localStorage', await p.evaluate(() => { const b = document.getElementById('klSimpanBtn'); return b && !b.disabled && (localStorage.getItem('sinkronKLDraft_' + localStorage.getItem('klKode')) || '').indexOf('belum') >= 0; }));
   cek('Tanda ajuan: kelompok tombol jadi bergaris oranye', await p.evaluate(() => !!document.querySelector('.kl-amil-switch.ajuan, .kl-ts.ajuan, .kl-sel.ajuan, .kl-edit.ajuan')));
 
@@ -185,11 +193,21 @@ const srv = http.createServer(async (req, res) => {
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[2].click());
   cek('Tab LPJ: panel "Cakupan UMP oleh LPJ" dengan kolom sisa belum LPJ', await p.evaluate(() =>
     /Cakupan UMP oleh LPJ/.test(document.getElementById('klIsi').textContent) && /Sisa belum LPJ/.test(document.getElementById('klIsi').textContent)));
-  cek('Tab LPJ: kolom kiri "Hubungkan UMP" ada di tabel catatan', await p.evaluate(() =>
-    [...document.querySelectorAll('#klIsi th')].some((t) => /Hubungkan UMP/.test(t.textContent))));
-  await p.evaluate(() => { const b = [...document.querySelectorAll('#klIsi .kl-ganti')].find((x) => /Ubah tujuan/.test(x.textContent)); if (b) b.click(); });
-  cek('Tab LPJ: editor "Ubah tujuan UMP" membuka pencari dengan maksimal 10 usulan UMP yang belum lengkap LPJ-nya', await p.evaluate(() => {
-    const ed = document.querySelector('.kl-tujuan');
+  cek('Tab LPJ: kartu per baris LPJ dengan kepala grid (tanggal, program, nominal) & panel tujuan UMP terbuka di bawah', await p.evaluate(() => {
+    const item = document.querySelector('#klIsi .kl-ump-item');
+    const head = item && item.querySelector('.kl-ump-head');
+    const hub = item && item.querySelector('.kl-lpj-hub');
+    return !!item && !!head && !!hub && !!item.querySelector('.kl-ump-field') && /Program|Tujuan UMP/.test(item.textContent);
+  }));
+  cek('Tab LPJ: daftar UMP yang ditutup kartu ditampilkan dengan nominal di kanan', await p.evaluate(() => {
+    const list = document.querySelector('#klIsi .kl-lpj-hub');
+    const lis = list ? [...list.querySelectorAll('li')] : [];
+    return list && lis.length > 0 && lis[0].innerHTML.includes('Rp');
+  }));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#klIsi .kl-ganti')].find((x) => /Tujuan UMP/.test(x.textContent)); if (b) b.click(); });
+  cek('Tab LPJ: tombol "Tujuan UMP" membuka panel di dalam kartunya, pencari aktif + usulan UMP belum lengkap', await p.evaluate(() => {
+    const pnl = document.querySelector('#klIsi .kl-ump-item.buka .kl-pec-panel');
+    const ed = pnl && pnl.querySelector('.kl-tujuan');
     const inp = ed && ed.querySelector('#klCariIn');
     const opt = ed ? ed.querySelectorAll('#klCariList .kl-cari-opt') : [];
     if (!ed || !inp || !opt.length) return false;
@@ -205,10 +223,12 @@ const srv = http.createServer(async (req, res) => {
     const inp = document.querySelector('.kl-tujuan-baris input.kl-edit');
     return !!a && a.nilai[0].nominal === 1000000 && inp && Number(inp.value) === 1000000 && !document.getElementById('klSimpanBtn').disabled;
   }));
+  cek('Tab LPJ: panel tetap terbuka setelah alokasi ditambah', await p.evaluate(() => !!document.querySelector('#klIsi .kl-ump-item.buka .kl-pec-panel .kl-tujuan')));
   await p.evaluate(() => { const b = [...document.querySelectorAll('.kl-tujuan-aksi .kl-batal')].find((x) => /Pakai otomatis/.test(x.textContent)); if (b) b.click(); });
   cek('Tab LPJ: "Pakai otomatis" menghapus ajuan tujuan', await p.evaluate(() => !daftarAjuan().some((x) => x.kolom === 'tujuan')));
   cek('Tab LPJ: tanggal juga memakai pemilih bertema', await p.evaluate(() =>
     !!document.querySelector('#klIsi .kl-tgl .kl-tgl-btn') && !document.querySelector('#klIsi input[type="date"]')));
+  cek('Tab LPJ: tidak ada overflow horizontal', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 
   await p.evaluate(() => document.querySelectorAll('.kl-tab')[3].click());
   const tR2 = await p.evaluate(() => (document.getElementById('klIsi') || {}).innerText || '');
