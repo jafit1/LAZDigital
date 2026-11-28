@@ -222,12 +222,16 @@ const srv = http.createServer(async (req, res) => {
     const t = document.querySelector('#klIsi .kl-ump-item .kl-lpj-tuju');
     const sel = t && t.querySelector('select.kl-lpj-pilih');
     if (!t || !sel || !/Menutup UMP/.test(t.textContent)) return false;
-    const o = [...sel.options];
-    return o[0].value === '' && /Otomatis/.test(o[0].textContent) && o.length >= 2 && /belum LPJ/.test(o[1].textContent);
+    const ts = sel.tomselect;
+    const o = ts ? Object.keys(ts.options).map((k) => ({ value: k, text: ts.options[k].text }))
+      : [...sel.options].map((x) => ({ value: x.value, text: x.textContent }));
+    return o[0].value === '__auto' && /Otomatis/.test(o[0].text) && o.length >= 2 && /belum LPJ/.test(o[1].text);
   }));
   await p.evaluate(() => {
     const sel = document.querySelector('#klIsi select.kl-lpj-pilih');
-    if (sel.tomselect) sel.tomselect.setValue(sel.options[1].value); else { sel.value = sel.options[1].value; sel.dispatchEvent(new Event('change')); }
+    const ts = sel.tomselect;
+    const tujuan = ts ? Object.keys(ts.options)[1] : sel.options[1].value;
+    if (ts) ts.setValue(tujuan); else { sel.value = tujuan; sel.dispatchEvent(new Event('change')); }
   });
   await p.waitForTimeout(250);
   cek('Tab LPJ: memilih satu UMP = seluruh jumlah LPJ dialokasikan ke UMP itu, Simpan menyala', await p.evaluate(() => {
@@ -237,7 +241,7 @@ const srv = http.createServer(async (req, res) => {
   }));
   await p.evaluate(() => {
     const sel = document.querySelector('#klIsi select.kl-lpj-pilih');
-    if (sel.tomselect) sel.tomselect.setValue(''); else { sel.value = ''; sel.dispatchEvent(new Event('change')); }
+    if (sel.tomselect) sel.tomselect.setValue('__auto'); else { sel.value = '__auto'; sel.dispatchEvent(new Event('change')); }
   });
   await p.waitForTimeout(250);
   cek('Tab LPJ: kembali ke "Otomatis" menghapus ajuan tujuan', await p.evaluate(() => !daftarAjuan().some((x) => x.kolom === 'tujuan')));

@@ -1327,11 +1327,11 @@ function kantorOpsi(pilih){
    tidak berubah — yang berganti hanya label Ya/Tidak. Kalau pustaka gagal
    dimuat, <select> asli tetap berfungsi. */
 var KL_OPSI={}, KL_SEL_N=0;
-function klSel(opsi,nilai,fn,kelas,lama,ajuan){
+function klSel(opsi,nilai,fn,kelas,lama,ajuan,ph){
   var id='s'+(++KL_SEL_N);
   KL_OPSI[id]={opsi:opsi,fn:fn};
   var h='<select class="kl-sel'+(kelas?' '+kelas:'')+(ajuan?' ajuan':'')+'" data-id="'+id+'" data-nilai="'+esc(nilai==null?'':nilai)+'"'
-    +(lama!=null?' data-lama="'+esc(lama)+'"':'')+' aria-label="Pilihan">';
+    +(lama!=null?' data-lama="'+esc(lama)+'"':'')+(ph?' data-ph="'+esc(ph)+'"':'')+' aria-label="Pilihan">';
   opsi.forEach(function(o){ h+='<option value="'+esc(o.v==null?'':o.v)+'"'+(String(o.v)===String(nilai)?' selected':'')+'>'+esc(o.t)+'</option>'; });
   return h+'</select>';
 }
@@ -1351,7 +1351,7 @@ function aktifkanSel(akar){
     if(window.TomSelect && (el.classList.contains('kl-cari') || el.options.length>=5)){
       try{
         new TomSelect(el,{ maxOptions:Number(el.getAttribute('data-max'))||300, closeAfterSelect:true,
-          hideSelected:false, placeholder:'- pilih -' });
+          hideSelected:false, placeholder:el.getAttribute('data-ph')||'- pilih -' });
       }catch(err){}
     }
   }
@@ -1680,7 +1680,6 @@ function isiLpj(){
       var nomN=Number(nilaiEfektif('lpj',x.kunci,'nominal',x.jumlah))||0;
       var progN=nilaiEfektif('lpj',x.kunci,'program',x.program||'');
       var berajuan=ajuanBaris('lpj',x.kunci,'nominal')||ajuanBaris('lpj',x.kunci,'tanggal')||ajuanBaris('lpj',x.kunci,'program')||ajuanBaris('lpj',x.kunci,'tujuan');
-      var ditunjuk=!!ajuanBaris('lpj',x.kunci,'tujuan')||!!lpjTujuanNilai(x.kunci);
       var sumber=null;
       hub.sumber.forEach(function(s){ if(s.kunci===x.kunci) sumber=s; });
       var cakup=(sumber&&sumber.ump)||[];
@@ -1700,7 +1699,6 @@ function isiLpj(){
               +klTglHTML({nilai:tglN, lama:x.tanggal, jenis:'lpj', kunci:x.kunci, ajuan:!!ajuanBaris('lpj',x.kunci,'tanggal')})
               +'<span class="kl-arah kembali">LPJ</span>'
             +'</div>'
-            +'<div class="kl-ump-meta">'+(ditunjuk?'tujuan ditunjuk sendiri':'tujuan otomatis (UMP tertua)')+'</div>'
           +'</div>'
           +'<div class="kl-ump-field"><label for="lp-'+esc(x.kunci)+'">Program</label>'
             +'<input id="lp-'+esc(x.kunci)+'" class="kl-edit'+(ajuanBaris('lpj',x.kunci,'program')?' ajuan':'')+'" value="'+esc(progN)+'" data-lama="'+esc(x.program||'')+'"'
@@ -1725,8 +1723,8 @@ function isiLpj(){
         h+='<div class="kl-f"><span class="kl-f-l">Menutup UMP</span><div class="kl-f-c">'
           +'<span class="kl-lpj-multi">Dibagi ke '+tunjuk.length+' UMP</span></div></div>';
       }else{
-        var pilihU=tunjuk.length===1?tunjuk[0].kunci:'';
-        var opsiDrop=[{v:'',t:'Otomatis: UMP tertua yang belum lengkap LPJ'}];
+        var pilihU=tunjuk.length===1?tunjuk[0].kunci:'__auto';
+        var opsiDrop=[{v:'__auto',t:'Otomatis: UMP tertua yang belum lengkap LPJ'}];
         hub.urut.forEach(function(u){
           /* Sisa yang tersedia untuk LPJ ini = sisa UMP + yang sedang ditutup LPJ ini sendiri. */
           var sisaBagiIni=(Number(hub.sisa[u.kunci])||0)+(potIni[u.kunci]||0);
@@ -1825,10 +1823,10 @@ function lpjTujuanTambah(kunci,umpKunci,nominal){
   butir.push({kunci:umpKunci,nominal:Math.max(0,Number(nominal)||0)});
   lpjTujuanSimpan(kunci,butir);
 }
-/* Dropdown "Menutup UMP" satu pilihan: kosong = otomatis (hapus ajuan tujuan),
-   terpilih = seluruh jumlah LPJ ini dialokasikan ke UMP itu. */
+/* Dropdown "Menutup UMP" satu pilihan: '__auto' = otomatis (hapus ajuan
+   tujuan), UMP terpilih = seluruh jumlah LPJ ini dialokasikan ke UMP itu. */
 function lpjTujuanPilih(kunci,umpKunci,jumlahLpj){
-  if(!umpKunci){ lpjTujuanOtomatis(kunci); return; }
+  if(!umpKunci||umpKunci==='__auto'){ lpjTujuanOtomatis(kunci); return; }
   lpjTujuanSimpan(kunci,[{kunci:umpKunci,nominal:Math.max(0,Number(jumlahLpj)||0)}]);
 }
 function editorTujuan(x){
