@@ -79,6 +79,19 @@ const srv = http.createServer(async (req, res) => {
   });
   cek('Klik sakelar amil: tabel tidak digambar ulang & gulir tidak bergeser', geser.ada && geser.sama && geser.dy === 0, JSON.stringify(geser));
   cek('Klik sakelar amil: catatan berubah ke "amil Rp 0" bertanda diubah', /amil Rp 0/.test(geser.note) && /diubah/.test(geser.note), geser.note);
+  /* Klik sakelar bolak-balik: kolom, baris, sakelar, dan savebar tidak boleh bergeser sepiksel pun. */
+  const diam = await p.evaluate(() => {
+    const sw = document.querySelector('.kl-amil-switch input');
+    const row = sw.closest('tr');
+    const bar = document.getElementById('klSavebar');
+    const ukur = () => JSON.stringify({
+      th: [...document.querySelectorAll('#klIsi .kl-tbl thead th')].map((t) => Math.round(t.getBoundingClientRect().left) + ':' + Math.round(t.getBoundingClientRect().width)),
+      row: Math.round(row.getBoundingClientRect().height), sw: Math.round(sw.getBoundingClientRect().left), y: window.scrollY,
+    });
+    const u0 = ukur(); sw.click(); const u1 = ukur(); sw.click(); const u2 = ukur();
+    return { sama: u0 === u1 && u1 === u2, barSama: bar === document.getElementById('klSavebar'), u0, u1 };
+  });
+  cek('Klik sakelar amil bolak-balik: kolom, tinggi baris, posisi sakelar & savebar diam', diam.sama && diam.barSama, JSON.stringify(diam));
   /* Checkbox tak terlihat harus menutup seluruh track (110px) supaya sisi "Tidak" (kanan) bisa diklik. */
   cek('Sakelar amil: area klik (checkbox) selebar track penuh — sisi Ya & Tidak keduanya bisa ditekan', await p.evaluate(() => {
     const sw = document.querySelector('.kl-amil-switch input[type="checkbox"]');

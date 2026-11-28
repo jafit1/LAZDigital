@@ -289,9 +289,11 @@
             padding:4px 7px;border-radius:6px;flex:none}
   .kl-batal:hover{color:var(--red);background:var(--surface2)}
   .kl-ambilwrap{display:flex;align-items:center;gap:6px}
-.kl-amilcell{min-width:190px}
-.kl-amil-note{display:block;margin-top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
-  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Lebar kolom amil dikunci: teks catatan berganti panjang tiap sakelar
+   diklik, dan di tabel auto-layout itu menggeser semua kolom. */
+.kl-amilcell{width:200px;min-width:200px;max-width:200px}
+.kl-amil-note{display:block;width:190px;max-width:190px;min-height:15px;margin-top:4px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+  line-height:15px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kl-amil-note.sudah{color:var(--green)}
 .kl-amil-note.belum{color:var(--muted)}
 .kl-amil-note.diubah{color:var(--accent)}
@@ -1011,15 +1013,27 @@ function sinkronUbah(jenis,kunci,kolom,nilai,el){
   }
   draftSimpan();
   if(el) el.classList.toggle('ajuan',!!ajuanBaris(jenis,kunci,kolom));
-  var bar=document.getElementById('klSavebar');
-  if(bar) bar.outerHTML=saveBar();
+  updateSaveBar();
 }
 function sinkronHapus(jenis,kunci,kolom,diam){
   delete SINKRON.ajuan[jenis+'|'+kunci+'|'+kolom];
   draftSimpan();
   if(!diam) gambarIsi();
+  updateSaveBar();
+}
+/* Perbarui isi savebar di tempat (teks + status tombol) tanpa mengganti
+   elemennya — mengganti outerHTML memicu reflow & pergeseran gulir. */
+function updateSaveBar(){
   var bar=document.getElementById('klSavebar');
-  if(bar) bar.outerHTML=saveBar();
+  if(!bar){ return; }
+  var n=jumlahAjuan();
+  var catatan='';
+  try{ if(localStorage.getItem(draftKunci(KODE))) catatan=' · salinan jaga-jaga ada di peramban ini'; }catch(e){}
+  var info=bar.querySelector('.info');
+  if(info) info.innerHTML=(n?'<b>'+n+' ajuan belum disimpan</b> — tekan Simpan supaya daerah menerima lognya'+esc(catatan):'Semua perubahan sudah tersimpan &amp; tercatat di log daerah'+esc(catatan));
+  var btn=bar.querySelector('#klSimpanBtn');
+  if(btn) btn.disabled=!n;
+  bar.classList.remove('err','terkirim');
 }
 
 /* ================= TAB: PENGHIMPUNAN =================
@@ -1135,6 +1149,8 @@ function klDuoTekan(v,el){
     note.className='kl-amil-note '+(v==='sudah'?'sudah':'belum')+(a?' diubah':'');
     note.textContent=klAmilTeks(v,x);
   }
+  /* Savebar diperbarui tanpa ganti outerHTML — agar tidak memicu reflow. */
+  updateSaveBar();
 }
 function sinkronUbahAmil(kunci,nilai,el){
   var x=(DATA.setoran||[]).find(function(s){return s.kunci===kunci;});
