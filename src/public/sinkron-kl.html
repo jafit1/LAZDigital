@@ -378,6 +378,14 @@
   .kl-lpj-hub-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .kl-lpj-hub-v{flex:none;font-weight:800;font-variant-numeric:tabular-nums;color:var(--green)}
   .kl-lpj .kl-pec-panel .kl-tujuan{margin-top:0;border:0;border-radius:0;background:transparent;padding:0}
+  /* Baris "Menutup UMP" di kartu LPJ: satu dropdown + daftar hasil + tautan bagi. */
+  .kl-lpj-tuju{border-top:1px solid var(--border);padding:12px 16px 12px;display:flex;flex-direction:column;gap:8px;
+    background:color-mix(in srgb,var(--surface2) 55%,var(--surface))}
+  .kl-lpj-tuju .kl-lpj-hub{border-top:0;padding:0;background:transparent}
+  .kl-lpj-tuju .kl-f-c>.kl-ts,.kl-lpj-tuju .kl-f-c>select.kl-sel{flex:1 1 auto;min-width:0;width:100%}
+  .kl-lpj-tuju .kl-ts .ts-control{min-height:40px;font-size:13.5px}
+  .kl-lpj-multi{font-size:13px;font-weight:700;color:var(--text)}
+  .kl-lpj-bagi{align-self:flex-start;padding:4px 0}
 
   /* --- scrollbar bertema: seluruh halaman, tabel, & daftar gulir ---
      styles.css global menyembunyikan scrollbar (width:0 !important);
@@ -1551,10 +1559,14 @@ function hubungkanUmpLpj(){
   var tertutup={};
   /* 1) Alokasi yang ditunjuk sendiri oleh kantor. */
   sumber.forEach(function(s){
+    var sisaLpj=s.jumlah;
     (s.tunjuk||[]).forEach(function(b){
       var sisaU=sisa[b.kunci];
       if(sisaU===undefined) return;
-      var pot=Math.min(sisaU,b.nominal);
+      /* Dibatasi jumlah LPJ: kalau nominal LPJ diturunkan setelah tujuan
+         dipilih, alokasi lama tidak boleh menutup lebih dari LPJ-nya. */
+      var pot=Math.min(sisaU,b.nominal,sisaLpj);
+      sisaLpj-=Math.max(0,pot);
       if(pot<=0) return;
       sisa[b.kunci]-=pot;
       tertutup[b.kunci]=(tertutup[b.kunci]||0)+pot;
@@ -1698,15 +1710,38 @@ function isiLpj(){
               +'<input class="kl-edit n'+(ajuanBaris('lpj',x.kunci,'nominal')?' ajuan':'')+'" type="number" min="0" step="1000"'
               +' aria-label="Jumlah LPJ" value="'+nomN+'" data-lama="'+x.jumlah+'"'
               +' onchange="sinkronUbah(\'lpj\',\''+esc(x.kunci)+'\',\'nominal\',this.value,this)"></div>'
-            +'<div class="kl-ump-aksi">'
-              +'<button class="kl-ganti pec-btn" type="button" aria-expanded="'+(buka?'true':'false')+'" onclick="lpjEditor(\''+esc(x.kunci)+'\')">'
-                +(buka?'Tutup detail':'Tujuan UMP &middot; '+cakup.length+' UMP &middot; '+klRp(totCakup))+'</button>'
-              +(berajuan?'<button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'lpj\',\''+esc(x.kunci)+'\')">&times;</button>':'')
-            +'</div>'
+            +(berajuan?'<div class="kl-ump-aksi"><button class="kl-batal" type="button" title="Batalkan semua ajuan baris ini" onclick="batalkanBaris(\'lpj\',\''+esc(x.kunci)+'\')">&times;</button></div>':'')
           +'</div>'
-        +'</div>'
-        +'<ul class="kl-lpj-hub">'+daftarHub
-          +(totCakup<nomN?'<li class="sisa">LPJ belum terpakai '+klRp(nomN-totCakup)+'</li>':'')+'</ul>';
+        +'</div>';
+      /* Satu baris "Menutup UMP": cukup pilih satu UMP. Kosong = otomatis
+         ke UMP tertua. Bila jumlah LPJ melebihi sisa UMP pilihan, lebihnya
+         tetap mengalir otomatis ke UMP tertua berikutnya (mesin yang sama).
+         Membagi ke beberapa UMP tetap bisa lewat tautan di bawahnya. */
+      var tunjuk=lpjTujuanNilai(x.kunci)||[];
+      var multi=tunjuk.length>1;
+      var potIni={}; cakup.forEach(function(c){ potIni[c.kunci]=(potIni[c.kunci]||0)+c.pot; });
+      h+='<div class="kl-lpj-tuju">';
+      if(multi){
+        h+='<div class="kl-f"><span class="kl-f-l">Menutup UMP</span><div class="kl-f-c">'
+          +'<span class="kl-lpj-multi">Dibagi ke '+tunjuk.length+' UMP</span></div></div>';
+      }else{
+        var pilihU=tunjuk.length===1?tunjuk[0].kunci:'';
+        var opsiDrop=[{v:'',t:'Otomatis: UMP tertua yang belum lengkap LPJ'}];
+        hub.urut.forEach(function(u){
+          /* Sisa yang tersedia untuk LPJ ini = sisa UMP + yang sedang ditutup LPJ ini sendiri. */
+          var sisaBagiIni=(Number(hub.sisa[u.kunci])||0)+(potIni[u.kunci]||0);
+          if(sisaBagiIni>0||u.kunci===pilihU)
+            opsiDrop.push({v:u.kunci,t:klTgl(u.tanggal)+' · '+(ketTampil(u.keterangan,u.layanan)||'UMP')+' · belum LPJ '+klRp(sisaBagiIni)});
+        });
+        h+='<div class="kl-f"><span class="kl-f-l">Menutup UMP</span><div class="kl-f-c">'
+          +klSel(opsiDrop,pilihU,function(v){ setTimeout(function(){ lpjTujuanPilih(x.kunci,v,nomN); },80); },'kl-cari kl-lpj-pilih',null,!!ajuanBaris('lpj',x.kunci,'tujuan'))
+          +'</div></div>';
+      }
+      h+='<ul class="kl-lpj-hub">'+daftarHub
+        +(totCakup<nomN?'<li class="sisa">LPJ belum terpakai '+klRp(nomN-totCakup)+'</li>':'')+'</ul>'
+        +'<button class="kl-pec-tbl kl-lpj-bagi" type="button" aria-expanded="'+(buka?'true':'false')+'" onclick="lpjEditor(\''+esc(x.kunci)+'\')">'
+          +(buka?'Tutup pembagian':(multi?'Ubah pembagian':'Bagi ke beberapa UMP'))+'</button>'
+        +'</div>';
       if(buka) h+='<div class="kl-pec-panel">'+editorTujuan(x)+'</div>';
       h+='</div>';
     });
@@ -1722,7 +1757,8 @@ function isiLpj(){
     +'</div>';
   h+='<ul class="kl-catatan"><li>LPJ mengurangi sisa uang muka kantor; tanggal boleh disesuaikan bila '
     +'pembukukuan daerah dan catatan kantor berbeda bulan.</li>'
-    +'<li><b>Ubah tujuan UMP</b>: LPJ bisa ditunjuk ke UMP tertentu (satu LPJ ke beberapa UMP, satu UMP boleh dari beberapa LPJ). Yang tidak ditunjuk diurutkan otomatis ke UMP tertua.</li>'
+    +'<li><b>Menutup UMP</b>: pilih satu UMP yang dipertanggungjawabkan LPJ ini. Biarkan <b>Otomatis</b> bila tidak tahu: LPJ menutup UMP tertua yang belum lengkap. Kalau LPJ lebih besar dari sisa UMP pilihan, lebihnya ikut menutup UMP tertua berikutnya.</li>'
+    +'<li>Satu LPJ untuk beberapa UMP sekaligus: tekan <b>Bagi ke beberapa UMP</b>.</li>'
     +'<li>Sel bergaris oranye = ada ajuan; × membatalkan. Semuanya masuk log saat <b>Simpan</b>.</li></ul>';
   h+='</div>';
   return h;
@@ -1788,6 +1824,12 @@ function lpjTujuanTambah(kunci,umpKunci,nominal){
   var butir=(lpjTujuanNilai(kunci)||[]).filter(function(b){ return b.kunci!==umpKunci; });
   butir.push({kunci:umpKunci,nominal:Math.max(0,Number(nominal)||0)});
   lpjTujuanSimpan(kunci,butir);
+}
+/* Dropdown "Menutup UMP" satu pilihan: kosong = otomatis (hapus ajuan tujuan),
+   terpilih = seluruh jumlah LPJ ini dialokasikan ke UMP itu. */
+function lpjTujuanPilih(kunci,umpKunci,jumlahLpj){
+  if(!umpKunci){ lpjTujuanOtomatis(kunci); return; }
+  lpjTujuanSimpan(kunci,[{kunci:umpKunci,nominal:Math.max(0,Number(jumlahLpj)||0)}]);
 }
 function editorTujuan(x){
   var hub=hubungkanUmpLpj();
